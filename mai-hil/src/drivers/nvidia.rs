@@ -1,19 +1,89 @@
-//! # NVIDIA CUDA Driver
-//!
-//! NVML-based GPU detection and management for NVIDIA hardware.
-//! Supports H100 `PCIe`, H100 SXM5, H200, RTX 5090.
-//!
-//! ## Features
-//!
-//! - GPU enumeration via NVML
-//! - VRAM tracking with per-model allocation accounting
-//! - Power management via persistence mode and power limits
-//! - Thermal monitoring with throttle event detection
-//! - Feature-gated behind `--features nvidia`
-//!
-//! ## Unsafe Usage
-//!
-//! This driver uses `unsafe` for NVML FFI calls. All unsafe blocks are
-//! documented with safety invariants.
+use crate::traits::*;
+use crate::HilError;
+use async_trait::async_trait;
 
-// Stub: implementation in Session 06
+/// Stub NVIDIA CUDA Driver Implementation
+///
+/// This is a skeletal implementation that satisfies the compiler and trait contracts.
+/// All methods return `HilError::NotImplemented` to indicate that real NVML integration
+/// will be implemented in Session 06. The struct compiles cleanly.
+pub struct NvidiaDriver {
+    pub device_index: u32,
+}
+
+impl NvidiaDriver {
+    pub fn new() -> Self {
+        Self { device_index: 0 }
+    }
+}
+
+#[async_trait]
+impl HardwareProbe for NvidiaDriver {
+    async fn discover_devices(&self) -> Result<Vec<CapabilityDescriptor>, HilError> {
+        Err(HilError::NotImplemented)
+    }
+
+    async fn get_thermal_state(&self, _device_uuid: &str) -> Result<f32, HilError> {
+        Err(HilError::NotImplemented)
+    }
+}
+
+#[async_trait]
+impl PowerStateController for NvidiaDriver {
+    async fn set_power_state(&self, _state: PowerState) -> Result<(), HilError> {
+        Err(HilError::NotImplemented)
+    }
+
+    async fn get_power_state(&self) -> Result<PowerState, HilError> {
+        Err(HilError::NotImplemented)
+    }
+
+    async fn set_thermal_limit(&self, _limit_celsius: f32) -> Result<(), HilError> {
+        Err(HilError::NotImplemented)
+    }
+}
+
+#[async_trait]
+impl MemoryManager for NvidiaDriver {
+    async fn allocate_memory(&self, _size_bytes: u64) -> Result<u64, HilError> {
+        Err(HilError::NotImplemented)
+    }
+
+    async fn free_memory(&self, _handle: u64) -> Result<(), HilError> {
+        Err(HilError::NotImplemented)
+    }
+
+    async fn predict_fit(&self, _required_size: u64) -> Result<bool, HilError> {
+        Err(HilError::NotImplemented)
+    }
+
+    async fn get_memory_usage(&self) -> Result<(u64, u64), HilError> {
+        Err(HilError::NotImplemented)
+    }
+}
+
+#[async_trait]
+impl SecureLoadContext for NvidiaDriver {
+    async fn unseal_tpm_key(&self) -> Result<Vec<u8>, HilError> {
+        Err(HilError::NotImplemented)
+    }
+
+    async fn decrypt_and_verify(&self, _encrypted_blob: &[u8], _manifest_hash: &str) -> Result<Vec<u8>, HilError> {
+        Err(HilError::NotImplemented)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_nvidia_stub_returns_not_implemented() {
+        let driver = NvidiaDriver::new();
+
+        assert!(driver.discover_devices().await.is_err());
+        assert!(driver.set_power_state(PowerState::FullInference).await.is_err());
+        assert!(driver.allocate_memory(1024).await.is_err());
+        assert!(driver.unseal_tpm_key().await.is_err());
+    }
+}
