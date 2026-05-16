@@ -10,7 +10,6 @@ use std::sync::Arc;
 use thiserror::Error;
 
 use mai_hil::PowerStateController;
-use crate::types::TransitionId;
 use crate::scheduler::ComplexityScore;
 
 /// Power states (matches Tock-inspired trust model)

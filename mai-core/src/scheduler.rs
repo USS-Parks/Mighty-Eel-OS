@@ -14,7 +14,6 @@ use mai_hil::traits::{HardwareProbe, MemoryManager};
 use mai_hil::traits::{AdapterCapabilities, AdapterHandle};
 
 use crate::types::{RequestId, ProfileId, ModelId, AdapterId, GpuIdentifier};
-use crate::registry::ModelManifest;
 
 /// Configurable scheduling strategies
 #[derive(Debug, Clone)]
