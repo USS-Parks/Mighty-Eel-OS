@@ -32,6 +32,9 @@ toml = "0.8"
 # Error handling
 thiserror = "2"
 
+# Async trait (dyn-compatible async methods)
+async-trait = "0.1"
+
 # FFI bridge
 pyo3 = { version = "0.22", features = ["auto-initialize"] }
 
