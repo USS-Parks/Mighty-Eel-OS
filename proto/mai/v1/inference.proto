@@ -1,0 +1,637 @@
+// MAI gRPC API - Proto3 Service Definitions
+// Session 05 Deliverable | Island Mountain MAI OS
+//
+// High-performance internal API for L4 components (agent orchestrator,
+// RAG pipeline). Lower latency than REST for tool calling chains and
+// batch operations.
+
+syntax = "proto3";
+
+package mai.v1;
+
+option java_package = "io.islandmountain.mai.v1";
+option go_package = "github.com/USS-Parks/im-mighty-eel-mai/proto/mai/v1";
+
+// ---------------------------------------------------------------------------
+// Inference Service
+// ---------------------------------------------------------------------------
+
+service MaiInference {
+  // Non-streaming chat completion
+  rpc ChatCompletion(ChatCompletionRequest) returns (ChatCompletionResponse);
+
+  // Server-streaming chat completion (SSE equivalent)
+  rpc ChatCompletionStream(ChatCompletionRequest) returns (stream ChatCompletionChunk);
+
+  // Non-streaming text completion
+  rpc Completion(CompletionRequest) returns (CompletionResponse);
+
+  // Server-streaming text completion
+  rpc CompletionStream(CompletionRequest) returns (stream CompletionChunk);
+
+  // Batch embedding
+  rpc Embed(EmbeddingRequest) returns (EmbeddingResponse);
+
+  // Structured output (JSON schema constrained)
+  rpc StructuredGeneration(StructuredRequest) returns (StructuredResponse);
+
+  // Function/tool calling
+  rpc FunctionCall(FunctionCallRequest) returns (FunctionCallResponse);
+
+  // Bidirectional streaming for agent orchestrator tool calling loops.
+  // Client sends requests and tool results; server streams tokens and
+  // tool invocation requests.
+  rpc AgentStream(stream AgentClientMessage) returns (stream AgentServerMessage);
+}
+
+// ---------------------------------------------------------------------------
+// Model Service
+// ---------------------------------------------------------------------------
+
+service MaiModels {
+  rpc ListModels(ListModelsRequest) returns (ListModelsResponse);
+  rpc GetModel(GetModelRequest) returns (ModelObject);
+  rpc LoadModel(LoadModelRequest) returns (LoadModelResponse);
+  rpc UnloadModel(UnloadModelRequest) returns (UnloadModelResponse);
+}
+
+// ---------------------------------------------------------------------------
+// Health Service (standard gRPC health protocol + MAI extensions)
+// ---------------------------------------------------------------------------
+
+service MaiHealth {
+  // Standard gRPC health check
+  rpc Check(HealthCheckRequest) returns (HealthCheckResponse);
+  // MAI system health snapshot
+  rpc GetSystemHealth(SystemHealthRequest) returns (SystemHealthResponse);
+  // Per-adapter health
+  rpc GetAdapterHealth(AdapterHealthRequest) returns (AdapterHealthResponse);
+  // Hardware health
+  rpc GetHardwareHealth(HardwareHealthRequest) returns (HardwareHealthResponse);
+}
+
+// ---------------------------------------------------------------------------
+// Power Service
+// ---------------------------------------------------------------------------
+
+service MaiPower {
+  rpc GetPowerState(PowerStateRequest) returns (PowerStateResponse);
+  rpc RequestTransition(TransitionRequest) returns (TransitionResponse);
+}
+
+// ---------------------------------------------------------------------------
+// Registry Service
+// ---------------------------------------------------------------------------
+
+service MaiRegistry {
+  rpc GetManifest(ManifestRequest) returns (ManifestResponse);
+  rpc InstallModel(InstallModelRequest) returns (InstallModelResponse);
+  rpc UninstallModel(UninstallModelRequest) returns (UninstallModelResponse);
+}
+
+// ---------------------------------------------------------------------------
+// Audit Service
+// ---------------------------------------------------------------------------
+
+service MaiAudit {
+  rpc GetAuditLog(AuditLogRequest) returns (AuditLogResponse);
+}
+
+// ===========================================================================
+// Messages: Inference
+// ===========================================================================
+
+message ChatMessage {
+  string role = 1;     // system, user, assistant, tool
+  string content = 2;
+  string tool_call_id = 3;  // set when role = tool
+}
+
+message ChatCompletionRequest {
+  string model = 1;
+  repeated ChatMessage messages = 2;
+  float temperature = 3;
+  float top_p = 4;
+  int32 max_tokens = 5;
+  bool stream = 6;
+  repeated string stop = 7;
+  ResponseFormat response_format = 8;
+  repeated ToolDefinition tools = 9;
+  string tool_choice = 10;  // "auto", "none", or function name
+  // Metadata (gRPC equivalent of HTTP headers)
+  string profile_id = 20;
+  string priority = 21;     // low, normal, high, critical
+  string request_id = 22;
+}
+
+message ResponseFormat {
+  string type = 1;   // json_object, json_schema
+  string schema_json = 2;  // JSON Schema as string
+}
+
+message ToolDefinition {
+  string type = 1;   // "function"
+  FunctionDef function = 2;
+}
+
+message FunctionDef {
+  string name = 1;
+  string description = 2;
+  string parameters_json = 3;  // JSON Schema as string
+}
+
+message ChatCompletionResponse {
+  string id = 1;
+  string object = 2;        // "chat.completion"
+  int64 created = 3;
+  string model = 4;
+  repeated ChatChoice choices = 5;
+  Usage usage = 6;
+}
+
+message ChatChoice {
+  int32 index = 1;
+  ChatMessage message = 2;
+  string finish_reason = 3;  // stop, max_tokens, stop_sequence, tool_calls
+}
+
+message ChatCompletionChunk {
+  string id = 1;
+  string object = 2;        // "chat.completion.chunk"
+  int64 created = 3;
+  string model = 4;
+  int64 sequence = 5;
+  repeated ChatDelta choices = 6;
+  Usage usage = 7;           // populated on final chunk
+}
+
+message ChatDelta {
+  int32 index = 1;
+  ChatMessage delta = 2;
+  string finish_reason = 3;
+}
+
+message CompletionRequest {
+  string model = 1;
+  string prompt = 2;
+  float temperature = 3;
+  float top_p = 4;
+  int32 max_tokens = 5;
+  bool stream = 6;
+  repeated string stop = 7;
+  string profile_id = 20;
+  string priority = 21;
+  string request_id = 22;
+}
+
+message CompletionResponse {
+  string id = 1;
+  string object = 2;       // "text_completion"
+  int64 created = 3;
+  string model = 4;
+  repeated CompletionChoice choices = 5;
+  Usage usage = 6;
+}
+
+message CompletionChoice {
+  int32 index = 1;
+  string text = 2;
+  string finish_reason = 3;
+}
+
+message CompletionChunk {
+  string id = 1;
+  string object = 2;
+  int64 created = 3;
+  string model = 4;
+  int64 sequence = 5;
+  repeated CompletionChoice choices = 6;
+  Usage usage = 7;
+}
+
+message EmbeddingRequest {
+  string model = 1;
+  repeated string input = 2;
+  string profile_id = 20;
+  string request_id = 22;
+}
+
+message EmbeddingResponse {
+  string object = 1;        // "list"
+  repeated EmbeddingData data = 2;
+  string model = 3;
+  Usage usage = 4;
+}
+
+message EmbeddingData {
+  string object = 1;        // "embedding"
+  int32 index = 2;
+  repeated float embedding = 3;
+  int32 input_tokens = 4;   // IM extension
+}
+
+message StructuredRequest {
+  string model = 1;
+  string prompt = 2;
+  string schema_json = 3;   // JSON Schema as string
+  float temperature = 4;
+  string profile_id = 20;
+  string request_id = 22;
+}
+
+message StructuredResponse {
+  string id = 1;
+  string object = 2;       // "structured_output"
+  string model = 3;
+  string output_json = 4;  // JSON string of structured output
+  Usage usage = 5;
+  bool schema_valid = 6;
+}
+
+message FunctionCallRequest {
+  string model = 1;
+  repeated ChatMessage messages = 2;
+  repeated FunctionDef functions = 3;
+  string profile_id = 20;
+  string request_id = 22;
+}
+
+message FunctionCallResponse {
+  string id = 1;
+  string object = 2;        // "function_call"
+  string model = 3;
+  FunctionCallResult function_call = 4;
+  Usage usage = 5;
+}
+
+message FunctionCallResult {
+  string name = 1;
+  string arguments_json = 2;  // JSON string
+}
+
+message Usage {
+  int32 prompt_tokens = 1;
+  int32 completion_tokens = 2;
+  int32 total_tokens = 3;
+}
+
+// --- Agent bidirectional streaming ---
+
+message AgentClientMessage {
+  oneof message {
+    ChatCompletionRequest inference_request = 1;
+    ToolResult tool_result = 2;
+    CancelRequest cancel = 3;
+  }
+}
+
+message ToolResult {
+  string request_id = 1;
+  string tool_call_id = 2;
+  string result_json = 3;
+}
+
+message CancelRequest {
+  string request_id = 1;
+}
+
+message AgentServerMessage {
+  oneof message {
+    ChatCompletionChunk token = 1;
+    ToolInvocation tool_request = 2;
+    ChatCompletionResponse complete = 3;
+    ErrorMessage error = 4;
+  }
+}
+
+message ToolInvocation {
+  string request_id = 1;
+  string tool_call_id = 2;
+  string function_name = 3;
+  string arguments_json = 4;
+}
+
+message ErrorMessage {
+  string code = 1;           // MAI-XYYY
+  string message = 2;
+  string type = 3;
+  int32 retry_after_seconds = 4;
+  string request_id = 5;
+}
+
+// ===========================================================================
+// Messages: Models
+// ===========================================================================
+
+message ListModelsRequest {
+  string backend = 1;
+  string capability = 2;
+  string status = 3;
+  int64 max_vram = 4;
+}
+
+message ListModelsResponse {
+  string object = 1;        // "list"
+  repeated ModelObject data = 2;
+}
+
+message GetModelRequest {
+  string model_id = 1;
+}
+
+message ModelObject {
+  string id = 1;
+  string object = 2;        // "model"
+  int64 created = 3;
+  string owned_by = 4;
+  string name = 5;
+  string version = 6;
+  string format = 7;        // GGUF, SafeTensors, EXL2, GPTQ
+  string quantization = 8;
+  int64 size_bytes = 9;
+  int64 required_vram_bytes = 10;
+  string status = 11;       // cold_storage, loading, loaded, active, evicting
+  CapabilityInfo capabilities = 12;
+  repeated string compatible_backends = 13;
+  SecurityInfo security = 14;
+  // Detail fields (populated by GetModel, not ListModels)
+  AdapterAssignment adapter_assignment = 20;
+  int64 vram_allocated_bytes = 21;
+  int64 request_count = 22;
+  string last_used = 23;     // ISO8601
+}
+
+message CapabilityInfo {
+  bool chat = 1;
+  bool completion = 2;
+  bool embedding = 3;
+  bool vision = 4;
+  bool structured_output = 5;
+  int32 max_context_tokens = 6;
+  repeated string supported_languages = 7;
+}
+
+message SecurityInfo {
+  string signature_algorithm = 1;
+  bool integrity_verified = 2;
+}
+
+message AdapterAssignment {
+  string adapter_id = 1;
+  string gpu_id = 2;
+}
+
+message LoadModelRequest {
+  string model_id = 1;
+  string target_adapter = 2;
+  string priority = 3;
+}
+
+message LoadModelResponse {
+  string model_id = 1;
+  string status = 2;
+  int32 progress_percent = 3;
+  int32 estimated_time_seconds = 4;
+}
+
+message UnloadModelRequest {
+  string model_id = 1;
+  bool force = 2;
+}
+
+message UnloadModelResponse {
+  string model_id = 1;
+  string status = 2;
+  int32 drained_requests = 3;
+}
+
+// ===========================================================================
+// Messages: Health
+// ===========================================================================
+
+message HealthCheckRequest {
+  string service = 1;
+}
+
+message HealthCheckResponse {
+  enum ServingStatus {
+    UNKNOWN = 0;
+    SERVING = 1;
+    NOT_SERVING = 2;
+  }
+  ServingStatus status = 1;
+}
+
+message SystemHealthRequest {}
+
+message SystemHealthResponse {
+  string status = 1;        // healthy, degraded, unhealthy
+  bool air_gap_verified = 2;
+  string power_state = 3;
+  int64 uptime_seconds = 4;
+  AdapterSummary adapters = 5;
+  HardwareSummary hardware = 6;
+  SystemResources system = 7;
+}
+
+message AdapterSummary {
+  int32 total = 1;
+  int32 healthy = 2;
+  int32 degraded = 3;
+  int32 unhealthy = 4;
+}
+
+message HardwareSummary {
+  int32 gpus = 1;
+  int64 total_vram_bytes = 2;
+  int64 used_vram_bytes = 3;
+  string thermal_state = 4;
+}
+
+message SystemResources {
+  double cpu_load_percent = 1;
+  int64 ram_used_bytes = 2;
+  int64 ram_total_bytes = 3;
+  int64 disk_vault_free_bytes = 4;
+}
+
+message AdapterHealthRequest {}
+
+message AdapterHealthResponse {
+  map<string, AdapterHealthEntry> adapters = 1;
+}
+
+message AdapterHealthEntry {
+  string status = 1;       // healthy, degraded, unhealthy, unknown
+  string last_heartbeat = 2;
+  int32 missed_heartbeats = 3;
+  double avg_latency_ms = 4;
+  double error_rate_5min = 5;
+  int64 vram_usage_bytes = 6;
+  int32 active_requests = 7;
+}
+
+message HardwareHealthRequest {}
+
+message HardwareHealthResponse {
+  map<string, GpuHealthEntry> gpus = 1;
+  double power_draw_watts = 2;
+  string thermal_state = 3;
+  string network_state = 4;
+}
+
+message GpuHealthEntry {
+  double temperature_celsius = 1;
+  int32 fan_speed_percent = 2;
+  int64 vram_used_bytes = 3;
+  int64 vram_total_bytes = 4;
+  int32 power_limit_watts = 5;
+  int32 compute_utilization_percent = 6;
+}
+
+// ===========================================================================
+// Messages: Power
+// ===========================================================================
+
+message PowerStateRequest {}
+
+message PowerStateResponse {
+  string state = 1;
+  double estimated_power_watts = 2;
+  AutoDemotion auto_demotion = 3;
+  bool promotion_available = 4;
+  int32 promotion_latency_target_ms = 5;
+}
+
+message AutoDemotion {
+  bool enabled = 1;
+  int32 idle_minutes_remaining = 2;
+  string next_state = 3;
+}
+
+message TransitionRequest {
+  string target_state = 1;
+  string reason = 2;
+}
+
+message TransitionResponse {
+  string transition_id = 1;
+  string from = 2;
+  string to = 3;
+  string status = 4;        // in_progress, completed, failed
+  int32 estimated_latency_ms = 5;
+}
+
+// ===========================================================================
+// Messages: Registry
+// ===========================================================================
+
+message ManifestRequest {}
+
+message ManifestResponse {
+  repeated RegistryEntry models = 1;
+}
+
+message RegistryEntry {
+  string model_id = 1;
+  ModelManifest manifest = 2;
+  string status = 3;
+  string vault_path = 4;
+}
+
+message ModelManifest {
+  ModelInfo model = 1;
+  CompatibilityInfo compatibility = 2;
+  CapabilityInfo capabilities = 3;
+  ManifestSecurity security = 4;
+  MetadataInfo metadata = 5;
+}
+
+message ModelInfo {
+  string name = 1;
+  string version = 2;
+  string format = 3;
+  string quantization = 4;
+  int64 size_bytes = 5;
+  int64 required_vram_bytes = 6;
+}
+
+message CompatibilityInfo {
+  string min_mai_version = 1;
+  repeated string supported_backends = 2;
+  repeated string hardware_classes = 3;
+}
+
+message ManifestSecurity {
+  string signature_algorithm = 1;
+  string public_key_fingerprint = 2;
+  string integrity_hash_tree = 3;
+}
+
+message MetadataInfo {
+  string license = 1;
+  string source = 2;
+  string changelog = 3;
+}
+
+message InstallModelRequest {
+  string source_path = 1;
+  bool verify_signature = 2;
+}
+
+message InstallModelResponse {
+  string model_id = 1;
+  string status = 2;       // installed, failed
+  bool integrity_verified = 3;
+  bool signature_verified = 4;
+  string installed_at = 5;  // ISO8601
+}
+
+message UninstallModelRequest {
+  string model_id = 1;
+  bool wipe_vault = 2;
+}
+
+message UninstallModelResponse {
+  string model_id = 1;
+  string status = 2;
+  bool vault_wiped = 3;
+}
+
+// ===========================================================================
+// Messages: Audit
+// ===========================================================================
+
+message AuditLogRequest {
+  int32 limit = 1;
+  int32 offset = 2;
+  string profile_id = 3;
+  string model = 4;
+  string start_time = 5;   // ISO8601
+  string end_time = 6;     // ISO8601
+  int32 status_code = 7;
+}
+
+message AuditLogResponse {
+  int64 total_entries = 1;
+  int32 offset = 2;
+  int32 limit = 3;
+  repeated AuditEntry entries = 4;
+}
+
+message AuditEntry {
+  string timestamp = 1;
+  string request_id = 2;
+  string profile_id = 3;
+  string endpoint = 4;
+  string method = 5;
+  string model = 6;
+  string adapter = 7;
+  int32 tokens_in = 8;
+  int32 tokens_out = 9;
+  int32 latency_ms = 10;
+  int32 status_code = 11;
+  string priority = 12;
+  string hash = 13;
+  string prev_hash = 14;
+}

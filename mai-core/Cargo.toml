@@ -14,11 +14,13 @@ serde_json = { workspace = true }
 toml = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
+uuid = { workspace = true }
 
 mai-hil = { path = "../mai-hil" }
 
 [dev-dependencies]
 tokio-test = { workspace = true }
+mockall = { workspace = true }
 
 [lints]
 workspace = true

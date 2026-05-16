@@ -1,0 +1,1406 @@
+openapi: "3.1.0"
+info:
+  title: Island Mountain MAI API
+  version: "1.0.0"
+  description: >
+    Model Abstraction Interface API. Stable syscall boundary between
+    L4-L5 applications and the MAI inference kernel. OpenAI-compatible
+    for /chat/completions and /embeddings. All endpoints function
+    identically in air-gapped mode.
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
+  contact:
+    name: Island Mountain AI
+    url: https://islandmountain.io
+
+servers:
+  - url: http://localhost:8420/v1
+    description: Local MAI server (default port)
+
+# ---------------------------------------------------------------------------
+# Security
+# ---------------------------------------------------------------------------
+security:
+  - profileToken: []
+
+components:
+  securitySchemes:
+    profileToken:
+      type: apiKey
+      in: header
+      name: X-IM-Profile
+      description: >
+        Family profile UUID. TPM-sealed token. If omitted, default
+        adult profile is used.
+
+  # -----------------------------------------------------------------------
+  # Shared parameters
+  # -----------------------------------------------------------------------
+  parameters:
+    ProfileHeader:
+      name: X-IM-Profile
+      in: header
+      required: false
+      schema:
+        type: string
+        format: uuid
+      description: Family profile ID
+    PriorityHeader:
+      name: X-IM-Priority
+      in: header
+      required: false
+      schema:
+        type: string
+        enum: [low, normal, high, critical]
+        default: normal
+      description: Request priority (maps to scheduler::RequestPriority)
+    RequestIdHeader:
+      name: X-IM-Request-Id
+      in: header
+      required: false
+      schema:
+        type: string
+        format: uuid
+      description: Client-supplied request correlation ID
+
+  # -----------------------------------------------------------------------
+  # Schemas
+  # -----------------------------------------------------------------------
+  schemas:
+    # --- Chat Completion ---
+    ChatCompletionRequest:
+      type: object
+      required: [model, messages]
+      properties:
+        model:
+          type: string
+          description: "Model ID from registry. Format: name:quantization or name:version:quantization"
+          example: "qwen3-14b:Q4_K_M"
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChatMessage"
+          minItems: 1
+        temperature:
+          type: number
+          minimum: 0.0
+          maximum: 2.0
+          default: 0.7
+        top_p:
+          type: number
+          minimum: 0.0
+          maximum: 1.0
+          default: 0.9
+        max_tokens:
+          type: integer
+          minimum: 1
+          default: 2048
+        stream:
+          type: boolean
+          default: true
+        stop:
+          type: array
+          items:
+            type: string
+          default: []
+        response_format:
+          $ref: "#/components/schemas/ResponseFormat"
+        tools:
+          type: array
+          items:
+            $ref: "#/components/schemas/ToolDefinition"
+        tool_choice:
+          oneOf:
+            - type: string
+              enum: [auto, none]
+            - $ref: "#/components/schemas/ToolChoice"
+          default: auto
+
+    ChatMessage:
+      type: object
+      required: [role, content]
+      properties:
+        role:
+          type: string
+          enum: [system, user, assistant, tool]
+        content:
+          type: string
+        tool_call_id:
+          type: string
+          description: Required when role is 'tool'
+
+    ResponseFormat:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [json_object, json_schema]
+        schema:
+          type: object
+          description: JSON Schema for constrained output
+
+    ToolDefinition:
+      type: object
+      required: [type, function]
+      properties:
+        type:
+          type: string
+          enum: [function]
+        function:
+          type: object
+          required: [name, parameters]
+          properties:
+            name:
+              type: string
+            description:
+              type: string
+            parameters:
+              type: object
+
+    ToolChoice:
+      type: object
+      required: [type, function]
+      properties:
+        type:
+          type: string
+          enum: [function]
+        function:
+          type: object
+          required: [name]
+          properties:
+            name:
+              type: string
+
+    ChatCompletionResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "mai-req-550e8400-e29b-41d4-a716-446655440000"
+        object:
+          type: string
+          enum: [chat.completion]
+        created:
+          type: integer
+          description: Unix timestamp
+        model:
+          type: string
+        choices:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChatChoice"
+        usage:
+          $ref: "#/components/schemas/Usage"
+
+    ChatChoice:
+      type: object
+      properties:
+        index:
+          type: integer
+        message:
+          $ref: "#/components/schemas/ChatMessage"
+        finish_reason:
+          type: string
+          enum: [stop, max_tokens, stop_sequence, tool_calls]
+          description: Maps to adapter::FinishReason
+
+    ChatCompletionChunk:
+      type: object
+      properties:
+        id:
+          type: string
+        object:
+          type: string
+          enum: [chat.completion.chunk]
+        created:
+          type: integer
+        model:
+          type: string
+        sequence:
+          type: integer
+          description: Monotonic sequence number for SSE resume
+        choices:
+          type: array
+          items:
+            type: object
+            properties:
+              index:
+                type: integer
+              delta:
+                type: object
+                properties:
+                  role:
+                    type: string
+                  content:
+                    type: string
+              finish_reason:
+                type: string
+                nullable: true
+        usage:
+          $ref: "#/components/schemas/Usage"
+
+    # --- Completion ---
+    CompletionRequest:
+      type: object
+      required: [model, prompt]
+      properties:
+        model:
+          type: string
+        prompt:
+          type: string
+        temperature:
+          type: number
+          default: 0.7
+        top_p:
+          type: number
+          default: 0.9
+        max_tokens:
+          type: integer
+          default: 2048
+        stream:
+          type: boolean
+          default: true
+        stop:
+          type: array
+          items:
+            type: string
+
+    CompletionResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        object:
+          type: string
+          enum: [text_completion]
+        created:
+          type: integer
+        model:
+          type: string
+        choices:
+          type: array
+          items:
+            type: object
+            properties:
+              index:
+                type: integer
+              text:
+                type: string
+              finish_reason:
+                type: string
+        usage:
+          $ref: "#/components/schemas/Usage"
+
+    # --- Embedding ---
+    EmbeddingRequest:
+      type: object
+      required: [model, input]
+      properties:
+        model:
+          type: string
+        input:
+          oneOf:
+            - type: string
+            - type: array
+              items:
+                type: string
+
+    EmbeddingResponse:
+      type: object
+      properties:
+        object:
+          type: string
+          enum: [list]
+        data:
+          type: array
+          items:
+            type: object
+            properties:
+              object:
+                type: string
+                enum: [embedding]
+              index:
+                type: integer
+              embedding:
+                type: array
+                items:
+                  type: number
+                  format: float
+              input_tokens:
+                type: integer
+                description: "IM extension: per-embedding token count (maps to adapter::Embedding.input_tokens)"
+        model:
+          type: string
+        usage:
+          $ref: "#/components/schemas/Usage"
+
+    # --- Structured Generation ---
+    StructuredRequest:
+      type: object
+      required: [model, prompt, schema]
+      properties:
+        model:
+          type: string
+        prompt:
+          type: string
+        schema:
+          type: object
+          description: JSON Schema for constrained output
+        temperature:
+          type: number
+          default: 0.0
+
+    StructuredResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        object:
+          type: string
+          enum: [structured_output]
+        model:
+          type: string
+        output:
+          type: object
+        usage:
+          $ref: "#/components/schemas/Usage"
+        schema_valid:
+          type: boolean
+
+    # --- Function Call ---
+    FunctionCallRequest:
+      type: object
+      required: [model, messages, functions]
+      properties:
+        model:
+          type: string
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChatMessage"
+        functions:
+          type: array
+          items:
+            type: object
+            required: [name, parameters]
+            properties:
+              name:
+                type: string
+              description:
+                type: string
+              parameters:
+                type: object
+
+    FunctionCallResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        object:
+          type: string
+          enum: [function_call]
+        model:
+          type: string
+        function_call:
+          type: object
+          properties:
+            name:
+              type: string
+            arguments:
+              type: string
+              description: JSON-encoded arguments
+        usage:
+          $ref: "#/components/schemas/Usage"
+
+    # --- Shared ---
+    Usage:
+      type: object
+      properties:
+        prompt_tokens:
+          type: integer
+        completion_tokens:
+          type: integer
+        total_tokens:
+          type: integer
+
+    # --- Model ---
+    ModelObject:
+      type: object
+      properties:
+        id:
+          type: string
+          description: "Maps to types::ModelId"
+        object:
+          type: string
+          enum: [model]
+        created:
+          type: integer
+        owned_by:
+          type: string
+          default: island-mountain
+        name:
+          type: string
+        version:
+          type: string
+        format:
+          type: string
+          enum: [GGUF, SafeTensors, EXL2, GPTQ]
+          description: Maps to registry::ModelFormat
+        quantization:
+          type: string
+          nullable: true
+        size_bytes:
+          type: integer
+          format: int64
+        required_vram_bytes:
+          type: integer
+          format: int64
+        status:
+          type: string
+          enum: [cold_storage, loading, loaded, active, evicting, evicted]
+          description: Maps to registry::ModelStatus
+        capabilities:
+          $ref: "#/components/schemas/CapabilityInfo"
+        compatible_backends:
+          type: array
+          items:
+            type: string
+        security:
+          type: object
+          properties:
+            signature_algorithm:
+              type: string
+            integrity_verified:
+              type: boolean
+
+    CapabilityInfo:
+      type: object
+      description: Maps to registry::CapabilityInfo
+      properties:
+        chat:
+          type: boolean
+        completion:
+          type: boolean
+        embedding:
+          type: boolean
+        vision:
+          type: boolean
+        structured_output:
+          type: boolean
+        max_context_tokens:
+          type: integer
+        supported_languages:
+          type: array
+          items:
+            type: string
+
+    ModelDetail:
+      allOf:
+        - $ref: "#/components/schemas/ModelObject"
+        - type: object
+          properties:
+            adapter_assignment:
+              type: object
+              nullable: true
+              properties:
+                adapter_id:
+                  type: string
+                gpu_id:
+                  type: string
+            vram_allocated_bytes:
+              type: integer
+              format: int64
+            request_count:
+              type: integer
+              format: int64
+            last_used:
+              type: string
+              format: date-time
+              nullable: true
+
+    # --- Health ---
+    HealthResponse:
+      type: object
+      description: Maps to health::HealthSnapshot
+      properties:
+        status:
+          type: string
+          enum: [healthy, degraded, unhealthy]
+        air_gap_verified:
+          type: boolean
+        power_state:
+          type: string
+          enum: [off, deep_vault_sleep, sentinel, full_inference, thermal_throttle]
+        uptime_seconds:
+          type: integer
+          format: int64
+        adapters:
+          type: object
+          properties:
+            total:
+              type: integer
+            healthy:
+              type: integer
+            degraded:
+              type: integer
+            unhealthy:
+              type: integer
+        hardware:
+          type: object
+          properties:
+            gpus:
+              type: integer
+            total_vram_bytes:
+              type: integer
+              format: int64
+            used_vram_bytes:
+              type: integer
+              format: int64
+            thermal_state:
+              type: string
+              enum: [normal, elevated, throttled, critical]
+        system:
+          type: object
+          properties:
+            cpu_load_percent:
+              type: number
+            ram_used_bytes:
+              type: integer
+              format: int64
+            ram_total_bytes:
+              type: integer
+              format: int64
+            disk_vault_free_bytes:
+              type: integer
+              format: int64
+
+    AdapterHealthMap:
+      type: object
+      properties:
+        adapters:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/AdapterHealthEntry"
+
+    AdapterHealthEntry:
+      type: object
+      description: Maps to health::AdapterHealth
+      properties:
+        status:
+          type: string
+          enum: [healthy, degraded, unhealthy, unknown]
+        last_heartbeat:
+          type: string
+          format: date-time
+        missed_heartbeats:
+          type: integer
+        avg_latency_ms:
+          type: number
+        error_rate_5min:
+          type: number
+        vram_usage_bytes:
+          type: integer
+          format: int64
+        active_requests:
+          type: integer
+
+    HardwareHealthResponse:
+      type: object
+      description: Maps to health::HardwareHealth
+      properties:
+        gpus:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/GpuHealthEntry"
+        power_draw_watts:
+          type: number
+        thermal_state:
+          type: string
+          enum: [normal, elevated, throttled, critical]
+        network_state:
+          type: string
+          enum: [air_gap_compliant, connected, non_compliant]
+
+    GpuHealthEntry:
+      type: object
+      description: Maps to health::GpuHealth
+      properties:
+        temperature_celsius:
+          type: number
+        fan_speed_percent:
+          type: integer
+        vram_used_bytes:
+          type: integer
+          format: int64
+        vram_total_bytes:
+          type: integer
+          format: int64
+        power_limit_watts:
+          type: integer
+        compute_utilization_percent:
+          type: integer
+
+    # --- Power ---
+    PowerStateResponse:
+      type: object
+      properties:
+        state:
+          type: string
+          enum: [off, deep_vault_sleep, sentinel, full_inference, thermal_throttle]
+          description: Maps to power::PowerState
+        estimated_power_watts:
+          type: number
+        auto_demotion:
+          type: object
+          properties:
+            enabled:
+              type: boolean
+            idle_minutes_remaining:
+              type: integer
+              nullable: true
+            next_state:
+              type: string
+              nullable: true
+        promotion_available:
+          type: boolean
+        promotion_latency_target_ms:
+          type: integer
+
+    PowerTransitionRequest:
+      type: object
+      required: [target_state]
+      properties:
+        target_state:
+          type: string
+          enum: [off, deep_vault_sleep, sentinel, full_inference]
+        reason:
+          type: string
+
+    PowerTransitionResponse:
+      type: object
+      properties:
+        transition_id:
+          type: string
+          format: uuid
+        from:
+          type: string
+        to:
+          type: string
+        status:
+          type: string
+          enum: [in_progress, completed, failed]
+        estimated_latency_ms:
+          type: integer
+
+    # --- Registry ---
+    InstallRequest:
+      type: object
+      required: [source_path]
+      properties:
+        source_path:
+          type: string
+        verify_signature:
+          type: boolean
+          default: true
+
+    InstallResponse:
+      type: object
+      properties:
+        model_id:
+          type: string
+        status:
+          type: string
+          enum: [installed, failed]
+        integrity_verified:
+          type: boolean
+        signature_verified:
+          type: boolean
+        installed_at:
+          type: string
+          format: date-time
+
+    UninstallRequest:
+      type: object
+      required: [model_id]
+      properties:
+        model_id:
+          type: string
+        wipe_vault:
+          type: boolean
+          default: false
+
+    # --- Audit ---
+    AuditLogResponse:
+      type: object
+      properties:
+        total_entries:
+          type: integer
+          format: int64
+        offset:
+          type: integer
+        limit:
+          type: integer
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/AuditEntry"
+
+    AuditEntry:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        request_id:
+          type: string
+          format: uuid
+        profile_id:
+          type: string
+          format: uuid
+        endpoint:
+          type: string
+        method:
+          type: string
+        model:
+          type: string
+          nullable: true
+        adapter:
+          type: string
+          nullable: true
+        tokens_in:
+          type: integer
+        tokens_out:
+          type: integer
+        latency_ms:
+          type: integer
+        status_code:
+          type: integer
+        priority:
+          type: string
+        hash:
+          type: string
+        prev_hash:
+          type: string
+
+    # --- Profile ---
+    ProfileObject:
+      type: object
+      properties:
+        profile_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        role:
+          type: string
+          enum: [admin, adult, teen, child, guest]
+        created_at:
+          type: string
+          format: date-time
+        permissions:
+          $ref: "#/components/schemas/ProfilePermissions"
+        priority:
+          type: string
+          enum: [low, normal, high, critical]
+        rate_limits:
+          type: object
+          properties:
+            requests_per_minute:
+              type: integer
+              nullable: true
+            tokens_per_hour:
+              type: integer
+              nullable: true
+        content_safety:
+          type: object
+          properties:
+            enabled:
+              type: boolean
+            filter_level:
+              type: string
+              enum: [none, moderate, strict]
+
+    ProfilePermissions:
+      type: object
+      properties:
+        model_access:
+          type: array
+          items:
+            type: string
+          description: "Model ID patterns. ['*'] = all models."
+        max_context_tokens:
+          type: integer
+          nullable: true
+        allowed_endpoints:
+          type: array
+          items:
+            type: string
+          description: "Endpoint patterns. ['*'] = all endpoints."
+        can_manage_models:
+          type: boolean
+        can_manage_power:
+          type: boolean
+        can_view_audit:
+          type: boolean
+        can_manage_profiles:
+          type: boolean
+
+    # --- Error ---
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: object
+          required: [code, message, type]
+          properties:
+            code:
+              type: string
+              description: "MAI error code (MAI-XYYY format)"
+              example: "MAI-5003"
+            message:
+              type: string
+              description: "Human-readable. Never contains backend internals."
+            type:
+              type: string
+              enum:
+                - invalid_request
+                - authentication_failed
+                - model_unavailable
+                - permission_denied
+                - validation_error
+                - rate_limited
+                - context_exceeded
+                - internal_error
+                - request_failed
+                - overloaded
+                - air_gap_violation
+                - power_state_unavailable
+                - timeout
+            retry_after_seconds:
+              type: integer
+              nullable: true
+            request_id:
+              type: string
+              format: uuid
+
+# ---------------------------------------------------------------------------
+# Paths
+# ---------------------------------------------------------------------------
+paths:
+  /chat/completions:
+    post:
+      operationId: chatCompletion
+      summary: Chat completion (OpenAI-compatible)
+      tags: [Inference]
+      parameters:
+        - $ref: "#/components/parameters/ProfileHeader"
+        - $ref: "#/components/parameters/PriorityHeader"
+        - $ref: "#/components/parameters/RequestIdHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChatCompletionRequest"
+      responses:
+        "200":
+          description: Completion response (non-streaming) or SSE stream (streaming)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatCompletionResponse"
+            text/event-stream:
+              schema:
+                $ref: "#/components/schemas/ChatCompletionChunk"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Model not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Overloaded or air-gap violation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /completions:
+    post:
+      operationId: completion
+      summary: Text completion
+      tags: [Inference]
+      parameters:
+        - $ref: "#/components/parameters/ProfileHeader"
+        - $ref: "#/components/parameters/PriorityHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CompletionRequest"
+      responses:
+        "200":
+          description: Completion response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CompletionResponse"
+
+  /embeddings:
+    post:
+      operationId: createEmbedding
+      summary: Text embedding (OpenAI-compatible)
+      tags: [Inference]
+      parameters:
+        - $ref: "#/components/parameters/ProfileHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmbeddingRequest"
+      responses:
+        "200":
+          description: Embedding response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmbeddingResponse"
+
+  /generate/structured:
+    post:
+      operationId: structuredGeneration
+      summary: JSON schema-constrained generation
+      tags: [Inference]
+      parameters:
+        - $ref: "#/components/parameters/ProfileHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StructuredRequest"
+      responses:
+        "200":
+          description: Structured output
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StructuredResponse"
+
+  /generate/function_call:
+    post:
+      operationId: functionCall
+      summary: Function/tool calling
+      tags: [Inference]
+      parameters:
+        - $ref: "#/components/parameters/ProfileHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FunctionCallRequest"
+      responses:
+        "200":
+          description: Function call response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FunctionCallResponse"
+
+  /models:
+    get:
+      operationId: listModels
+      summary: List available models
+      tags: [Models]
+      parameters:
+        - $ref: "#/components/parameters/ProfileHeader"
+        - name: backend
+          in: query
+          schema:
+            type: string
+        - name: capability
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: max_vram
+          in: query
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "200":
+          description: Model list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  object:
+                    type: string
+                    enum: [list]
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ModelObject"
+
+  /models/{model_id}:
+    get:
+      operationId: getModel
+      summary: Get model detail
+      tags: [Models]
+      parameters:
+        - $ref: "#/components/parameters/ProfileHeader"
+        - name: model_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Model detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModelDetail"
+        "404":
+          description: Model not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /models/{model_id}/load:
+    post:
+      operationId: loadModel
+      summary: Load model to VRAM (admin only)
+      tags: [Models]
+      parameters:
+        - name: model_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                target_adapter:
+                  type: string
+                priority:
+                  type: string
+                  enum: [low, normal, high]
+      responses:
+        "200":
+          description: Load initiated
+        "403":
+          description: Admin profile required
+
+  /models/{model_id}/unload:
+    post:
+      operationId: unloadModel
+      summary: Unload model from VRAM (admin only)
+      tags: [Models]
+      parameters:
+        - name: model_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                force:
+                  type: boolean
+                  default: false
+      responses:
+        "200":
+          description: Unload initiated
+        "403":
+          description: Admin profile required
+
+  /health:
+    get:
+      operationId: getHealth
+      summary: System health (no auth required)
+      tags: [Health]
+      security: []
+      responses:
+        "200":
+          description: Health summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+
+  /health/adapters:
+    get:
+      operationId: getAdapterHealth
+      summary: Per-adapter health
+      tags: [Health]
+      responses:
+        "200":
+          description: Adapter health map
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdapterHealthMap"
+
+  /health/hardware:
+    get:
+      operationId: getHardwareHealth
+      summary: GPU/accelerator health
+      tags: [Health]
+      responses:
+        "200":
+          description: Hardware health
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HardwareHealthResponse"
+
+  /power/state:
+    get:
+      operationId: getPowerState
+      summary: Current power state
+      tags: [Power]
+      responses:
+        "200":
+          description: Power state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PowerStateResponse"
+
+  /power/transition:
+    post:
+      operationId: requestTransition
+      summary: Request power state transition (admin only)
+      tags: [Power]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PowerTransitionRequest"
+      responses:
+        "200":
+          description: Transition initiated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PowerTransitionResponse"
+        "403":
+          description: Admin profile required
+
+  /registry/manifest:
+    get:
+      operationId: getRegistryManifest
+      summary: Full registry dump (admin only)
+      tags: [Registry]
+      responses:
+        "200":
+          description: Full model registry
+        "403":
+          description: Admin profile required
+
+  /registry/install:
+    post:
+      operationId: installModel
+      summary: Install model from USB/local path (admin only)
+      tags: [Registry]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InstallRequest"
+      responses:
+        "200":
+          description: Installation result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InstallResponse"
+        "403":
+          description: Admin profile required
+
+  /registry/uninstall:
+    post:
+      operationId: uninstallModel
+      summary: Remove model from registry (admin only)
+      tags: [Registry]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UninstallRequest"
+      responses:
+        "200":
+          description: Model removed
+        "403":
+          description: Admin profile required
+
+  /audit/log:
+    get:
+      operationId: getAuditLog
+      summary: Read audit trail (admin only)
+      tags: [Audit]
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+            maximum: 1000
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: profile_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: model
+          in: query
+          schema:
+            type: string
+        - name: start_time
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: end_time
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: status_code
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Audit log page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditLogResponse"
+        "403":
+          description: Admin profile required
+
+  /profiles:
+    get:
+      operationId: listProfiles
+      summary: List all profiles (admin only)
+      tags: [Profiles]
+      responses:
+        "200":
+          description: Profile list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  profiles:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ProfileObject"
+    post:
+      operationId: createProfile
+      summary: Create new profile (admin only)
+      tags: [Profiles]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProfileObject"
+      responses:
+        "201":
+          description: Profile created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProfileObject"
+
+  /profiles/{profile_id}:
+    get:
+      operationId: getProfile
+      summary: Get profile (admin only)
+      tags: [Profiles]
+      parameters:
+        - name: profile_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Profile detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProfileObject"
+    put:
+      operationId: updateProfile
+      summary: Update profile (admin only)
+      tags: [Profiles]
+      parameters:
+        - name: profile_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProfileObject"
+      responses:
+        "200":
+          description: Profile updated
+    delete:
+      operationId: deleteProfile
+      summary: Delete profile (admin only)
+      tags: [Profiles]
+      parameters:
+        - name: profile_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Profile deleted

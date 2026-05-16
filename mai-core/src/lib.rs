@@ -1,30 +1,42 @@
-//! # MAI Core Kernel
+//! MAI Core Kernel - Trusted inference orchestration layer
 //!
-//! The trusted core of the Model Abstraction Interface. Contains the model
-//! scheduler, model registry, power state machine, health monitor, hot-swap
-//! manager, and vault interface.
+//! This crate implements the trusted center of the Model Abstraction Interface:
+//! - Model scheduling across adapters and GPUs
+//! - Model registry with air-gap-safe updates
+//! - Health monitoring with local-only telemetry
+//! - Power state machine for sleep mode management
+//! - Hot-swap manager for zero-downtime updates
 //!
-//! ## Trust Level: TRUSTED
+//! # Trust Model
 //!
-//! This crate contains zero `unsafe` code. All unsafe operations are confined
-//! to `mai-hil` driver implementations. This invariant is enforced by CI.
+//! All code in this crate is TRUSTED. It may use `unsafe` only when absolutely
+//! necessary and must be audited. Prefer safe Rust patterns. All hardware access
+//! goes through the `mai-hil` traits.
 //!
-//! ## Modules
+//! # No Network Dependencies
 //!
-//! - `scheduler`: Routes inference requests to adapters based on capability,
-//!   load, and scheduling strategy.
-//! - `registry`: Tracks model manifests, lifecycle state, and version history.
-//! - `power`: Controls power state transitions (`DeepVaultSleep`, Sentinel,
-//!   `FullInference`, `ThermalThrottle`) with auto-demotion timers.
-//! - `health`: Monitors adapter heartbeats, hardware telemetry, and system
-//!   integrity. Telemetry is local-only, never transmitted.
-//! - `hotswap`: Zero-downtime model and adapter replacement with rollback.
-//! - `vault`: Interface to L2 vault operations (ZFS, PQC encryption, profiles,
-//!   audit trail, vector DB).
+//! This crate must work in air-gapped mode. Do not add dependencies that initiate
+//! network connections. Telemetry is local-only.
 
-pub mod health;
-pub mod hotswap;
-pub mod power;
-pub mod registry;
+#![forbid(unsafe_code)] // Enforced by CI; drivers in mai-hil may use unsafe
+#![warn(missing_docs)]
+
 pub mod scheduler;
-pub mod vault;
+pub mod registry;
+pub mod health;
+pub mod power;
+pub mod hotswap;
+pub mod vault; // L2 interface, implemented in Session 12
+
+// Re-export core types for convenience
+pub use scheduler::{Scheduler, SchedulerConfig, InferenceRequest, RequestPriority};
+pub use registry::{ModelRegistry, ModelManifest, ModelStatus};
+pub use health::{HealthMonitor, HealthSnapshot, AlertLevel};
+pub use power::{PowerStateMachine, PowerState, TransitionTrigger};
+pub use hotswap::{HotSwapManager, SwapRequest, SwapResult};
+
+// Core error type
+pub use errors::CoreError;
+
+mod errors;
+pub mod types;
