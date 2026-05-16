@@ -29,18 +29,18 @@ for FILE in $STAGED_FILES; do
     STAGED_CONTENT=$(git show ":$FILE" 2>/dev/null || true)
 
     # CHECK 1: Null bytes (compare byte counts)
-    ORIG_SZ=$(echo "$STAGED_CONTENT" | wc -c)
-    CLEAN_SZ=$(echo "$STAGED_CONTENT" | tr -d '\0' | wc -c)
+    ORIG_SZ=$(printf '%s' "$STAGED_CONTENT" | wc -c)
+    CLEAN_SZ=$(printf '%s' "$STAGED_CONTENT" | tr -d '\0' | wc -c)
     if [ "$ORIG_SZ" -ne "$CLEAN_SZ" ]; then
         echo -e "${RED}BLOCKED${NC} [null-bytes] $FILE"
         ERRORS=$((ERRORS + 1))
         continue
     fi
 
-    # CHECK 2: Truncation detection (>50% size reduction vs HEAD)
-    if git rev-parse HEAD >/dev/null 2>&1; then
-        HEAD_SIZE=$(git show "HEAD:$FILE" 2>/dev/null | wc -c || echo 0)
-        STAGED_SIZE=$(echo "$STAGED_CONTENT" | wc -c)
+    # CHECK 2: Truncation detection (skip new files not yet in HEAD)
+    if git show "HEAD:$FILE" &>/dev/null; then
+        HEAD_SIZE=$(git show "HEAD:$FILE" | wc -c)
+        STAGED_SIZE=$(printf '%s' "$STAGED_CONTENT" | wc -c)
 
         if [ "$HEAD_SIZE" -gt 100 ] && [ "$STAGED_SIZE" -gt 0 ]; then
             RATIO=$((STAGED_SIZE * 100 / HEAD_SIZE))
@@ -58,8 +58,8 @@ for FILE in $STAGED_FILES; do
     # CHECK 3: Bracket balance for code files
     case "$FILE" in
         *.rs|*.py|*.js|*.ts|*.json)
-            OPEN=$(echo "$STAGED_CONTENT" | grep -c '{' || true)
-            CLOSE=$(echo "$STAGED_CONTENT" | grep -c '}' || true)
+            OPEN=$(printf '%s' "$STAGED_CONTENT" | grep -c '{' || true)
+            CLOSE=$(printf '%s' "$STAGED_CONTENT" | grep -c '}' || true)
             DELTA=$((OPEN - CLOSE))
             ABS=${DELTA#-}
             if [ "$ABS" -gt 3 ]; then
@@ -73,7 +73,7 @@ for FILE in $STAGED_FILES; do
     case "$FILE" in
         *.py)
             if command -v python3 &>/dev/null; then
-                if ! echo "$STAGED_CONTENT" | python3 -c "import sys, ast; ast.parse(sys.stdin.read())" 2>/dev/null; then
+                if ! printf '%s' "$STAGED_CONTENT" | python3 -c "import sys, ast; ast.parse(sys.stdin.read())" 2>/dev/null; then
                     echo -e "${RED}BLOCKED${NC} [syntax-error] $FILE"
                     ERRORS=$((ERRORS + 1))
                 fi
