@@ -92,3 +92,4 @@ fi
 
 echo -e "${GREEN}All checks passed.${NC}"
 exit 0
+
