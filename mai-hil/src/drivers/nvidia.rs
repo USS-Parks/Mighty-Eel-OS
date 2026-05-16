@@ -1,5 +1,8 @@
-use crate::traits::*;
 use crate::HilError;
+use crate::traits::{
+    CapabilityDescriptor, HardwareProbe, MemoryManager, PowerState, PowerStateController,
+    SecureLoadContext,
+};
 use async_trait::async_trait;
 
 /// Stub NVIDIA CUDA Driver Implementation
@@ -7,13 +10,21 @@ use async_trait::async_trait;
 /// This is a skeletal implementation that satisfies the compiler and trait contracts.
 /// All methods return `HilError::NotImplemented` to indicate that real NVML integration
 /// will be implemented in Session 06. The struct compiles cleanly.
+#[derive(Debug)]
 pub struct NvidiaDriver {
     pub device_index: u32,
 }
 
 impl NvidiaDriver {
+    #[must_use]
     pub fn new() -> Self {
         Self { device_index: 0 }
+    }
+}
+
+impl Default for NvidiaDriver {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -68,7 +79,11 @@ impl SecureLoadContext for NvidiaDriver {
         Err(HilError::NotImplemented)
     }
 
-    async fn decrypt_and_verify(&self, _encrypted_blob: &[u8], _manifest_hash: &str) -> Result<Vec<u8>, HilError> {
+    async fn decrypt_and_verify(
+        &self,
+        _encrypted_blob: &[u8],
+        _manifest_hash: &str,
+    ) -> Result<Vec<u8>, HilError> {
         Err(HilError::NotImplemented)
     }
 }
@@ -82,7 +97,12 @@ mod tests {
         let driver = NvidiaDriver::new();
 
         assert!(driver.discover_devices().await.is_err());
-        assert!(driver.set_power_state(PowerState::FullInference).await.is_err());
+        assert!(
+            driver
+                .set_power_state(PowerState::FullInference)
+                .await
+                .is_err()
+        );
         assert!(driver.allocate_memory(1024).await.is_err());
         assert!(driver.unseal_tpm_key().await.is_err());
     }

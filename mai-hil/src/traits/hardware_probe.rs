@@ -1,6 +1,6 @@
-use serde::{Deserialize, Serialize};
-use async_trait::async_trait;
 use crate::HilError;
+use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
 
 /// Represents the type of computation the hardware accelerates
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

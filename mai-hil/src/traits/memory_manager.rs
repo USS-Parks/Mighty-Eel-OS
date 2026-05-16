@@ -1,5 +1,5 @@
-use async_trait::async_trait;
 use crate::HilError;
+use async_trait::async_trait;
 
 /// `MemoryManager`: Interface for compute memory allocation and tracking.
 /// Handles VRAM/RAM mapping, model loading offsets, and OOM prediction.

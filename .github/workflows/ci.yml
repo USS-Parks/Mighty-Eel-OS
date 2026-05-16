@@ -60,7 +60,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install ruff mypy pytest pytest-asyncio
-          pip install -e mai-sdk-python[dev]
+          pip install -e "mai-sdk-python[dev]"
 
       - name: Lint (ruff)
         run: ruff check adapters/ mai-sdk-python/

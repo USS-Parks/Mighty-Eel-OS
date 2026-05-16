@@ -1,5 +1,5 @@
-use async_trait::async_trait;
 use crate::HilError;
+use async_trait::async_trait;
 
 /// `SecureLoadContext`: Interface for TPM-attested, encrypted model loading.
 /// Ensures model weights are never exposed in plaintext outside the secure boundary.
@@ -10,5 +10,9 @@ pub trait SecureLoadContext: Send + Sync {
     async fn unseal_tpm_key(&self) -> Result<Vec<u8>, HilError>;
 
     /// Decrypts model weights in-place using ML-KEM, verifying integrity via ML-DSA hash tree.
-    async fn decrypt_and_verify(&self, encrypted_blob: &[u8], manifest_hash: &str) -> Result<Vec<u8>, HilError>;
+    async fn decrypt_and_verify(
+        &self,
+        encrypted_blob: &[u8],
+        manifest_hash: &str,
+    ) -> Result<Vec<u8>, HilError>;
 }

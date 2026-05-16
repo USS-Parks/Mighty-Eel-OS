@@ -3,20 +3,13 @@
 // Driver implementations (mai-hil/src/drivers/) are permitted to use unsafe
 // where direct hardware/FFI access is required per CONVENTIONS.md.
 
-pub mod traits;
 pub mod drivers;
+pub mod traits;
 
 /// Re-export core traits for MAI Core consumption
 pub use traits::{
-    HardwareProbe,
-    PowerStateController,
-    MemoryManager,
-    SecureLoadContext,
-    CapabilityDescriptor,
-    ComputeType,
-    QuantizationFormat,
-    PowerState,
-    HardwareEvent,
+    CapabilityDescriptor, ComputeType, HardwareEvent, HardwareProbe, MemoryManager, PowerState,
+    PowerStateController, QuantizationFormat, SecureLoadContext,
 };
 
 /// HIL Error Enumeration

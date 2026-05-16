@@ -1,6 +1,6 @@
-use serde::{Deserialize, Serialize};
-use async_trait::async_trait;
 use crate::HilError;
+use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
 
 /// Power states for the MAI system
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

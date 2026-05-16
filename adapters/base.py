@@ -15,11 +15,12 @@ Session 03 deliverable. Corrected per Claude audit (B1, B2, B3).
 
 from __future__ import annotations
 
+import logging
 from abc import ABC, abstractmethod
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import AsyncIterator, Any, Dict, List, Optional, Type
-import logging
+from typing import Any
 
 logger = logging.getLogger("mai.adapters.base")
 
@@ -31,18 +32,20 @@ class AdapterError(Exception):
     """Base exception for adapter failures. All variants carry structured data
     that maps 1:1 to Rust AdapterError enum variants across the FFI boundary."""
 
-    def __init__(self, code: str, detail: Optional[str] = None, **kwargs: Any):
+    def __init__(self, code: str, detail: str | None = None, **kwargs: Any):
         self.code = code
         self.detail = detail
         self.data = kwargs
         super().__init__(f"[{code}] {detail or ''}")
 
 
-class TimeoutError(AdapterError):
+class AdapterTimeoutError(AdapterError):
     """Backend exceeded response deadline."""
 
     def __init__(self, timeout_ms: int):
-        super().__init__(code="Timeout", detail=f"Timed out after {timeout_ms}ms", timeout_ms=timeout_ms)
+        super().__init__(
+            code="Timeout", detail=f"Timed out after {timeout_ms}ms", timeout_ms=timeout_ms,
+        )
 
 
 class OutOfMemoryError(AdapterError):
@@ -77,7 +80,9 @@ class ContextExceededError(AdapterError):
     """Prompt exceeds max_context_window."""
 
     def __init__(self, max_context: int):
-        super().__init__(code="ContextExceeded", detail=f"Exceeds {max_context} tokens", max_context=max_context)
+        super().__init__(
+            code="ContextExceeded", detail=f"Exceeds {max_context} tokens", max_context=max_context,
+        )
 
 
 class RateLimitedError(AdapterError):
@@ -105,7 +110,9 @@ class UnsupportedOperationError(AdapterError):
     """Operation not supported by this backend."""
 
     def __init__(self, operation: str):
-        super().__init__(code="UnsupportedOperation", detail=f"Not supported: {operation}", operation=operation)
+        super().__init__(
+            code="UnsupportedOperation", detail=f"Not supported: {operation}", operation=operation,
+        )
 
 
 # ─── Data Types (B1 fix: mirror Rust structs field-for-field) ─────────────────
@@ -116,7 +123,7 @@ class Token:
     """Single token output. Mirrors Rust Token struct exactly."""
 
     text: str
-    logprob: Optional[float] = None
+    logprob: float | None = None
     index: int = 0
     is_end_of_text: bool = False
 
@@ -128,8 +135,8 @@ class GenerationParams:
     temperature: float = 0.7
     top_p: float = 0.9
     max_tokens: int = 512
-    stop_sequences: List[str] = field(default_factory=list)
-    structured_schema: Optional[Dict[str, Any]] = None
+    stop_sequences: list[str] = field(default_factory=list)
+    structured_schema: dict[str, Any] | None = None
 
 
 class FinishReason(Enum):
@@ -153,7 +160,7 @@ class GenerationResult:
 class Embedding:
     """Embedding vector output. Mirrors Rust Embedding exactly."""
 
-    vector: List[float]
+    vector: list[float]
     input_tokens: int
 
 
@@ -178,18 +185,20 @@ class HealthStatus:
     kind: HealthStatusKind
     uptime_ms: int = 0
     requests_served: int = 0
-    reason: Optional[str] = None
+    reason: str | None = None
 
     @classmethod
-    def healthy(cls, uptime_ms: int, requests_served: int) -> "HealthStatus":
-        return cls(kind=HealthStatusKind.HEALTHY, uptime_ms=uptime_ms, requests_served=requests_served)
+    def healthy(cls, uptime_ms: int, requests_served: int) -> HealthStatus:
+        return cls(
+            kind=HealthStatusKind.HEALTHY, uptime_ms=uptime_ms, requests_served=requests_served,
+        )
 
     @classmethod
-    def degraded(cls, reason: str, uptime_ms: int) -> "HealthStatus":
+    def degraded(cls, reason: str, uptime_ms: int) -> HealthStatus:
         return cls(kind=HealthStatusKind.DEGRADED, reason=reason, uptime_ms=uptime_ms)
 
     @classmethod
-    def unavailable(cls) -> "HealthStatus":
+    def unavailable(cls) -> HealthStatus:
         return cls(kind=HealthStatusKind.UNAVAILABLE)
 
 
@@ -205,7 +214,7 @@ class AdapterCapabilities:
     """
 
     max_context_window: int
-    supported_quantizations: List[str]
+    supported_quantizations: list[str]
     supports_streaming: bool = True
     supports_batching: bool = False
     supports_structured_output: bool = False
@@ -242,11 +251,11 @@ class AdapterBase(ABC):
 
     def __init__(self) -> None:
         self._initialized: bool = False
-        self._config: Dict[str, Any] = {}
-        self._hil_handle: Optional[Any] = None
+        self._config: dict[str, Any] = {}
+        self._hil_handle: Any | None = None
 
     @abstractmethod
-    async def initialize(self, config: Dict[str, Any], hil_handle: Any) -> str:
+    async def initialize(self, config: dict[str, Any], hil_handle: Any) -> str:
         """Initialize adapter with config and HIL handle.
         Returns opaque adapter handle string.
         Blocks until backend is ready to serve."""
@@ -262,13 +271,15 @@ class AdapterBase(ABC):
         #     yield Token(text="...", is_end_of_text=True)
 
     @abstractmethod
-    async def generate_batch(self, prompts: List[str], params: GenerationParams) -> List[GenerationResult]:
+    async def generate_batch(
+        self, prompts: list[str], params: GenerationParams,
+    ) -> list[GenerationResult]:
         """Batch generation. Returns typed GenerationResult list.
         Backends without native batching parallelize internally."""
         ...
 
     @abstractmethod
-    async def embed(self, texts: List[str]) -> List[Embedding]:
+    async def embed(self, texts: list[str]) -> list[Embedding]:
         """Compute embeddings. Returns typed Embedding list.
         Backends without embedding support MUST raise UnsupportedOperationError."""
         ...
@@ -291,7 +302,7 @@ class AdapterBase(ABC):
 
 # ─── Registration ─────────────────────────────────────────────────────────────
 
-_ADAPTER_REGISTRY: Dict[str, Type[AdapterBase]] = {}
+_ADAPTER_REGISTRY: dict[str, type[AdapterBase]] = {}
 
 
 def mai_adapter(*, name: str, version: str = "1.0.0"):
@@ -301,11 +312,11 @@ def mai_adapter(*, name: str, version: str = "1.0.0"):
     decorator via static AST parsing (no execution at discovery time).
     """
 
-    def decorator(cls: Type[AdapterBase]) -> Type[AdapterBase]:
+    def decorator(cls: type[AdapterBase]) -> type[AdapterBase]:
         if not issubclass(cls, AdapterBase):
             raise TypeError(f"{cls.__name__} must inherit from AdapterBase")
-        cls._mai_adapter_name = name  # noqa: SLF001
-        cls._mai_adapter_version = version  # noqa: SLF001
+        cls._mai_adapter_name = name
+        cls._mai_adapter_version = version
         _ADAPTER_REGISTRY[name] = cls
         logger.info(f"Registered adapter: {name} v{version}")
         return cls
@@ -313,11 +324,11 @@ def mai_adapter(*, name: str, version: str = "1.0.0"):
     return decorator
 
 
-def get_adapter(name: str) -> Optional[Type[AdapterBase]]:
+def get_adapter(name: str) -> type[AdapterBase] | None:
     """Retrieve a registered adapter class by name."""
     return _ADAPTER_REGISTRY.get(name)
 
 
-def list_adapters() -> Dict[str, Type[AdapterBase]]:
+def list_adapters() -> dict[str, type[AdapterBase]]:
     """Return all registered adapters."""
     return dict(_ADAPTER_REGISTRY)
