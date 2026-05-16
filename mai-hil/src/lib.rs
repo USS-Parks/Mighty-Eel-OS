@@ -21,7 +21,7 @@
 //! - `nvidia`: NVML-based NVIDIA GPU driver (H100, H200, RTX 5090)
 //! - `amd`: ROCm-based AMD GPU driver (MI300X, RX 9090 XT)
 //! - `cpu`: CPU fallback driver (AVX-512 detection)
-//! - `tetramem_stub`: Future memristor interface (compiles, returns NotImplemented)
+//! - `tetramem_stub`: Future memristor interface (compiles, returns `NotImplemented`)
 
 pub mod drivers;
 pub mod traits;

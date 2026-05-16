@@ -9,9 +9,9 @@
 //! - Model weight storage and retrieval (ZFS datasets)
 //! - PQC encryption/decryption (ML-KEM key encapsulation, ML-DSA signatures)
 //! - TPM 2.0 key seal/unseal
-//! - Family profile CRUD (SQLite)
+//! - Family profile CRUD (`SQLite`)
 //! - Audit trail append (hash-chained, tamper-evident)
-//! - Qdrant vector DB operations (embedding storage, similarity search)
+//! - `Qdrant` vector DB operations (embedding storage, similarity search)
 //! - Compliance audit data export
 
 // Stub: implementation in Session 12

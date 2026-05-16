@@ -1,4 +1,4 @@
-//! # PowerStateController Trait
+//! # `PowerStateController` Trait
 //!
 //! Power state transition requests, current draw reporting, wake latency
 //! guarantees, and thermal throttle signals.

@@ -1,7 +1,7 @@
 //! # NVIDIA CUDA Driver
 //!
 //! NVML-based GPU detection and management for NVIDIA hardware.
-//! Supports H100 PCIe, H100 SXM5, H200, RTX 5090.
+//! Supports H100 `PCIe`, H100 SXM5, H200, RTX 5090.
 //!
 //! ## Features
 //!

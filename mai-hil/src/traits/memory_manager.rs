@@ -1,4 +1,4 @@
-//! # MemoryManager Trait
+//! # `MemoryManager` Trait
 //!
 //! VRAM allocation, model memory mapping, OOM signaling, and shared
 //! memory management between adapters for hybrid scheduling.

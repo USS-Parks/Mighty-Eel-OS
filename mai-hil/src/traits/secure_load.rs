@@ -1,4 +1,4 @@
-//! # SecureLoadContext Trait
+//! # `SecureLoadContext` Trait
 //!
 //! TPM-attested model loading, encrypted model weight transfer from
 //! vault, and integrity verification before inference begins.

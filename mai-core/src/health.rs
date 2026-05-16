@@ -5,7 +5,7 @@
 //!
 //! ## Responsibilities
 //!
-//! - Adapter heartbeat monitoring via AdapterManager
+//! - Adapter heartbeat monitoring via `AdapterManager`
 //! - Hardware telemetry collection via HIL (GPU temp, VRAM, power, fans)
 //! - Alert escalation: Healthy -> Degraded -> Critical -> Failed
 //! - Air-gap verification (periodic network interface check)

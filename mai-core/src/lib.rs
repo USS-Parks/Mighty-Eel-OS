@@ -14,8 +14,8 @@
 //! - `scheduler`: Routes inference requests to adapters based on capability,
 //!   load, and scheduling strategy.
 //! - `registry`: Tracks model manifests, lifecycle state, and version history.
-//! - `power`: Controls power state transitions (DeepVaultSleep, Sentinel,
-//!   FullInference, ThermalThrottle) with auto-demotion timers.
+//! - `power`: Controls power state transitions (`DeepVaultSleep`, Sentinel,
+//!   `FullInference`, `ThermalThrottle`) with auto-demotion timers.
 //! - `health`: Monitors adapter heartbeats, hardware telemetry, and system
 //!   integrity. Telemetry is local-only, never transmitted.
 //! - `hotswap`: Zero-downtime model and adapter replacement with rollback.

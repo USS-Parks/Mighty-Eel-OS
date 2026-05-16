@@ -1,22 +1,22 @@
 //! # Power State Machine
 //!
-//! Controls device power state transitions between Off, DeepVaultSleep,
-//! Sentinel, FullInference, and ThermalThrottle.
+//! Controls device power state transitions between Off, `DeepVaultSleep`,
+//! Sentinel, `FullInference`, and `ThermalThrottle`.
 //!
 //! ## States
 //!
 //! | State           | GPU-era Power | QM-era Power |
 //! |-----------------|---------------|--------------|
 //! | Off             | 0W            | 0W           |
-//! | DeepVaultSleep  | ~2W           | ~1W          |
+//! | `DeepVaultSleep`  | ~2W           | ~1W          |
 //! | Sentinel        | ~8W           | ~3W          |
-//! | FullInference   | ~350W         | ~15W         |
-//! | ThermalThrottle | Variable      | N/A          |
+//! | `FullInference`   | ~350W         | ~15W         |
+//! | `ThermalThrottle` | Variable      | N/A          |
 //!
 //! ## Auto-Demotion
 //!
-//! - FullInference -> Sentinel: 12 minutes idle (configurable)
-//! - Sentinel -> DeepVaultSleep: 2 hours idle (configurable)
+//! - `FullInference` -> Sentinel: 12 minutes idle (configurable)
+//! - Sentinel -> `DeepVaultSleep`: 2 hours idle (configurable)
 //!
 //! ## Sovereignty Signal
 //!
