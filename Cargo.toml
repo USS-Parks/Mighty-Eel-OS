@@ -39,8 +39,8 @@ pyo3 = { version = "0.22", features = ["auto-initialize"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
 
-# GPU access (feature-gated)
-nvml-wrapper = { version = "0.10", optional = true }
+# GPU access (feature-gated at crate level, not here)
+nvml-wrapper = "0.10"
 
 # Testing
 tokio-test = "0.4"
