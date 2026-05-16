@@ -37,7 +37,11 @@ jobs:
 
       - name: Verify no unsafe in mai-core
         run: |
-          if grep -rn "unsafe" mai-core/src/; then
+          # Strip comments before grepping so doc-comments mentioning
+          # "unsafe" don't cause false positives.  The workspace lint
+          # unsafe_code = "deny" is the real enforcement; this is a
+          # belt-and-suspenders check.
+          if grep -rn "unsafe" mai-core/src/ | grep -v '^\s*//' | grep -v '//.*unsafe'; then
             echo "ERROR: unsafe code found in mai-core"
             exit 1
           fi
