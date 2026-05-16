@@ -121,7 +121,7 @@ pub struct SchedulerConfig {
 #[derive(Debug)]
 pub struct AdapterSelection {
     /// Selected adapter
-    pub adapter_id: AdapterId,
+    pub _adapter_id: AdapterId,
     /// Selected model
     pub model_id: ModelId,
     /// GPU assignment (None for CPU fallback)
@@ -168,14 +168,14 @@ pub struct Scheduler {
 }
 
 struct AdapterInfo {
-    handle: AdapterHandle,
-    capabilities: AdapterCapabilities,
+    _handle: AdapterHandle,
+    _capabilities: AdapterCapabilities,
     current_load: usize,
     health_status: bool,
 }
 
 struct ModelPlacement {
-    adapter_id: AdapterId,
+    _adapter_id: AdapterId,
     gpu_id: Option<GpuIdentifier>,
     vram_allocated: u64,
 }
@@ -199,9 +199,9 @@ impl Scheduler {
     /// Register an adapter with the scheduler
     pub async fn register_adapter(
         &self,
-        adapter_id: AdapterId,
-        handle: AdapterHandle,
-        capabilities: AdapterCapabilities,
+        _adapter_id: AdapterId,
+        _handle: AdapterHandle,
+        _capabilities: AdapterCapabilities,
     ) -> Result<(), SchedulerError> {
         // Implementation in Session 07
         todo!()
@@ -210,14 +210,14 @@ impl Scheduler {
     /// Route a request to the optimal adapter+model
     pub async fn route_request(
         &self,
-        request: InferenceRequest,
+        _request: InferenceRequest,
     ) -> Result<AdapterSelection, SchedulerError> {
         // Implementation in Session 07
         todo!()
     }
 
     /// Evaluate if request exceeds Sentinel capability (for promotion)
-    pub fn evaluate_complexity(&self, request: &InferenceRequest) -> ComplexityScore {
+    pub fn evaluate_complexity(&self, _request: &InferenceRequest) -> ComplexityScore {
         // Implementation in Session 07
         todo!()
     }
@@ -225,7 +225,7 @@ impl Scheduler {
     /// Trigger promotion to Full Inference mode
     pub async fn promote_to_full_inference(
         &self,
-        request_id: RequestId,
+        _request_id: RequestId,
         required_capabilities: ModelCapabilities,
     ) -> Result<PromotionResult, SchedulerError> {
         // Implementation in Session 07
