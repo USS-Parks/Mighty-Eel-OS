@@ -1,4 +1,3 @@
-#![allow(unused_variables, unused_imports)]
 //! Model Scheduler - Request routing and load balancing
 //!
 //! Routes inference requests to the optimal adapter+model combination based on

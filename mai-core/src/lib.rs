@@ -1,3 +1,4 @@
+#![allow(unused_variables)]
 //! MAI Core Kernel - Trusted inference orchestration layer
 //!
 //! This crate implements the trusted center of the Model Abstraction Interface:
