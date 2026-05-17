@@ -349,6 +349,9 @@ impl HotSwapManager {
         state: &mut SwapState,
         drained_count: &mut usize,
     ) -> Result<(), SwapError> {
+        // Resolve adapter ID before deactivation (registry needs old model loaded to look it up)
+        let resolved_adapter_id = self.target_adapter_id(&request.target).await?;
+
         // Step 1: Pause routing to old component
         self.pause_routing(&request.target).await?;
 
@@ -360,8 +363,8 @@ impl HotSwapManager {
         self.deactivate(&request.target).await?;
         state.old_deactivated = true;
 
-        // Step 4: Activate new component
-        self.activate(&request.target).await?;
+        // Step 4: Activate new component (pass resolved adapter for model loading)
+        self.activate(&request.target, &resolved_adapter_id).await?;
         state.new_activated = true;
 
         // Step 5: Health check new component
@@ -498,12 +501,12 @@ impl HotSwapManager {
     }
 
     /// Activate new component: load in registry and register in scheduler.
-    async fn activate(&self, target: &SwapTarget) -> Result<(), SwapError> {
+    async fn activate(&self, target: &SwapTarget, resolved_adapter: &AdapterId) -> Result<(), SwapError> {
         match target {
             SwapTarget::Model { new_id, .. } => {
-                // Load the new model through the registry
+                // Load the new model through the registry onto the same adapter
                 let mut registry = self.registry.write().await;
-                registry.load_model(new_id).await.map_err(|e| {
+                registry.load_model(new_id, resolved_adapter.clone()).await.map_err(|e| {
                     SwapError::RegistryError(format!("Failed to load model {}: {}", new_id, e))
                 })?;
                 info!("Activated new model: {}", new_id);
@@ -577,10 +580,11 @@ impl HotSwapManager {
             // Record a heartbeat from the new component
             {
                 let mut health = self.health_monitor.write().await;
-                health.record_heartbeat(
+                let _ = health.record_heartbeat(
                     &adapter_id,
-                    Duration::from_millis(10), // Initial latency measurement
-                    true,                      // Assume healthy until proven otherwise
+                    1,     // requests_served
+                    10.0,  // avg_latency_ms (healthy baseline)
+                    0.0,   // error_rate (no errors)
                 );
             }
 
@@ -588,7 +592,7 @@ impl HotSwapManager {
             {
                 let health = self.health_monitor.read().await;
                 if let Some(adapter_health) = health.get_adapter_health(&adapter_id) {
-                    if adapter_health.is_healthy {
+                    if matches!(adapter_health.status, crate::health::AdapterStatus::Healthy) {
                         info!("Health check passed for {}", adapter_id);
                         return Ok(true);
                     }
@@ -618,9 +622,15 @@ impl HotSwapManager {
         match target {
             SwapTarget::Model { old_id, new_id } => {
                 // Unload new model, reload old model
+                // We need an adapter to reload onto; look up from new_id (just loaded)
+                let adapter_id = {
+                    let registry = self.registry.read().await;
+                    registry.get_loaded_adapter(new_id).cloned()
+                        .unwrap_or_else(|| "unknown-adapter".to_string())
+                };
                 let mut registry = self.registry.write().await;
                 let _ = registry.unload_model(new_id).await; // Best effort
-                registry.load_model(old_id).await.map_err(|e| {
+                registry.load_model(old_id, adapter_id).await.map_err(|e| {
                     SwapError::RollbackFailed(format!(
                         "Cannot restore original model {}: {}",
                         old_id, e
@@ -793,7 +803,7 @@ mod tests {
     ) {
         let config = SchedulerConfig {
             strategy: SchedulingStrategy::LeastLoaded,
-            max_queue_depth_per_priority: std::collections::HashMap::new(),
+            ..SchedulerConfig::default()
         };
         let scheduler = Arc::new(RwLock::new(Scheduler::new(config).unwrap()));
         let registry = Arc::new(RwLock::new(ModelRegistry::new(Box::new(MockVault))));

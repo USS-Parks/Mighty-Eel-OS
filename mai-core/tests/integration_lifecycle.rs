@@ -20,7 +20,7 @@ use uuid::Uuid;
 
 use mai_core::health::{HealthConfig, HealthMonitor};
 use mai_core::hotswap::{HotSwapManager, SwapRequest, SwapResult};
-use mai_core::power::{PowerState, PowerStateMachine, TransitionTrigger};
+use mai_core::power::{PowerConfig, PowerState, PowerStateMachine, TransitionTrigger, WakeSource};
 use mai_core::registry::ModelRegistry;
 use mai_core::scheduler::{
     InferenceRequest, RequestPriority, Scheduler, SchedulerConfig,
@@ -94,21 +94,21 @@ fn make_request(model: Option<&str>, priority: RequestPriority) -> InferenceRequ
 #[tokio::test]
 async fn test_full_request_lifecycle() {
     // 1. Initialize power state machine and boot to FullInference
-    let mut power = PowerStateMachine::new();
+    let mut power = PowerStateMachine::new(PowerConfig::default());
     assert_eq!(power.current_state(), PowerState::Off);
 
     power
-        .transition(TransitionTrigger::BootCommand)
+        .request_transition(TransitionTrigger::SystemBoot)
         .expect("Boot should succeed");
     assert_eq!(power.current_state(), PowerState::DeepVaultSleep);
 
     power
-        .transition(TransitionTrigger::WakeWord)
+        .request_transition(TransitionTrigger::WakeTrigger(WakeSource::ApiRequest))
         .expect("Wake should succeed");
     assert_eq!(power.current_state(), PowerState::Sentinel);
 
     power
-        .transition(TransitionTrigger::ComplexRequest)
+        .request_transition(TransitionTrigger::SentinelPromotion)
         .expect("Promotion should succeed");
     assert_eq!(power.current_state(), PowerState::FullInference);
 
@@ -150,26 +150,29 @@ async fn test_full_request_lifecycle() {
     health.register_adapter("gpu-0-ollama".to_string());
     health.register_adapter("gpu-1-vllm".to_string());
 
-    // Record healthy heartbeats
+    // Record healthy heartbeats (requests_served, avg_latency_ms, error_rate)
     health.record_heartbeat(
         &"gpu-0-ollama".to_string(),
-        Duration::from_millis(15),
-        true,
-    );
+        10,    // requests_served
+        15.0,  // avg_latency_ms
+        0.0,   // error_rate
+    ).unwrap();
     health.record_heartbeat(
         &"gpu-1-vllm".to_string(),
-        Duration::from_millis(20),
-        true,
-    );
+        8,     // requests_served
+        20.0,  // avg_latency_ms
+        0.0,   // error_rate
+    ).unwrap();
 
     assert_eq!(health.healthy_adapter_count(), 2);
 
-    // 5. Simulate adapter failure: mark gpu-1-vllm unhealthy
+    // 5. Simulate adapter failure: mark gpu-1-vllm unhealthy via high error rate
     health.record_heartbeat(
         &"gpu-1-vllm".to_string(),
-        Duration::from_millis(5000),
-        false,
-    );
+        0,     // requests_served
+        5000.0, // avg_latency_ms (very high)
+        0.9,   // error_rate (above 0.5 threshold -> Degraded)
+    ).unwrap();
 
     // Scheduler should exclude unhealthy adapter
     scheduler.set_adapter_health(&"gpu-1-vllm".to_string(), false);
@@ -290,25 +293,25 @@ async fn test_scheduler_metrics_under_load() {
 
 #[tokio::test]
 async fn test_power_state_full_cycle() {
-    let mut power = PowerStateMachine::new();
+    let mut power = PowerStateMachine::new(PowerConfig::default());
 
     // Boot -> DeepVaultSleep -> Sentinel -> FullInference -> Sentinel -> DeepVaultSleep -> Off
-    power.transition(TransitionTrigger::BootCommand).unwrap();
+    power.request_transition(TransitionTrigger::SystemBoot).unwrap();
     assert_eq!(power.current_state(), PowerState::DeepVaultSleep);
 
-    power.transition(TransitionTrigger::WakeWord).unwrap();
+    power.request_transition(TransitionTrigger::WakeTrigger(WakeSource::ApiRequest)).unwrap();
     assert_eq!(power.current_state(), PowerState::Sentinel);
 
-    power.transition(TransitionTrigger::ComplexRequest).unwrap();
+    power.request_transition(TransitionTrigger::SentinelPromotion).unwrap();
     assert_eq!(power.current_state(), PowerState::FullInference);
 
-    power.transition(TransitionTrigger::InactivityTimeout).unwrap();
+    power.request_transition(TransitionTrigger::InactivityTimeout).unwrap();
     assert_eq!(power.current_state(), PowerState::Sentinel);
 
-    power.transition(TransitionTrigger::ExtendedInactivity).unwrap();
+    power.request_transition(TransitionTrigger::ExtendedInactivity).unwrap();
     assert_eq!(power.current_state(), PowerState::DeepVaultSleep);
 
-    power.transition(TransitionTrigger::ShutdownCommand).unwrap();
+    power.request_transition(TransitionTrigger::SystemShutdown).unwrap();
     assert_eq!(power.current_state(), PowerState::Off);
 
     // Verify transition log recorded all 6 transitions

@@ -64,7 +64,7 @@ impl PowerState {
 }
 
 /// What triggered the transition request
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum TransitionTrigger {
     /// System boot sequence
     SystemBoot,
