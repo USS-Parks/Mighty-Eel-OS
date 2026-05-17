@@ -10,7 +10,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use mai_hil::traits::adapter::{
+use mai_hil::traits::{
     AdapterCapabilities, AdapterConfig, AdapterMetrics, Embedding, FinishReason,
     GenerationParams, GenerationResult, HealthStatus, Token,
 };

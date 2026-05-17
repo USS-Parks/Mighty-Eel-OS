@@ -5,17 +5,14 @@
 //! inference requests to adapters.
 
 use std::collections::HashMap;
-use std::pin::Pin;
 use std::sync::Arc;
-use std::time::Duration;
 
-use futures::Stream;
 use serde_json::Value;
 use tokio::sync::{Mutex, RwLock};
 use tracing::{debug, error, info, warn};
 
-use mai_hil::traits::adapter::{
-    AdapterCapabilities, AdapterConfig, AdapterError, Embedding, GenerationParams,
+use mai_hil::traits::{
+    AdapterCapabilities, AdapterConfig, Embedding, GenerationParams,
     GenerationResult, HealthStatus, Token,
 };
 
@@ -439,7 +436,7 @@ impl AdapterManager {
                     config: adapter_config,
                 };
                 let params_json = serde_json::to_value(&init_params)?;
-                let result = process.call("initialize", params_json).await?;
+                let _result = process.call("initialize", params_json).await?;
 
                 process.mark_running();
 

@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info, warn};
 
-use mai_hil::traits::adapter::AdapterConfig;
+use mai_hil::traits::AdapterConfig;
 
 use crate::errors::FrameworkError;
 
