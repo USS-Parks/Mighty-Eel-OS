@@ -14,9 +14,17 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 toml = { workspace = true }
+tracing = { workspace = true }
+tokio = { workspace = true }
+nvml-wrapper = { workspace = true, optional = true }
 
 [dev-dependencies]
-tokio = { workspace = true }
+mockall = { workspace = true }
+
+[features]
+default = []
+nvidia = ["nvml-wrapper"]
+integration = ["nvidia"]
 
 [lints]
 workspace = true
