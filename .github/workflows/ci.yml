@@ -5,6 +5,11 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # Nightly integration: 2am UTC daily (uncomment integration job when GPU runner available)
+  # Weekly benchmarks: 3am UTC Sunday (uncomment benchmarks job when GPU runner available)
+  # schedule:
+  #   - cron: '0 2 * * *'   # nightly
+  #   - cron: '0 3 * * 0'   # weekly Sunday
 
 env:
   CARGO_TERM_COLOR: always
@@ -37,10 +42,6 @@ jobs:
 
       - name: Verify no unsafe in mai-core
         run: |
-          # Strip comments before grepping so doc-comments mentioning
-          # "unsafe" don't cause false positives.  The workspace lint
-          # unsafe_code = "deny" is the real enforcement; this is a
-          # belt-and-suspenders check.
           if grep -rn "unsafe" mai-core/src/ | grep -v '^\s*//' | grep -v '//.*unsafe'; then
             echo "ERROR: unsafe code found in mai-core"
             exit 1
@@ -67,31 +68,79 @@ jobs:
 
       - name: Type check (mypy)
         run: mypy --strict adapters/ mai-sdk-python/src/
-        continue-on-error: true  # Strict until adapters have full type coverage
+        continue-on-error: true
 
       - name: Unit tests
         run: pytest adapters/ mai-sdk-python/ -v --ignore=**/test_integration*
 
-  # Nightly integration tests (requires GPU runner)
-  # integration:
+  # CI-safe integration tests (no GPU required, runs on every PR)
+  # Uses mock adapters; tests the Rust MAI stack only.
+  integration-ci:
+    name: Integration Tests (CI, No GPU)
+    runs-on: ubuntu-latest
+    needs: [rust-check]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Run mai-core integration tests
+        run: cargo test -p mai-core --test integration_lifecycle -- --nocapture
+      - name: Run mai-adapters CI integration tests
+        run: cargo test -p mai-adapters --test e2e_integration -- --nocapture
+
+  # CI-safe benchmarks (no GPU, structural validation only)
+  benchmarks-ci:
+    name: Benchmark Validation (CI, No GPU)
+    runs-on: ubuntu-latest
+    needs: [rust-check]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Run benchmark suite (simulated)
+        run: cargo test -p mai-adapters --features benchmark --test benchmarks -- --nocapture
+
+  # ─── GPU-Required Jobs (uncomment when self-hosted runner available) ────
+  #
+  # integration-gpu:
   #   name: Integration Tests (GPU)
   #   runs-on: [self-hosted, gpu]
-  #   if: github.event_name == 'schedule'
+  #   needs: [rust-check]
   #   steps:
   #     - uses: actions/checkout@v4
-  #     - name: Run integration tests
-  #       run: cargo test --workspace --features integration
+  #     - uses: dtolnay/rust-toolchain@stable
+  #     - uses: Swatinem/rust-cache@v2
+  #     - name: Verify Ollama is running
+  #       run: curl -s http://localhost:11434/api/tags || (echo "Ollama not available" && exit 1)
+  #     - name: Run Rust integration tests
+  #       run: cargo test -p mai-adapters --features integration -- --nocapture
+  #     - name: Run E2E integration tests
+  #       run: cargo test -p mai-adapters --features integration --test e2e_integration -- --nocapture
   #     - name: Run Python integration tests
   #       run: pytest adapters/ -m integration -v
-
-  # Weekly benchmarks
-  # benchmarks:
-  #   name: Performance Benchmarks
+  #
+  # benchmarks-gpu:
+  #   name: Performance Benchmarks (GPU)
   #   runs-on: [self-hosted, gpu]
-  #   if: github.event.schedule == '0 3 * * 0'
+  #   needs: [rust-check]
   #   steps:
   #     - uses: actions/checkout@v4
+  #     - uses: dtolnay/rust-toolchain@stable
+  #     - uses: Swatinem/rust-cache@v2
+  #     - uses: actions/setup-python@v5
+  #       with:
+  #         python-version: "3.12"
   #     - name: Run benchmarks
-  #       run: cargo bench --workspace
-  #     - name: Store results
-  #       run: cp target/criterion tests/benchmarks/
+  #       run: |
+  #         cargo test -p mai-adapters --features benchmark -- --nocapture 2>&1 | \
+  #           tee /tmp/bench_output.txt
+  #     - name: Store benchmark results
+  #       run: cat /tmp/bench_output.txt | python3 tests/benchmarks/bench_compare.py store
+  #     - name: Compare with previous run
+  #       run: python3 tests/benchmarks/bench_compare.py compare
+  #       continue-on-error: true
+  #     - name: Upload benchmark results
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: benchmark-results
+  #         path: tests/benchmarks/results/
