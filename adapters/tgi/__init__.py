@@ -1,6 +1,6 @@
 """MAI TGI backend adapter."""
 from .adapter import TgiAdapter
-from .config import TgiConfig
 from .client import TgiClient
+from .config import TgiConfig
 
-__all__ = ["TgiAdapter", "TgiConfig", "TgiClient"]
+__all__ = ["TgiAdapter", "TgiClient", "TgiConfig"]

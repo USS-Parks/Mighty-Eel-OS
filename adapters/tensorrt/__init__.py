@@ -1,6 +1,6 @@
 """MAI TensorRT-LLM backend adapter."""
 from .adapter import TensorRtAdapter
-from .config import TensorRtConfig
 from .client import TensorRtClient
+from .config import TensorRtConfig
 
-__all__ = ["TensorRtAdapter", "TensorRtConfig", "TensorRtClient"]
+__all__ = ["TensorRtAdapter", "TensorRtClient", "TensorRtConfig"]

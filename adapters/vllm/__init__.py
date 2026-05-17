@@ -1,6 +1,6 @@
 """MAI vLLM backend adapter."""
 from .adapter import VllmAdapter
-from .config import VllmConfig
 from .client import VllmClient
+from .config import VllmConfig
 
-__all__ = ["VllmAdapter", "VllmConfig", "VllmClient"]
+__all__ = ["VllmAdapter", "VllmClient", "VllmConfig"]

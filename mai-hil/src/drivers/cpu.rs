@@ -13,7 +13,7 @@ use crate::traits::{
 use crate::drivers::{parse_memory_value, parse_proc_line};
 use async_trait::async_trait;
 use tokio::sync::Mutex;
-use tracing::{debug, info, warn};
+use tracing::info;
 
 /// CPU fallback driver using procfs and sysfs.
 ///
@@ -186,7 +186,7 @@ impl PowerStateController for CpuDriver {
     }
 
     async fn set_thermal_limit(&self, limit_celsius: f32) -> Result<(), HilError> {
-        if limit_celsius > 105.0 || limit_celsius < 30.0 {
+        if !(30.0..=105.0).contains(&limit_celsius) {
             return Err(HilError::ThermalLimitExceeded {
                 temperature: limit_celsius,
             });

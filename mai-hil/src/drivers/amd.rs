@@ -13,7 +13,7 @@ use crate::traits::{
 use async_trait::async_trait;
 use tokio::process::Command;
 use tokio::sync::Mutex;
-use tracing::{debug, error, info, warn};
+use tracing::info;
 
 /// AMD GPU driver backed by rocm-smi CLI.
 ///
@@ -179,7 +179,7 @@ impl PowerStateController for AmdDriver {
     }
 
     async fn set_thermal_limit(&self, limit_celsius: f32) -> Result<(), HilError> {
-        if limit_celsius > 100.0 || limit_celsius < 30.0 {
+        if !(30.0..=100.0).contains(&limit_celsius) {
             return Err(HilError::ThermalLimitExceeded {
                 temperature: limit_celsius,
             });

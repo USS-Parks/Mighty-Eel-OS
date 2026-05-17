@@ -6,7 +6,6 @@ Implements RadixAttention KV cache reuse, constrained decoding
 from __future__ import annotations
 
 import asyncio
-import json
 import time
 from typing import Any, AsyncIterator
 
@@ -16,11 +15,9 @@ from adapters.base import (
     AdapterTimeoutError,
     BackendCrashedError,
     BackendUnavailableError,
-    ContextExceededError,
     GenerationParams,
     GenerationResult,
     HealthStatus,
-    ModelNotFoundError,
     Token,
     UnsupportedOperationError,
     mai_adapter,
