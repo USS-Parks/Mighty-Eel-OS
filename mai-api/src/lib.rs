@@ -1,3 +1,4 @@
+#![allow(unused_variables, dead_code, missing_docs)]
 //! # MAI API Server
 //!
 //! REST (axum) + gRPC (tonic) + SSE/WebSocket streaming API server.

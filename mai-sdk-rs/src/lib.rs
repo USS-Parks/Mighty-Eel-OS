@@ -1,3 +1,4 @@
+#![allow(unused_variables, dead_code, missing_docs)]
 //! # MAI Rust SDK
 //!
 //! Typed Rust SDK for performance-critical L4 components that need direct
