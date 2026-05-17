@@ -6,11 +6,11 @@
 use thiserror::Error;
 
 // Re-export module errors for unified handling
-pub use crate::scheduler::SchedulerError;
-pub use crate::registry::RegistryError;
 pub use crate::health::HealthError;
-pub use crate::power::PowerError;
 pub use crate::hotswap::SwapError;
+pub use crate::power::PowerError;
+pub use crate::registry::RegistryError;
+pub use crate::scheduler::SchedulerError;
 
 /// Top-level core error (for API boundary)
 #[derive(Error, Debug)]
@@ -44,9 +44,7 @@ impl From<SchedulerError> for CoreError {
                 CoreError::ModelUnavailable("No compatible adapter".into())
             }
             SchedulerError::AllAdaptersBusy => CoreError::Overloaded,
-            SchedulerError::Timeout(_) => {
-                CoreError::RequestFailed("Request timed out".into())
-            }
+            SchedulerError::Timeout(_) => CoreError::RequestFailed("Request timed out".into()),
             SchedulerError::QueueFull(_) => CoreError::Overloaded,
             _ => CoreError::Internal("Scheduler error".into()),
         }

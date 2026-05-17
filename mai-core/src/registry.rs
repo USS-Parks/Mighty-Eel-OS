@@ -10,7 +10,7 @@ use std::time::Instant;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::types::{ModelId, AdapterId};
+use crate::types::{AdapterId, ModelId};
 use crate::vault::VaultInterface;
 
 /// Model manifest schema (matches TOML structure)
@@ -120,7 +120,10 @@ pub enum ModelStatus {
     /// Loaded in VRAM, ready to serve requests
     Loaded,
     /// Actively serving requests (tracked for LRU eviction)
-    Active { last_used: Instant, request_count: u64 },
+    Active {
+        last_used: Instant,
+        request_count: u64,
+    },
     /// Being evicted: finishing in-flight requests, freeing VRAM
     Evicting,
     /// Removed from VRAM, returned to ColdStorage

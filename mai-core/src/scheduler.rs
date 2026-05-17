@@ -7,13 +7,11 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use tokio::sync::RwLock;
 use thiserror::Error;
+use tokio::sync::RwLock;
 
-use mai_hil::traits::{HardwareProbe, MemoryManager};
-use mai_hil::traits::{AdapterCapabilities, AdapterHandle};
-
-use crate::types::{RequestId, ProfileId, ModelId, AdapterId, GpuIdentifier};
+use crate::types::{AdapterId, GpuIdentifier, ModelId, ProfileId, RequestId};
+use mai_hil::traits::{AdapterCapabilities, AdapterHandle, HardwareProbe, MemoryManager};
 
 /// Configurable scheduling strategies
 #[derive(Debug, Clone)]

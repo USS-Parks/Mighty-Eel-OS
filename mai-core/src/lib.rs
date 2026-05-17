@@ -22,19 +22,19 @@
 #![forbid(unsafe_code)] // Enforced by CI; drivers in mai-hil may use unsafe
 // #![warn(missing_docs)] // Re-enable after stub phase (Session 08+)
 
-pub mod scheduler;
-pub mod registry;
 pub mod health;
-pub mod power;
 pub mod hotswap;
+pub mod power;
+pub mod registry;
+pub mod scheduler;
 pub mod vault; // L2 interface, implemented in Session 12
 
 // Re-export core types for convenience
-pub use scheduler::{Scheduler, SchedulerConfig, InferenceRequest, RequestPriority};
-pub use registry::{ModelRegistry, ModelManifest, ModelStatus};
-pub use health::{HealthMonitor, HealthSnapshot, AlertLevel};
-pub use power::{PowerStateMachine, PowerState, TransitionTrigger};
+pub use health::{AlertLevel, HealthMonitor, HealthSnapshot};
 pub use hotswap::{HotSwapManager, SwapRequest, SwapResult};
+pub use power::{PowerState, PowerStateMachine, TransitionTrigger};
+pub use registry::{ModelManifest, ModelRegistry, ModelStatus};
+pub use scheduler::{InferenceRequest, RequestPriority, Scheduler, SchedulerConfig};
 
 // Core error type
 pub use errors::CoreError;

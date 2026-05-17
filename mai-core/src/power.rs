@@ -4,21 +4,21 @@
 //! and ThermalThrottle states with hardware integration via HIL.
 //! NEVER transmits data off-device.
 
-use std::time::Duration;
 use std::sync::Arc;
+use std::time::Duration;
 
 use thiserror::Error;
 
-use mai_hil::PowerStateController;
 use crate::scheduler::ComplexityScore;
+use mai_hil::PowerStateController;
 
 /// Power states (matches Tock-inspired trust model)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PowerState {
     Off,
-    DeepVaultSleep,  // ~2W GPU-era, ~1W QM-era target
-    Sentinel,        // ~8W GPU-era, ~3W QM-era target
-    FullInference,   // ~350W GPU-era, ~15W QM-era target
+    DeepVaultSleep, // ~2W GPU-era, ~1W QM-era target
+    Sentinel,       // ~8W GPU-era, ~3W QM-era target
+    FullInference,  // ~350W GPU-era, ~15W QM-era target
     ThermalThrottle,
 }
 
@@ -71,8 +71,8 @@ pub enum TransitionAction {
 #[derive(Debug, Clone, Copy)]
 pub enum PowerGpuState {
     Off,
-    LowPower,   // Sentinel mode
-    FullPower,  // Full inference
+    LowPower,  // Sentinel mode
+    FullPower, // Full inference
     Throttled,
 }
 
@@ -84,8 +84,8 @@ pub struct Transition {
     pub trigger: TransitionTrigger,
     pub guard: Option<TransitionGuard>,
     pub actions: Vec<TransitionAction>,
-    pub latency_target: Duration,     // GPU-era
-    pub latency_target_qm: Duration,  // QM-era (interface only)
+    pub latency_target: Duration,    // GPU-era
+    pub latency_target_qm: Duration, // QM-era (interface only)
 }
 
 /// Power state machine errors
@@ -210,7 +210,11 @@ impl PowerStateMachine {
     }
 
     /// Get transition latency target (for dashboard reporting)
-    pub fn transition_latency_target(&self, from: PowerState, to: PowerState) -> Option<Duration> {
+    pub fn transition_latency_target(
+        &self,
+        from: PowerState,
+        to: PowerState,
+    ) -> Option<Duration> {
         // Implementation in Session 07
         todo!()
     }

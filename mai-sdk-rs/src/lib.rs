@@ -132,7 +132,6 @@ pub enum RequestPriority {
     Critical,
 }
 
-
 /// Maps to OpenAPI ChatChoice.finish_reason and adapter::FinishReason
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -737,7 +736,10 @@ impl MaiClient {
     // ── Inference endpoints ──
 
     /// POST /v1/chat/completions (OpenAI-compatible)
-    pub async fn chat(&self, _request: ChatCompletionRequest) -> SdkResult<ChatCompletionResponse> {
+    pub async fn chat(
+        &self,
+        _request: ChatCompletionRequest,
+    ) -> SdkResult<ChatCompletionResponse> {
         todo!("Session 11: HTTP client")
     }
 

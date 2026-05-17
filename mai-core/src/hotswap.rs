@@ -3,16 +3,16 @@
 //! Coordinates graceful draining, component replacement, health verification,
 //! and automatic rollback on failure. NEVER transmits data off-device.
 
-use std::time::Duration;
 use std::sync::Arc;
+use std::time::Duration;
 
-use tokio::sync::RwLock;
 use thiserror::Error;
+use tokio::sync::RwLock;
 
-use crate::types::{ModelId, AdapterId};
-use crate::scheduler::Scheduler;
-use crate::registry::ModelRegistry;
 use crate::health::HealthMonitor;
+use crate::registry::ModelRegistry;
+use crate::scheduler::Scheduler;
+use crate::types::{AdapterId, ModelId};
 
 /// Swap target specification
 #[derive(Debug, Clone)]
@@ -138,10 +138,7 @@ impl HotSwapManager {
     }
 
     /// Execute a swap request with graceful handling
-    pub async fn execute_swap(
-        &self,
-        request: SwapRequest,
-    ) -> Result<SwapResult, SwapError> {
+    pub async fn execute_swap(&self, request: SwapRequest) -> Result<SwapResult, SwapError> {
         // Implementation in Session 07
         todo!()
     }
