@@ -279,7 +279,7 @@ class OllamaAdapter(AdapterBase):
 
         models = await self.list_models()
         if model not in models:
-            base_name = model.split(":")[0]
+            base_name = model.split(":", maxsplit=1)[0]
             matched = [m for m in models if m.startswith(base_name)]
             if not matched:
                 raise ModelNotFoundError(model=model)

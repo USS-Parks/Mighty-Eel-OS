@@ -8,20 +8,15 @@ use std::collections::VecDeque;
 use std::time::{Duration, Instant};
 
 /// Circuit breaker operational states
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum CircuitState {
     /// Normal operation, requests flow through
+    #[default]
     Closed,
     /// Tripped, requests immediately rejected
     Open,
     /// Testing recovery, single probe allowed
     HalfOpen,
-}
-
-impl Default for CircuitState {
-    fn default() -> Self {
-        CircuitState::Closed
-    }
 }
 
 /// Configuration for circuit breaker thresholds and cooldowns
