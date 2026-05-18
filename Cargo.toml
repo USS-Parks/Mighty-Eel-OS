@@ -48,6 +48,9 @@ nvml-wrapper = "0.10"
 # IDs
 uuid = { version = "1", features = ["v4", "serde"] }
 
+# Hashing (cache keys)
+blake3 = "1.5"
+
 # Testing
 tokio-test = "0.4"
 mockall = "0.13"

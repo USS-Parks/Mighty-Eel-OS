@@ -29,6 +29,7 @@ pub mod power;
 pub mod registry;
 pub mod scheduler;
 pub mod vault; // L2 interface, implemented in Session 12
+pub mod cache;
 
 // Re-export core types for convenience
 pub use circuit_breaker::{CircuitBreaker, CircuitBreakerConfig, CircuitState};
@@ -37,6 +38,7 @@ pub use hotswap::{HotSwapManager, SwapRequest, SwapResult};
 pub use power::{PowerState, PowerStateMachine, TransitionTrigger};
 pub use registry::{ModelManifest, ModelRegistry, ModelStatus};
 pub use scheduler::{InferenceRequest, RequestPriority, Scheduler, SchedulerConfig};
+pub use cache::ResponseCache;
 
 // Core error type
 pub use errors::CoreError;
