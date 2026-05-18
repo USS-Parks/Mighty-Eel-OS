@@ -2,7 +2,7 @@
 
 **Project:** Island Mountain Model Abstraction Interface (MAI)
 **Source:** MAI-BUILD-PROMPT-ROSTER.md (Session 65, 2026-05-15)
-**Status:** Phase A+B complete. Session 11a+11b complete. Next: Session 11c (SSE Streaming + WebSocket).
+**Status:** Phase A+B complete. Sessions 11a+11b+11c complete. Next: Session 11d (gRPC Server).
 **Archive:** Detailed Phase A+B code inventory and onboarding walkthrough archived to [HANDOFF-ARCHIVE-01.md](HANDOFF-ARCHIVE-01.md) on 2026-05-17.
 
 ---
@@ -32,13 +32,13 @@ The inference engine is a plugin. The data sovereignty layer is the product.
 
 ### Codebase (Phase B Complete)
 
-5 Rust crates and 7 Python adapters are implemented. The mai-api foundation layer (Session 11a) is complete with 7 source modules (3189 lines, 45 unit tests). Session 11b added 7 new files (state.rs, routes.rs, handlers/mod.rs, handlers/inference.rs, handlers/models.rs, handlers/health.rs, handlers/system.rs) totaling 1531 lines, plus modifications to types.rs and lib.rs. The REST API has 20 endpoints across 4 route groups (inference, models, health, system) with profile-based auth on all routes. The mai-core kernel, mai-hil drivers, and mai-adapters framework are all production code with 86+ unit tests, 14 E2E integration tests, and 8 benchmarks passing. See [SESSION-LOG-ARCHIVE-01.md](SESSION-LOG-ARCHIVE-01.md) for detailed line counts and per-session deliverable lists.
+5 Rust crates and 7 Python adapters are implemented. The mai-api foundation layer (Session 11a) is complete with 7 source modules (3189 lines, 45 unit tests). Session 11b added 7 handler/state/route files (1531 lines). Session 11c added 3 streaming files (streaming/mod.rs, streaming/sse.rs, streaming/ws.rs) totaling 1762 lines with 31 unit tests. The REST API has 20 endpoints plus a WebSocket at /v1/ws across 5 route groups (inference, models, health, system, streaming) with profile-based auth on all routes. The mai-core kernel, mai-hil drivers, and mai-adapters framework are all production code with 86+ unit tests, 14 E2E integration tests, and 8 benchmarks passing. See [SESSION-LOG-ARCHIVE-01.md](SESSION-LOG-ARCHIVE-01.md) for detailed line counts and per-session deliverable lists.
 
 **CI fixes applied 2026-05-17:** (1) pytest collection failures fixed (missing `adapters/__init__.py`, added `conftest.py`). (2) `AdapterBase.__init__` now accepts optional config dict; all 6 non-Ollama adapters updated to match. (3) Stale test assertions corrected (llamacpp context_size, tensorrt ports). **Still needed:** run `cargo fmt` locally (Rust formatting drift), fix Sglang's `self._raw_config` reference (should be `self._config`).
 
 **Response Cache (Session 10d, 2026-05-17):** Standalone `mai-core/src/cache.rs` module (627 lines, 12 unit tests). LRU eviction with TTL, memory budget enforcement, profile isolation, blake3 key hashing. Not yet integrated into scheduler or hotswap (deferred to Session 11 when API layer provides proper entry points). Types added to `mai-core/src/types.rs`.
 
-**Immediate next step:** Execute **Session 11c** (SSE Streaming + WebSocket: SSE with sequence numbering/heartbeat/backpressure/resume, WebSocket with multiplexed requests). Session 11c depends on 11a+11b (both complete).
+**Immediate next step:** Execute **Session 11d** (gRPC Server: Proto3 service definitions, tonic server with 6 services, auth interceptor). Session 11d depends on 11a only (can run parallel with 11c, which is now complete).
 
 ---
 

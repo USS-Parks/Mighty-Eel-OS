@@ -72,7 +72,7 @@ pub async fn aggregate_health(
 
     let response = HealthResponse {
         status: overall_status.to_string(),
-        alert_level: String::from(snapshot.alert_level),
+        alert_level: crate::types::alert_level_to_string(snapshot.alert_level),
         adapters,
         hardware: HardwareHealthSummary {
             gpus,

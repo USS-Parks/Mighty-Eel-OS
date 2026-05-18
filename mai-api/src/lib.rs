@@ -36,3 +36,6 @@ pub mod air_gap;
 pub mod state;
 pub mod routes;
 pub mod handlers;
+
+// Session 11c: SSE Streaming + WebSocket
+pub mod streaming;

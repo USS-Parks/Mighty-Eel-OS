@@ -10,9 +10,7 @@
 //! The API layer never exposes internal type names or structures.
 
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 
-use mai_core::types::{ModelId, RequestId};
 
 // ─── Chat Completion Request ────────────────────────────────────────
 
@@ -733,10 +731,8 @@ impl From<&mai_core::health::GpuHealth> for GpuHealthSummary {
     }
 }
 
-impl From<mai_core::health::AlertLevel> for String {
-    fn from(level: mai_core::health::AlertLevel) -> Self {
-        level.as_str().to_string()
-    }
+pub fn alert_level_to_string(level: mai_core::health::AlertLevel) -> String {
+    level.as_str().to_string()
 }
 
 impl From<&mai_core::registry::CapabilityInfo> for ModelCapabilities {
@@ -752,8 +748,6 @@ impl From<&mai_core::registry::CapabilityInfo> for ModelCapabilities {
     }
 }
 
-impl From<mai_core::power::PowerState> for String {
-    fn from(state: mai_core::power::PowerState) -> Self {
-        state.as_str().to_string()
-    }
+pub fn power_state_to_string(state: mai_core::power::PowerState) -> String {
+    state.as_str().to_string()
 }

@@ -21,7 +21,7 @@ use std::sync::Arc;
 use tracing::{debug, warn};
 
 use crate::errors::ApiError;
-use crate::types::{ContentFilterLevel, ModelAccessFilter, ProfileInfo, ProfileRole};
+use crate::types::{ModelAccessFilter, ProfileInfo, ProfileRole};
 
 // ── Header Constants ──────────────────────────────────────────────────
 
@@ -156,6 +156,29 @@ fn parse_role(s: &str) -> Result<ProfileRole, ApiError> {
     }
 }
 
+
+// ── Axum Extractor ───────────────────────────────────────────────────
+
+/// Allows handlers to extract ProfileInfo directly from the request.
+/// Requires that profile_middleware has run and inserted ProfileInfo
+/// into request extensions.
+impl<S> axum::extract::FromRequestParts<S> for ProfileInfo
+where
+    S: Send + Sync,
+{
+    type Rejection = ApiError;
+
+    async fn from_request_parts(
+        parts: &mut axum::http::request::Parts,
+        _state: &S,
+    ) -> Result<Self, Self::Rejection> {
+        parts
+            .extensions
+            .get::<ProfileInfo>()
+            .cloned()
+            .ok_or(ApiError::Unauthorized)
+    }
+}
 // ── Middleware ─────────────────────────────────────────────────────────
 
 /// Authentication state shared across middleware layers.

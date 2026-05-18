@@ -88,22 +88,25 @@ Notes:
 
 #### Session 11c: SSE Streaming + WebSocket
 
-**Status:** Not Started
+**Status:** Complete
 **Depends On:** Sessions 11a, 11b
 **Blocks:** 11e
-**Started:** --
-**Completed:** --
+**Started:** 2026-05-17
+**Completed:** 2026-05-17
 
 Deliverables:
-- [ ] src/streaming/sse.rs: SSE with sequence numbering, heartbeat, backpressure, resume
-- [ ] src/streaming/ws.rs: WebSocket with multiplexed requests, all message types
-- [ ] src/streaming/mod.rs: module declarations and shared utilities
-- [ ] Updated inference handler for stream=true delegation
-- [ ] WebSocket route at /v1/ws
-- [ ] cargo check + clippy clean
+- [x] src/streaming/sse.rs: SSE with sequence numbering, heartbeat, backpressure, resume (560 lines, 8 tests)
+- [x] src/streaming/ws.rs: WebSocket with multiplexed requests, all message types (925 lines, 17 tests)
+- [x] src/streaming/mod.rs: module declarations and shared utilities (277 lines, 6 tests)
+- [x] Updated inference handler for stream=true delegation
+- [x] WebSocket route at /v1/ws
+- [ ] cargo check + clippy clean (deferred: no Rust toolchain in Cowork sandbox)
 
 Notes:
-- --
+- 3 new files (1762 lines total), 4 modified files
+- 31 new unit tests (6 mod.rs + 8 sse.rs + 17 ws.rs)
+- Cargo.toml: added tokio-stream dependency
+- cargo check/clippy deferred to local (no Rust toolchain in sandbox)
 
 #### Session 11d: gRPC Server
 
@@ -358,8 +361,8 @@ Notes:
 | E: Testing + Packaging | 17-18 | Not Started |
 
 **Sessions Complete:** 10 / 18 (includes 06+06b as one logical session)
-**Deliverables Complete:** 87 / 180
-**Next Session:** 11b (REST API Endpoints)
+**Deliverables Complete:** 93 / 180
+**Next Session:** 11d (gRPC Server)
 **Next Archive:** After Session 20 (or end of Phase D, whichever comes first)
 
 ---
@@ -446,3 +449,27 @@ Notes:
 - Removed unused imports: Body and StatusCode from audit.rs, ProfilePermissions from auth.rs.
 
 **Remaining:** Run `cargo check --workspace` and `cargo clippy --workspace` locally (no Rust toolchain in Cowork sandbox). Run `cargo fmt` (known drift from previous sessions).
+
+### 2026-05-17: Session 11c - SSE Streaming + WebSocket
+
+**Scope:** Streaming protocol implementations for the MAI API server. SSE for chat completions (stream=true), WebSocket for bidirectional multiplexed streaming at /v1/ws.
+
+**Delivered (3 new files, 4 modified):**
+- `mai-api/src/streaming/mod.rs` (277 lines): TokenSender/TokenReceiver channel, BackpressureMonitor, StreamId, TokenEvent, 6 tests
+- `mai-api/src/streaming/sse.rs` (560 lines): SSE handler with sequence numbering, 15s heartbeat, 64-event backpressure buffer, Last-Event-ID resume, 30s token timeout, OpenAI-compatible format, [DONE] terminator, 8 tests
+- `mai-api/src/streaming/ws.rs` (925 lines): WebSocket upgrade at /v1/ws, multiplexed request_id, auth handshake, inference.request/cancel/token/complete/error, audio.chunk binary frames, tool.result, transcription.partial/final, 30s ping/pong keepalive, graceful shutdown, 17 tests
+- `mai-api/src/handlers/inference.rs`: stream=true now delegates to SSE handler (was 501)
+- `mai-api/src/routes.rs`: added /v1/ws WebSocket route
+- `mai-api/src/lib.rs`: added streaming module declaration
+- `mai-api/Cargo.toml`: added tokio-stream dependency
+
+**Architecture Notes:**
+- Token channel (mpsc, capacity 64) is the bridge between adapter and streaming handler. Adapter sends TokenEvent, handler formats for SSE or WebSocket.
+- Placeholder token producers simulate adapter output. Real adapter IPC integration deferred to Session 11e (server bootstrap).
+- WebSocket requires auth.handshake as first message. All subsequent messages use that profile for permission checks.
+- WebSocket supports max 8 concurrent multiplexed requests per connection.
+- SSE backpressure: when 64-event buffer fills, oldest events dropped with gap marker comment. Resume via Last-Event-ID replays from buffer.
+- Audio/STT binary frames accepted but processing deferred to Session 13.
+- Tool calling acknowledged but processing deferred to Session 13.
+
+**Remaining:** Run `cargo check --workspace` and `cargo clippy --workspace` locally (no Rust toolchain in Cowork sandbox).

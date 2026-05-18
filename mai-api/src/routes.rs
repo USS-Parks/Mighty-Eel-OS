@@ -15,11 +15,12 @@
 //! - `/v1/profiles/*` - Family profile queries
 
 use axum::middleware;
-use axum::routing::{get, post};
+use axum::routing::{any, get, post};
 use axum::Router;
 
 use crate::auth::profile_middleware;
 use crate::handlers;
+use crate::streaming;
 use crate::state::AppState;
 
 /// Build the complete API router with all routes and middleware.
@@ -79,12 +80,17 @@ pub fn build_router(state: AppState) -> Router {
             get(handlers::system::get_profile),
         );
 
+    // WebSocket streaming route (Session 11c)
+    let ws_routes = Router::new()
+        .route("/v1/ws", any(streaming::ws::ws_upgrade));
+
     // Merge all route groups and apply middleware
     Router::new()
         .merge(inference_routes)
         .merge(model_routes)
         .merge(health_routes)
         .merge(system_routes)
+        .merge(ws_routes)
         .layer(middleware::from_fn(profile_middleware))
         .with_state(state)
 }

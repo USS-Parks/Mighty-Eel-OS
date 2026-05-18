@@ -8,7 +8,7 @@ use axum::extract::{Path, Query, State};
 use axum::response::IntoResponse;
 use axum::Json;
 use serde::Deserialize;
-use tracing::{debug, info, warn};
+use tracing::{info, warn};
 
 use crate::auth::check_permission;
 use crate::errors::ApiError;
@@ -36,7 +36,7 @@ pub async fn get_power_state(
     let current = power.current_state();
 
     let response = PowerStateResponse {
-        state: String::from(current),
+        state: crate::types::power_state_to_string(current),
         estimated_watts: current.estimated_watts_gpu_era(),
         state_duration_secs: 0, // Would need entry timestamp tracking
         demotion_pending: false, // Would need timer inspection
@@ -85,7 +85,7 @@ pub async fn power_transition(
     );
 
     Ok(Json(PowerStateResponse {
-        state: String::from(current),
+        state: crate::types::power_state_to_string(current),
         estimated_watts: current.estimated_watts_gpu_era(),
         state_duration_secs: 0,
         demotion_pending: false,

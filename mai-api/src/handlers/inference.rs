@@ -4,8 +4,8 @@
 //! function calling. All handlers validate requests, route through
 //! the scheduler, and return OpenAI-compatible response formats.
 //!
-//! Streaming (SSE) is deferred to Session 11c. Requests with
-//! `stream: true` return HTTP 501 Not Implemented.
+//! Streaming (SSE) delegates to the streaming::sse module. Requests with
+//! `stream: true` return an SSE event stream (Session 11c).
 
 use axum::extract::State;
 use axum::response::IntoResponse;
@@ -33,15 +33,20 @@ use mai_core::scheduler::{InferenceRequest, RequestPayload, RequestPriority, Req
 /// checks profile permissions, routes through the scheduler, and
 /// returns a ChatCompletionResponse.
 ///
-/// If `stream: true`, returns 501 (implemented in Session 11c).
+/// If `stream: true`, delegates to SSE streaming handler (Session 11c).
 pub async fn chat_completions(
     State(state): State<AppState>,
     profile: ProfileInfo,
     Json(req): Json<ChatCompletionRequest>,
 ) -> Result<impl IntoResponse, ApiError> {
-    // Streaming deferred to 11c
+    // Streaming via SSE (Session 11c)
     if req.stream {
-        return Err(ApiError::ServiceUnavailable);
+        let last_event_id = None; // Extracted from headers in full integration (11e)
+        return crate::streaming::sse::handle_sse_chat(
+            state, profile, req, last_event_id,
+        )
+        .await
+        .map(|r| r.into_response());
     }
 
     // Permission check
@@ -57,7 +62,7 @@ pub async fn chat_completions(
 
     let inference_req = InferenceRequest {
         id: request_id,
-        profile_id: profile.profile_id.clone(),
+        profile_id: Uuid::parse_str(&profile.profile_id).unwrap_or_else(|_| Uuid::new_v4()),
         model_name: model_name.clone(),
         request_type: RequestType::Chat,
         payload,
@@ -133,7 +138,7 @@ pub async fn chat_completions(
         "Chat completion served"
     );
 
-    Ok(Json(response))
+    Ok(Json(response).into_response())
 }
 
 // ─── Embeddings ────────────────────────────────────────────────────
@@ -175,7 +180,7 @@ pub async fn embeddings(
 
     let inference_req = InferenceRequest {
         id: request_id,
-        profile_id: profile.profile_id.clone(),
+        profile_id: Uuid::parse_str(&profile.profile_id).unwrap_or_else(|_| Uuid::new_v4()),
         model_name: model_name.clone(),
         request_type: RequestType::Embedding,
         payload,
@@ -229,7 +234,7 @@ pub async fn embeddings(
         "Embedding request served"
     );
 
-    Ok(Json(response))
+    Ok(Json(response).into_response())
 }
 
 // ─── Structured Generation ─────────────────────────────────────────
@@ -270,7 +275,7 @@ pub async fn structured_generation(
 
     let inference_req = InferenceRequest {
         id: request_id,
-        profile_id: profile.profile_id.clone(),
+        profile_id: Uuid::parse_str(&profile.profile_id).unwrap_or_else(|_| Uuid::new_v4()),
         model_name: model_name.clone(),
         request_type: RequestType::Structured,
         payload,
@@ -322,7 +327,7 @@ pub async fn structured_generation(
         scheduler.request_completed(&selection.adapter_id);
     }
 
-    Ok(Json(response))
+    Ok(Json(response).into_response())
 }
 
 // ─── Function Calling ──────────────────────────────────────────────
@@ -375,7 +380,7 @@ pub async fn function_call(
 
     let inference_req = InferenceRequest {
         id: request_id,
-        profile_id: profile.profile_id.clone(),
+        profile_id: Uuid::parse_str(&profile.profile_id).unwrap_or_else(|_| Uuid::new_v4()),
         model_name: model_name.clone(),
         request_type: RequestType::FunctionCall,
         payload,
@@ -427,7 +432,7 @@ pub async fn function_call(
         scheduler.request_completed(&selection.adapter_id);
     }
 
-    Ok(Json(response))
+    Ok(Json(response).into_response())
 }
 
 // ─── Validation Helpers ────────────────────────────────────────────
