@@ -10,8 +10,9 @@ use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 
+use crate::circuit_breaker::{CircuitBreaker, CircuitBreakerConfig, CircuitState};
 use crate::types::{AdapterId, GpuIdentifier, ModelId, ProfileId, RequestId};
 
 /// Scheduling strategy for adapter selection
@@ -68,6 +69,19 @@ pub enum RequestPriority {
     High = 2,
     /// System-critical (health checks, security tasks)
     Critical = 3,
+}
+
+/// Scheduler lifecycle events for audit/health reporting
+#[derive(Debug, Clone)]
+pub enum SchedulerEvent {
+    /// Circuit breaker tripped on an adapter
+    CircuitTripped {
+        adapter_id: AdapterId,
+        state: CircuitState,
+        cooldown: Option<Duration>,
+    },
+    /// Adapter circuit breaker recovered to Closed
+    CircuitRecovered { adapter_id: AdapterId },
 }
 
 /// Type of inference request
@@ -217,7 +231,7 @@ impl ComplexityScore {
 }
 
 /// Registered adapter info tracked by the scheduler
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 struct AdapterInfo {
     adapter_id: AdapterId,
     /// Models this adapter can serve
@@ -228,8 +242,10 @@ struct AdapterInfo {
     max_concurrent: usize,
     /// GPU(s) assigned to this adapter
     gpu_ids: Vec<GpuIdentifier>,
-    /// Whether adapter is healthy
+    /// Whether adapter is healthy (HealthMonitor signal)
     is_healthy: bool,
+    /// Circuit breaker for partial failure tracking
+    circuit_breaker: CircuitBreaker,
     /// Last time a request was routed here
     last_used: Instant,
 }
@@ -286,6 +302,8 @@ pub struct Scheduler {
     round_robin_index: usize,
     /// Local metrics (never transmitted)
     metrics: SchedulerMetrics,
+    /// Pending lifecycle events for circuit breaker state changes
+    pub pending_events: Vec<SchedulerEvent>,
 }
 
 impl Scheduler {
@@ -305,6 +323,7 @@ impl Scheduler {
             queues,
             round_robin_index: 0,
             metrics: SchedulerMetrics::default(),
+            pending_events: Vec::new(),
         })
     }
 
@@ -331,6 +350,7 @@ impl Scheduler {
                 max_concurrent,
                 gpu_ids,
                 is_healthy: true,
+                circuit_breaker: CircuitBreaker::new(CircuitBreakerConfig::default()),
                 last_used: Instant::now(),
             },
         );
@@ -341,10 +361,29 @@ impl Scheduler {
         self.adapters.remove(adapter_id);
     }
 
-    /// Mark an adapter as healthy or unhealthy
+    /// Mark an adapter as healthy or unhealthy, with circuit breaker interop
     pub fn set_adapter_health(&mut self, adapter_id: &AdapterId, healthy: bool) {
         if let Some(adapter) = self.adapters.get_mut(adapter_id) {
             adapter.is_healthy = healthy;
+            if healthy {
+                adapter.circuit_breaker.reset();
+                self.pending_events.push(SchedulerEvent::CircuitRecovered {
+                    adapter_id: adapter_id.clone(),
+                });
+                info!(adapter_id = %adapter_id, "Health restored, circuit breaker reset to Closed");
+            } else {
+                let was_closed = adapter.circuit_breaker.state() == CircuitState::Closed;
+                adapter.circuit_breaker.force_open();
+                if was_closed {
+                    let cooldown = adapter.circuit_breaker.time_until_half_open();
+                    self.pending_events.push(SchedulerEvent::CircuitTripped {
+                        adapter_id: adapter_id.clone(),
+                        state: CircuitState::Open,
+                        cooldown,
+                    });
+                    warn!(adapter_id = %adapter_id, "HealthMonitor declared dead, circuit forced Open");
+                }
+            }
         }
     }
 
@@ -513,30 +552,80 @@ impl Scheduler {
         self.adapters.get(adapter_id).map_or(0, |a| a.in_flight)
     }
 
+    /// Record a successful response from an adapter (updates circuit breaker)
+    pub fn record_adapter_success(&mut self, adapter_id: &AdapterId) {
+        if let Some(adapter) = self.adapters.get_mut(adapter_id) {
+            let was_half_open = adapter.circuit_breaker.state() == CircuitState::HalfOpen;
+            adapter.circuit_breaker.record_success();
+            if was_half_open && adapter.circuit_breaker.state() == CircuitState::Closed {
+                self.pending_events.push(SchedulerEvent::CircuitRecovered {
+                    adapter_id: adapter_id.clone(),
+                });
+                info!(adapter_id = %adapter_id, "Circuit breaker recovered via probe success");
+            }
+        }
+    }
+
+    /// Record a failed response from an adapter (updates circuit breaker)
+    pub fn record_adapter_failure(&mut self, adapter_id: &AdapterId) {
+        if let Some(adapter) = self.adapters.get_mut(adapter_id) {
+            let prev_state = adapter.circuit_breaker.state();
+            adapter.circuit_breaker.record_failure();
+            let new_state = adapter.circuit_breaker.state();
+
+            if prev_state != CircuitState::Open && new_state == CircuitState::Open {
+                let cooldown = adapter.circuit_breaker.time_until_half_open();
+                self.pending_events.push(SchedulerEvent::CircuitTripped {
+                    adapter_id: adapter_id.clone(),
+                    state: CircuitState::Open,
+                    cooldown,
+                });
+                let metrics = adapter.circuit_breaker.metrics();
+                warn!(
+                    adapter_id = %adapter_id,
+                    consecutive_failures = metrics.consecutive_failures,
+                    failures_in_window = metrics.failures_in_window,
+                    total_in_window = metrics.total_in_window,
+                    "Circuit breaker tripped"
+                );
+            }
+        }
+    }
+
+    /// Consume pending events (call periodically or after route_request)
+    pub fn drain_events(&mut self) -> Vec<SchedulerEvent> {
+        std::mem::take(&mut self.pending_events)
+    }
+
     // ─── Internal helpers ─────────────────────────────────────────────
 
-    /// Find adapters that can serve a request
-    fn find_candidates(&self, request: &InferenceRequest) -> Vec<AdapterId> {
+    /// Find adapters that can serve a request (checks health, circuit state, capacity)
+    fn find_candidates(&mut self, request: &InferenceRequest) -> Vec<AdapterId> {
         self.adapters
-            .values()
-            .filter(|a| {
-                // Must be healthy
+            .values_mut()
+            .filter_map(|a| {
+                // Must be healthy (HealthMonitor signal)
                 if !a.is_healthy {
-                    return false;
+                    return None;
+                }
+                // Refresh circuit state (Open -> HalfOpen if cooldown elapsed)
+                a.circuit_breaker.refresh_state();
+                // Circuit must allow execution
+                if !a.circuit_breaker.can_execute() {
+                    return None;
                 }
                 // Must have capacity
                 if a.in_flight >= a.max_concurrent {
-                    return false;
+                    return None;
                 }
                 // Must support the requested model (if specified)
                 if let Some(ref model) = request.model_name {
                     if !a.supported_models.contains(model) {
-                        return false;
+                        return None;
                     }
                 }
-                true
+                Some(a.adapter_id.clone())
             })
-            .map(|a| a.adapter_id.clone())
             .collect()
     }
 
@@ -860,5 +949,92 @@ mod tests {
         let result = sched.check_promotion(&complex);
         assert!(matches!(result, PromotionResult::PromotionTriggered));
         assert_eq!(sched.metrics().total_promotions, 1);
+    }
+
+    // ─── Circuit Breaker Integration Tests ────────────────────────────
+
+    #[test]
+    fn test_scheduler_skips_open_circuit() {
+        let mut sched = setup_scheduler();
+        let req = make_request(RequestPriority::Normal, Some("qwen3-14b"));
+        // Default CircuitBreakerConfig has trip_threshold=5
+        for _ in 0..5 {
+            sched.record_adapter_failure(&"ollama:0".to_string());
+        }
+        let result = sched.route_request(&req);
+        assert!(matches!(result, Err(SchedulerError::NoAdapterAvailable(_))));
+    }
+
+    #[test]
+    fn test_fallback_on_circuit_trip() {
+        let mut sched = setup_scheduler();
+        // Register second adapter for same model
+        sched.register_adapter(
+            "vllm-fallback".to_string(),
+            vec!["qwen3-14b".to_string()],
+            10,
+            vec!["nvidia:h100:0".to_string()],
+        );
+        let req = make_request(RequestPriority::Normal, Some("qwen3-14b"));
+        // Trip primary (5 failures for default threshold)
+        for _ in 0..5 {
+            sched.record_adapter_failure(&"ollama:0".to_string());
+        }
+        // Route should skip primary and pick fallback
+        let selection = sched.route_request(&req).unwrap();
+        assert_eq!(selection.adapter_id, "vllm-fallback");
+    }
+
+    #[test]
+    fn test_health_monitor_dead_forces_open() {
+        let mut sched = setup_scheduler();
+        sched.set_adapter_health(&"ollama:0".to_string(), false);
+        assert_eq!(
+            sched.adapters["ollama:0"].circuit_breaker.state(),
+            CircuitState::Open
+        );
+    }
+
+    #[test]
+    fn test_health_monitor_alive_resets() {
+        let mut sched = setup_scheduler();
+        for _ in 0..5 {
+            sched.record_adapter_failure(&"ollama:0".to_string());
+        }
+        assert_eq!(
+            sched.adapters["ollama:0"].circuit_breaker.state(),
+            CircuitState::Open
+        );
+        sched.set_adapter_health(&"ollama:0".to_string(), true);
+        assert_eq!(
+            sched.adapters["ollama:0"].circuit_breaker.state(),
+            CircuitState::Closed
+        );
+    }
+
+    #[test]
+    fn test_circuit_trip_emits_event() {
+        let mut sched = setup_scheduler();
+        for _ in 0..5 {
+            sched.record_adapter_failure(&"ollama:0".to_string());
+        }
+        let events = sched.drain_events();
+        assert!(!events.is_empty());
+        assert!(matches!(
+            &events[0],
+            SchedulerEvent::CircuitTripped { adapter_id, .. } if adapter_id == "ollama:0"
+        ));
+    }
+
+    #[test]
+    fn test_drain_events_clears() {
+        let mut sched = setup_scheduler();
+        for _ in 0..5 {
+            sched.record_adapter_failure(&"ollama:0".to_string());
+        }
+        let events = sched.drain_events();
+        assert!(!events.is_empty());
+        let events2 = sched.drain_events();
+        assert!(events2.is_empty());
     }
 }

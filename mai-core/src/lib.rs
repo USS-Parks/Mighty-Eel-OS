@@ -22,6 +22,7 @@
 #![forbid(unsafe_code)] // Enforced by CI; drivers in mai-hil may use unsafe
 // #![warn(missing_docs)] // Re-enable after stub phase (Session 08+)
 
+pub mod circuit_breaker;
 pub mod health;
 pub mod hotswap;
 pub mod power;
@@ -30,6 +31,7 @@ pub mod scheduler;
 pub mod vault; // L2 interface, implemented in Session 12
 
 // Re-export core types for convenience
+pub use circuit_breaker::{CircuitBreaker, CircuitBreakerConfig, CircuitState};
 pub use health::{AlertLevel, HealthMonitor, HealthSnapshot};
 pub use hotswap::{HotSwapManager, SwapRequest, SwapResult};
 pub use power::{PowerState, PowerStateMachine, TransitionTrigger};
