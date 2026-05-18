@@ -4,14 +4,14 @@
 //! Uses nvml-wrapper (NVML bindings) for GPU discovery, thermal monitoring,
 //! power management, and memory tracking. Feature-gated behind `nvidia`.
 
+use crate::HilError;
 use crate::traits::{
     CapabilityDescriptor, ComputeType, HardwareProbe, MemoryManager, PowerState,
     PowerStateController, QuantizationFormat, SecureLoadContext,
 };
-use crate::HilError;
 use async_trait::async_trait;
-use nvml_wrapper::enum_wrappers::device::TemperatureSensor;
 use nvml_wrapper::Nvml;
+use nvml_wrapper::enum_wrappers::device::TemperatureSensor;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tracing::info;

@@ -5,12 +5,12 @@
 //! hardware detection and monitoring. This is the compute target of
 //! last resort when no GPU is available.
 
+use crate::HilError;
 use crate::drivers::{parse_memory_value, parse_proc_line};
 use crate::traits::{
     CapabilityDescriptor, ComputeType, HardwareProbe, MemoryManager, PowerState,
     PowerStateController, QuantizationFormat, SecureLoadContext,
 };
-use crate::HilError;
 use async_trait::async_trait;
 use tokio::sync::Mutex;
 use tracing::info;

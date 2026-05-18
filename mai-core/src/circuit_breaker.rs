@@ -243,7 +243,10 @@ impl CircuitBreaker {
 
     fn calculate_cooldown(&self) -> Duration {
         let base = self.config.cooldown_base.as_secs_f64();
-        let multiplier = self.config.cooldown_multiplier.powf(self.cooldown_cycles as f64);
+        let multiplier = self
+            .config
+            .cooldown_multiplier
+            .powf(self.cooldown_cycles as f64);
         let calculated = Duration::from_secs_f64(base * multiplier);
         calculated.min(self.config.cooldown_max)
     }

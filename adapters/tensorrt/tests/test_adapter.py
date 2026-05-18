@@ -24,8 +24,8 @@ class TestTensorRtConfig:
     def test_defaults(self):
         cfg = TensorRtConfig.from_dict({})
         assert cfg.host == "127.0.0.1"
-        assert cfg.port == 8000
-        assert cfg.grpc_port == 8001
+        assert cfg.port == 8001
+        assert cfg.grpc_port == 8002
         assert cfg.enable_inflight_batching is True
 
     def test_custom(self):

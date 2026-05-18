@@ -26,7 +26,7 @@ class TestLlamaCppConfig:
         assert cfg.host == "127.0.0.1"
         assert cfg.port == 8080
         assert cfg.n_gpu_layers == -1
-        assert cfg.context_size == 4096
+        assert cfg.context_size == 8192
 
     def test_custom(self):
         cfg = LlamaCppConfig.from_dict({"n_gpu_layers": 40, "use_mlock": True})

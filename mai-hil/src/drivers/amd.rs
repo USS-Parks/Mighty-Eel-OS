@@ -5,11 +5,11 @@
 //! thermal monitoring, power management, and memory tracking.
 //! No direct library dependency - works with any ROCm version that ships rocm-smi.
 
+use crate::HilError;
 use crate::traits::{
     CapabilityDescriptor, ComputeType, HardwareProbe, MemoryManager, PowerState,
     PowerStateController, QuantizationFormat, SecureLoadContext,
 };
-use crate::HilError;
 use async_trait::async_trait;
 use tokio::process::Command;
 use tokio::sync::Mutex;

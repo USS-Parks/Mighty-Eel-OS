@@ -43,8 +43,8 @@ class ExLlamaV2Adapter(AdapterBase):
     enabling larger effective context on limited VRAM.
     """
 
-    def __init__(self) -> None:
-        super().__init__()
+    def __init__(self, config: dict[str, Any] | None = None) -> None:
+        super().__init__(config)
         self._client: ExLlamaV2Client | None = None
         self._config: ExLlamaV2Config = ExLlamaV2Config()
         self._start_time_ms: int = 0

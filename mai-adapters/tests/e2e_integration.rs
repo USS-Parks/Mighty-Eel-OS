@@ -34,9 +34,7 @@ use mai_core::health::{
     ThermalState,
 };
 use mai_core::hotswap::{HotSwapManager, SwapRequest, SwapResult};
-use mai_core::power::{
-    PowerConfig, PowerState, PowerStateMachine, TransitionTrigger, WakeSource,
-};
+use mai_core::power::{PowerConfig, PowerState, PowerStateMachine, TransitionTrigger, WakeSource};
 use mai_core::registry::ModelRegistry;
 use mai_core::scheduler::{
     BackpressureAction, ChatMessage, ComplexityScore, InferenceRequest, PromotionResult,
@@ -144,9 +142,7 @@ fn make_complex_request() -> InferenceRequest {
 }
 
 /// Helper: create a default scheduler with named adapter registrations.
-fn setup_scheduler_with_adapters(
-    adapters: Vec<(&str, Vec<&str>, usize, Vec<&str>)>,
-) -> Scheduler {
+fn setup_scheduler_with_adapters(adapters: Vec<(&str, Vec<&str>, usize, Vec<&str>)>) -> Scheduler {
     let mut scheduler = Scheduler::new(SchedulerConfig::default()).unwrap();
     for (id, models, max_conc, gpus) in adapters {
         scheduler.register_adapter(
@@ -162,9 +158,15 @@ fn setup_scheduler_with_adapters(
 /// Helper: boot power state machine to FullInference.
 fn boot_to_full_inference() -> PowerStateMachine {
     let mut power = PowerStateMachine::new(PowerConfig::default());
-    power.request_transition(TransitionTrigger::SystemBoot).unwrap();
-    power.request_transition(TransitionTrigger::WakeTrigger(WakeSource::ApiRequest)).unwrap();
-    power.request_transition(TransitionTrigger::SentinelPromotion).unwrap();
+    power
+        .request_transition(TransitionTrigger::SystemBoot)
+        .unwrap();
+    power
+        .request_transition(TransitionTrigger::WakeTrigger(WakeSource::ApiRequest))
+        .unwrap();
+    power
+        .request_transition(TransitionTrigger::SentinelPromotion)
+        .unwrap();
     assert_eq!(power.current_state(), PowerState::FullInference);
     power
 }
@@ -172,8 +174,12 @@ fn boot_to_full_inference() -> PowerStateMachine {
 /// Helper: boot power state machine to Sentinel.
 fn boot_to_sentinel() -> PowerStateMachine {
     let mut power = PowerStateMachine::new(PowerConfig::default());
-    power.request_transition(TransitionTrigger::SystemBoot).unwrap();
-    power.request_transition(TransitionTrigger::WakeTrigger(WakeSource::ApiRequest)).unwrap();
+    power
+        .request_transition(TransitionTrigger::SystemBoot)
+        .unwrap();
+    power
+        .request_transition(TransitionTrigger::WakeTrigger(WakeSource::ApiRequest))
+        .unwrap();
     assert_eq!(power.current_state(), PowerState::Sentinel);
     power
 }
@@ -187,9 +193,12 @@ fn boot_to_sentinel() -> PowerStateMachine {
 async fn test_ollama_chat() {
     let _power = boot_to_full_inference();
 
-    let mut scheduler = setup_scheduler_with_adapters(vec![
-        ("ollama-0", vec!["llama3-8b", "phi4-mini"], 4, vec!["gpu-0"]),
-    ]);
+    let mut scheduler = setup_scheduler_with_adapters(vec![(
+        "ollama-0",
+        vec!["llama3-8b", "phi4-mini"],
+        4,
+        vec!["gpu-0"],
+    )]);
 
     let request = make_request(Some("llama3-8b"), RequestPriority::Normal);
     let selection = scheduler.route_request(&request).unwrap();
@@ -219,9 +228,12 @@ async fn test_ollama_chat() {
 async fn test_ollama_embed() {
     let _power = boot_to_full_inference();
 
-    let mut scheduler = setup_scheduler_with_adapters(vec![
-        ("ollama-0", vec!["nomic-embed-text"], 4, vec!["gpu-0"]),
-    ]);
+    let mut scheduler = setup_scheduler_with_adapters(vec![(
+        "ollama-0",
+        vec!["nomic-embed-text"],
+        4,
+        vec!["gpu-0"],
+    )]);
 
     let request = make_embed_request(Some("nomic-embed-text"));
     let selection = scheduler.route_request(&request).unwrap();
@@ -243,9 +255,12 @@ async fn test_ollama_embed() {
 async fn test_vllm_chat() {
     let _power = boot_to_full_inference();
 
-    let mut scheduler = setup_scheduler_with_adapters(vec![
-        ("vllm-0", vec!["llama3-70b"], 8, vec!["gpu-0", "gpu-1"]),
-    ]);
+    let mut scheduler = setup_scheduler_with_adapters(vec![(
+        "vllm-0",
+        vec!["llama3-70b"],
+        8,
+        vec!["gpu-0", "gpu-1"],
+    )]);
 
     let request = make_request(Some("llama3-70b"), RequestPriority::High);
     let selection = scheduler.route_request(&request).unwrap();
@@ -268,9 +283,12 @@ async fn test_vllm_tensor_parallel() {
     let _power = boot_to_full_inference();
 
     // Ranger config: 2 GPUs, vLLM with tensor parallelism
-    let mut scheduler = setup_scheduler_with_adapters(vec![
-        ("vllm-tp2", vec!["llama3-70b"], 4, vec!["gpu-0", "gpu-1"]),
-    ]);
+    let mut scheduler = setup_scheduler_with_adapters(vec![(
+        "vllm-tp2",
+        vec!["llama3-70b"],
+        4,
+        vec!["gpu-0", "gpu-1"],
+    )]);
 
     // Route request to tensor-parallel adapter
     let request = make_request(Some("llama3-70b"), RequestPriority::Normal);
@@ -302,9 +320,8 @@ async fn test_vllm_tensor_parallel() {
 async fn test_llamacpp_chat() {
     let _power = boot_to_full_inference();
 
-    let mut scheduler = setup_scheduler_with_adapters(vec![
-        ("llamacpp-0", vec!["phi4-mini-q4"], 2, vec!["gpu-0"]),
-    ]);
+    let mut scheduler =
+        setup_scheduler_with_adapters(vec![("llamacpp-0", vec!["phi4-mini-q4"], 2, vec!["gpu-0"])]);
 
     let request = make_request(Some("phi4-mini-q4"), RequestPriority::Normal);
     let selection = scheduler.route_request(&request).unwrap();
@@ -325,9 +342,8 @@ async fn test_llamacpp_chat() {
 async fn test_llamacpp_grammar() {
     let _power = boot_to_full_inference();
 
-    let mut scheduler = setup_scheduler_with_adapters(vec![
-        ("llamacpp-0", vec!["phi4-mini-q4"], 2, vec!["gpu-0"]),
-    ]);
+    let mut scheduler =
+        setup_scheduler_with_adapters(vec![("llamacpp-0", vec!["phi4-mini-q4"], 2, vec!["gpu-0"])]);
 
     // Structured output request (uses grammar constraints)
     let request = InferenceRequest {
@@ -525,11 +541,12 @@ async fn test_sentinel_promotion() {
 
 #[tokio::test]
 async fn test_model_hotswap() {
-    let scheduler = Arc::new(RwLock::new(
-        setup_scheduler_with_adapters(vec![
-            ("adapter-v1", vec!["model-old"], 4, vec!["gpu-0"]),
-        ]),
-    ));
+    let scheduler = Arc::new(RwLock::new(setup_scheduler_with_adapters(vec![(
+        "adapter-v1",
+        vec!["model-old"],
+        4,
+        vec!["gpu-0"],
+    )])));
     let registry = Arc::new(RwLock::new(ModelRegistry::new(Box::new(MockVault))));
     let health = Arc::new(RwLock::new(HealthMonitor::new(HealthConfig::default())));
 
@@ -706,10 +723,7 @@ async fn test_scheduler_backpressure() {
     scheduler.request_completed(&"adapter-0".to_string());
     let retry_req = make_request(Some("model-a"), RequestPriority::Normal);
     let retry_result = scheduler.route_request(&retry_req);
-    assert!(
-        retry_result.is_ok(),
-        "Should accept after slot freed"
-    );
+    assert!(retry_result.is_ok(), "Should accept after slot freed");
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

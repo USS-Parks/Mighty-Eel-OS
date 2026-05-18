@@ -66,8 +66,8 @@ mod integration {
 
 #[cfg(feature = "benchmark")]
 mod benchmark {
-    use mai_adapters::config::FrameworkConfig;
     use mai_adapters::AdapterManager;
+    use mai_adapters::config::FrameworkConfig;
     use std::time::Instant;
 
     /// Benchmark: AdapterManager creation overhead.

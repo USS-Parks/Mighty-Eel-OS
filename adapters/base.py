@@ -249,9 +249,9 @@ class AdapterBase(ABC):
     Type signatures match the CBOR/MsgPack serialization contract.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, config: dict[str, Any] | None = None) -> None:
         self._initialized: bool = False
-        self._config: dict[str, Any] = {}
+        self._config: dict[str, Any] = config or {}
         self._hil_handle: Any | None = None
 
     @abstractmethod

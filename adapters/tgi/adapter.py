@@ -43,8 +43,8 @@ class TgiAdapter(AdapterBase):
     per instance; multi-model requires multiple TGI processes.
     """
 
-    def __init__(self) -> None:
-        super().__init__()
+    def __init__(self, config: dict[str, Any] | None = None) -> None:
+        super().__init__(config)
         self._client: TgiClient | None = None
         self._config: TgiConfig = TgiConfig()
         self._start_time_ms: int = 0

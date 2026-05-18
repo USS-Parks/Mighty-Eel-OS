@@ -42,8 +42,8 @@ class VllmAdapter(AdapterBase):
     multi-GPU Ranger/Pack Leader configurations.
     """
 
-    def __init__(self) -> None:
-        super().__init__()
+    def __init__(self, config: dict[str, Any] | None = None) -> None:
+        super().__init__(config)
         self._client: VllmClient | None = None
         self._config: VllmConfig = VllmConfig()
         self._start_time_ms: int = 0

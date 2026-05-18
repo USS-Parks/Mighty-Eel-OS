@@ -44,8 +44,8 @@ class LlamaCppAdapter(AdapterBase):
     inference with configurable layer offloading.
     """
 
-    def __init__(self) -> None:
-        super().__init__()
+    def __init__(self, config: dict[str, Any] | None = None) -> None:
+        super().__init__(config)
         self._client: LlamaCppClient | None = None
         self._config: LlamaCppConfig = LlamaCppConfig()
         self._start_time_ms: int = 0

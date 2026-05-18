@@ -201,12 +201,14 @@ mod benchmarks {
             per_iter_us,
             target_us: 100, // <100us per route = >10k routes/sec
             passed: per_iter_us < 100,
-            metadata: HashMap::from([
-                ("routes_per_sec".to_string(), routes_per_sec.to_string()),
-            ]),
+            metadata: HashMap::from([("routes_per_sec".to_string(), routes_per_sec.to_string())]),
         };
         report_result(&result);
-        assert!(result.passed, "Routing throughput below 10k/sec: {}us/iter", per_iter_us);
+        assert!(
+            result.passed,
+            "Routing throughput below 10k/sec: {}us/iter",
+            per_iter_us
+        );
     }
 
     // ─── Benchmark 2: Time-to-first-token (TTFT) ───────────────────────────
@@ -332,10 +334,7 @@ mod benchmarks {
 
         // Route one request per adapter to populate in-flight tracking
         for i in 0..adapter_count {
-            let req = make_request(
-                Some(&format!("mem-model-{}", i)),
-                RequestPriority::Normal,
-            );
+            let req = make_request(Some(&format!("mem-model-{}", i)), RequestPriority::Normal);
             let _ = scheduler.route_request(&req).unwrap();
         }
 
@@ -424,12 +423,10 @@ mod benchmarks {
             per_iter_us: 0,
             target_us: 0,
             passed: true,
-            metadata: HashMap::from([
-                (
-                    "adapters_tested".to_string(),
-                    format!("{:?}", adapter_counts),
-                ),
-            ]),
+            metadata: HashMap::from([(
+                "adapters_tested".to_string(),
+                format!("{:?}", adapter_counts),
+            )]),
         };
         report_result(&result);
     }
@@ -515,16 +512,10 @@ mod benchmarks {
             per_iter_us,
             target_us: 200_000, // <200ms per load with 50ms simulated delay
             passed: per_iter_us < 200_000,
-            metadata: HashMap::from([
-                ("simulated_delay_ms".to_string(), "50".to_string()),
-            ]),
+            metadata: HashMap::from([("simulated_delay_ms".to_string(), "50".to_string())]),
         };
         report_result(&result);
-        assert!(
-            result.passed,
-            "Model load exceeds 200ms: {}us",
-            per_iter_us
-        );
+        assert!(result.passed, "Model load exceeds 200ms: {}us", per_iter_us);
     }
 
     // ─── Benchmark 8: Hot-swap latency ──────────────────────────────────────
@@ -550,12 +541,7 @@ mod benchmarks {
 
             {
                 let mut s = scheduler.write().await;
-                s.register_adapter(
-                    old_name.clone(),
-                    vec!["swap-model".to_string()],
-                    4,
-                    vec![],
-                );
+                s.register_adapter(old_name.clone(), vec!["swap-model".to_string()], 4, vec![]);
                 s.set_adapter_health(&old_name, true);
             }
             {
@@ -563,14 +549,9 @@ mod benchmarks {
                 h.register_adapter(old_name.clone());
             }
 
-            let mut mgr =
-                HotSwapManager::new(scheduler.clone(), registry.clone(), health.clone());
+            let mut mgr = HotSwapManager::new(scheduler.clone(), registry.clone(), health.clone());
 
-            let req = SwapRequest::adapter_swap(
-                old_name,
-                new_name,
-                "Benchmark swap",
-            );
+            let req = SwapRequest::adapter_swap(old_name, new_name, "Benchmark swap");
 
             let t0 = Instant::now();
             let result = mgr.execute_swap(req).await.unwrap();
@@ -602,10 +583,6 @@ mod benchmarks {
             ]),
         };
         report_result(&result);
-        assert!(
-            result.passed,
-            "Hot-swap avg exceeds 100ms: {}us",
-            avg
-        );
+        assert!(result.passed, "Hot-swap avg exceeds 100ms: {}us", avg);
     }
 }

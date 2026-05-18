@@ -43,8 +43,8 @@ class TensorRtAdapter(AdapterBase):
     and multi-GPU inference with NVLink awareness.
     """
 
-    def __init__(self) -> None:
-        super().__init__()
+    def __init__(self, config: dict[str, Any] | None = None) -> None:
+        super().__init__(config)
         self._client: TensorRtClient | None = None
         self._config: TensorRtConfig = TensorRtConfig()
         self._start_time_ms: int = 0
