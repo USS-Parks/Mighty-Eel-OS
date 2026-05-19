@@ -86,6 +86,7 @@ After the project scaffold is created in Session 06, the monorepo will contain:
 | mai-api | Rust | Trusted | 06 (scaffold) | 11 |
 | mai-sdk-python | Python | N/A (SDK) | 06 (scaffold) | 05 (skeleton), 11 (full) |
 | mai-sdk-rs | Rust | N/A (SDK) | 06 (scaffold) | 05 (skeleton), 11 (full) |
+| mai-vault | Rust | Trusted | 12 | 12 |
 | adapters/ollama | Python | Untrusted | 06 (scaffold) | 08 |
 | adapters/vllm | Python | Untrusted | 06 (scaffold) | 09 |
 | adapters/llamacpp | Python | Untrusted | 06 (scaffold) | 09 |
@@ -106,7 +107,7 @@ After the project scaffold is created in Session 06, the monorepo will contain:
 
 ---
 
-## Test Suites Index (Updated Session 11e)
+## Test Suites Index (Updated Session 12)
 
 | Suite | Location | Purpose | Session |
 |---|---|---|---|
@@ -124,5 +125,11 @@ After the project scaffold is created in Session 06, the monorepo will contain:
 | HTTP integration | `mai-api/tests/http_integration.rs` | Chat, embeddings, models, admin, health, errors, guest (7 tests) | 11e |
 | gRPC integration | `mai-api/tests/grpc_integration.rs` | Health, models, chat, auth rejection (4 tests) | 11e |
 | Streaming integration | `mai-api/tests/streaming_integration.rs` | SSE events, heartbeat, done, 50-concurrent, non-streaming (5 tests) | 11e |
+| Session 12 ZFS vault tests | `mai-vault/src/zfs.rs` `#[cfg(test)]` | Store, load, integrity, remove, snapshot lifecycle (7 tests) | 12 |
+| Session 12 PQC tests | `mai-vault/src/pqc.rs` `#[cfg(test)]` | KEM/DSA keypair sizes, roundtrip, sign/verify, encrypt/decrypt, tamper detection (8 tests) | 12 |
+| Session 12 TPM tests | `mai-vault/src/tpm.rs` `#[cfg(test)]` | Seal/unseal, PCR mismatch, recovery, key list/remove, attestation (5 tests) | 12 |
+| Session 12 profile tests | `mai-vault/src/profiles.rs` `#[cfg(test)]` | CRUD, role filter, permissions, persistence, count (8 tests) | 12 |
+| Session 12 audit tests | `mai-vault/src/audit.rs` `#[cfg(test)]` | Chain integrity, broken chain detection, profile/time queries, compliance export (7 tests) | 12 |
+| Session 12 vector tests | `mai-vault/src/vectors.rs` `#[cfg(test)]` | Collection CRUD, similarity search, dimension validation, upsert, threshold filter (9 tests) | 12 |
 | Security tests | tests/integration/ | PQC integrity, tamper detection, sandbox enforcement | 17 |
 | Scenario 

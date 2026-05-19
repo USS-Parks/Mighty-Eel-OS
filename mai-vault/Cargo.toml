@@ -1,0 +1,50 @@
+[package]
+name = "mai-vault"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "L2 vault implementation: ZFS storage, PQC encryption, TPM, profiles, audit, vectors"
+
+[dependencies]
+# Workspace shared
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+async-trait = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+blake3 = { workspace = true }
+
+# Core interface crate
+mai-core = { path = "../mai-core" }
+
+# Post-quantum cryptography (NIST PQC standards)
+# pqcrypto-mlkem: ML-KEM-1024 (FIPS 203, formerly Kyber)
+# pqcrypto-mldsa: ML-DSA-87 (FIPS 204, formerly Dilithium5)
+# NOTE: These are placeholder deps - verify exact crate names at build time.
+# The trait implementations use Vec<u8> opaque blobs, so the actual PQC
+# library is swappable without changing the interface.
+
+# Symmetric encryption (for bulk data after KEM key exchange)
+# aes-gcm = "0.10"
+
+# SQLite for profiles and audit (encrypted at rest by ZFS)
+# rusqlite = { version = "0.32", features = ["bundled"] }
+
+# Qdrant client (local gRPC, 127.0.0.1:6334)
+# qdrant-client = "1"
+
+# SHA3 for audit hash chain
+# sha3 = "0.10"
+
+# System time
+chrono = { workspace = true }
+
+[dev-dependencies]
+tokio-test = { workspace = true }
+tempfile = "3"
+
+[lints]
+workspace = true

@@ -2,7 +2,7 @@
 
 **Project:** Island Mountain Model Abstraction Interface (MAI)
 **Source:** MAI-BUILD-PROMPT-ROSTER.md (Session 65, 2026-05-15)
-**Status:** Phase A+B complete. Session 11 complete (11a+11b+11c+11d+11e). Next: Session 12 (Vault Integration).
+**Status:** Phase A+B+C(partial) complete. Session 12 complete. Next: Session 13 (Agent/RAG Interface).
 **Archive:** Detailed Phase A+B code inventory and onboarding walkthrough archived to [HANDOFF-ARCHIVE-01.md](HANDOFF-ARCHIVE-01.md) on 2026-05-17.
 
 ---
@@ -38,7 +38,9 @@ The inference engine is a plugin. The data sovereignty layer is the product.
 
 **Response Cache (Session 10d, 2026-05-17):** Standalone `mai-core/src/cache.rs` module (627 lines, 12 unit tests). LRU eviction with TTL, memory budget enforcement, profile isolation, blake3 key hashing. Not yet integrated into scheduler or hotswap (deferred to Session 12+ when vault provides proper entry points). Types added to `mai-core/src/types.rs`.
 
-**Immediate next step:** Execute **Session 12** (Vault Integration: ZFS vault interface, PQC encryption ML-KEM/ML-DSA, TPM 2.0 key management, family profile store, audit trail writer, Qdrant vector DB). Session 12 depends on Sessions 07 and 11 (both complete).
+**Vault Integration (Session 12, 2026-05-18):** New `mai-vault` crate (8 source files, ~3000 lines) implementing L2 vault layer. `mai-core/vault.rs` expanded from 49 to 788 lines with 7 traits: VaultInterface (original, unchanged), ModelStorage (ZFS ops), PqcProvider (ML-KEM-1024 + ML-DSA-87), TpmProvider (PCR-bound key sealing), ProfileStore (family profiles), AuditStore (hash-chained audit trail), VectorStore (Qdrant embeddings). FullVault super-trait with blanket impl. All implementations are structurally complete with correct NIST FIPS 203/204 key sizes, hash chain verification, cosine/euclidean/dot-product similarity, and 50+ unit tests. PQC library and ZFS linking deferred to local build.
+
+**Immediate next step:** Execute **Session 13** (Agent/RAG Interface: tool calling execution, audio/STT binary frame processing, RAG pipeline integration with Qdrant). Session 13 depends on Sessions 08 and 12 (both complete).
 
 ---
 

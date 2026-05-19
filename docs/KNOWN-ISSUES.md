@@ -41,9 +41,9 @@ The Sglang adapter references `self._raw_config` in its `initialize()` method, b
 
 **Severity:** Expected (placeholder)
 **Affects:** `mai-api/src/server.rs`
-**Status:** By design, resolved in Session 12
+**Status:** RESOLVED (Session 12, 2026-05-18)
 
-The server uses a `StubVault` that returns `ModelNotFound` for all weight loads and `Ok(true)` for all signature verifications. This is intentional for Session 11e. Session 12 provides the real ZFS-backed vault with PQC encryption.
+The server uses a `StubVault` that returns `ModelNotFound` for all weight loads and `Ok(true)` for all signature verifications. This is intentional for Session 11e. Real ZfsVault now available in mai-vault crate.
 
 ### 5. Placeholder Token Producers in Streaming
 

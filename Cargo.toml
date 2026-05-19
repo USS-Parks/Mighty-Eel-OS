@@ -6,6 +6,7 @@ members = [
     "mai-adapters",
     "mai-api",
     "mai-sdk-rs",
+    "mai-vault",
 ]
 
 [workspace.package]
@@ -47,6 +48,9 @@ nvml-wrapper = "0.10"
 
 # IDs
 uuid = { version = "1", features = ["v4", "serde"] }
+
+# Time
+chrono = "0.4"
 
 # Hashing (cache keys)
 blake3 = "1.5"

@@ -39,6 +39,15 @@ pub use power::{PowerState, PowerStateMachine, TransitionTrigger};
 pub use registry::{ModelManifest, ModelRegistry, ModelStatus};
 pub use scheduler::{InferenceRequest, RequestPriority, Scheduler, SchedulerConfig};
 pub use cache::ResponseCache;
+// L2 vault types and traits
+pub use vault::{
+    CollectionConfig, ComplianceReport, DistanceMetric, EmbeddingPoint,
+    FamilyProfile, FullVault, IntegrityResult, KeyInfo, KeyLevel,
+    ProfileChangeEvent, ProfilePermissions, ProfileRole, SearchResult,
+    SnapshotInfo, StorageInfo, VaultAuditAction, VaultAuditEntry,
+    VaultAuditStatus, VaultError, VaultInterface,
+};
+pub use vault::{AuditStore, ModelStorage, PqcProvider, ProfileStore, TpmProvider, VectorStore};
 
 // Core error type
 pub use errors::CoreError;
