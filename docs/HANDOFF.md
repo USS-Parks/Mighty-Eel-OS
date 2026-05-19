@@ -2,7 +2,7 @@
 
 **Project:** Island Mountain Model Abstraction Interface (MAI)
 **Source:** MAI-BUILD-PROMPT-ROSTER.md (Session 65, 2026-05-15)
-**Status:** Phase A+B+C(partial) complete. Session 12 complete. Next: Session 13 (Agent/RAG Interface).
+**Status:** Phase A+B+C complete. Session 13 complete. Next: Session 14 (Sleep Mode + Power State Machine).
 **Archive:** Detailed Phase A+B code inventory and onboarding walkthrough archived to [HANDOFF-ARCHIVE-01.md](HANDOFF-ARCHIVE-01.md) on 2026-05-17.
 
 ---
@@ -30,7 +30,7 @@ The inference engine is a plugin. The data sovereignty layer is the product.
 | [KNOWN-ISSUES.md](KNOWN-ISSUES.md) | Deferred work, open questions |
 | [INDEX.md](INDEX.md) | Master file index |
 
-### Codebase (Phase B Complete)
+### Codebase (Phase C Complete)
 
 5 Rust crates and 7 Python adapters are implemented. The mai-api crate (Session 11, all 5 sub-sessions complete) contains 27 source files (~12,400 lines), 3 integration test suites (16 tests), and proto/mai.proto (534 lines). The REST API has 20 endpoints plus a WebSocket at /v1/ws across 5 route groups (inference, models, health, system, streaming) with profile-based auth on all routes. The gRPC server runs on port 8421 with 6 MAI services + grpc.health.v1, tonic-reflection, and shared AppState. The mai-core kernel, mai-hil drivers, and mai-adapters framework are all production code with 86+ unit tests, 14 E2E integration tests, and 8 benchmarks passing. Session 11 adds 94 unit tests + 16 integration tests. See SESSION-LOG.md for detailed deliverable lists.
 
@@ -40,7 +40,9 @@ The inference engine is a plugin. The data sovereignty layer is the product.
 
 **Vault Integration (Session 12, 2026-05-18):** New `mai-vault` crate (8 source files, ~3000 lines) implementing L2 vault layer. `mai-core/vault.rs` expanded from 49 to 788 lines with 7 traits: VaultInterface (original, unchanged), ModelStorage (ZFS ops), PqcProvider (ML-KEM-1024 + ML-DSA-87), TpmProvider (PCR-bound key sealing), ProfileStore (family profiles), AuditStore (hash-chained audit trail), VectorStore (Qdrant embeddings). FullVault super-trait with blanket impl. All implementations are structurally complete with correct NIST FIPS 203/204 key sizes, hash chain verification, cosine/euclidean/dot-product similarity, and 50+ unit tests. PQC library and ZFS linking deferred to local build.
 
-**Immediate next step:** Execute **Session 13** (Agent/RAG Interface: tool calling execution, audio/STT binary frame processing, RAG pipeline integration with Qdrant). Session 13 depends on Sessions 08 and 12 (both complete).
+**Agent/RAG Interface (Session 13, 2026-05-18):** New `mai-agent` crate (8 source files + 3 integration test files, ~5434 lines total). Context management with 4 truncation strategies (OldestFirst, MiddleOut, RelevanceScored, HardCutoff). Tool registry with OpenAI-compatible function format, multi-step chain tracking, role-based access control. RAG pipeline with batch embedding, cosine similarity semantic cache, profile-isolated retrieval. STT manager with PCM silence detection, audio buffering, Whisper large-v3 default. Agentic task manager with per-profile concurrency limits, resource budgets (tokens, tool calls, duration), submit/poll/cancel lifecycle. 61 unit tests + 16 integration tests. All types reference real mai-core exports.
+
+**Immediate next step:** Execute **Session 14** (Sleep Mode + Power State Machine). Sessions 14, 15, 16 can run in parallel (different subsystems, shared dependencies met after Session 12).
 
 ---
 
@@ -62,12 +64,12 @@ The inference engine is a plugin. The data sovereignty layer is the product.
 
 The longest remaining dependency chain:
 
-**12 -> 15 -> 17 -> 18** (4 sessions sequential, Session 11 now complete)
+**15 -> 17 -> 18** (3 sessions sequential, Phase C now complete)
 
 Sessions that can overlap (if multiple sessions available):
 - Sessions 14, 15, 16 can run in parallel (different subsystems, shared dependencies met after 12)
 
-Realistic remaining calendar: 12-16 Cowork/Code sessions (Session 11 now complete).
+Realistic remaining calendar: 8-12 Cowork/Code sessions (Phase C now complete).
 
 ---
 

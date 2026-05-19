@@ -87,6 +87,7 @@ After the project scaffold is created in Session 06, the monorepo will contain:
 | mai-sdk-python | Python | N/A (SDK) | 06 (scaffold) | 05 (skeleton), 11 (full) |
 | mai-sdk-rs | Rust | N/A (SDK) | 06 (scaffold) | 05 (skeleton), 11 (full) |
 | mai-vault | Rust | Trusted | 12 | 12 |
+| mai-agent | Rust | Trusted (L3-L4 boundary) | 13 | 13 |
 | adapters/ollama | Python | Untrusted | 06 (scaffold) | 08 |
 | adapters/vllm | Python | Untrusted | 06 (scaffold) | 09 |
 | adapters/llamacpp | Python | Untrusted | 06 (scaffold) | 09 |
@@ -107,7 +108,7 @@ After the project scaffold is created in Session 06, the monorepo will contain:
 
 ---
 
-## Test Suites Index (Updated Session 12)
+## Test Suites Index (Updated Session 13)
 
 | Suite | Location | Purpose | Session |
 |---|---|---|---|
@@ -131,5 +132,13 @@ After the project scaffold is created in Session 06, the monorepo will contain:
 | Session 12 profile tests | `mai-vault/src/profiles.rs` `#[cfg(test)]` | CRUD, role filter, permissions, persistence, count (8 tests) | 12 |
 | Session 12 audit tests | `mai-vault/src/audit.rs` `#[cfg(test)]` | Chain integrity, broken chain detection, profile/time queries, compliance export (7 tests) | 12 |
 | Session 12 vector tests | `mai-vault/src/vectors.rs` `#[cfg(test)]` | Collection CRUD, similarity search, dimension validation, upsert, threshold filter (9 tests) | 12 |
+| Session 13 context tests | `mai-agent/src/context.rs` `#[cfg(test)]` | Session lifecycle, truncation strategies, RAG/tool injection, token accounting (11 tests) | 13 |
+| Session 13 tools tests | `mai-agent/src/tools.rs` `#[cfg(test)]` | Register/unregister, role filtering, chain lifecycle, parallel calls, audit trail (12 tests) | 13 |
+| Session 13 RAG tests | `mai-agent/src/rag.rs` `#[cfg(test)]` | Cosine similarity, batch prep, packaging, cache hit/miss, profile isolation (13 tests) | 13 |
+| Session 13 STT tests | `mai-agent/src/stt.rs` `#[cfg(test)]` | Transcription lifecycle, audio buffering, silence detection, format validation (10 tests) | 13 |
+| Session 13 task tests | `mai-agent/src/tasks.rs` `#[cfg(test)]` | Submit/start/complete/cancel, budget exhaustion, concurrency, pruning (15 tests) | 13 |
+| RAG pipeline integration | `mai-agent/tests/rag_pipeline_test.rs` | Full RAG flow, semantic cache, profile isolation, dimension validation (4 tests) | 13 |
+| Tool calling integration | `mai-agent/tests/tool_calling_test.rs` | Chain round-trip, role access, parallel calls, step limits, model format (5 tests) | 13 |
+| Task lifecycle integration | `mai-agent/tests/task_lifecycle_test.rs` | Full lifecycle, concurrency, budget exhaustion, cancel/fail, audit trail (7 tests) | 13 |
 | Security tests | tests/integration/ | PQC integrity, tamper detection, sandbox enforcement | 17 |
 | Scenario 
