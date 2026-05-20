@@ -21,8 +21,8 @@
 use std::collections::VecDeque;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use axum::http::header;
 use axum::http::StatusCode;
+use axum::http::header;
 use axum::response::Response;
 use futures_util::stream::Stream;
 use tokio::sync::mpsc;
@@ -34,12 +34,11 @@ use crate::auth::check_permission;
 use crate::errors::ApiError;
 use crate::state::AppState;
 use crate::types::{
-    ChatCompletionChunk, ChatCompletionRequest, ChunkChoice, ChunkDelta,
-    ProfileInfo,
+    ChatCompletionChunk, ChatCompletionRequest, ChunkChoice, ChunkDelta, ProfileInfo,
 };
 use mai_core::scheduler::{InferenceRequest, RequestPayload, RequestPriority, RequestType};
 
-use super::{token_channel, BackpressureMonitor, StreamId, TokenEvent, TokenReceiver};
+use super::{BackpressureMonitor, StreamId, TokenEvent, TokenReceiver, token_channel};
 
 // ─── Constants ─────────────────────────────────────────────────────
 
@@ -98,13 +97,9 @@ pub async fn handle_sse_chat(
             warn!(error = %e, "Scheduler routing failed for SSE stream");
             match e {
                 mai_core::scheduler::SchedulerError::NoAdapterAvailable(_) => {
-                    ApiError::ModelUnavailable(
-                        model_name.unwrap_or_else(|| "default".to_string()),
-                    )
+                    ApiError::ModelUnavailable(model_name.unwrap_or_else(|| "default".to_string()))
                 }
-                mai_core::scheduler::SchedulerError::QueueFull(_, _) => {
-                    ApiError::SystemOverloaded
-                }
+                mai_core::scheduler::SchedulerError::QueueFull(_, _) => ApiError::SystemOverloaded,
                 _ => ApiError::InternalError,
             }
         })?
@@ -149,12 +144,7 @@ pub async fn handle_sse_chat(
     });
 
     // Build the SSE byte stream
-    let sse_stream = build_sse_stream(
-        rx,
-        request_id,
-        model_id.clone(),
-        last_event_id,
-    );
+    let sse_stream = build_sse_stream(rx, request_id, model_id.clone(), last_event_id);
 
     // Build response with SSE headers
     let body = axum::body::Body::from_stream(sse_stream);
@@ -210,7 +200,8 @@ fn build_sse_stream(
 
     tokio::spawn(async move {
         let mut backpressure = BackpressureMonitor::new(BACKPRESSURE_CAPACITY);
-        let mut replay_buffer: VecDeque<(u64, bytes::Bytes)> = VecDeque::with_capacity(BACKPRESSURE_CAPACITY);
+        let mut replay_buffer: VecDeque<(u64, bytes::Bytes)> =
+            VecDeque::with_capacity(BACKPRESSURE_CAPACITY);
         let mut sequence: u64 = 0;
         let mut heartbeat_interval = interval(HEARTBEAT_INTERVAL);
         let mut last_token_time = Instant::now();
@@ -403,7 +394,8 @@ fn validate_sse_request(req: &ChatCompletionRequest) -> Result<(), ApiError> {
     if let Some(temp) = req.temperature {
         if !(0.0..=2.0).contains(&temp) {
             return Err(ApiError::ValidationFailed(format!(
-                "Temperature must be between 0.0 and 2.0, got {}", temp
+                "Temperature must be between 0.0 and 2.0, got {}",
+                temp
             )));
         }
     }
@@ -471,10 +463,7 @@ mod tests {
     #[test]
     fn test_build_chunk_finish() {
         let chunk = build_chunk("id-1", "model-1", None, Some("length"));
-        assert_eq!(
-            chunk.choices[0].finish_reason.as_deref(),
-            Some("length")
-        );
+        assert_eq!(chunk.choices[0].finish_reason.as_deref(), Some("length"));
         assert!(chunk.choices[0].delta.content.is_none());
     }
 

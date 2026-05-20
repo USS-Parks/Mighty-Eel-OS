@@ -27,8 +27,8 @@
 use std::collections::HashMap;
 use std::time::Duration;
 
-use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::extract::State;
+use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::response::IntoResponse;
 use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
@@ -145,11 +145,7 @@ impl ServerMessage {
 
     /// Create an auth.error response.
     fn auth_error(reason: &str) -> Self {
-        Self::new(
-            "auth.error",
-            None,
-            serde_json::json!({ "error": reason }),
-        )
+        Self::new("auth.error", None, serde_json::json!({ "error": reason }))
     }
 
     /// Create an inference.token message.
@@ -165,11 +161,7 @@ impl ServerMessage {
     }
 
     /// Create an inference.complete message.
-    fn inference_complete(
-        request_id: &str,
-        finish_reason: &str,
-        total_tokens: u32,
-    ) -> Self {
+    fn inference_complete(request_id: &str, finish_reason: &str, total_tokens: u32) -> Self {
         Self::new(
             "inference.complete",
             Some(request_id.to_string()),
@@ -251,10 +243,7 @@ impl ConnectionState {
 ///
 /// This is registered in routes.rs. It upgrades the HTTP connection
 /// to a WebSocket and spawns the connection handler task.
-pub async fn ws_upgrade(
-    State(state): State<AppState>,
-    ws: WebSocketUpgrade,
-) -> impl IntoResponse {
+pub async fn ws_upgrade(State(state): State<AppState>, ws: WebSocketUpgrade) -> impl IntoResponse {
     ws.max_message_size(MAX_BINARY_FRAME_SIZE)
         .on_upgrade(move |socket| handle_ws_connection(socket, state))
 }
@@ -450,10 +439,7 @@ async fn handle_text_message(
 /// Validates the profile token and populates connection state.
 /// All subsequent messages on this connection use the authenticated
 /// profile for permission checks.
-fn handle_auth_handshake(
-    conn: &mut ConnectionState,
-    msg: &ClientMessage,
-) -> Option<ServerMessage> {
+fn handle_auth_handshake(conn: &mut ConnectionState, msg: &ClientMessage) -> Option<ServerMessage> {
     if conn.authenticated {
         return Some(ServerMessage::new(
             "error",
@@ -469,7 +455,8 @@ fn handle_auth_handshake(
         Ok(h) => h,
         Err(e) => {
             return Some(ServerMessage::auth_error(&format!(
-                "Invalid handshake payload: {}", e
+                "Invalid handshake payload: {}",
+                e
             )));
         }
     };
@@ -483,7 +470,8 @@ fn handle_auth_handshake(
         "guest" => ProfileRole::Guest,
         other => {
             return Some(ServerMessage::auth_error(&format!(
-                "Unknown role: '{}'", other
+                "Unknown role: '{}'",
+                other
             )));
         }
     };
@@ -602,11 +590,7 @@ async fn handle_inference_request(
     // Placeholder: immediately complete (real streaming in 11e)
     conn.active_requests.remove(&request_id);
 
-    Some(ServerMessage::inference_complete(
-        &request_id,
-        "stop",
-        0,
-    ))
+    Some(ServerMessage::inference_complete(&request_id, "stop", 0))
 }
 
 // ─── Inference Cancel ──────────────────────────────────────────────
@@ -657,10 +641,7 @@ fn handle_inference_cancel(
 ///
 /// Tool calling integration is built in Session 13. This handler
 /// validates the message format and acknowledges receipt.
-fn handle_tool_result(
-    conn: &mut ConnectionState,
-    msg: &ClientMessage,
-) -> Option<ServerMessage> {
+fn handle_tool_result(conn: &mut ConnectionState, msg: &ClientMessage) -> Option<ServerMessage> {
     let request_id = match &msg.request_id {
         Some(id) => id.clone(),
         None => {

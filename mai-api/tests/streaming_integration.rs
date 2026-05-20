@@ -34,16 +34,29 @@ struct TestVault;
 
 #[async_trait::async_trait]
 impl VaultInterface for TestVault {
-    async fn load_model_weights(&self, model_id: &str) -> Result<Vec<u8>, mai_core::vault::VaultError> {
-        Err(mai_core::vault::VaultError::ModelNotFound(model_id.to_string()))
+    async fn load_model_weights(
+        &self,
+        model_id: &str,
+    ) -> Result<Vec<u8>, mai_core::vault::VaultError> {
+        Err(mai_core::vault::VaultError::ModelNotFound(
+            model_id.to_string(),
+        ))
     }
-    async fn store_model_package(&self, _id: &str, _data: &[u8]) -> Result<(), mai_core::vault::VaultError> {
+    async fn store_model_package(
+        &self,
+        _id: &str,
+        _data: &[u8],
+    ) -> Result<(), mai_core::vault::VaultError> {
         Ok(())
     }
     async fn append_audit_entry(&self, _entry: &[u8]) -> Result<(), mai_core::vault::VaultError> {
         Ok(())
     }
-    async fn verify_signature(&self, _data: &[u8], _sig: &[u8]) -> Result<bool, mai_core::vault::VaultError> {
+    async fn verify_signature(
+        &self,
+        _data: &[u8],
+        _sig: &[u8],
+    ) -> Result<bool, mai_core::vault::VaultError> {
         Ok(true)
     }
 }
@@ -70,7 +83,16 @@ fn build_test_state() -> AppState {
     let config = Arc::new(RwLock::new(ServerConfig::default()));
     let auth = AuthState::local_trust();
 
-    AppState::new(scheduler, registry, health, power, hotswap, audit_writer, config, auth)
+    AppState::new(
+        scheduler,
+        registry,
+        health,
+        power,
+        hotswap,
+        audit_writer,
+        config,
+        auth,
+    )
 }
 
 fn streaming_request(profile: &str) -> Request<Body> {
@@ -118,7 +140,9 @@ async fn test_sse_stream_delivers_events() {
         );
 
         // Read some of the body to verify SSE format
-        let body = axum::body::to_bytes(resp.into_body(), 1024 * 64).await.unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), 1024 * 64)
+            .await
+            .unwrap();
         let body_str = String::from_utf8_lossy(&body);
 
         // SSE events start with "data:" or contain event names
@@ -179,13 +203,14 @@ async fn test_sse_done_terminates() {
     let status = resp.status();
 
     if status == StatusCode::OK {
-        let body = axum::body::to_bytes(resp.into_body(), 1024 * 64).await.unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), 1024 * 64)
+            .await
+            .unwrap();
         let body_str = String::from_utf8_lossy(&body);
 
         // Stream should end with [DONE] or be empty (if model error was caught early)
-        let terminated = body_str.contains("[DONE]")
-            || body_str.is_empty()
-            || body_str.contains("error");
+        let terminated =
+            body_str.contains("[DONE]") || body_str.is_empty() || body_str.contains("error");
 
         assert!(
             terminated,

@@ -694,11 +694,8 @@ pub trait AuditStore: Send + Sync {
     async fn verify_chain(&self) -> Result<u64, VaultError>;
 
     /// Generate a compliance report for a time range.
-    async fn export_compliance(
-        &self,
-        start: u64,
-        end: u64,
-    ) -> Result<ComplianceReport, VaultError>;
+    async fn export_compliance(&self, start: u64, end: u64)
+    -> Result<ComplianceReport, VaultError>;
 
     /// Get the total entry count.
     async fn entry_count(&self) -> Result<u64, VaultError>;

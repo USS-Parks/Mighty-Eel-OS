@@ -23,16 +23,16 @@
 
 use std::net::SocketAddr;
 use tonic::transport::Server;
-use tracing::{info, error};
+use tracing::{error, info};
 
-use crate::state::AppState;
-use super::proto;
+use super::audit::MaiAuditService;
+use super::health::{GrpcHealthService, MaiHealthService};
 use super::inference::MaiInferenceService;
 use super::models::MaiModelsService;
-use super::health::{MaiHealthService, GrpcHealthService};
 use super::power::MaiPowerService;
+use super::proto;
 use super::registry::MaiRegistryService;
-use super::audit::MaiAuditService;
+use crate::state::AppState;
 
 /// Default gRPC server port.
 pub const DEFAULT_GRPC_PORT: u16 = 8421;
@@ -69,7 +69,10 @@ impl Default for GrpcServerConfig {
 pub async fn build_grpc_server(
     state: AppState,
     config: GrpcServerConfig,
-) -> Result<impl std::future::Future<Output = Result<(), tonic::transport::Error>>, Box<dyn std::error::Error>> {
+) -> Result<
+    impl std::future::Future<Output = Result<(), tonic::transport::Error>>,
+    Box<dyn std::error::Error>,
+> {
     info!(
         addr = %config.bind_addr,
         reflection = config.enable_reflection,
@@ -84,29 +87,23 @@ pub async fn build_grpc_server(
     .max_decoding_message_size(config.max_message_size)
     .max_encoding_message_size(config.max_message_size);
 
-    let models_svc = proto::mai_models_server::MaiModelsServer::new(
-        MaiModelsService::new(state.clone()),
-    );
+    let models_svc =
+        proto::mai_models_server::MaiModelsServer::new(MaiModelsService::new(state.clone()));
 
-    let mai_health_svc = proto::mai_health_server::MaiHealthServer::new(
-        MaiHealthService::new(state.clone()),
-    );
+    let mai_health_svc =
+        proto::mai_health_server::MaiHealthServer::new(MaiHealthService::new(state.clone()));
 
-    let power_svc = proto::mai_power_server::MaiPowerServer::new(
-        MaiPowerService::new(state.clone()),
-    );
+    let power_svc =
+        proto::mai_power_server::MaiPowerServer::new(MaiPowerService::new(state.clone()));
 
-    let registry_svc = proto::mai_registry_server::MaiRegistryServer::new(
-        MaiRegistryService::new(state.clone()),
-    );
+    let registry_svc =
+        proto::mai_registry_server::MaiRegistryServer::new(MaiRegistryService::new(state.clone()));
 
-    let audit_svc = proto::mai_audit_server::MaiAuditServer::new(
-        MaiAuditService::new(state.clone()),
-    );
+    let audit_svc =
+        proto::mai_audit_server::MaiAuditServer::new(MaiAuditService::new(state.clone()));
 
-    let grpc_health_svc = proto::health_server::HealthServer::new(
-        GrpcHealthService::new(state.clone()),
-    );
+    let grpc_health_svc =
+        proto::health_server::HealthServer::new(GrpcHealthService::new(state.clone()));
 
     // Build reflection service (allows grpcurl and grpcui to discover services)
     let reflection_svc = tonic_reflection::server::Builder::configure()

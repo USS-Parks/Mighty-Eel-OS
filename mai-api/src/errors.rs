@@ -249,8 +249,15 @@ impl From<mai_core::CoreError> for ApiError {
 fn sanitize_error_detail(detail: &str) -> String {
     // List of backend names that must never appear in API responses
     const BACKEND_NAMES: &[&str] = &[
-        "ollama", "vllm", "llama.cpp", "llamacpp", "tgi",
-        "tensorrt", "exllamav2", "sglang", "huggingface",
+        "ollama",
+        "vllm",
+        "llama.cpp",
+        "llamacpp",
+        "tgi",
+        "tensorrt",
+        "exllamav2",
+        "sglang",
+        "huggingface",
     ];
 
     let lower = detail.to_lowercase();
@@ -277,20 +284,43 @@ mod tests {
     #[test]
     fn test_error_codes_match_categories() {
         assert!(ApiError::BadRequest("x".into()).code().starts_with("MAI-1"));
-        assert!(ApiError::ModelNotFound("x".into()).code().starts_with("MAI-2"));
+        assert!(
+            ApiError::ModelNotFound("x".into())
+                .code()
+                .starts_with("MAI-2")
+        );
         assert!(ApiError::SystemOverloaded.code().starts_with("MAI-3"));
         assert!(ApiError::Unauthorized.code().starts_with("MAI-4"));
-        assert!(ApiError::ConfigError("x".into()).code().starts_with("MAI-5"));
+        assert!(
+            ApiError::ConfigError("x".into())
+                .code()
+                .starts_with("MAI-5")
+        );
     }
 
     #[test]
     fn test_status_codes() {
-        assert_eq!(ApiError::BadRequest("x".into()).status(), StatusCode::BAD_REQUEST);
+        assert_eq!(
+            ApiError::BadRequest("x".into()).status(),
+            StatusCode::BAD_REQUEST
+        );
         assert_eq!(ApiError::Unauthorized.status(), StatusCode::UNAUTHORIZED);
-        assert_eq!(ApiError::PermissionDenied("x".into()).status(), StatusCode::FORBIDDEN);
-        assert_eq!(ApiError::ModelNotFound("x".into()).status(), StatusCode::NOT_FOUND);
-        assert_eq!(ApiError::SystemOverloaded.status(), StatusCode::TOO_MANY_REQUESTS);
-        assert_eq!(ApiError::InternalError.status(), StatusCode::INTERNAL_SERVER_ERROR);
+        assert_eq!(
+            ApiError::PermissionDenied("x".into()).status(),
+            StatusCode::FORBIDDEN
+        );
+        assert_eq!(
+            ApiError::ModelNotFound("x".into()).status(),
+            StatusCode::NOT_FOUND
+        );
+        assert_eq!(
+            ApiError::SystemOverloaded.status(),
+            StatusCode::TOO_MANY_REQUESTS
+        );
+        assert_eq!(
+            ApiError::InternalError.status(),
+            StatusCode::INTERNAL_SERVER_ERROR
+        );
     }
 
     #[test]

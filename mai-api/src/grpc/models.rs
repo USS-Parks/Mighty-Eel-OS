@@ -8,9 +8,9 @@
 use tonic::{Request, Response, Status};
 use tracing::{debug, info};
 
-use crate::state::AppState;
 use super::proto;
 use super::{extract_grpc_profile, role_has_permission};
+use crate::state::AppState;
 
 /// MaiModels service implementation.
 pub struct MaiModelsService {
@@ -53,7 +53,9 @@ impl proto::mai_models_server::MaiModels for MaiModelsService {
     ) -> Result<Response<proto::ModelListResponse>, Status> {
         let (profile_id, role) = extract_grpc_profile(&request)?;
         if !role_has_permission(&role, "list_models") {
-            return Err(Status::permission_denied("profile lacks list_models permission"));
+            return Err(Status::permission_denied(
+                "profile lacks list_models permission",
+            ));
         }
 
         debug!(profile_id = %profile_id, "gRPC ListModels");
@@ -61,10 +63,7 @@ impl proto::mai_models_server::MaiModels for MaiModelsService {
         let registry = self.state.registry.read().await;
         let models = registry.list_models(None);
 
-        let data: Vec<proto::ModelDetail> = models
-            .iter()
-            .map(model_summary_to_proto)
-            .collect();
+        let data: Vec<proto::ModelDetail> = models.iter().map(model_summary_to_proto).collect();
 
         Ok(Response::new(proto::ModelListResponse {
             object: "list".to_string(),
@@ -79,7 +78,9 @@ impl proto::mai_models_server::MaiModels for MaiModelsService {
     ) -> Result<Response<proto::ModelDetail>, Status> {
         let (profile_id, role) = extract_grpc_profile(&request)?;
         if !role_has_permission(&role, "list_models") {
-            return Err(Status::permission_denied("profile lacks list_models permission"));
+            return Err(Status::permission_denied(
+                "profile lacks list_models permission",
+            ));
         }
 
         let req = request.into_inner();
@@ -119,7 +120,9 @@ impl proto::mai_models_server::MaiModels for MaiModelsService {
     ) -> Result<Response<proto::ModelOperationResponse>, Status> {
         let (profile_id, role) = extract_grpc_profile(&request)?;
         if !role_has_permission(&role, "manage_models") {
-            return Err(Status::permission_denied("admin role required for model management"));
+            return Err(Status::permission_denied(
+                "admin role required for model management",
+            ));
         }
 
         let req = request.into_inner();
@@ -146,7 +149,9 @@ impl proto::mai_models_server::MaiModels for MaiModelsService {
     ) -> Result<Response<proto::ModelOperationResponse>, Status> {
         let (profile_id, role) = extract_grpc_profile(&request)?;
         if !role_has_permission(&role, "manage_models") {
-            return Err(Status::permission_denied("admin role required for model management"));
+            return Err(Status::permission_denied(
+                "admin role required for model management",
+            ));
         }
 
         let req = request.into_inner();

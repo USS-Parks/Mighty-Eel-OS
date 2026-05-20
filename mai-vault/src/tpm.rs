@@ -77,9 +77,7 @@ impl TpmManager {
     fn compute_initial_pcr_state() -> Vec<u8> {
         // In production: read actual PCR values from TPM.
         // Stub: use a fixed "healthy boot" state.
-        blake3::hash(b"healthy-boot-pcr-0-7")
-            .as_bytes()
-            .to_vec()
+        blake3::hash(b"healthy-boot-pcr-0-7").as_bytes().to_vec()
     }
 
     /// Simulate a PCR state change (for testing tamper scenarios).
@@ -120,11 +118,7 @@ impl TpmProvider for TpmManager {
         self.available
     }
 
-    async fn seal_key(
-        &self,
-        key_data: &[u8],
-        key_id: &str,
-    ) -> Result<Vec<u8>, VaultError> {
+    async fn seal_key(&self, key_data: &[u8], key_id: &str) -> Result<Vec<u8>, VaultError> {
         if !self.available {
             return Err(VaultError::TpmUnavailable);
         }
@@ -132,7 +126,11 @@ impl TpmProvider for TpmManager {
         let pcr_state = self.current_pcr_state.read().await.clone();
         let sealed_blob = Self::seal_with_pcr(key_data, &pcr_state);
 
-        info!(key_id, blob_len = sealed_blob.len(), "Key sealed to TPM PCR state");
+        info!(
+            key_id,
+            blob_len = sealed_blob.len(),
+            "Key sealed to TPM PCR state"
+        );
 
         let mut keys = self.sealed_keys.write().await;
         keys.insert(
@@ -154,11 +152,7 @@ impl TpmProvider for TpmManager {
         Ok(sealed_blob)
     }
 
-    async fn unseal_key(
-        &self,
-        sealed_blob: &[u8],
-        key_id: &str,
-    ) -> Result<Vec<u8>, VaultError> {
+    async fn unseal_key(&self, sealed_blob: &[u8], key_id: &str) -> Result<Vec<u8>, VaultError> {
         if !self.available {
             return Err(VaultError::TpmUnavailable);
         }
@@ -192,7 +186,10 @@ impl TpmProvider for TpmManager {
         // Stub: BLAKE3 hash of current PCR state.
         let pcr_state = self.current_pcr_state.read().await;
         let quote = blake3::hash(&pcr_state).as_bytes().to_vec();
-        debug!(quote_len = quote.len(), "TPM attestation quote generated (stub)");
+        debug!(
+            quote_len = quote.len(),
+            "TPM attestation quote generated (stub)"
+        );
         Ok(quote)
     }
 
@@ -212,10 +209,7 @@ impl TpmProvider for TpmManager {
 
         let mut keys = self.sealed_keys.write().await;
         if keys.remove(key_id).is_none() {
-            return Err(VaultError::TpmError(format!(
-                "Key not found: {}",
-                key_id
-            )));
+            return Err(VaultError::TpmError(format!("Key not found: {}", key_id)));
         }
 
         info!(key_id, "Sealed key removed from TPM");

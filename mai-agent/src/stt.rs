@@ -30,8 +30,8 @@ use uuid::Uuid;
 use mai_core::types::{ModelId, ProfileId, RequestId};
 
 use crate::types::{
-    AgentError, AudioEncoding, AudioFormat, PartialTranscription,
-    SttConfig, Transcription, WordTimestamp,
+    AgentError, AudioEncoding, AudioFormat, PartialTranscription, SttConfig, Transcription,
+    WordTimestamp,
 };
 
 // ============================================================================
@@ -429,7 +429,8 @@ impl SttManager {
 
         // Validate encoding
         match format.encoding {
-            AudioEncoding::Pcm | AudioEncoding::Wav | AudioEncoding::Flac | AudioEncoding::Opus => {}
+            AudioEncoding::Pcm | AudioEncoding::Wav | AudioEncoding::Flac | AudioEncoding::Opus => {
+            }
         }
 
         Ok(())

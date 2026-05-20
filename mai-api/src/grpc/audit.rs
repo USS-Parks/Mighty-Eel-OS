@@ -7,9 +7,9 @@
 use tonic::{Request, Response, Status};
 use tracing::debug;
 
-use crate::state::AppState;
 use super::proto;
 use super::{extract_grpc_profile, role_has_permission};
+use crate::state::AppState;
 
 /// MaiAudit service implementation.
 pub struct MaiAuditService {
@@ -31,7 +31,9 @@ impl proto::mai_audit_server::MaiAudit for MaiAuditService {
     ) -> Result<Response<proto::AuditLogResponse>, Status> {
         let (profile_id, role) = extract_grpc_profile(&request)?;
         if !role_has_permission(&role, "view_audit") {
-            return Err(Status::permission_denied("admin role required to view audit logs"));
+            return Err(Status::permission_denied(
+                "admin role required to view audit logs",
+            ));
         }
 
         let req = request.into_inner();

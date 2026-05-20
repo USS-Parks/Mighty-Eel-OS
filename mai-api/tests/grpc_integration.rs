@@ -17,7 +17,7 @@ use tonic::Request;
 use mai_api::audit::MemoryAuditWriter;
 use mai_api::auth::AuthState;
 use mai_api::config::ServerConfig;
-use mai_api::grpc::server::{build_grpc_server, GrpcServerConfig};
+use mai_api::grpc::server::{GrpcServerConfig, build_grpc_server};
 use mai_api::state::AppState;
 
 use mai_core::health::{HealthConfig, HealthMonitor};
@@ -33,16 +33,29 @@ struct TestVault;
 
 #[async_trait::async_trait]
 impl VaultInterface for TestVault {
-    async fn load_model_weights(&self, model_id: &str) -> Result<Vec<u8>, mai_core::vault::VaultError> {
-        Err(mai_core::vault::VaultError::ModelNotFound(model_id.to_string()))
+    async fn load_model_weights(
+        &self,
+        model_id: &str,
+    ) -> Result<Vec<u8>, mai_core::vault::VaultError> {
+        Err(mai_core::vault::VaultError::ModelNotFound(
+            model_id.to_string(),
+        ))
     }
-    async fn store_model_package(&self, _id: &str, _data: &[u8]) -> Result<(), mai_core::vault::VaultError> {
+    async fn store_model_package(
+        &self,
+        _id: &str,
+        _data: &[u8],
+    ) -> Result<(), mai_core::vault::VaultError> {
         Ok(())
     }
     async fn append_audit_entry(&self, _entry: &[u8]) -> Result<(), mai_core::vault::VaultError> {
         Ok(())
     }
-    async fn verify_signature(&self, _data: &[u8], _sig: &[u8]) -> Result<bool, mai_core::vault::VaultError> {
+    async fn verify_signature(
+        &self,
+        _data: &[u8],
+        _sig: &[u8],
+    ) -> Result<bool, mai_core::vault::VaultError> {
         Ok(true)
     }
 }
@@ -69,7 +82,16 @@ fn build_test_state() -> AppState {
     let config = Arc::new(RwLock::new(ServerConfig::default()));
     let auth = AuthState::local_trust();
 
-    AppState::new(scheduler, registry, health, power, hotswap, audit_writer, config, auth)
+    AppState::new(
+        scheduler,
+        registry,
+        health,
+        power,
+        hotswap,
+        audit_writer,
+        config,
+        auth,
+    )
 }
 
 /// Start a gRPC server on an ephemeral port and return the bound address.
@@ -121,7 +143,10 @@ async fn test_grpc_health_check_serving() {
     let status = response.into_inner().status;
 
     // HealthCheckResponse.ServingStatus: SERVING = 1
-    assert_eq!(status, 1, "Health check must return SERVING (1), got {status}");
+    assert_eq!(
+        status, 1,
+        "Health check must return SERVING (1), got {status}"
+    );
 }
 
 /// Test 2: MaiModels.ListModels returns a valid response.
@@ -135,11 +160,12 @@ async fn test_grpc_list_models() {
         .await
         .unwrap();
 
-    let mut request = Request::new(mai_api::grpc::proto::ListModelsRequest { profile_id: String::new() });
-    request.metadata_mut().insert(
-        "x-im-profile",
-        "admin-1:Admin".parse().unwrap(),
-    );
+    let mut request = Request::new(mai_api::grpc::proto::ListModelsRequest {
+        profile_id: String::new(),
+    });
+    request
+        .metadata_mut()
+        .insert("x-im-profile", "admin-1:Admin".parse().unwrap());
 
     let response = client.list_models(request).await;
     // Either a successful empty list or a controlled error
@@ -162,9 +188,10 @@ async fn test_grpc_chat_completion_no_model() {
     let addr = start_test_grpc_server().await;
     let endpoint = format!("http://{addr}");
 
-    let mut client = mai_api::grpc::proto::mai_inference_client::MaiInferenceClient::connect(endpoint)
-        .await
-        .unwrap();
+    let mut client =
+        mai_api::grpc::proto::mai_inference_client::MaiInferenceClient::connect(endpoint)
+            .await
+            .unwrap();
 
     let mut request = Request::new(mai_api::grpc::proto::ChatCompletionRequest {
         model: "phi-4-mini".to_string(),
@@ -181,10 +208,9 @@ async fn test_grpc_chat_completion_no_model() {
         profile_id: "admin-1".to_string(),
         ..Default::default()
     });
-    request.metadata_mut().insert(
-        "x-im-profile",
-        "admin-1:Admin".parse().unwrap(),
-    );
+    request
+        .metadata_mut()
+        .insert("x-im-profile", "admin-1:Admin".parse().unwrap());
 
     let response = client.chat_completion(request).await;
     // Expect an error since no model is loaded

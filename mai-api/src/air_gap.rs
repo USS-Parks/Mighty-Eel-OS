@@ -196,10 +196,7 @@ pub struct VerificationResult {
 }
 
 impl VerificationResult {
-    fn new(
-        switch_position: SwitchPosition,
-        network_state: NetworkInterfaceState,
-    ) -> Self {
+    fn new(switch_position: SwitchPosition, network_state: NetworkInterfaceState) -> Self {
         let mut anomalies = Vec::new();
 
         // Check consistency between switch and network
@@ -222,7 +219,8 @@ impl VerificationResult {
         let message = if air_gapped && consistent {
             "Air-gap verified: switch engaged, no active network interfaces".to_string()
         } else if air_gapped && !consistent {
-            "Air-gap INCONSISTENT: switch engaged but network interfaces detected active".to_string()
+            "Air-gap INCONSISTENT: switch engaged but network interfaces detected active"
+                .to_string()
         } else if !air_gapped && consistent {
             "Network mode: switch disengaged, network available".to_string()
         } else {
@@ -303,25 +301,16 @@ impl AirGapChecker {
 
         match (result.air_gapped, result.consistent) {
             (true, true) => {
-                info!(
-                    "Air-gap startup verification PASSED: {}",
-                    result.message
-                );
+                info!("Air-gap startup verification PASSED: {}", result.message);
             }
             (true, false) => {
-                warn!(
-                    "Air-gap startup verification WARNING: {}",
-                    result.message
-                );
+                warn!("Air-gap startup verification WARNING: {}", result.message);
                 for anomaly in &result.anomalies {
                     warn!("  Anomaly: {}", anomaly);
                 }
             }
             (false, _) => {
-                info!(
-                    "Network mode startup verification: {}",
-                    result.message
-                );
+                info!("Network mode startup verification: {}", result.message);
             }
         }
 
@@ -361,10 +350,7 @@ impl AirGapChecker {
                 match checker.verify().await {
                     Ok(result) => {
                         if !result.consistent {
-                            error!(
-                                "Periodic air-gap check FAILED: {}",
-                                result.message
-                            );
+                            error!("Periodic air-gap check FAILED: {}", result.message);
                         } else {
                             debug!(
                                 air_gapped = result.air_gapped,
@@ -428,12 +414,14 @@ mod tests {
     async fn test_verification_inconsistent_state() {
         let reader = Arc::new(DevSwitchReader::new());
         // Switch is air-gapped but network is active
-        reader.set_network_state(NetworkInterfaceState {
-            any_link_active: true,
-            interface_count: 2,
-            active_count: 1,
-            active_interfaces: vec!["eth0".to_string()],
-        }).await;
+        reader
+            .set_network_state(NetworkInterfaceState {
+                any_link_active: true,
+                interface_count: 2,
+                active_count: 1,
+                active_interfaces: vec!["eth0".to_string()],
+            })
+            .await;
 
         let checker = AirGapChecker::with_default_interval(reader);
         let result = checker.verify().await.unwrap();
@@ -446,12 +434,14 @@ mod tests {
     async fn test_network_mode_verification() {
         let reader = Arc::new(DevSwitchReader::new());
         reader.set_position(SwitchPosition::NetworkEnabled).await;
-        reader.set_network_state(NetworkInterfaceState {
-            any_link_active: true,
-            interface_count: 2,
-            active_count: 1,
-            active_interfaces: vec!["eth0".to_string()],
-        }).await;
+        reader
+            .set_network_state(NetworkInterfaceState {
+                any_link_active: true,
+                interface_count: 2,
+                active_count: 1,
+                active_interfaces: vec!["eth0".to_string()],
+            })
+            .await;
 
         let checker = AirGapChecker::with_default_interval(reader);
         let result = checker.verify().await.unwrap();
@@ -501,12 +491,14 @@ mod tests {
 
         // Transition to network mode
         reader.set_position(SwitchPosition::NetworkEnabled).await;
-        reader.set_network_state(NetworkInterfaceState {
-            any_link_active: true,
-            interface_count: 1,
-            active_count: 1,
-            active_interfaces: vec!["eth0".to_string()],
-        }).await;
+        reader
+            .set_network_state(NetworkInterfaceState {
+                any_link_active: true,
+                interface_count: 1,
+                active_count: 1,
+                active_interfaces: vec!["eth0".to_string()],
+            })
+            .await;
 
         let r2 = checker.verify().await.unwrap();
         assert!(!r2.air_gapped);

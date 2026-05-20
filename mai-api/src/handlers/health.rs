@@ -4,16 +4,16 @@
 //! and system resource monitoring. All telemetry is local-only and
 //! never transmitted off-device.
 
+use axum::Json;
 use axum::extract::State;
 use axum::response::IntoResponse;
-use axum::Json;
 use tracing::debug;
 
 use crate::errors::ApiError;
 use crate::state::AppState;
 use crate::types::{
-    AdapterHealthSummary, GpuHealthSummary, HardwareHealthSummary,
-    HealthResponse, ProfileInfo, SystemHealthSummary,
+    AdapterHealthSummary, GpuHealthSummary, HardwareHealthSummary, HealthResponse, ProfileInfo,
+    SystemHealthSummary,
 };
 
 use mai_core::health::NetworkState;

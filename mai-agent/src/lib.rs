@@ -30,12 +30,12 @@
 //! All operations are local-only. No network access. Embedding vectors,
 //! audio data, and tool definitions stay on-device.
 
-pub mod types;
 pub mod context;
-pub mod tools;
 pub mod rag;
 pub mod stt;
 pub mod tasks;
+pub mod tools;
+pub mod types;
 
 // Re-export primary types for convenience
 pub use context::ContextManager;
@@ -45,20 +45,46 @@ pub use tasks::TaskManager;
 pub use tools::ToolRegistry;
 
 pub use types::{
-    // Context
-    ContextConfig, ContextPriority, ContextSegment, ConversationSession,
-    SegmentSource, SessionId, TokenAccounting, TruncationStrategy,
-    // Tools
-    ToolAccessRole, ToolAuditEntry, ToolCall, ToolChain, ToolChainState,
-    ToolDefinition, ToolId, ToolResult,
-    // RAG
-    DocumentChunk, RagConfig, RagRequest, RagResponse, RetrievalResult,
-    // STT
-    AudioEncoding, AudioFormat, PartialTranscription, SttConfig,
-    Transcription, WordTimestamp,
-    // Tasks
-    AgentTaskRequest, AgentTaskResponse, AgentTaskStatus, ResourceBudget,
-    ResourceBudgetRequest, TaskConfig, TaskId, TaskProgress,
     // Errors
     AgentError,
+    // Tasks
+    AgentTaskRequest,
+    AgentTaskResponse,
+    AgentTaskStatus,
+    // STT
+    AudioEncoding,
+    AudioFormat,
+    // Context
+    ContextConfig,
+    ContextPriority,
+    ContextSegment,
+    ConversationSession,
+    // RAG
+    DocumentChunk,
+    PartialTranscription,
+    RagConfig,
+    RagRequest,
+    RagResponse,
+    ResourceBudget,
+    ResourceBudgetRequest,
+    RetrievalResult,
+    SegmentSource,
+    SessionId,
+    SttConfig,
+    TaskConfig,
+    TaskId,
+    TaskProgress,
+    TokenAccounting,
+    // Tools
+    ToolAccessRole,
+    ToolAuditEntry,
+    ToolCall,
+    ToolChain,
+    ToolChainState,
+    ToolDefinition,
+    ToolId,
+    ToolResult,
+    Transcription,
+    TruncationStrategy,
+    WordTimestamp,
 };

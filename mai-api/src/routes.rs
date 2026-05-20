@@ -14,14 +14,14 @@
 //! - `/v1/audit/*` - Audit trail access
 //! - `/v1/profiles/*` - Family profile queries
 
+use axum::Router;
 use axum::middleware;
 use axum::routing::{any, get, post};
-use axum::Router;
 
 use crate::auth::profile_middleware;
 use crate::handlers;
-use crate::streaming;
 use crate::state::AppState;
+use crate::streaming;
 
 /// Build the complete API router with all routes and middleware.
 ///
@@ -32,7 +32,10 @@ use crate::state::AppState;
 pub fn build_router(state: AppState) -> Router {
     // Inference routes (require inference permission)
     let inference_routes = Router::new()
-        .route("/v1/chat/completions", post(handlers::inference::chat_completions))
+        .route(
+            "/v1/chat/completions",
+            post(handlers::inference::chat_completions),
+        )
         .route("/v1/embeddings", post(handlers::inference::embeddings))
         .route(
             "/v1/generate/structured",
@@ -60,7 +63,10 @@ pub fn build_router(state: AppState) -> Router {
     let health_routes = Router::new()
         .route("/v1/health", get(handlers::health::aggregate_health))
         .route("/v1/health/adapters", get(handlers::health::adapter_health))
-        .route("/v1/health/hardware", get(handlers::health::hardware_health))
+        .route(
+            "/v1/health/hardware",
+            get(handlers::health::hardware_health),
+        )
         .route("/v1/health/system", get(handlers::health::system_health));
 
     // System routes (mixed permissions, enforced per-handler)
@@ -81,8 +87,7 @@ pub fn build_router(state: AppState) -> Router {
         );
 
     // WebSocket streaming route (Session 11c)
-    let ws_routes = Router::new()
-        .route("/v1/ws", any(streaming::ws::ws_upgrade));
+    let ws_routes = Router::new().route("/v1/ws", any(streaming::ws::ws_upgrade));
 
     // Merge all route groups and apply middleware
     Router::new()

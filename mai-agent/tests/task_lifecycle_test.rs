@@ -6,8 +6,8 @@
 use std::time::Duration;
 
 use mai_agent::{
-    AgentTaskRequest, AgentTaskStatus, ResourceBudgetRequest,
-    TaskConfig, TaskManager, ToolAuditEntry,
+    AgentTaskRequest, AgentTaskStatus, ResourceBudgetRequest, TaskConfig, TaskManager,
+    ToolAuditEntry,
 };
 
 fn test_config() -> TaskConfig {
@@ -46,7 +46,11 @@ fn make_tool_audit(profile: &str, tool: &str, success: bool) -> ToolAuditEntry {
         success,
         duration_ms: 50,
         chain_step: 1,
-        error: if success { None } else { Some("timeout".to_string()) },
+        error: if success {
+            None
+        } else {
+            Some("timeout".to_string())
+        },
         session_id: "session-42".to_string(),
     }
 }
@@ -113,7 +117,10 @@ fn full_task_lifecycle_happy_path() {
 
     // 9. Complete the task
     let response = mgr
-        .complete(task_id, "Full summary of all 12 vault documents.".to_string())
+        .complete(
+            task_id,
+            "Full summary of all 12 vault documents.".to_string(),
+        )
         .unwrap();
 
     assert_eq!(response.status, AgentTaskStatus::Completed);
@@ -133,12 +140,8 @@ fn concurrency_enforcement_per_profile() {
     let mut mgr = TaskManager::new(test_config());
 
     // Admin can have 2 concurrent tasks
-    let t1 = mgr
-        .submit(make_request("admin", "Task 1"))
-        .unwrap();
-    let _t2 = mgr
-        .submit(make_request("admin", "Task 2"))
-        .unwrap();
+    let t1 = mgr.submit(make_request("admin", "Task 1")).unwrap();
+    let _t2 = mgr.submit(make_request("admin", "Task 2")).unwrap();
 
     // Third admin task rejected
     let err = mgr.submit(make_request("admin", "Task 3"));
@@ -242,7 +245,9 @@ fn cancel_and_fail_paths() {
     // Cancel path
     let t1 = mgr.submit(make_request("admin", "Cancel me")).unwrap();
     mgr.start_task(t1).unwrap();
-    let resp = mgr.cancel(t1, "User requested cancellation".to_string()).unwrap();
+    let resp = mgr
+        .cancel(t1, "User requested cancellation".to_string())
+        .unwrap();
     assert!(matches!(resp.status, AgentTaskStatus::Cancelled { .. }));
 
     // Cannot cancel a cancelled task

@@ -50,7 +50,7 @@ impl Default for CacheConfig {
             enabled: true,
             max_entries: 10_000,
             max_memory_bytes: 256 * 1024 * 1024, // 256 MiB
-            ttl: Duration::from_secs(3600),       // 1 hour
+            ttl: Duration::from_secs(3600),      // 1 hour
             per_profile_limit: None,
             exclude_models: vec![],
             min_response_bytes: 40, // ~10 tokens * 4 bytes

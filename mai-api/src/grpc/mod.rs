@@ -28,16 +28,15 @@ pub mod proto {
     tonic::include_proto!("mai.v1");
 
     /// File descriptor set for tonic-reflection service discovery.
-    pub const FILE_DESCRIPTOR_SET: &[u8] =
-        tonic::include_file_descriptor_set!("mai_descriptor");
+    pub const FILE_DESCRIPTOR_SET: &[u8] = tonic::include_file_descriptor_set!("mai_descriptor");
 }
 
+pub mod audit;
+pub mod health;
 pub mod inference;
 pub mod models;
-pub mod health;
 pub mod power;
 pub mod registry;
-pub mod audit;
 pub mod server;
 
 use tonic::{Request, Status};

@@ -23,8 +23,7 @@ use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
 
 use mai_core::vault::{
-    AuditStore, ComplianceReport, VaultAuditAction, VaultAuditEntry, VaultAuditStatus,
-    VaultError,
+    AuditStore, ComplianceReport, VaultAuditAction, VaultAuditEntry, VaultAuditStatus, VaultError,
 };
 
 use crate::config::AuditConfig;
@@ -63,27 +62,25 @@ impl AuditWriter {
 
         if self.config.db_path.exists() {
             match std::fs::read_to_string(&self.config.db_path) {
-                Ok(content) => {
-                    match serde_json::from_str::<Vec<VaultAuditEntry>>(&content) {
-                        Ok(loaded) => {
-                            let mut entries = self.entries.write().await;
-                            let mut last = self.last_hash.write().await;
+                Ok(content) => match serde_json::from_str::<Vec<VaultAuditEntry>>(&content) {
+                    Ok(loaded) => {
+                        let mut entries = self.entries.write().await;
+                        let mut last = self.last_hash.write().await;
 
-                            if let Some(final_entry) = loaded.last() {
-                                *last = final_entry.entry_hash.clone();
-                            }
-                            *entries = loaded;
-                            info!(
-                                count = entries.len(),
-                                last_hash = %*last,
-                                "Loaded audit trail from disk"
-                            );
+                        if let Some(final_entry) = loaded.last() {
+                            *last = final_entry.entry_hash.clone();
                         }
-                        Err(e) => {
-                            warn!(error = %e, "Could not parse audit database, starting fresh");
-                        }
+                        *entries = loaded;
+                        info!(
+                            count = entries.len(),
+                            last_hash = %*last,
+                            "Loaded audit trail from disk"
+                        );
                     }
-                }
+                    Err(e) => {
+                        warn!(error = %e, "Could not parse audit database, starting fresh");
+                    }
+                },
                 Err(e) => {
                     warn!(error = %e, "Could not read audit database, starting fresh");
                 }
@@ -275,9 +272,7 @@ impl AuditStore for AuditWriter {
                 *action_summary
                     .entry(format!("{:?}", entry.action))
                     .or_insert(0) += 1;
-                *profile_summary
-                    .entry(entry.profile_id.clone())
-                    .or_insert(0) += 1;
+                *profile_summary.entry(entry.profile_id.clone()).or_insert(0) += 1;
             }
         }
 
@@ -331,13 +326,8 @@ pub fn build_audit_entry(
     error_code: Option<String>,
     previous_hash: String,
 ) -> VaultAuditEntry {
-    let entry_hash = AuditWriter::compute_entry_hash(
-        &previous_hash,
-        timestamp,
-        &profile_id,
-        &action,
-        &status,
-    );
+    let entry_hash =
+        AuditWriter::compute_entry_hash(&previous_hash, timestamp, &profile_id, &action, &status);
 
     VaultAuditEntry {
         entry_id,
@@ -405,7 +395,13 @@ mod tests {
         let writer = AuditWriter::new(test_audit_config(&tmp));
         writer.initialize().await.unwrap();
 
-        let entry = make_entry("e1", 1000, "admin", VaultAuditAction::SystemStartup, GENESIS_HASH);
+        let entry = make_entry(
+            "e1",
+            1000,
+            "admin",
+            VaultAuditAction::SystemStartup,
+            GENESIS_HASH,
+        );
         writer.append(&entry).await.unwrap();
 
         let recent = writer.read_recent(10).await.unwrap();
@@ -419,13 +415,31 @@ mod tests {
         let writer = AuditWriter::new(test_audit_config(&tmp));
         writer.initialize().await.unwrap();
 
-        let e1 = make_entry("e1", 1000, "admin", VaultAuditAction::SystemStartup, GENESIS_HASH);
+        let e1 = make_entry(
+            "e1",
+            1000,
+            "admin",
+            VaultAuditAction::SystemStartup,
+            GENESIS_HASH,
+        );
         writer.append(&e1).await.unwrap();
 
-        let e2 = make_entry("e2", 1001, "admin", VaultAuditAction::ModelLoad, &e1.entry_hash);
+        let e2 = make_entry(
+            "e2",
+            1001,
+            "admin",
+            VaultAuditAction::ModelLoad,
+            &e1.entry_hash,
+        );
         writer.append(&e2).await.unwrap();
 
-        let e3 = make_entry("e3", 1002, "user1", VaultAuditAction::ModelLoad, &e2.entry_hash);
+        let e3 = make_entry(
+            "e3",
+            1002,
+            "user1",
+            VaultAuditAction::ModelLoad,
+            &e2.entry_hash,
+        );
         writer.append(&e3).await.unwrap();
 
         let verified = writer.verify_chain().await.unwrap();
@@ -438,11 +452,23 @@ mod tests {
         let writer = AuditWriter::new(test_audit_config(&tmp));
         writer.initialize().await.unwrap();
 
-        let e1 = make_entry("e1", 1000, "admin", VaultAuditAction::SystemStartup, GENESIS_HASH);
+        let e1 = make_entry(
+            "e1",
+            1000,
+            "admin",
+            VaultAuditAction::SystemStartup,
+            GENESIS_HASH,
+        );
         writer.append(&e1).await.unwrap();
 
         // Try to append with wrong previous hash
-        let bad_entry = make_entry("e2", 1001, "admin", VaultAuditAction::ModelLoad, "wrong_hash");
+        let bad_entry = make_entry(
+            "e2",
+            1001,
+            "admin",
+            VaultAuditAction::ModelLoad,
+            "wrong_hash",
+        );
         let result = writer.append(&bad_entry).await;
         assert!(result.is_err());
     }
@@ -453,13 +479,31 @@ mod tests {
         let writer = AuditWriter::new(test_audit_config(&tmp));
         writer.initialize().await.unwrap();
 
-        let e1 = make_entry("e1", 1000, "admin", VaultAuditAction::SystemStartup, GENESIS_HASH);
+        let e1 = make_entry(
+            "e1",
+            1000,
+            "admin",
+            VaultAuditAction::SystemStartup,
+            GENESIS_HASH,
+        );
         writer.append(&e1).await.unwrap();
 
-        let e2 = make_entry("e2", 1001, "user1", VaultAuditAction::ModelLoad, &e1.entry_hash);
+        let e2 = make_entry(
+            "e2",
+            1001,
+            "user1",
+            VaultAuditAction::ModelLoad,
+            &e1.entry_hash,
+        );
         writer.append(&e2).await.unwrap();
 
-        let e3 = make_entry("e3", 1002, "admin", VaultAuditAction::ModelUnload, &e2.entry_hash);
+        let e3 = make_entry(
+            "e3",
+            1002,
+            "admin",
+            VaultAuditAction::ModelUnload,
+            &e2.entry_hash,
+        );
         writer.append(&e3).await.unwrap();
 
         let admin_entries = writer.read_by_profile("admin", 10).await.unwrap();
@@ -475,13 +519,31 @@ mod tests {
         let writer = AuditWriter::new(test_audit_config(&tmp));
         writer.initialize().await.unwrap();
 
-        let e1 = make_entry("e1", 1000, "admin", VaultAuditAction::SystemStartup, GENESIS_HASH);
+        let e1 = make_entry(
+            "e1",
+            1000,
+            "admin",
+            VaultAuditAction::SystemStartup,
+            GENESIS_HASH,
+        );
         writer.append(&e1).await.unwrap();
 
-        let e2 = make_entry("e2", 2000, "admin", VaultAuditAction::ModelLoad, &e1.entry_hash);
+        let e2 = make_entry(
+            "e2",
+            2000,
+            "admin",
+            VaultAuditAction::ModelLoad,
+            &e1.entry_hash,
+        );
         writer.append(&e2).await.unwrap();
 
-        let e3 = make_entry("e3", 3000, "admin", VaultAuditAction::ModelUnload, &e2.entry_hash);
+        let e3 = make_entry(
+            "e3",
+            3000,
+            "admin",
+            VaultAuditAction::ModelUnload,
+            &e2.entry_hash,
+        );
         writer.append(&e3).await.unwrap();
 
         let range = writer.read_by_time_range(1500, 2500).await.unwrap();
@@ -495,7 +557,13 @@ mod tests {
         let writer = AuditWriter::new(test_audit_config(&tmp));
         writer.initialize().await.unwrap();
 
-        let e1 = make_entry("e1", 1000, "admin", VaultAuditAction::SystemStartup, GENESIS_HASH);
+        let e1 = make_entry(
+            "e1",
+            1000,
+            "admin",
+            VaultAuditAction::SystemStartup,
+            GENESIS_HASH,
+        );
         writer.append(&e1).await.unwrap();
 
         let report = writer.export_compliance(0, 9999).await.unwrap();
@@ -512,7 +580,13 @@ mod tests {
         assert_eq!(writer.entry_count().await.unwrap(), 0);
         assert_eq!(writer.last_hash().await.unwrap(), GENESIS_HASH);
 
-        let e1 = make_entry("e1", 1000, "admin", VaultAuditAction::SystemStartup, GENESIS_HASH);
+        let e1 = make_entry(
+            "e1",
+            1000,
+            "admin",
+            VaultAuditAction::SystemStartup,
+            GENESIS_HASH,
+        );
         let expected_hash = e1.entry_hash.clone();
         writer.append(&e1).await.unwrap();
 

@@ -19,9 +19,7 @@ use async_trait::async_trait;
 use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
 
-use mai_core::vault::{
-    FamilyProfile, ProfilePermissions, ProfileRole, ProfileStore, VaultError,
-};
+use mai_core::vault::{FamilyProfile, ProfilePermissions, ProfileRole, ProfileStore, VaultError};
 
 use crate::config::ProfileStoreConfig;
 
@@ -55,23 +53,18 @@ impl ProfileManager {
         // Stub: check if a JSON dump exists and load it.
         if self.config.db_path.exists() {
             match std::fs::read_to_string(&self.config.db_path) {
-                Ok(content) => {
-                    match serde_json::from_str::<Vec<FamilyProfile>>(&content) {
-                        Ok(profiles) => {
-                            let mut store = self.profiles.write().await;
-                            for p in profiles {
-                                store.insert(p.id.clone(), p);
-                            }
-                            info!(
-                                count = store.len(),
-                                "Loaded profiles from disk"
-                            );
+                Ok(content) => match serde_json::from_str::<Vec<FamilyProfile>>(&content) {
+                    Ok(profiles) => {
+                        let mut store = self.profiles.write().await;
+                        for p in profiles {
+                            store.insert(p.id.clone(), p);
                         }
-                        Err(e) => {
-                            warn!(error = %e, "Could not parse profile database, starting fresh");
-                        }
+                        info!(count = store.len(), "Loaded profiles from disk");
                     }
-                }
+                    Err(e) => {
+                        warn!(error = %e, "Could not parse profile database, starting fresh");
+                    }
+                },
                 Err(e) => {
                     warn!(error = %e, "Could not read profile database, starting fresh");
                 }
@@ -177,10 +170,7 @@ impl ProfileStore for ProfileManager {
         Ok(())
     }
 
-    async fn get_permissions(
-        &self,
-        profile_id: &str,
-    ) -> Result<ProfilePermissions, VaultError> {
+    async fn get_permissions(&self, profile_id: &str) -> Result<ProfilePermissions, VaultError> {
         let profile = self.get_profile(profile_id).await?;
         Ok(profile.role.permissions())
     }

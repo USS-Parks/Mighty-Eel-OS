@@ -25,17 +25,17 @@
 #![forbid(unsafe_code)]
 
 // Session 11a: Foundation + Middleware modules
-pub mod types;
-pub mod errors;
-pub mod config;
-pub mod auth;
-pub mod audit;
 pub mod air_gap;
+pub mod audit;
+pub mod auth;
+pub mod config;
+pub mod errors;
+pub mod types;
 
 // Session 11b: REST API Endpoints
-pub mod state;
-pub mod routes;
 pub mod handlers;
+pub mod routes;
+pub mod state;
 
 // Session 11c: SSE Streaming + WebSocket
 pub mod streaming;
@@ -47,7 +47,7 @@ pub mod grpc;
 pub mod server;
 
 // Public re-exports for SDK consumers and binary entry point
-pub use server::MaiServer;
-pub use server::ServerError;
 pub use config::ServerConfig;
 pub use errors::ApiError;
+pub use server::MaiServer;
+pub use server::ServerError;

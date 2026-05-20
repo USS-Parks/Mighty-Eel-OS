@@ -16,11 +16,7 @@
 //! All audit data stays local. No network transmission. The AuditWriter
 //! trait allows pluggable storage (SQLite, file, ZFS dataset).
 
-use axum::{
-    extract::Request,
-    middleware::Next,
-    response::Response,
-};
+use axum::{extract::Request, middleware::Next, response::Response};
 use serde::{Deserialize, Serialize};
 use sha3::{Digest, Sha3_256};
 use std::sync::Arc;
@@ -96,8 +92,10 @@ pub enum AuditRequestType {
 impl AuditRequestType {
     /// Classify a request based on its path.
     pub fn from_path(path: &str) -> Self {
-        if path.starts_with("/v1/chat") || path.starts_with("/v1/embeddings")
-            || path.starts_with("/v1/structured") || path.starts_with("/v1/function")
+        if path.starts_with("/v1/chat")
+            || path.starts_with("/v1/embeddings")
+            || path.starts_with("/v1/structured")
+            || path.starts_with("/v1/function")
         {
             AuditRequestType::Inference
         } else if path.starts_with("/v1/models") {
@@ -124,8 +122,7 @@ impl AuditRequestType {
 
 /// Well-known genesis hash for the audit chain.
 /// SHA3-256("island-mountain-mai-audit-genesis-v1")
-const GENESIS_HASH: &str =
-    "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2";
+const GENESIS_HASH: &str = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2";
 
 /// Compute the hash for an audit entry.
 ///
@@ -160,7 +157,10 @@ pub fn verify_chain(entries: &[AuditEntry]) -> Result<usize, (usize, String)> {
 
     // First entry must chain from genesis
     if entries[0].previous_hash != GENESIS_HASH {
-        return Err((0, "First entry does not chain from genesis hash".to_string()));
+        return Err((
+            0,
+            "First entry does not chain from genesis hash".to_string(),
+        ));
     }
 
     for (i, entry) in entries.iter().enumerate() {
@@ -442,11 +442,7 @@ impl AuditManager {
 ///
 /// Captures: profile, method, path, status code, duration.
 /// Does NOT capture request/response bodies (privacy + performance).
-pub async fn audit_middleware(
-    audit: Arc<AuditManager>,
-    request: Request,
-    next: Next,
-) -> Response {
+pub async fn audit_middleware(audit: Arc<AuditManager>, request: Request, next: Next) -> Response {
     let start = std::time::Instant::now();
     let method = request.method().to_string();
     let path = request.uri().path().to_string();
@@ -472,7 +468,16 @@ pub async fn audit_middleware(
 
     tokio::spawn(async move {
         if let Err(e) = audit
-            .record(&pid, &prole, &method_clone, &path_clone, status, duration, None, None)
+            .record(
+                &pid,
+                &prole,
+                &method_clone,
+                &path_clone,
+                status,
+                duration,
+                None,
+                None,
+            )
             .await
         {
             error!(error = %e, path = %path_clone, "Failed to record audit entry");
@@ -566,13 +571,31 @@ mod tests {
         let manager = AuditManager::new(writer.clone(), signer, 0).await.unwrap();
 
         let e1 = manager
-            .record("user1", "Admin", "GET", "/v1/health", 200, Duration::from_millis(5), None, None)
+            .record(
+                "user1",
+                "Admin",
+                "GET",
+                "/v1/health",
+                200,
+                Duration::from_millis(5),
+                None,
+                None,
+            )
             .await
             .unwrap();
         assert_eq!(e1.previous_hash, GENESIS_HASH);
 
         let e2 = manager
-            .record("user1", "Admin", "POST", "/v1/chat/completions", 200, Duration::from_millis(50), Some("phi-4".to_string()), None)
+            .record(
+                "user1",
+                "Admin",
+                "POST",
+                "/v1/chat/completions",
+                200,
+                Duration::from_millis(50),
+                Some("phi-4".to_string()),
+                None,
+            )
             .await
             .unwrap();
         assert_eq!(e2.previous_hash, e1.entry_hash);
@@ -608,24 +631,22 @@ mod tests {
 
     #[test]
     fn test_chain_verification_tampered() {
-        let mut entries = vec![
-            AuditEntry {
-                entry_id: "e1".to_string(),
-                timestamp: 1000,
-                previous_hash: GENESIS_HASH.to_string(),
-                entry_hash: compute_entry_hash(GENESIS_HASH, 1000, "u1", "GET", "/v1/health", 200),
-                profile_id: "u1".to_string(),
-                profile_role: "Admin".to_string(),
-                method: "GET".to_string(),
-                path: "/v1/health".to_string(),
-                status_code: 200,
-                duration_ms: 1,
-                model_name: None,
-                request_type: AuditRequestType::HealthCheck,
-                context: None,
-                pqc_signature: None,
-            },
-        ];
+        let mut entries = vec![AuditEntry {
+            entry_id: "e1".to_string(),
+            timestamp: 1000,
+            previous_hash: GENESIS_HASH.to_string(),
+            entry_hash: compute_entry_hash(GENESIS_HASH, 1000, "u1", "GET", "/v1/health", 200),
+            profile_id: "u1".to_string(),
+            profile_role: "Admin".to_string(),
+            method: "GET".to_string(),
+            path: "/v1/health".to_string(),
+            status_code: 200,
+            duration_ms: 1,
+            model_name: None,
+            request_type: AuditRequestType::HealthCheck,
+            context: None,
+            pqc_signature: None,
+        }];
 
         // Tamper with the hash
         entries[0].entry_hash = "tampered_hash".to_string();
@@ -640,15 +661,42 @@ mod tests {
         let manager = AuditManager::new(writer.clone(), signer, 0).await.unwrap();
 
         manager
-            .record("alice", "Admin", "GET", "/v1/health", 200, Duration::from_millis(1), None, None)
+            .record(
+                "alice",
+                "Admin",
+                "GET",
+                "/v1/health",
+                200,
+                Duration::from_millis(1),
+                None,
+                None,
+            )
             .await
             .unwrap();
         manager
-            .record("bob", "Adult", "POST", "/v1/chat/completions", 200, Duration::from_millis(10), None, None)
+            .record(
+                "bob",
+                "Adult",
+                "POST",
+                "/v1/chat/completions",
+                200,
+                Duration::from_millis(10),
+                None,
+                None,
+            )
             .await
             .unwrap();
         manager
-            .record("alice", "Admin", "GET", "/v1/models", 200, Duration::from_millis(2), None, None)
+            .record(
+                "alice",
+                "Admin",
+                "GET",
+                "/v1/models",
+                200,
+                Duration::from_millis(2),
+                None,
+                None,
+            )
             .await
             .unwrap();
 

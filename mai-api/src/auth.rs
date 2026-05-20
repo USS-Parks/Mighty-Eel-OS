@@ -11,12 +11,7 @@
 //! Profile middleware never exposes adapter or backend names. All authorization
 //! decisions reference model capabilities, not implementation details.
 
-use axum::{
-    extract::Request,
-    http::HeaderMap,
-    middleware::Next,
-    response::Response,
-};
+use axum::{extract::Request, http::HeaderMap, middleware::Next, response::Response};
 use std::sync::Arc;
 use tracing::{debug, warn};
 
@@ -89,11 +84,9 @@ pub fn extract_profile(headers: &HeaderMap) -> Result<ProfileInfo, ApiError> {
         }
     };
 
-    let header_str = header_value
-        .to_str()
-        .map_err(|_| ApiError::BadRequest(
-            "X-IM-Profile header contains non-ASCII characters".to_string(),
-        ))?;
+    let header_str = header_value.to_str().map_err(|_| {
+        ApiError::BadRequest("X-IM-Profile header contains non-ASCII characters".to_string())
+    })?;
 
     parse_profile_header(header_str)
 }
@@ -105,9 +98,10 @@ fn parse_profile_header(value: &str) -> Result<ProfileInfo, ApiError> {
     let parts: Vec<&str> = value.splitn(3, ':').collect();
 
     if parts.len() < 2 {
-        return Err(ApiError::BadRequest(
-            format!("Invalid X-IM-Profile header: expected 'profile_id:role', got '{}'", value),
-        ));
+        return Err(ApiError::BadRequest(format!(
+            "Invalid X-IM-Profile header: expected 'profile_id:role', got '{}'",
+            value
+        )));
     }
 
     let profile_id = parts[0].trim();
@@ -123,7 +117,8 @@ fn parse_profile_header(value: &str) -> Result<ProfileInfo, ApiError> {
         .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
     {
         return Err(ApiError::BadRequest(
-            "Profile ID contains invalid characters (alphanumeric, hyphens, underscores only)".to_string(),
+            "Profile ID contains invalid characters (alphanumeric, hyphens, underscores only)"
+                .to_string(),
         ));
     }
 
@@ -147,15 +142,12 @@ fn parse_role(s: &str) -> Result<ProfileRole, ApiError> {
         "teen" => Ok(ProfileRole::Teen),
         "child" => Ok(ProfileRole::Child),
         "guest" => Ok(ProfileRole::Guest),
-        other => Err(ApiError::BadRequest(
-            format!(
-                "Unknown role '{}' in X-IM-Profile header. Valid: admin, adult, teen, child, guest",
-                other
-            ),
-        )),
+        other => Err(ApiError::BadRequest(format!(
+            "Unknown role '{}' in X-IM-Profile header. Valid: admin, adult, teen, child, guest",
+            other
+        ))),
     }
 }
-
 
 // ── Axum Extractor ───────────────────────────────────────────────────
 
@@ -229,10 +221,7 @@ pub async fn profile_middleware(
 ///
 /// This is called by route handlers that need to enforce authorization.
 /// The profile must have been injected by profile_middleware first.
-pub fn check_permission(
-    profile: &ProfileInfo,
-    permission: &str,
-) -> Result<(), ApiError> {
+pub fn check_permission(profile: &ProfileInfo, permission: &str) -> Result<(), ApiError> {
     let allowed = match permission {
         "inference" => profile.permissions.can_inference,
         "list_models" => profile.permissions.can_list_models,
@@ -248,12 +237,10 @@ pub fn check_permission(
     };
 
     if !allowed {
-        return Err(ApiError::PermissionDenied(
-            format!(
-                "Profile '{}' (role: {:?}) lacks '{}' permission",
-                profile.profile_id, profile.role, permission
-            ),
-        ));
+        return Err(ApiError::PermissionDenied(format!(
+            "Profile '{}' (role: {:?}) lacks '{}' permission",
+            profile.profile_id, profile.role, permission
+        )));
     }
 
     Ok(())
@@ -355,7 +342,10 @@ mod tests {
         assert!(perms.can_inference);
         assert!(!perms.can_manage_models);
         assert!(matches!(perms.content_filter, ContentFilterLevel::Moderate));
-        assert!(matches!(perms.model_filter, Some(ModelAccessFilter::TeenSafe)));
+        assert!(matches!(
+            perms.model_filter,
+            Some(ModelAccessFilter::TeenSafe)
+        ));
     }
 
     #[test]
@@ -365,7 +355,10 @@ mod tests {
         assert!(!perms.can_list_models);
         assert!(!perms.can_manage_models);
         assert!(matches!(perms.content_filter, ContentFilterLevel::Strict));
-        assert!(matches!(perms.model_filter, Some(ModelAccessFilter::ChildSafe)));
+        assert!(matches!(
+            perms.model_filter,
+            Some(ModelAccessFilter::ChildSafe)
+        ));
     }
 
     #[test]
@@ -376,7 +369,13 @@ mod tests {
             display_name: None,
             permissions: ProfileRole::Admin.permissions(),
         };
-        assert!(can_access_model(&profile, "llama-3.1-70b", false, false, false));
+        assert!(can_access_model(
+            &profile,
+            "llama-3.1-70b",
+            false,
+            false,
+            false
+        ));
         assert!(can_access_model(&profile, "anything", true, true, true));
     }
 
@@ -390,7 +389,13 @@ mod tests {
         };
         // Child can only access child-safe models
         assert!(can_access_model(&profile, "phi-4-mini", false, true, false));
-        assert!(!can_access_model(&profile, "llama-3.1-70b", false, false, false));
+        assert!(!can_access_model(
+            &profile,
+            "llama-3.1-70b",
+            false,
+            false,
+            false
+        ));
     }
 
     #[test]
@@ -402,7 +407,13 @@ mod tests {
             permissions: ProfileRole::Teen.permissions(),
         };
         assert!(can_access_model(&profile, "phi-4", true, false, false));
-        assert!(!can_access_model(&profile, "uncensored-model", false, false, false));
+        assert!(!can_access_model(
+            &profile,
+            "uncensored-model",
+            false,
+            false,
+            false
+        ));
     }
 
     #[test]
@@ -414,8 +425,20 @@ mod tests {
             permissions: ProfileRole::Guest.permissions(),
         };
         // Guest can only access default model
-        assert!(can_access_model(&profile, "default-model", false, false, true));
-        assert!(!can_access_model(&profile, "other-model", false, false, false));
+        assert!(can_access_model(
+            &profile,
+            "default-model",
+            false,
+            false,
+            true
+        ));
+        assert!(!can_access_model(
+            &profile,
+            "other-model",
+            false,
+            false,
+            false
+        ));
     }
 
     #[test]

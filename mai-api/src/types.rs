@@ -11,7 +11,6 @@
 
 use serde::{Deserialize, Serialize};
 
-
 // ─── Chat Completion Request ────────────────────────────────────────
 
 /// OpenAI-compatible chat completion request
@@ -464,7 +463,6 @@ pub struct AuditLogEntry {
     /// Hash chain integrity value
     pub chain_hash: String,
 }
-
 
 // ─── Profile Wire Types (API responses) ────────────────────────────
 

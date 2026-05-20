@@ -20,13 +20,13 @@
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use mai_core::types::RequestId;
 use serde_json::Value as JsonValue;
 use tracing::{debug, info, warn};
-use mai_core::types::RequestId;
 
 use crate::types::{
-    AgentError, SessionId, ToolAccessRole, ToolAuditEntry, ToolCall,
-    ToolChain, ToolChainState, ToolDefinition, ToolId, ToolResult,
+    AgentError, SessionId, ToolAccessRole, ToolAuditEntry, ToolCall, ToolChain, ToolChainState,
+    ToolDefinition, ToolId, ToolResult,
 };
 
 // ============================================================================
@@ -137,9 +137,10 @@ impl ToolRegistry {
         call: &ToolCall,
         caller_role: &ToolAccessRole,
     ) -> Result<&ToolDefinition, AgentError> {
-        let tool = self.tools.get(&call.tool_id).ok_or_else(|| {
-            AgentError::ToolNotRegistered(call.tool_id.clone())
-        })?;
+        let tool = self
+            .tools
+            .get(&call.tool_id)
+            .ok_or_else(|| AgentError::ToolNotRegistered(call.tool_id.clone()))?;
 
         // Permission check
         if *caller_role < tool.required_role {
@@ -154,8 +155,7 @@ impl ToolRegistry {
         if !call.arguments.is_object() && !call.arguments.is_null() {
             return Err(AgentError::InvalidToolArguments(format!(
                 "Tool {} arguments must be a JSON object, got {}",
-                call.tool_id,
-                call.arguments
+                call.tool_id, call.arguments
             )));
         }
 
@@ -353,11 +353,17 @@ impl ToolRegistry {
     }
 
     /// Abort a chain.
-    pub fn abort_chain(&mut self, request_id: &RequestId, reason: String) -> Result<(), AgentError> {
+    pub fn abort_chain(
+        &mut self,
+        request_id: &RequestId,
+        reason: String,
+    ) -> Result<(), AgentError> {
         let chain = self.chains.get_mut(request_id).ok_or_else(|| {
             AgentError::Internal(format!("No active chain for request {request_id}"))
         })?;
-        chain.state = ToolChainState::Aborted { reason: reason.clone() };
+        chain.state = ToolChainState::Aborted {
+            reason: reason.clone(),
+        };
         warn!(%request_id, %reason, "Tool chain aborted");
         Ok(())
     }
@@ -524,9 +530,15 @@ mod tests {
         };
 
         // Child can call
-        assert!(reg.validate_tool_call(&call, &ToolAccessRole::Child).is_ok());
+        assert!(
+            reg.validate_tool_call(&call, &ToolAccessRole::Child)
+                .is_ok()
+        );
         // Guest cannot
-        assert!(reg.validate_tool_call(&call, &ToolAccessRole::Guest).is_err());
+        assert!(
+            reg.validate_tool_call(&call, &ToolAccessRole::Guest)
+                .is_err()
+        );
     }
 
     #[test]
@@ -563,7 +575,9 @@ mod tests {
             chain_step: 0,
             parallel_group: None,
         }];
-        let validated = reg.submit_calls(&request_id, calls, &ToolAccessRole::Parent).unwrap();
+        let validated = reg
+            .submit_calls(&request_id, calls, &ToolAccessRole::Parent)
+            .unwrap();
         assert_eq!(validated.len(), 1);
 
         // Record results
@@ -575,7 +589,9 @@ mod tests {
             error: None,
             duration_ms: 42,
         }];
-        let should_continue = reg.record_results(&request_id, results, "dad-profile").unwrap();
+        let should_continue = reg
+            .record_results(&request_id, results, "dad-profile")
+            .unwrap();
         assert!(should_continue);
 
         // Complete chain
@@ -602,7 +618,8 @@ mod tests {
             chain_step: 0,
             parallel_group: None,
         }];
-        reg.submit_calls(&request_id, calls, &ToolAccessRole::Admin).unwrap();
+        reg.submit_calls(&request_id, calls, &ToolAccessRole::Admin)
+            .unwrap();
         reg.record_results(
             &request_id,
             vec![ToolResult {
@@ -614,7 +631,8 @@ mod tests {
                 duration_ms: 10,
             }],
             "admin",
-        ).unwrap();
+        )
+        .unwrap();
 
         // Second call exceeds limit
         let calls2 = vec![ToolCall {
@@ -625,7 +643,10 @@ mod tests {
             parallel_group: None,
         }];
         let result = reg.submit_calls(&request_id, calls2, &ToolAccessRole::Admin);
-        assert!(matches!(result, Err(AgentError::ChainStepLimitExceeded { max: 1 })));
+        assert!(matches!(
+            result,
+            Err(AgentError::ChainStepLimitExceeded { max: 1 })
+        ));
     }
 
     #[test]
@@ -654,7 +675,9 @@ mod tests {
             },
         ];
 
-        let validated = reg.submit_calls(&request_id, calls, &ToolAccessRole::Parent).unwrap();
+        let validated = reg
+            .submit_calls(&request_id, calls, &ToolAccessRole::Parent)
+            .unwrap();
         assert_eq!(validated.len(), 2);
     }
 
@@ -702,7 +725,8 @@ mod tests {
             chain_step: 0,
             parallel_group: None,
         }];
-        reg.submit_calls(&request_id, calls, &ToolAccessRole::Parent).unwrap();
+        reg.submit_calls(&request_id, calls, &ToolAccessRole::Parent)
+            .unwrap();
         reg.record_results(
             &request_id,
             vec![ToolResult {
@@ -714,7 +738,8 @@ mod tests {
                 duration_ms: 50,
             }],
             "dad-profile",
-        ).unwrap();
+        )
+        .unwrap();
 
         assert_eq!(reg.audit_count(), 1);
         let recent = reg.recent_audit(10);
@@ -740,7 +765,8 @@ mod tests {
         let mut reg = ToolRegistry::new();
         let request_id = Uuid::new_v4();
         reg.start_chain(request_id, Uuid::new_v4(), None).unwrap();
-        reg.abort_chain(&request_id, "User cancelled".into()).unwrap();
+        reg.abort_chain(&request_id, "User cancelled".into())
+            .unwrap();
 
         let chain = reg.get_chain(&request_id).unwrap();
         assert!(matches!(chain.state, ToolChainState::Aborted { .. }));

@@ -4,9 +4,9 @@
 //! audit log access, and family profile queries. Most endpoints are
 //! admin-only; enforced via check_permission().
 
+use axum::Json;
 use axum::extract::{Path, Query, State};
 use axum::response::IntoResponse;
-use axum::Json;
 use serde::Deserialize;
 use tracing::{info, warn};
 
@@ -14,9 +14,9 @@ use crate::auth::check_permission;
 use crate::errors::ApiError;
 use crate::state::AppState;
 use crate::types::{
-    AdapterHealthSummary, AdapterListResponse, AuditLogResponse, ModelCapabilities,
-    ModelDetail, PowerStateResponse, PowerTransitionRequest, ProfileInfo,
-    ProfileListResponse, ProfileResponse, RegistryQueryResponse, RegistryScanResponse,
+    AdapterHealthSummary, AdapterListResponse, AuditLogResponse, ModelCapabilities, ModelDetail,
+    PowerStateResponse, PowerTransitionRequest, ProfileInfo, ProfileListResponse, ProfileResponse,
+    RegistryQueryResponse, RegistryScanResponse,
 };
 
 use mai_core::power::TransitionTrigger;
@@ -38,7 +38,7 @@ pub async fn get_power_state(
     let response = PowerStateResponse {
         state: crate::types::power_state_to_string(current),
         estimated_watts: current.estimated_watts_gpu_era(),
-        state_duration_secs: 0, // Would need entry timestamp tracking
+        state_duration_secs: 0,  // Would need entry timestamp tracking
         demotion_pending: false, // Would need timer inspection
     };
 
@@ -63,10 +63,7 @@ pub async fn power_transition(
         warn!(error = %e, action = %req.action, "Power transition failed");
         match e {
             mai_core::power::PowerError::InvalidTransition { from, to } => {
-                ApiError::ValidationFailed(format!(
-                    "Invalid power transition: {} -> {}",
-                    from, to
-                ))
+                ApiError::ValidationFailed(format!("Invalid power transition: {} -> {}", from, to))
             }
             mai_core::power::PowerError::GuardFailed(reason) => {
                 ApiError::ValidationFailed(format!("Transition guard failed: {}", reason))
@@ -327,15 +324,11 @@ pub async fn get_profile(
     Path(profile_id): Path<String>,
 ) -> Result<impl IntoResponse, ApiError> {
     // Non-admin can only view their own profile
-    if profile.role != crate::types::ProfileRole::Admin
-        && profile.profile_id != profile_id
-    {
-        return Err(ApiError::PermissionDenied(
-            format!(
-                "Profile '{}' cannot view profile '{}'",
-                profile.profile_id, profile_id
-            ),
-        ));
+    if profile.role != crate::types::ProfileRole::Admin && profile.profile_id != profile_id {
+        return Err(ApiError::PermissionDenied(format!(
+            "Profile '{}' cannot view profile '{}'",
+            profile.profile_id, profile_id
+        )));
     }
 
     // In production, look up from vault profile store.

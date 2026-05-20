@@ -4,8 +4,8 @@
 //! steps -> audit trail -> model-compatible format export.
 
 use mai_agent::{
-    AgentError, ToolAccessRole, ToolAuditEntry, ToolCall, ToolChainState,
-    ToolDefinition, ToolRegistry, ToolResult,
+    AgentError, ToolAccessRole, ToolAuditEntry, ToolCall, ToolChainState, ToolDefinition,
+    ToolRegistry, ToolResult,
 };
 
 fn sample_tools() -> Vec<ToolDefinition> {
@@ -192,7 +192,10 @@ fn parallel_tool_calls() {
     ];
 
     let invalid = registry.validate_parallel_calls(&mixed_calls);
-    assert!(invalid.is_err(), "Cannot parallel-execute non-parallel tool");
+    assert!(
+        invalid.is_err(),
+        "Cannot parallel-execute non-parallel tool"
+    );
 }
 
 #[test]

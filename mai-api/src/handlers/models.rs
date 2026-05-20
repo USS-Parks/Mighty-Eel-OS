@@ -4,9 +4,9 @@
 //! and admin-only load/unload operations. Backend adapter names are never
 //! exposed in responses.
 
+use axum::Json;
 use axum::extract::{Path, State};
 use axum::response::IntoResponse;
-use axum::Json;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tracing::{debug, info, warn};
 
@@ -14,8 +14,7 @@ use crate::auth::{can_access_model, check_permission};
 use crate::errors::ApiError;
 use crate::state::AppState;
 use crate::types::{
-    ModelCapabilities, ModelDetail, ModelListResponse, ModelOperationResponse,
-    ProfileInfo,
+    ModelCapabilities, ModelDetail, ModelListResponse, ModelOperationResponse, ProfileInfo,
 };
 
 use mai_core::registry::ModelStatus;
@@ -45,11 +44,17 @@ pub async fn list_models(
     for summary in &summaries {
         // Determine model safety tags (in production, these come from manifest metadata)
         // For now, use heuristic: all models are adult-accessible, specific tags TBD
-        let is_teen_safe = true;  // Placeholder: read from manifest metadata
+        let is_teen_safe = true; // Placeholder: read from manifest metadata
         let is_child_safe = false; // Placeholder: only small/safe models
-        let is_default = false;    // Placeholder: check config for default model
+        let is_default = false; // Placeholder: check config for default model
 
-        if !can_access_model(&profile, &summary.model_id, is_teen_safe, is_child_safe, is_default) {
+        if !can_access_model(
+            &profile,
+            &summary.model_id,
+            is_teen_safe,
+            is_child_safe,
+            is_default,
+        ) {
             continue;
         }
 
@@ -166,7 +171,12 @@ pub async fn load_model(
         ModelStatus::ColdStorage => {
             // Initiate loading
             registry
-                .update_status(&model_id, ModelStatus::Loading { progress_percent: 0 })
+                .update_status(
+                    &model_id,
+                    ModelStatus::Loading {
+                        progress_percent: 0,
+                    },
+                )
                 .map_err(|e| {
                     warn!(error = %e, model = %model_id, "Failed to start model load");
                     ApiError::InternalError
@@ -181,25 +191,21 @@ pub async fn load_model(
                 message: format!("Model '{}' load initiated from cold storage", model_id),
             }))
         }
-        ModelStatus::Loaded | ModelStatus::Active { .. } => {
-            Ok(Json(ModelOperationResponse {
-                operation: "load".to_string(),
-                model_id: model_id.clone(),
-                status: "already_loaded".to_string(),
-                message: format!("Model '{}' is already loaded", model_id),
-            }))
-        }
-        ModelStatus::Loading { progress_percent } => {
-            Ok(Json(ModelOperationResponse {
-                operation: "load".to_string(),
-                model_id: model_id.clone(),
-                status: "loading".to_string(),
-                message: format!(
-                    "Model '{}' is already loading ({}% complete)",
-                    model_id, progress_percent
-                ),
-            }))
-        }
+        ModelStatus::Loaded | ModelStatus::Active { .. } => Ok(Json(ModelOperationResponse {
+            operation: "load".to_string(),
+            model_id: model_id.clone(),
+            status: "already_loaded".to_string(),
+            message: format!("Model '{}' is already loaded", model_id),
+        })),
+        ModelStatus::Loading { progress_percent } => Ok(Json(ModelOperationResponse {
+            operation: "load".to_string(),
+            model_id: model_id.clone(),
+            status: "loading".to_string(),
+            message: format!(
+                "Model '{}' is already loading ({}% complete)",
+                model_id, progress_percent
+            ),
+        })),
         _ => Err(ApiError::ModelUnavailable(format!(
             "Model '{}' is in state {:?} and cannot be loaded",
             model_id,
@@ -247,17 +253,18 @@ pub async fn unload_model(
                 operation: "unload".to_string(),
                 model_id: model_id.clone(),
                 status: "evicting".to_string(),
-                message: format!("Model '{}' unload initiated, draining in-flight requests", model_id),
+                message: format!(
+                    "Model '{}' unload initiated, draining in-flight requests",
+                    model_id
+                ),
             }))
         }
-        ModelStatus::ColdStorage | ModelStatus::Evicted => {
-            Ok(Json(ModelOperationResponse {
-                operation: "unload".to_string(),
-                model_id: model_id.clone(),
-                status: "not_loaded".to_string(),
-                message: format!("Model '{}' is not currently loaded", model_id),
-            }))
-        }
+        ModelStatus::ColdStorage | ModelStatus::Evicted => Ok(Json(ModelOperationResponse {
+            operation: "unload".to_string(),
+            model_id: model_id.clone(),
+            status: "not_loaded".to_string(),
+            message: format!("Model '{}' is not currently loaded", model_id),
+        })),
         _ => Err(ApiError::ModelUnavailable(format!(
             "Model '{}' is in state {:?} and cannot be unloaded now",
             model_id,

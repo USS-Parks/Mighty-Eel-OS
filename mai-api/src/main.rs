@@ -23,9 +23,8 @@ async fn main() -> ExitCode {
     // Default level: info for mai crates, warn for everything else.
     tracing_subscriber::fmt()
         .with_env_filter(
-            EnvFilter::try_from_default_env().unwrap_or_else(|_| {
-                EnvFilter::new("mai_api=info,mai_core=info,mai_hil=info,warn")
-            }),
+            EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| EnvFilter::new("mai_api=info,mai_core=info,mai_hil=info,warn")),
         )
         .with_target(true)
         .with_thread_ids(false)

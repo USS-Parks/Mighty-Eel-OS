@@ -7,9 +7,9 @@
 use tonic::{Request, Response, Status};
 use tracing::{debug, info, warn};
 
-use crate::state::AppState;
 use super::proto;
 use super::{extract_grpc_profile, role_has_permission};
+use crate::state::AppState;
 
 use mai_core::power::{TransitionResult, TransitionTrigger};
 
@@ -78,7 +78,9 @@ impl proto::mai_power_server::MaiPower for MaiPowerService {
     ) -> Result<Response<proto::PowerTransitionResponse>, Status> {
         let (profile_id, role) = extract_grpc_profile(&request)?;
         if !role_has_permission(&role, "power_control") {
-            return Err(Status::permission_denied("admin role required for power control"));
+            return Err(Status::permission_denied(
+                "admin role required for power control",
+            ));
         }
 
         let req = request.into_inner();
@@ -109,10 +111,7 @@ impl proto::mai_power_server::MaiPower for MaiPowerService {
                         previous_state: from.as_str().to_string(),
                         current_state: from.as_str().to_string(), // Still in progress
                         accepted: true,
-                        message: format!(
-                            "transition to {} in progress",
-                            to.as_str()
-                        ),
+                        message: format!("transition to {} in progress", to.as_str()),
                     }))
                 }
                 TransitionResult::Rejected { from, to, reason } => {

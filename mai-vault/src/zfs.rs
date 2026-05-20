@@ -18,9 +18,9 @@
 //!       └── VectorManager  (Qdrant)
 //! ```
 
+use async_trait::async_trait;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use async_trait::async_trait;
 use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
 
@@ -239,11 +239,7 @@ impl VaultInterface for ZfsVault {
         Ok(data)
     }
 
-    async fn store_model_package(
-        &self,
-        model_id: &str,
-        data: &[u8],
-    ) -> Result<(), VaultError> {
+    async fn store_model_package(&self, model_id: &str, data: &[u8]) -> Result<(), VaultError> {
         // Check if model already exists
         {
             let index = self.model_index.read().await;
@@ -311,11 +307,7 @@ impl VaultInterface for ZfsVault {
         Ok(())
     }
 
-    async fn verify_signature(
-        &self,
-        data: &[u8],
-        signature: &[u8],
-    ) -> Result<bool, VaultError> {
+    async fn verify_signature(&self, data: &[u8], signature: &[u8]) -> Result<bool, VaultError> {
         // Delegate to PqcProvider implementation when wired.
         // For now, return true (signature verification placeholder).
         debug!(
@@ -333,10 +325,7 @@ impl VaultInterface for ZfsVault {
 
 #[async_trait]
 impl ModelStorage for ZfsVault {
-    async fn verify_model_integrity(
-        &self,
-        model_id: &str,
-    ) -> Result<IntegrityResult, VaultError> {
+    async fn verify_model_integrity(&self, model_id: &str) -> Result<IntegrityResult, VaultError> {
         let index = self.model_index.read().await;
         let entry = index
             .get(model_id)
@@ -430,10 +419,7 @@ impl ModelStorage for ZfsVault {
     }
 
     async fn create_snapshot(&self, reason: &str) -> Result<SnapshotInfo, VaultError> {
-        let name = format!(
-            "mai-snap-{}",
-            chrono::Utc::now().format("%Y%m%d-%H%M%S")
-        );
+        let name = format!("mai-snap-{}", chrono::Utc::now().format("%Y%m%d-%H%M%S"));
         let now = chrono::Utc::now().timestamp() as u64;
 
         info!(snapshot = %name, reason, "Creating vault snapshot");
@@ -577,7 +563,10 @@ mod tests {
             .await
             .unwrap();
 
-        let result = vault.verify_model_integrity("integrity-test").await.unwrap();
+        let result = vault
+            .verify_model_integrity("integrity-test")
+            .await
+            .unwrap();
         assert!(result.valid);
         assert_eq!(result.verified_bytes, 18); // len("integrity test data")
     }

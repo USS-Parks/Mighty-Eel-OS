@@ -10,9 +10,9 @@ use tonic::{Request, Response, Status};
 use tracing::{debug, error, info};
 use uuid::Uuid;
 
-use crate::state::AppState;
 use super::proto;
 use super::{extract_grpc_profile, role_has_permission};
+use crate::state::AppState;
 
 use mai_core::scheduler::{
     ChatMessage, InferenceRequest, RequestPayload, RequestPriority, RequestType,
@@ -42,7 +42,9 @@ impl proto::mai_inference_server::MaiInference for MaiInferenceService {
     ) -> Result<Response<proto::ChatCompletionResponse>, Status> {
         let (profile_id, role) = extract_grpc_profile(&request)?;
         if !role_has_permission(&role, "inference") {
-            return Err(Status::permission_denied("profile lacks inference permission"));
+            return Err(Status::permission_denied(
+                "profile lacks inference permission",
+            ));
         }
 
         let req = request.into_inner();
@@ -70,10 +72,7 @@ impl proto::mai_inference_server::MaiInference for MaiInferenceService {
             .collect();
 
         // Estimate token count from message content lengths
-        let estimated_tokens: u32 = messages
-            .iter()
-            .map(|m| (m.content.len() / 4) as u32)
-            .sum();
+        let estimated_tokens: u32 = messages.iter().map(|m| (m.content.len() / 4) as u32).sum();
 
         // Build InferenceRequest matching mai-core's actual struct
         let inference_req = InferenceRequest {
@@ -95,12 +94,10 @@ impl proto::mai_inference_server::MaiInference for MaiInferenceService {
 
         // Route through scheduler to get adapter selection
         let mut scheduler = self.state.scheduler.write().await;
-        let selection = scheduler
-            .route_request(&inference_req)
-            .map_err(|e| {
-                error!(request_id = %request_id, error = %e, "scheduler routing failed");
-                Status::internal("inference request routing failed")
-            })?;
+        let selection = scheduler.route_request(&inference_req).map_err(|e| {
+            error!(request_id = %request_id, error = %e, "scheduler routing failed");
+            Status::internal("inference request routing failed")
+        })?;
 
         // NOTE: Actual adapter invocation happens via the adapter manager
         // (IPC bridge). This is the routing decision; the full request
@@ -153,7 +150,9 @@ impl proto::mai_inference_server::MaiInference for MaiInferenceService {
     ) -> Result<Response<Self::ChatCompletionStreamStream>, Status> {
         let (profile_id, role) = extract_grpc_profile(&request)?;
         if !role_has_permission(&role, "inference") {
-            return Err(Status::permission_denied("profile lacks inference permission"));
+            return Err(Status::permission_denied(
+                "profile lacks inference permission",
+            ));
         }
 
         let req = request.into_inner();
@@ -179,10 +178,7 @@ impl proto::mai_inference_server::MaiInference for MaiInferenceService {
             })
             .collect();
 
-        let estimated_tokens: u32 = messages
-            .iter()
-            .map(|m| (m.content.len() / 4) as u32)
-            .sum();
+        let estimated_tokens: u32 = messages.iter().map(|m| (m.content.len() / 4) as u32).sum();
 
         let inference_req = InferenceRequest {
             id: request_uuid,
@@ -203,12 +199,10 @@ impl proto::mai_inference_server::MaiInference for MaiInferenceService {
 
         // Route the streaming request
         let mut scheduler = self.state.scheduler.write().await;
-        let selection = scheduler
-            .route_request(&inference_req)
-            .map_err(|e| {
-                error!(request_id = %request_id, error = %e, "streaming route failed");
-                Status::internal("streaming inference routing failed")
-            })?;
+        let selection = scheduler.route_request(&inference_req).map_err(|e| {
+            error!(request_id = %request_id, error = %e, "streaming route failed");
+            Status::internal("streaming inference routing failed")
+        })?;
 
         let adapter_id = selection.adapter_id.clone();
         let model_id = selection.model_id.clone();
@@ -280,7 +274,9 @@ impl proto::mai_inference_server::MaiInference for MaiInferenceService {
     ) -> Result<Response<proto::EmbeddingResponse>, Status> {
         let (profile_id, role) = extract_grpc_profile(&request)?;
         if !role_has_permission(&role, "inference") {
-            return Err(Status::permission_denied("profile lacks inference permission"));
+            return Err(Status::permission_denied(
+                "profile lacks inference permission",
+            ));
         }
 
         let req = request.into_inner();
@@ -296,11 +292,7 @@ impl proto::mai_inference_server::MaiInference for MaiInferenceService {
             "gRPC Embed request"
         );
 
-        let estimated_tokens: u32 = req
-            .input
-            .iter()
-            .map(|t| (t.len() / 4) as u32)
-            .sum();
+        let estimated_tokens: u32 = req.input.iter().map(|t| (t.len() / 4) as u32).sum();
 
         let inference_req = InferenceRequest {
             id: request_uuid,
@@ -322,12 +314,10 @@ impl proto::mai_inference_server::MaiInference for MaiInferenceService {
         };
 
         let mut scheduler = self.state.scheduler.write().await;
-        let selection = scheduler
-            .route_request(&inference_req)
-            .map_err(|e| {
-                error!(request_id = %request_id, error = %e, "embedding route failed");
-                Status::internal("embedding request routing failed")
-            })?;
+        let selection = scheduler.route_request(&inference_req).map_err(|e| {
+            error!(request_id = %request_id, error = %e, "embedding route failed");
+            Status::internal("embedding request routing failed")
+        })?;
 
         scheduler.request_completed(&selection.adapter_id);
 

@@ -23,13 +23,10 @@
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
-use tracing::{debug, info};
 use mai_core::vault::{CollectionConfig, DistanceMetric, EmbeddingPoint, SearchResult};
+use tracing::{debug, info};
 
-use crate::types::{
-    AgentError, DocumentChunk, RagConfig, RagResponse,
-    RetrievalResult,
-};
+use crate::types::{AgentError, DocumentChunk, RagConfig, RagResponse, RetrievalResult};
 
 // ============================================================================
 // Semantic Cache
@@ -79,14 +76,11 @@ impl SemanticCache {
 
     /// Look up a query embedding in the cache.
     /// Returns the cached response if a sufficiently similar query exists.
-    fn lookup(
-        &mut self,
-        query_embedding: &[f32],
-        profile_id: &str,
-    ) -> Option<RagResponse> {
+    fn lookup(&mut self, query_embedding: &[f32], profile_id: &str) -> Option<RagResponse> {
         // Evict expired entries first
         let now = Instant::now();
-        self.entries.retain(|e| now.duration_since(e.created_at) < self.ttl);
+        self.entries
+            .retain(|e| now.duration_since(e.created_at) < self.ttl);
 
         let mut best_score = 0.0f32;
         let mut best_idx = None;
@@ -108,11 +102,7 @@ impl SemanticCache {
                 self.entries[idx].hit_count += 1;
                 let mut response = self.entries[idx].response.clone();
                 response.cache_hit = true;
-                debug!(
-                    score = best_score,
-                    profile_id,
-                    "Semantic cache hit"
-                );
+                debug!(score = best_score, profile_id, "Semantic cache hit");
                 return Some(response);
             }
         }
@@ -121,12 +111,7 @@ impl SemanticCache {
     }
 
     /// Store a query/response pair in the cache.
-    fn store(
-        &mut self,
-        query_embedding: Vec<f32>,
-        response: RagResponse,
-        profile_id: &str,
-    ) {
+    fn store(&mut self, query_embedding: Vec<f32>, response: RagResponse, profile_id: &str) {
         if self.entries.len() >= self.max_entries {
             // Evict least recently used (lowest hit count, oldest)
             if let Some(evict_idx) = self
@@ -311,8 +296,14 @@ impl RagPipeline {
                 .iter()
                 .map(|(k, v)| (k.clone(), serde_json::Value::String(v.clone())))
                 .collect();
-            payload.insert("document_id".into(), serde_json::Value::String(chunk.document_id.clone()));
-            payload.insert("chunk_index".into(), serde_json::Value::String(chunk.chunk_index.to_string()));
+            payload.insert(
+                "document_id".into(),
+                serde_json::Value::String(chunk.document_id.clone()),
+            );
+            payload.insert(
+                "chunk_index".into(),
+                serde_json::Value::String(chunk.chunk_index.to_string()),
+            );
 
             // Use hash of document_id + chunk_index as point ID
             let point_id = compute_point_id(&chunk.document_id, chunk.chunk_index);
@@ -624,9 +615,15 @@ mod tests {
         let mut pipeline = RagPipeline::new(test_config());
 
         let mut meta = HashMap::new();
-        meta.insert("document_id".into(), serde_json::Value::String("doc-1".into()));
+        meta.insert(
+            "document_id".into(),
+            serde_json::Value::String("doc-1".into()),
+        );
         meta.insert("chunk_index".into(), serde_json::Value::String("0".into()));
-        meta.insert("text".into(), serde_json::Value::String("The answer is 42.".into()));
+        meta.insert(
+            "text".into(),
+            serde_json::Value::String("The answer is 42.".into()),
+        );
 
         let results = vec![SearchResult {
             id: "1".to_string(),
@@ -657,12 +654,7 @@ mod tests {
             payload: HashMap::new(),
         }];
 
-        let response = pipeline.process_retrieval(
-            "query",
-            vec![0.1, 0.2],
-            results,
-            "profile-1",
-        );
+        let response = pipeline.process_retrieval("query", vec![0.1, 0.2], results, "profile-1");
 
         assert_eq!(response.retrieved.len(), 0);
     }
@@ -684,7 +676,9 @@ mod tests {
             cache_hit: false,
             augmented_token_count: 5,
         };
-        pipeline.cache.store(query_embedding.clone(), response, profile);
+        pipeline
+            .cache
+            .store(query_embedding.clone(), response, profile);
 
         // Same query: hit (identical embedding = similarity 1.0 > 0.95)
         let cached = pipeline.check_cache(&query_embedding, profile);
@@ -705,7 +699,9 @@ mod tests {
         };
 
         // Store for profile-1
-        pipeline.cache.store(embedding.clone(), response, "profile-1");
+        pipeline
+            .cache
+            .store(embedding.clone(), response, "profile-1");
 
         // profile-2 should NOT get the hit
         assert!(pipeline.check_cache(&embedding, "profile-2").is_none());
@@ -725,7 +721,9 @@ mod tests {
             augmented_token_count: 2,
         };
 
-        pipeline.cache.store(embedding.clone(), response, "profile-1");
+        pipeline
+            .cache
+            .store(embedding.clone(), response, "profile-1");
         assert_eq!(pipeline.cache_size(), 1);
 
         pipeline.invalidate_profile_cache("profile-1");

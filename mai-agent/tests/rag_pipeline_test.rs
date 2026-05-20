@@ -4,9 +4,7 @@
 //! -> augmented prompt construction -> semantic cache hit/miss.
 //! No external services required (pure in-memory).
 
-use mai_agent::{
-    DocumentChunk, RagConfig, RagPipeline, RetrievalResult,
-};
+use mai_agent::{DocumentChunk, RagConfig, RagPipeline, RetrievalResult};
 
 fn test_config() -> RagConfig {
     RagConfig {
@@ -96,11 +94,7 @@ fn full_rag_pipeline_flow() {
         v
     };
 
-    let response = pipeline.process_retrieval(
-        "admin-profile-id",
-        &query_vec,
-        &results,
-    );
+    let response = pipeline.process_retrieval("admin-profile-id", &query_vec, &results);
 
     // Should filter out the low-score chunk
     assert_eq!(response.chunks_used, 2);
@@ -110,7 +104,10 @@ fn full_rag_pipeline_flow() {
 
     // Step 4: Semantic cache should have stored this result
     let cache_hit = pipeline.check_cache("admin-profile-id", &query_vec);
-    assert!(cache_hit.is_some(), "Should hit semantic cache on exact same vector");
+    assert!(
+        cache_hit.is_some(),
+        "Should hit semantic cache on exact same vector"
+    );
 
     // Step 5: Slightly different vector should miss cache
     let different_vec = {
@@ -181,5 +178,8 @@ fn cache_profile_isolation() {
 
     // Teen profile with same vector should NOT hit admin's cache
     let teen_hit = pipeline.check_cache("teen", &vec_a);
-    assert!(teen_hit.is_none(), "Teen must not see admin's cached results");
+    assert!(
+        teen_hit.is_none(),
+        "Teen must not see admin's cached results"
+    );
 }

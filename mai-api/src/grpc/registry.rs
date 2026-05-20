@@ -7,9 +7,9 @@
 use tonic::{Request, Response, Status};
 use tracing::{debug, info};
 
-use crate::state::AppState;
 use super::proto;
 use super::{extract_grpc_profile, role_has_permission};
+use crate::state::AppState;
 
 use mai_core::registry::ModelFilter;
 
@@ -54,7 +54,9 @@ impl proto::mai_registry_server::MaiRegistry for MaiRegistryService {
     ) -> Result<Response<proto::RegistryQueryResponse>, Status> {
         let (profile_id, role) = extract_grpc_profile(&request)?;
         if !role_has_permission(&role, "list_models") {
-            return Err(Status::permission_denied("profile lacks list_models permission"));
+            return Err(Status::permission_denied(
+                "profile lacks list_models permission",
+            ));
         }
 
         let req = request.into_inner();
@@ -96,10 +98,8 @@ impl proto::mai_registry_server::MaiRegistry for MaiRegistryService {
             .filter(|m| format!("{:?}", m.status).to_lowercase() == "loaded")
             .count();
 
-        let models: Vec<proto::ModelDetail> = filtered
-            .iter()
-            .map(|m| summary_to_proto(m))
-            .collect();
+        let models: Vec<proto::ModelDetail> =
+            filtered.iter().map(|m| summary_to_proto(m)).collect();
 
         Ok(Response::new(proto::RegistryQueryResponse {
             total_models: models.len() as u32,
@@ -119,7 +119,9 @@ impl proto::mai_registry_server::MaiRegistry for MaiRegistryService {
     ) -> Result<Response<proto::ScanModelsResponse>, Status> {
         let (profile_id, role) = extract_grpc_profile(&request)?;
         if !role_has_permission(&role, "registry_write") {
-            return Err(Status::permission_denied("admin role required for registry scan"));
+            return Err(Status::permission_denied(
+                "admin role required for registry scan",
+            ));
         }
 
         info!(profile_id = %profile_id, "gRPC ScanModels (placeholder)");

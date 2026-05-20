@@ -25,8 +25,8 @@
 //! using deterministic test vectors. Real PQC operations require linking
 //! against liboqs or the pqcrypto crate family at build time.
 
-use std::collections::HashMap;
 use async_trait::async_trait;
+use std::collections::HashMap;
 use tokio::sync::RwLock;
 use tracing::{debug, info};
 
@@ -173,10 +173,7 @@ impl PqcProvider for PqcEngine {
         Ok((pk, sk))
     }
 
-    async fn kem_encapsulate(
-        &self,
-        public_key: &[u8],
-    ) -> Result<(Vec<u8>, Vec<u8>), VaultError> {
+    async fn kem_encapsulate(&self, public_key: &[u8]) -> Result<(Vec<u8>, Vec<u8>), VaultError> {
         if public_key.len() != 1568 {
             return Err(VaultError::PqcError(format!(
                 "Invalid ML-KEM-1024 public key length: {} (expected 1568)",
@@ -217,11 +214,7 @@ impl PqcProvider for PqcEngine {
         Ok((pk, sk))
     }
 
-    async fn dsa_sign(
-        &self,
-        data: &[u8],
-        signing_key: &[u8],
-    ) -> Result<Vec<u8>, VaultError> {
+    async fn dsa_sign(&self, data: &[u8], signing_key: &[u8]) -> Result<Vec<u8>, VaultError> {
         if signing_key.len() != 4896 {
             return Err(VaultError::PqcError(format!(
                 "Invalid ML-DSA-87 signing key length: {} (expected 4896)",
@@ -233,7 +226,10 @@ impl PqcProvider for PqcEngine {
         let mut signature = vec![0u8; 4627]; // ML-DSA-87 signature is 4627 bytes
         let hash_bytes = hash.as_bytes();
         signature[..32].copy_from_slice(hash_bytes);
-        debug!(data_len = data.len(), "ML-DSA-87 signature generated (stub)");
+        debug!(
+            data_len = data.len(),
+            "ML-DSA-87 signature generated (stub)"
+        );
         Ok(signature)
     }
 
@@ -253,7 +249,10 @@ impl PqcProvider for PqcEngine {
         let hash = blake3::hash(data);
         let hash_bytes = hash.as_bytes();
         let valid = signature.len() >= 32 && signature[..32] == hash_bytes[..];
-        debug!(data_len = data.len(), valid, "ML-DSA-87 signature verified (stub)");
+        debug!(
+            data_len = data.len(),
+            valid, "ML-DSA-87 signature verified (stub)"
+        );
         Ok(valid)
     }
 
@@ -267,13 +266,21 @@ impl PqcProvider for PqcEngine {
         // 2. KEM-encapsulate to get symmetric key
         // 3. AES-256-GCM encrypt plaintext with symmetric key
         // 4. Prepend KEM ciphertext to encrypted data
-        debug!(model_id, bytes = plaintext.len(), "Encrypting model weights");
+        debug!(
+            model_id,
+            bytes = plaintext.len(),
+            "Encrypting model weights"
+        );
 
         // Stub: XOR-based "encryption" for structural correctness
         let key_hint = model_id.as_bytes();
         let ciphertext = Self::stub_encrypt(plaintext, key_hint);
 
-        info!(model_id, bytes = ciphertext.len(), "Model weights encrypted (stub)");
+        info!(
+            model_id,
+            bytes = ciphertext.len(),
+            "Model weights encrypted (stub)"
+        );
         Ok(ciphertext)
     }
 
@@ -282,12 +289,20 @@ impl PqcProvider for PqcEngine {
         model_id: &str,
         ciphertext: &[u8],
     ) -> Result<Vec<u8>, VaultError> {
-        debug!(model_id, bytes = ciphertext.len(), "Decrypting model weights");
+        debug!(
+            model_id,
+            bytes = ciphertext.len(),
+            "Decrypting model weights"
+        );
 
         let key_hint = model_id.as_bytes();
         let plaintext = Self::stub_decrypt(ciphertext, key_hint);
 
-        info!(model_id, bytes = plaintext.len(), "Model weights decrypted (stub)");
+        info!(
+            model_id,
+            bytes = plaintext.len(),
+            "Model weights decrypted (stub)"
+        );
         Ok(plaintext)
     }
 

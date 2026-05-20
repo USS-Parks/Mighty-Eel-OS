@@ -15,11 +15,11 @@ use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use tower::ServiceExt; // for `oneshot`
 
+use mai_api::audit::MemoryAuditWriter;
+use mai_api::auth::AuthState;
 use mai_api::config::ServerConfig;
 use mai_api::routes::build_router;
 use mai_api::state::AppState;
-use mai_api::audit::MemoryAuditWriter;
-use mai_api::auth::AuthState;
 
 use mai_core::health::{HealthConfig, HealthMonitor};
 use mai_core::hotswap::HotSwapManager;
@@ -34,16 +34,29 @@ struct TestVault;
 
 #[async_trait::async_trait]
 impl VaultInterface for TestVault {
-    async fn load_model_weights(&self, model_id: &str) -> Result<Vec<u8>, mai_core::vault::VaultError> {
-        Err(mai_core::vault::VaultError::ModelNotFound(model_id.to_string()))
+    async fn load_model_weights(
+        &self,
+        model_id: &str,
+    ) -> Result<Vec<u8>, mai_core::vault::VaultError> {
+        Err(mai_core::vault::VaultError::ModelNotFound(
+            model_id.to_string(),
+        ))
     }
-    async fn store_model_package(&self, _id: &str, _data: &[u8]) -> Result<(), mai_core::vault::VaultError> {
+    async fn store_model_package(
+        &self,
+        _id: &str,
+        _data: &[u8],
+    ) -> Result<(), mai_core::vault::VaultError> {
         Ok(())
     }
     async fn append_audit_entry(&self, _entry: &[u8]) -> Result<(), mai_core::vault::VaultError> {
         Ok(())
     }
-    async fn verify_signature(&self, _data: &[u8], _sig: &[u8]) -> Result<bool, mai_core::vault::VaultError> {
+    async fn verify_signature(
+        &self,
+        _data: &[u8],
+        _sig: &[u8],
+    ) -> Result<bool, mai_core::vault::VaultError> {
         Ok(true)
     }
 }
@@ -70,10 +83,24 @@ fn build_test_state() -> AppState {
     let config = Arc::new(RwLock::new(ServerConfig::default()));
     let auth = AuthState::local_trust();
 
-    AppState::new(scheduler, registry, health, power, hotswap, audit_writer, config, auth)
+    AppState::new(
+        scheduler,
+        registry,
+        health,
+        power,
+        hotswap,
+        audit_writer,
+        config,
+        auth,
+    )
 }
 
-fn json_request(method: &str, uri: &str, body: &str, profile_header: Option<&str>) -> Request<Body> {
+fn json_request(
+    method: &str,
+    uri: &str,
+    body: &str,
+    profile_header: Option<&str>,
+) -> Request<Body> {
     let mut builder = Request::builder()
         .method(method)
         .uri(uri)
@@ -114,11 +141,19 @@ async fn test_chat_completions_no_model() {
         "Expected error status, got {status}"
     );
 
-    let body_bytes = axum::body::to_bytes(resp.into_body(), 1024 * 64).await.unwrap();
+    let body_bytes = axum::body::to_bytes(resp.into_body(), 1024 * 64)
+        .await
+        .unwrap();
     let json: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
-    assert!(json["error"]["code"].is_string(), "Error response must have code field");
+    assert!(
+        json["error"]["code"].is_string(),
+        "Error response must have code field"
+    );
     let code = json["error"]["code"].as_str().unwrap();
-    assert!(code.starts_with("MAI-"), "Error code must start with MAI-, got: {code}");
+    assert!(
+        code.starts_with("MAI-"),
+        "Error code must start with MAI-, got: {code}"
+    );
 }
 
 /// Test 2: POST /v1/embeddings endpoint.
@@ -138,7 +173,11 @@ async fn test_embeddings_endpoint_routes() {
 
     // Embeddings with no model loaded returns an error, but the route itself works
     let status = resp.status();
-    assert_ne!(status, StatusCode::NOT_FOUND, "Route /v1/embeddings must exist (got 404)");
+    assert_ne!(
+        status,
+        StatusCode::NOT_FOUND,
+        "Route /v1/embeddings must exist (got 404)"
+    );
     // Valid error statuses from missing model
     assert!(
         status.is_client_error() || status.is_server_error(),
@@ -191,9 +230,15 @@ async fn test_health_endpoint() {
     let resp = app.oneshot(req).await.unwrap();
 
     let status = resp.status();
-    assert_eq!(status, StatusCode::OK, "Health endpoint must return 200, got {status}");
+    assert_eq!(
+        status,
+        StatusCode::OK,
+        "Health endpoint must return 200, got {status}"
+    );
 
-    let body_bytes = axum::body::to_bytes(resp.into_body(), 1024 * 64).await.unwrap();
+    let body_bytes = axum::body::to_bytes(resp.into_body(), 1024 * 64)
+        .await
+        .unwrap();
     let json: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
     assert!(json.is_object(), "Health response must be a JSON object");
 }
@@ -207,18 +252,31 @@ async fn test_error_format_spec() {
     let app = build_router(state);
 
     // Malformed JSON to /v1/chat/completions should yield MAI-1001
-    let req = json_request("POST", "/v1/chat/completions", "{invalid json", Some("admin-1:Admin"));
+    let req = json_request(
+        "POST",
+        "/v1/chat/completions",
+        "{invalid json",
+        Some("admin-1:Admin"),
+    );
     let resp = app.oneshot(req).await.unwrap();
 
     let status = resp.status();
-    assert!(status.is_client_error(), "Malformed JSON must return 4xx, got {status}");
+    assert!(
+        status.is_client_error(),
+        "Malformed JSON must return 4xx, got {status}"
+    );
 
-    let body_bytes = axum::body::to_bytes(resp.into_body(), 1024 * 64).await.unwrap();
+    let body_bytes = axum::body::to_bytes(resp.into_body(), 1024 * 64)
+        .await
+        .unwrap();
     if let Ok(json) = serde_json::from_slice::<serde_json::Value>(&body_bytes) {
         // If we got a JSON error body, verify structure
         if let Some(error) = json.get("error") {
             assert!(error.get("code").is_some(), "Error must have 'code' field");
-            assert!(error.get("message").is_some(), "Error must have 'message' field");
+            assert!(
+                error.get("message").is_some(),
+                "Error must have 'message' field"
+            );
             assert!(error.get("type").is_some(), "Error must have 'type' field");
         }
     }

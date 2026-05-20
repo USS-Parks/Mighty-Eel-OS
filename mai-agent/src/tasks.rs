@@ -14,9 +14,8 @@ use chrono::Utc;
 use uuid::Uuid;
 
 use crate::types::{
-    AgentError, AgentTaskRequest, AgentTaskResponse, AgentTaskStatus,
-    ResourceBudget, ResourceBudgetRequest, TaskConfig, TaskId,
-    TaskProgress, ToolAuditEntry,
+    AgentError, AgentTaskRequest, AgentTaskResponse, AgentTaskStatus, ResourceBudget,
+    ResourceBudgetRequest, TaskConfig, TaskId, TaskProgress, ToolAuditEntry,
 };
 
 // ============================================================================
@@ -488,7 +487,11 @@ impl TaskManager {
             .ok_or_else(|| AgentError::TaskNotFound(task_id.to_string()))
     }
 
-    fn build_budget(&self, overrides: &Option<ResourceBudgetRequest>, now_ms: u64) -> ResourceBudget {
+    fn build_budget(
+        &self,
+        overrides: &Option<ResourceBudgetRequest>,
+        now_ms: u64,
+    ) -> ResourceBudget {
         let defaults = &self.config;
         let max_dur = defaults.max_timeout;
 

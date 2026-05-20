@@ -22,7 +22,7 @@ use tokio::sync::RwLock;
 use tracing::{debug, info};
 
 use mai_core::vault::{
-    CollectionConfig, DistanceMetric, EmbeddingPoint, SearchResult, VectorStore, VaultError,
+    CollectionConfig, DistanceMetric, EmbeddingPoint, SearchResult, VaultError, VectorStore,
 };
 
 use crate::config::VectorConfig;
@@ -76,17 +76,11 @@ impl VectorManager {
                 }
             }
             DistanceMetric::Euclidean => {
-                let sum_sq: f32 = a
-                    .iter()
-                    .zip(b.iter())
-                    .map(|(x, y)| (x - y).powi(2))
-                    .sum();
+                let sum_sq: f32 = a.iter().zip(b.iter()).map(|(x, y)| (x - y).powi(2)).sum();
                 // Convert distance to similarity (closer = higher score)
                 1.0 / (1.0 + sum_sq.sqrt())
             }
-            DistanceMetric::DotProduct => {
-                a.iter().zip(b.iter()).map(|(x, y)| x * y).sum()
-            }
+            DistanceMetric::DotProduct => a.iter().zip(b.iter()).map(|(x, y)| x * y).sum(),
         }
     }
 }
@@ -133,9 +127,7 @@ impl VectorStore for VectorManager {
         let collections = self.collections.read().await;
         let result: Vec<CollectionConfig> = collections
             .values()
-            .filter(|c| {
-                profile_filter.is_none_or(|pid| c.config.profile_id == pid)
-            })
+            .filter(|c| profile_filter.is_none_or(|pid| c.config.profile_id == pid))
             .map(|c| c.config.clone())
             .collect();
         Ok(result)
@@ -214,7 +206,11 @@ impl VectorStore for VectorManager {
             .collect();
 
         // Sort by score descending
-        scored.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+        scored.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         scored.truncate(top_k);
 
         debug!(
@@ -236,9 +232,7 @@ impl VectorStore for VectorManager {
             .ok_or_else(|| VaultError::CollectionNotFound(collection_name.to_string()))?;
 
         let before = collection.points.len();
-        collection
-            .points
-            .retain(|p| !point_ids.contains(&p.id));
+        collection.points.retain(|p| !point_ids.contains(&p.id));
         let removed = before - collection.points.len();
 
         debug!(

@@ -13,8 +13,8 @@ use tokio_stream::wrappers::ReceiverStream;
 use tonic::{Request, Response, Status};
 use tracing::debug;
 
-use crate::state::AppState;
 use super::proto;
+use crate::state::AppState;
 
 use mai_core::health::{AdapterStatus, AlertLevel, NetworkState, ThermalState};
 
@@ -253,7 +253,10 @@ impl proto::mai_health_server::MaiHealth for MaiHealthService {
             5
         });
 
-        debug!(interval_secs = interval.as_secs(), "gRPC Health Watch started");
+        debug!(
+            interval_secs = interval.as_secs(),
+            "gRPC Health Watch started"
+        );
 
         let (tx, rx) = tokio::sync::mpsc::channel(16);
         let state = self.state.clone();

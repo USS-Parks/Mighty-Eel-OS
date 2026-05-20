@@ -419,9 +419,9 @@ impl Default for SttConfig {
     fn default() -> Self {
         Self {
             default_model: "whisper-large-v3".to_string(),
-            sample_rate: 16_000,  // 16 kHz (Whisper native)
-            channels: 1,          // Mono
-            bit_depth: 16,        // PCM 16-bit
+            sample_rate: 16_000,    // 16 kHz (Whisper native)
+            channels: 1,            // Mono
+            bit_depth: 16,          // PCM 16-bit
             max_duration_secs: 300, // 5 minutes
             streaming_enabled: true,
             silence_threshold_ms: 1500,
@@ -530,8 +530,8 @@ impl Default for TaskConfig {
             max_concurrent_per_profile: 3,
             default_token_budget: 100_000,
             default_max_tool_calls: 50,
-            default_timeout: Duration::from_secs(300),     // 5 minutes
-            max_timeout: Duration::from_secs(3600),        // 1 hour
+            default_timeout: Duration::from_secs(300), // 5 minutes
+            max_timeout: Duration::from_secs(3600),    // 1 hour
             progress_interval: Duration::from_secs(5),
         }
     }

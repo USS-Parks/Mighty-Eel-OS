@@ -27,8 +27,8 @@ use tracing::{error, info, warn};
 use crate::air_gap::{AirGapChecker, DevSwitchReader};
 use crate::audit::MemoryAuditWriter;
 use crate::auth::AuthState;
-use crate::config::{load_or_default, ProductTier, ServerConfig};
-use crate::grpc::server::{build_grpc_server, GrpcServerConfig};
+use crate::config::{ProductTier, ServerConfig, load_or_default};
+use crate::grpc::server::{GrpcServerConfig, build_grpc_server};
 use crate::routes::build_router;
 use crate::state::AppState;
 
@@ -110,9 +110,9 @@ impl MaiServer {
         );
 
         // -- Step 1: Validate configuration--
-        self.config.validate().map_err(|e| {
-            ServerError::Config(format!("Configuration validation failed: {e}"))
-        })?;
+        self.config
+            .validate()
+            .map_err(|e| ServerError::Config(format!("Configuration validation failed: {e}")))?;
 
         // -- Step 2: Air-gap verification--
         if self.config.air_gap.enforce_on_startup {
@@ -152,11 +152,7 @@ impl MaiServer {
         let power = PowerStateMachine::new(PowerConfig::default());
         let power = Arc::new(RwLock::new(power));
 
-        let hotswap = HotSwapManager::new(
-            scheduler.clone(),
-            registry.clone(),
-            health.clone(),
-        );
+        let hotswap = HotSwapManager::new(scheduler.clone(), registry.clone(), health.clone());
         let hotswap = Arc::new(RwLock::new(hotswap));
 
         let audit_writer = Arc::new(MemoryAuditWriter::new());
@@ -211,7 +207,10 @@ impl MaiServer {
 
         info!(addr = %grpc_addr, "gRPC server listening");
 
-        info!("MAI server ready — REST on {}, gRPC on {}", rest_addr, grpc_addr);
+        info!(
+            "MAI server ready — REST on {}, gRPC on {}",
+            rest_addr, grpc_addr
+        );
 
         // -- Step 6: Block on shutdown signal--
         let shutdown = shutdown_signal();
@@ -273,11 +272,20 @@ struct StubVault;
 
 #[async_trait::async_trait]
 impl VaultInterface for StubVault {
-    async fn load_model_weights(&self, model_id: &str) -> Result<Vec<u8>, mai_core::vault::VaultError> {
-        Err(mai_core::vault::VaultError::ModelNotFound(model_id.to_string()))
+    async fn load_model_weights(
+        &self,
+        model_id: &str,
+    ) -> Result<Vec<u8>, mai_core::vault::VaultError> {
+        Err(mai_core::vault::VaultError::ModelNotFound(
+            model_id.to_string(),
+        ))
     }
 
-    async fn store_model_package(&self, _model_id: &str, _data: &[u8]) -> Result<(), mai_core::vault::VaultError> {
+    async fn store_model_package(
+        &self,
+        _model_id: &str,
+        _data: &[u8],
+    ) -> Result<(), mai_core::vault::VaultError> {
         Ok(())
     }
 
@@ -285,7 +293,11 @@ impl VaultInterface for StubVault {
         Ok(())
     }
 
-    async fn verify_signature(&self, _data: &[u8], _signature: &[u8]) -> Result<bool, mai_core::vault::VaultError> {
+    async fn verify_signature(
+        &self,
+        _data: &[u8],
+        _signature: &[u8],
+    ) -> Result<bool, mai_core::vault::VaultError> {
         Ok(true)
     }
 }

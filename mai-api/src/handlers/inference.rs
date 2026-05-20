@@ -7,9 +7,9 @@
 //! Streaming (SSE) delegates to the streaming::sse module. Requests with
 //! `stream: true` return an SSE event stream (Session 11c).
 
+use axum::Json;
 use axum::extract::State;
 use axum::response::IntoResponse;
-use axum::Json;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tracing::{info, warn};
 use uuid::Uuid;
@@ -18,9 +18,9 @@ use crate::auth::check_permission;
 use crate::errors::ApiError;
 use crate::state::AppState;
 use crate::types::{
-    ApiChatMessage, ChatChoice, ChatCompletionRequest, ChatCompletionResponse,
-    EmbeddingData, EmbeddingInput, EmbeddingRequest, EmbeddingResponse, EmbeddingUsage,
-    FunctionCallRequest, ProfileInfo, StructuredGenerationRequest, TokenUsage,
+    ApiChatMessage, ChatChoice, ChatCompletionRequest, ChatCompletionResponse, EmbeddingData,
+    EmbeddingInput, EmbeddingRequest, EmbeddingResponse, EmbeddingUsage, FunctionCallRequest,
+    ProfileInfo, StructuredGenerationRequest, TokenUsage,
 };
 
 use mai_core::scheduler::{InferenceRequest, RequestPayload, RequestPriority, RequestType};
@@ -42,11 +42,9 @@ pub async fn chat_completions(
     // Streaming via SSE (Session 11c)
     if req.stream {
         let last_event_id = None; // Extracted from headers in full integration (11e)
-        return crate::streaming::sse::handle_sse_chat(
-            state, profile, req, last_event_id,
-        )
-        .await
-        .map(|r| r.into_response());
+        return crate::streaming::sse::handle_sse_chat(state, profile, req, last_event_id)
+            .await
+            .map(|r| r.into_response());
     }
 
     // Permission check
@@ -80,13 +78,9 @@ pub async fn chat_completions(
             warn!(error = %e, "Scheduler routing failed");
             match e {
                 mai_core::scheduler::SchedulerError::NoAdapterAvailable(_) => {
-                    ApiError::ModelUnavailable(
-                        model_name.unwrap_or_else(|| "default".to_string()),
-                    )
+                    ApiError::ModelUnavailable(model_name.unwrap_or_else(|| "default".to_string()))
                 }
-                mai_core::scheduler::SchedulerError::QueueFull(_, _) => {
-                    ApiError::SystemOverloaded
-                }
+                mai_core::scheduler::SchedulerError::QueueFull(_, _) => ApiError::SystemOverloaded,
                 mai_core::scheduler::SchedulerError::RequestTimeout(_, _) => {
                     ApiError::RequestTimeout
                 }

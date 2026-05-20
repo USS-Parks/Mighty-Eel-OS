@@ -29,8 +29,8 @@ use uuid::Uuid;
 use mai_core::types::ProfileId;
 
 use crate::types::{
-    AgentError, ContextConfig, ContextPriority, ContextSegment,
-    ConversationSession, SegmentSource, SessionId, TokenAccounting,
+    AgentError, ContextConfig, ContextPriority, ContextSegment, ConversationSession, SegmentSource,
+    SessionId, TokenAccounting,
 };
 
 // ============================================================================
@@ -352,19 +352,13 @@ impl ContextManager {
     }
 
     /// Get token accounting for a session.
-    pub fn token_accounting(
-        &self,
-        session_id: &SessionId,
-    ) -> Result<&TokenAccounting, AgentError> {
+    pub fn token_accounting(&self, session_id: &SessionId) -> Result<&TokenAccounting, AgentError> {
         let session = self.get_session(session_id)?;
         Ok(&session.token_accounting)
     }
 
     /// Report context window utilization for a session.
-    pub fn context_report(
-        &self,
-        session_id: &SessionId,
-    ) -> Result<ContextReport, AgentError> {
+    pub fn context_report(&self, session_id: &SessionId) -> Result<ContextReport, AgentError> {
         let session = self.get_session(session_id)?;
         let total_used: u32 = session.segments.iter().map(|s| s.token_count).sum();
         let max = session.config.max_context_tokens;
@@ -456,8 +450,8 @@ impl ContextManager {
             .saturating_sub(total_used)
             .saturating_sub(session.config.generation_reserve);
 
-        accounting.cumulative_tokens = session.token_accounting.cumulative_tokens
-            + u64::from(total_used);
+        accounting.cumulative_tokens =
+            session.token_accounting.cumulative_tokens + u64::from(total_used);
 
         session.token_accounting = accounting;
         Ok(())
@@ -466,7 +460,9 @@ impl ContextManager {
     /// Apply truncation strategy when context exceeds the window.
     fn apply_truncation(&mut self, session_id: &SessionId) -> Result<(), AgentError> {
         let session = self.get_session_mut(session_id)?;
-        let max_tokens = session.config.max_context_tokens
+        let max_tokens = session
+            .config
+            .max_context_tokens
             .saturating_sub(session.config.generation_reserve);
         let total: u32 = session.segments.iter().map(|s| s.token_count).sum();
 
@@ -512,7 +508,9 @@ impl ContextManager {
         session_id: &SessionId,
         mut overflow: u32,
     ) -> Result<(), AgentError> {
-        let session = self.sessions.get_mut(session_id)
+        let session = self
+            .sessions
+            .get_mut(session_id)
             .ok_or_else(|| AgentError::SessionNotFound(session_id.to_string()))?;
 
         // Sort removable segments by priority (lowest first), then by age
@@ -560,7 +558,9 @@ impl ContextManager {
         session_id: &SessionId,
         mut overflow: u32,
     ) -> Result<(), AgentError> {
-        let session = self.sessions.get_mut(session_id)
+        let session = self
+            .sessions
+            .get_mut(session_id)
             .ok_or_else(|| AgentError::SessionNotFound(session_id.to_string()))?;
 
         let len = session.segments.len();
@@ -600,7 +600,9 @@ impl ContextManager {
         session_id: &SessionId,
         mut overflow: u32,
     ) -> Result<(), AgentError> {
-        let session = self.sessions.get_mut(session_id)
+        let session = self
+            .sessions
+            .get_mut(session_id)
             .ok_or_else(|| AgentError::SessionNotFound(session_id.to_string()))?;
 
         while overflow > 0 && session.segments.len() > 1 {
@@ -715,7 +717,8 @@ mod tests {
 
         mgr.set_system_prompt(&sid, "System.".to_string()).unwrap();
         mgr.add_user_message(&sid, "Hello".to_string()).unwrap();
-        mgr.add_assistant_message(&sid, "Hi there!".to_string()).unwrap();
+        mgr.add_assistant_message(&sid, "Hi there!".to_string())
+            .unwrap();
 
         let session = mgr.get_session(&sid).unwrap();
         assert_eq!(session.segments.len(), 3);
@@ -734,7 +737,8 @@ mod tests {
         let sid = mgr.create_session(Uuid::new_v4(), None, None).unwrap();
 
         mgr.set_system_prompt(&sid, "System.".to_string()).unwrap();
-        mgr.add_user_message(&sid, "What is X?".to_string()).unwrap();
+        mgr.add_user_message(&sid, "What is X?".to_string())
+            .unwrap();
 
         let tokens = mgr
             .inject_rag_context(&sid, vec!["Doc chunk 1".into(), "Doc chunk 2".into()])
@@ -747,7 +751,7 @@ mod tests {
         assert_eq!(messages[0].0, "system"); // System prompt
         assert_eq!(messages[1].0, "system"); // RAG (injected as system)
         assert_eq!(messages[2].0, "system"); // RAG
-        assert_eq!(messages[3].0, "user");   // User message
+        assert_eq!(messages[3].0, "user"); // User message
     }
 
     #[test]
@@ -755,9 +759,15 @@ mod tests {
         let mut mgr = ContextManager::new(test_config());
         let sid = mgr.create_session(Uuid::new_v4(), None, None).unwrap();
 
-        mgr.add_user_message(&sid, "Turn on lights".to_string()).unwrap();
-        mgr.inject_tool_result(&sid, "call-1", "homebase.lights", "Lights turned on".to_string())
+        mgr.add_user_message(&sid, "Turn on lights".to_string())
             .unwrap();
+        mgr.inject_tool_result(
+            &sid,
+            "call-1",
+            "homebase.lights",
+            "Lights turned on".to_string(),
+        )
+        .unwrap();
 
         let messages = mgr.assemble_context(&sid).unwrap();
         assert_eq!(messages.len(), 2);
@@ -784,7 +794,10 @@ mod tests {
         let session = mgr.get_session(&sid).unwrap();
         let total: u32 = session.segments.iter().map(|s| s.token_count).sum();
         // Should be truncated to fit within 40 tokens
-        assert!(total <= 40, "Total {total} should be <= 40 after truncation");
+        assert!(
+            total <= 40,
+            "Total {total} should be <= 40 after truncation"
+        );
         // System prompt should survive
         assert_eq!(session.segments[0].source, SegmentSource::SystemPrompt);
     }
@@ -793,8 +806,10 @@ mod tests {
     fn test_context_report() {
         let mut mgr = ContextManager::new(test_config());
         let sid = mgr.create_session(Uuid::new_v4(), None, None).unwrap();
-        mgr.set_system_prompt(&sid, "System prompt text.".to_string()).unwrap();
-        mgr.add_user_message(&sid, "Hello world".to_string()).unwrap();
+        mgr.set_system_prompt(&sid, "System prompt text.".to_string())
+            .unwrap();
+        mgr.add_user_message(&sid, "Hello world".to_string())
+            .unwrap();
 
         let report = mgr.context_report(&sid).unwrap();
         assert!(report.used_tokens > 0);
@@ -834,9 +849,12 @@ mod tests {
     #[test]
     fn test_update_model_expands_context() {
         let mut mgr = ContextManager::new(test_config());
-        let sid = mgr.create_session(Uuid::new_v4(), None, Some("phi-4-mini".into())).unwrap();
+        let sid = mgr
+            .create_session(Uuid::new_v4(), None, Some("phi-4-mini".into()))
+            .unwrap();
 
-        mgr.update_model(&sid, "llama-3.1-70b".into(), Some(32768)).unwrap();
+        mgr.update_model(&sid, "llama-3.1-70b".into(), Some(32768))
+            .unwrap();
 
         let session = mgr.get_session(&sid).unwrap();
         assert_eq!(session.model_id.as_deref(), Some("llama-3.1-70b"));

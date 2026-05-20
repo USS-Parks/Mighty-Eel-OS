@@ -118,11 +118,21 @@ impl Default for RequestLimits {
     }
 }
 
-fn default_max_concurrent() -> usize { 10 }
-fn default_max_body_size() -> usize { 10 * 1024 * 1024 } // 10 MiB
-fn default_request_timeout_secs() -> u64 { 120 }
-fn default_stream_timeout_secs() -> u64 { 600 }
-fn default_backpressure_threshold() -> usize { 80 }
+fn default_max_concurrent() -> usize {
+    10
+}
+fn default_max_body_size() -> usize {
+    10 * 1024 * 1024
+} // 10 MiB
+fn default_request_timeout_secs() -> u64 {
+    120
+}
+fn default_stream_timeout_secs() -> u64 {
+    600
+}
+fn default_backpressure_threshold() -> usize {
+    80
+}
 
 /// Profile store configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -171,8 +181,12 @@ impl Default for AuditConfig {
 fn default_audit_path() -> PathBuf {
     PathBuf::from("/var/lib/mai/audit")
 }
-fn default_retention_days() -> u32 { 90 }
-fn default_true() -> bool { true }
+fn default_retention_days() -> u32 {
+    90
+}
+fn default_true() -> bool {
+    true
+}
 
 /// Air-gap verification configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -201,7 +215,9 @@ impl Default for AirGapConfig {
 fn default_switch_device() -> PathBuf {
     PathBuf::from("/dev/im-airgap-switch")
 }
-fn default_check_interval_secs() -> u64 { 60 }
+fn default_check_interval_secs() -> u64 {
+    60
+}
 
 /// TLS configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]

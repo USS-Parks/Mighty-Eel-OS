@@ -22,6 +22,7 @@
 #![forbid(unsafe_code)] // Enforced by CI; drivers in mai-hil may use unsafe
 // #![warn(missing_docs)] // Re-enable after stub phase (Session 08+)
 
+pub mod cache;
 pub mod circuit_breaker;
 pub mod health;
 pub mod hotswap;
@@ -29,25 +30,23 @@ pub mod power;
 pub mod registry;
 pub mod scheduler;
 pub mod vault; // L2 interface, implemented in Session 12
-pub mod cache;
 
 // Re-export core types for convenience
+pub use cache::ResponseCache;
 pub use circuit_breaker::{CircuitBreaker, CircuitBreakerConfig, CircuitState};
 pub use health::{AlertLevel, HealthMonitor, HealthSnapshot};
 pub use hotswap::{HotSwapManager, SwapRequest, SwapResult};
 pub use power::{PowerState, PowerStateMachine, TransitionTrigger};
 pub use registry::{ModelManifest, ModelRegistry, ModelStatus};
 pub use scheduler::{InferenceRequest, RequestPriority, Scheduler, SchedulerConfig};
-pub use cache::ResponseCache;
 // L2 vault types and traits
-pub use vault::{
-    CollectionConfig, ComplianceReport, DistanceMetric, EmbeddingPoint,
-    FamilyProfile, FullVault, IntegrityResult, KeyInfo, KeyLevel,
-    ProfileChangeEvent, ProfilePermissions, ProfileRole, SearchResult,
-    SnapshotInfo, StorageInfo, VaultAuditAction, VaultAuditEntry,
-    VaultAuditStatus, VaultError, VaultInterface,
-};
 pub use vault::{AuditStore, ModelStorage, PqcProvider, ProfileStore, TpmProvider, VectorStore};
+pub use vault::{
+    CollectionConfig, ComplianceReport, DistanceMetric, EmbeddingPoint, FamilyProfile, FullVault,
+    IntegrityResult, KeyInfo, KeyLevel, ProfileChangeEvent, ProfilePermissions, ProfileRole,
+    SearchResult, SnapshotInfo, StorageInfo, VaultAuditAction, VaultAuditEntry, VaultAuditStatus,
+    VaultError, VaultInterface,
+};
 
 // Core error type
 pub use errors::CoreError;
