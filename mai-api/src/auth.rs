@@ -22,7 +22,7 @@
 //! implementation details.
 
 use axum::{extract::Request, http::HeaderMap, middleware::Next, response::Response};
-use sha2::{Digest, Sha256};
+use sha3::{Digest, Sha3_256};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
@@ -143,7 +143,7 @@ impl Default for ApiKeyStore {
 
 /// Hash an API key with SHA-256, return hex-encoded string.
 pub fn hash_api_key(raw_key: &str) -> String {
-    let mut hasher = Sha256::new();
+    let mut hasher = Sha3_256::new();
     hasher.update(raw_key.as_bytes());
     hex::encode(hasher.finalize())
 }
@@ -163,7 +163,7 @@ pub fn generate_api_key() -> String {
         std::process::id(),
         uuid::Uuid::new_v4()
     );
-    let mut hasher = Sha256::new();
+    let mut hasher = Sha3_256::new();
     hasher.update(seed.as_bytes());
     let hash = hex::encode(hasher.finalize());
     // Prefix with "im-" for easy identification
