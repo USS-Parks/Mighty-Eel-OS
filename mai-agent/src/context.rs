@@ -672,6 +672,8 @@ fn now_epoch_secs() -> u64 {
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
     use super::*;
 
     fn test_config() -> ContextConfig {

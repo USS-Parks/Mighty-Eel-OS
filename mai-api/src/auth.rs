@@ -279,6 +279,7 @@ pub fn can_access_model(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::types::ContentFilterLevel;
 
     #[test]
     fn test_parse_admin_profile() {

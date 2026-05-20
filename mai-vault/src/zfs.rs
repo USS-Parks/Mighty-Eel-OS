@@ -568,7 +568,7 @@ mod tests {
             .await
             .unwrap();
         assert!(result.valid);
-        assert_eq!(result.verified_bytes, 18); // len("integrity test data")
+        assert_eq!(result.verified_bytes, b"integrity test data".len() as u64);
     }
 
     #[tokio::test]
