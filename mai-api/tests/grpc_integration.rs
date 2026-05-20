@@ -177,7 +177,7 @@ async fn test_grpc_list_models() {
     if let Ok(resp) = response {
         let inner = resp.into_inner();
         // models field should exist (may be empty)
-        assert!(inner.models.len() >= 0, "Models list must be a valid vec");
+        assert!(inner.data.len() >= 0, "Models list must be a valid vec");
     }
 }
 

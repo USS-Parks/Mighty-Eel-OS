@@ -15,7 +15,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Compile proto with tonic-build, including file descriptor set
     tonic_build::configure()
         .build_server(true)
-        .build_client(false) // No client needed; SDKs build their own
+        .build_client(true) // Client stubs needed for integration tests
         .file_descriptor_set_path(&descriptor_path)
         .compile_protos(&["proto/mai.proto"], &["proto/"])?;
 
