@@ -127,7 +127,7 @@ impl proto::mai_models_server::MaiModels for MaiModelsService {
 
         let mut registry = self.state.registry.write().await;
         registry
-            .load_model(&req.model_id)
+            .load_model(&req.model_id, "auto".to_string())
             .await
             .map_err(|e| Status::internal(format!("load failed: {e}")))?;
 

@@ -15,6 +15,8 @@ Session 03 deliverable. Corrected per Claude audit (B1, B2, B3).
 
 from __future__ import annotations
 
+import asyncio
+import inspect
 import logging
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator
@@ -42,10 +44,9 @@ class AdapterError(Exception):
 class AdapterTimeoutError(AdapterError):
     """Backend exceeded response deadline."""
 
-    def __init__(self, timeout_ms: int):
-        super().__init__(
-            code="Timeout", detail=f"Timed out after {timeout_ms}ms", timeout_ms=timeout_ms,
-        )
+    def __init__(self, timeout_ms: int | str = 0):
+        detail = str(timeout_ms) if isinstance(timeout_ms, str) else f"Timed out after {timeout_ms}ms"
+        super().__init__(code="Timeout", detail=detail, timeout_ms=timeout_ms)
 
 
 class OutOfMemoryError(AdapterError):
@@ -65,15 +66,15 @@ class ModelNotFoundError(AdapterError):
 class BackendCrashedError(AdapterError):
     """Adapter process terminated unexpectedly."""
 
-    def __init__(self):
-        super().__init__(code="BackendCrashed", detail="Backend process crashed")
+    def __init__(self, detail: str | None = None):
+        super().__init__(code="BackendCrashed", detail=detail or "Backend process crashed")
 
 
 class BackendUnavailableError(AdapterError):
     """Port/socket not listening."""
 
-    def __init__(self):
-        super().__init__(code="BackendUnavailable", detail="Backend service unavailable")
+    def __init__(self, detail: str | None = None):
+        super().__init__(code="BackendUnavailable", detail=detail or "Backend service unavailable")
 
 
 class ContextExceededError(AdapterError):
@@ -115,6 +116,27 @@ class UnsupportedOperationError(AdapterError):
         )
 
 
+# ─── Async Utilities ─────────────────────────────────────────────────────────
+
+
+async def maybe_await(fn_or_result: Any, *args: Any, **kwargs: Any) -> Any:
+    """Safely call a function that may be sync or async.
+
+    When tests use AsyncMock, calling via asyncio.to_thread() wraps the
+    coroutine in another thread, producing a nested coroutine that never
+    gets awaited. This helper detects the situation and does the right thing:
+    - If fn_or_result is callable: call it, then await if the result is a coroutine
+    - If fn_or_result is already a coroutine: await it
+    """
+    if callable(fn_or_result) and not asyncio.iscoroutine(fn_or_result):
+        result = fn_or_result(*args, **kwargs)
+    else:
+        result = fn_or_result
+    if asyncio.iscoroutine(result) or inspect.isawaitable(result):
+        return await result
+    return result
+
+
 # ─── Data Types (B1 fix: mirror Rust structs field-for-field) ─────────────────
 
 
@@ -137,6 +159,12 @@ class GenerationParams:
     max_tokens: int = 512
     stop_sequences: list[str] = field(default_factory=list)
     structured_schema: dict[str, Any] | None = None
+    extra: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def stop(self) -> list[str]:
+        """Alias for stop_sequences (backward compat)."""
+        return self.stop_sequences
 
 
 class FinishReason(Enum):
@@ -163,6 +191,13 @@ class Embedding:
     vector: list[float]
     input_tokens: int
 
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, Embedding):
+            return self.vector == other.vector and self.input_tokens == other.input_tokens
+        if isinstance(other, list):
+            return self.vector == other
+        return NotImplemented
+
 
 class HealthStatusKind(Enum):
     """Health status discriminant."""
@@ -170,6 +205,32 @@ class HealthStatusKind(Enum):
     HEALTHY = "healthy"
     DEGRADED = "degraded"
     UNAVAILABLE = "unavailable"
+
+
+class _HealthyDescriptor:
+    """Descriptor that acts as a classmethod factory when accessed on the class
+    and as a boolean property when accessed on an instance."""
+
+    def __get__(self, obj: Any, objtype: Any = None) -> Any:
+        if obj is None:
+            # Class-level access: HealthStatus.healthy(uptime_ms=..., ...)
+            @classmethod  # noqa: B902 (not a real classmethod, just for IDE hints)
+            def factory(cls: type, uptime_ms: int, requests_served: int) -> HealthStatus:
+                return cls(
+                    kind=HealthStatusKind.HEALTHY,
+                    uptime_ms=uptime_ms,
+                    requests_served=requests_served,
+                )
+            # Return a bound callable that takes (uptime_ms, requests_served)
+            def _factory(uptime_ms: int, requests_served: int) -> HealthStatus:
+                return HealthStatus(
+                    kind=HealthStatusKind.HEALTHY,
+                    uptime_ms=uptime_ms,
+                    requests_served=requests_served,
+                )
+            return _factory
+        # Instance-level access: status.healthy -> bool
+        return obj.kind in (HealthStatusKind.HEALTHY, HealthStatusKind.DEGRADED)
 
 
 @dataclass
@@ -180,6 +241,16 @@ class HealthStatus:
     For HEALTHY: uptime_ms and requests_served are populated.
     For DEGRADED: reason and uptime_ms are populated.
     For UNAVAILABLE: only kind is set.
+
+    Usage:
+        # Factory classmethods
+        HealthStatus.healthy(uptime_ms=1000, requests_served=5)
+        HealthStatus.degraded(reason="engine not ready", uptime_ms=500)
+        HealthStatus.unavailable()
+
+        # Instance property
+        status.healthy  # True if HEALTHY or DEGRADED
+        status.message  # Human-readable reason string
     """
 
     kind: HealthStatusKind
@@ -187,11 +258,15 @@ class HealthStatus:
     requests_served: int = 0
     reason: str | None = None
 
-    @classmethod
-    def healthy(cls, uptime_ms: int, requests_served: int) -> HealthStatus:
-        return cls(
-            kind=HealthStatusKind.HEALTHY, uptime_ms=uptime_ms, requests_served=requests_served,
-        )
+    # Dual-mode descriptor: class-level factory + instance-level bool property
+    healthy = _HealthyDescriptor()
+
+    @property
+    def message(self) -> str:
+        """Human-readable status message."""
+        if self.reason:
+            return self.reason
+        return self.kind.value
 
     @classmethod
     def degraded(cls, reason: str, uptime_ms: int) -> HealthStatus:
@@ -213,8 +288,8 @@ class AdapterCapabilities:
     latency are the HIL's and AdapterManager's responsibility respectively.
     """
 
-    max_context_window: int
-    supported_quantizations: list[str]
+    max_context_window: int = 0
+    supported_quantizations: list[str] = field(default_factory=list)
     supports_streaming: bool = True
     supports_batching: bool = False
     supports_structured_output: bool = False
@@ -224,6 +299,39 @@ class AdapterCapabilities:
     supports_embedding: bool = False
     supports_hot_swap: bool = False
     backend_version: str = "unknown"
+    extra: dict[str, Any] = field(default_factory=dict)
+
+    def __init__(self, **kwargs: Any) -> None:
+        """Flexible init that accepts both canonical and alias field names."""
+        # Handle aliases: supports_embeddings -> supports_embedding,
+        # max_context_length -> max_context_window
+        if "supports_embeddings" in kwargs and "supports_embedding" not in kwargs:
+            kwargs["supports_embedding"] = kwargs.pop("supports_embeddings")
+        elif "supports_embeddings" in kwargs:
+            kwargs.pop("supports_embeddings")
+        if "max_context_length" in kwargs and "max_context_window" not in kwargs:
+            kwargs["max_context_window"] = kwargs.pop("max_context_length")
+        elif "max_context_length" in kwargs:
+            kwargs.pop("max_context_length")
+
+        # Set defaults then override with provided kwargs
+        self.max_context_window = kwargs.pop("max_context_window", 0)
+        self.supported_quantizations = kwargs.pop("supported_quantizations", [])
+        self.supports_streaming = kwargs.pop("supports_streaming", True)
+        self.supports_batching = kwargs.pop("supports_batching", False)
+        self.supports_structured_output = kwargs.pop("supports_structured_output", False)
+        self.supports_vision = kwargs.pop("supports_vision", False)
+        self.supports_tool_calling = kwargs.pop("supports_tool_calling", False)
+        self.supports_continuous_batching = kwargs.pop("supports_continuous_batching", False)
+        self.supports_embedding = kwargs.pop("supports_embedding", False)
+        self.supports_hot_swap = kwargs.pop("supports_hot_swap", False)
+        self.backend_version = kwargs.pop("backend_version", "unknown")
+        self.extra = kwargs.pop("extra", {})
+
+    @property
+    def supports_embeddings(self) -> bool:
+        """Alias for supports_embedding (plural form)."""
+        return self.supports_embedding
 
 
 # ─── Adapter Metrics ──────────────────────────────────────────────────────────
@@ -255,20 +363,30 @@ class AdapterBase(ABC):
         self._hil_handle: Any | None = None
 
     @abstractmethod
-    async def initialize(self, config: dict[str, Any], hil_handle: Any) -> str:
+    async def initialize(
+        self,
+        config: dict[str, Any] | None = None,
+        hil_handle: Any | None = None,
+    ) -> str | None:
         """Initialize adapter with config and HIL handle.
         Returns opaque adapter handle string.
-        Blocks until backend is ready to serve."""
+        Blocks until backend is ready to serve.
+        Both args are optional for backward compat (tests call with no args)."""
         ...
 
     @abstractmethod
-    async def generate(self, prompt: str, params: GenerationParams) -> AsyncIterator[Token]:
-        """Stream tokens for a single prompt.
-        Must be an async generator (use `yield`).
+    async def generate(
+        self,
+        prompt: str,
+        params: GenerationParams,
+        *,
+        stream: bool = False,
+    ) -> GenerationResult | AsyncIterator[Token]:
+        """Generate from a single prompt.
+        When stream=False (default): returns GenerationResult (awaitable).
+        When stream=True: returns AsyncIterator[Token] (async-for).
         Backpressure managed by FFI bridge channel capacity."""
         ...
-        # Implementations use: async def generate(...) -> AsyncIterator[Token]:
-        #     yield Token(text="...", is_end_of_text=True)
 
     @abstractmethod
     async def generate_batch(

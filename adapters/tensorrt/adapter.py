@@ -27,6 +27,7 @@ from adapters.base import (
     Token,
     UnsupportedOperationError,
     mai_adapter,
+    maybe_await,
 )
 from adapters.tensorrt.client import TensorRtClient
 from adapters.tensorrt.config import TensorRtConfig
@@ -52,24 +53,33 @@ class TensorRtAdapter(AdapterBase):
         self._model_name: str = ""
         self._engine_ready: bool = False
 
-    async def initialize(self, config: dict[str, Any], hil_handle: Any) -> str:
+    async def initialize(
+        self,
+        config: dict[str, Any] | None = None,
+        hil_handle: Any | None = None,
+    ) -> str:
         """Initialize TensorRT-LLM adapter. Verifies Triton health and model readiness."""
-        self._config = TensorRtConfig.from_dict(config)
-        self._hil_handle = hil_handle
-        self._client = TensorRtClient(
-            base_url=self._config.base_url,
-            timeout_ms=self._config.timeout_ms,
-            stream_timeout_ms=self._config.stream_timeout_ms,
-        )
+        if config is not None:
+            self._config = TensorRtConfig.from_dict(config)
+        elif hasattr(self, "_cfg") and self._cfg is not None:
+            self._config = self._cfg
+        if hil_handle is not None:
+            self._hil_handle = hil_handle
+        if self._client is None:
+            self._client = TensorRtClient(
+                base_url=self._config.base_url,
+                timeout_ms=self._config.timeout_ms,
+                stream_timeout_ms=self._config.stream_timeout_ms,
+            )
 
         # Verify Triton is ready
-        healthy = await asyncio.to_thread(self._client.health)
+        healthy = await maybe_await(self._client.health)
         if not healthy:
             raise BackendUnavailableError()
 
         # Check model readiness
         self._model_name = self._config.default_model
-        model_ready = await asyncio.to_thread(self._client.model_ready, self._model_name)
+        model_ready = await maybe_await(self._client.model_ready, self._model_name)
         self._engine_ready = model_ready
 
         if not model_ready:
@@ -88,11 +98,46 @@ class TensorRtAdapter(AdapterBase):
         if not self._initialized or self._client is None:
             raise BackendUnavailableError()
 
-    async def generate(self, prompt: str, params: GenerationParams) -> AsyncIterator[Token]:
-        """Stream tokens from TensorRT-LLM via Triton."""
+    async def generate(
+        self,
+        prompt: str,
+        params: GenerationParams,
+        *,
+        stream: bool = False,
+    ) -> GenerationResult | AsyncIterator[Token]:
+        """Generate from TensorRT-LLM. Dual-mode: await for result, async-for for streaming."""
         self._ensure_initialized()
         assert self._client is not None
 
+        if stream:
+            return self._generate_stream(prompt, params)
+
+        # Non-streaming: return GenerationResult
+        resp = await maybe_await(
+            self._client.generate,
+            model=self._model_name,
+            prompt=prompt,
+            max_tokens=params.max_tokens,
+            temperature=params.temperature,
+            top_p=params.top_p,
+            stop=params.stop_sequences or None,
+            stream=False,
+        )
+        if isinstance(resp, dict):
+            body = resp
+        else:
+            body = resp.body if hasattr(resp, "body") else resp
+        text = body.get("text_output", body.get("choices", [{}])[0].get("text", ""))
+        tokens_out = body.get("output_tokens", len(text) // 4)
+
+        self._requests_served += 1
+        return GenerationResult(text=text, tokens_generated=tokens_out, finish_reason=FinishReason.STOP)
+
+    async def _generate_stream(
+        self, prompt: str, params: GenerationParams,
+    ) -> AsyncIterator[Token]:
+        """Stream tokens from TensorRT-LLM via Triton."""
+        assert self._client is not None
         chunks = await asyncio.to_thread(
             self._client.generate,
             model=self._model_name,
@@ -156,7 +201,7 @@ class TensorRtAdapter(AdapterBase):
         if not self._initialized or self._client is None:
             return HealthStatus.unavailable()
 
-        healthy = await asyncio.to_thread(self._client.health)
+        healthy = await maybe_await(self._client.health)
         if healthy:
             uptime = int(time.time() * 1000) - self._start_time_ms
             if self._engine_ready:
@@ -178,6 +223,7 @@ class TensorRtAdapter(AdapterBase):
             supports_embedding=False,
             supports_hot_swap=False,
             backend_version="0.12.0",
+            extra={"inflight_batching": self._config.enable_inflight_batching},
         )
 
     async def shutdown(self) -> None:
@@ -192,7 +238,7 @@ class TensorRtAdapter(AdapterBase):
         """Check if TensorRT engine is compiled and loaded."""
         self._ensure_initialized()
         assert self._client is not None
-        ready = await asyncio.to_thread(self._client.model_ready, self._model_name)
+        ready = await maybe_await(self._client.model_ready, self._model_name)
         self._engine_ready = ready
         return ready
 
@@ -200,4 +246,4 @@ class TensorRtAdapter(AdapterBase):
         """Get Triton model metadata (inputs, outputs, config)."""
         self._ensure_initialized()
         assert self._client is not None
-        return await asyncio.to_thread(self._client.model_metadata, self._model_name)
+        return await maybe_await(self._client.model_metadata, self._model_name)

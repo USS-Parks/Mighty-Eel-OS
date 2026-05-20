@@ -27,6 +27,7 @@ from adapters.base import (
     Token,
     UnsupportedOperationError,
     mai_adapter,
+    maybe_await,
 )
 from adapters.tgi.client import TgiClient
 from adapters.tgi.config import TgiConfig
@@ -53,23 +54,32 @@ class TgiAdapter(AdapterBase):
         self._max_input_tokens: int = 4096
         self._max_total_tokens: int = 8192
 
-    async def initialize(self, config: dict[str, Any], hil_handle: Any) -> str:
+    async def initialize(
+        self,
+        config: dict[str, Any] | None = None,
+        hil_handle: Any | None = None,
+    ) -> str:
         """Initialize TGI adapter. Queries /info for model metadata."""
-        self._config = TgiConfig.from_dict(config)
-        self._hil_handle = hil_handle
-        self._client = TgiClient(
-            base_url=self._config.base_url,
-            timeout_ms=self._config.timeout_ms,
-            stream_timeout_ms=self._config.stream_timeout_ms,
-        )
+        if config is not None:
+            self._config = TgiConfig.from_dict(config)
+        elif hasattr(self, "_cfg") and self._cfg is not None:
+            self._config = self._cfg
+        if hil_handle is not None:
+            self._hil_handle = hil_handle
+        if self._client is None:
+            self._client = TgiClient(
+                base_url=self._config.base_url,
+                timeout_ms=self._config.timeout_ms,
+                stream_timeout_ms=self._config.stream_timeout_ms,
+            )
 
         # Verify health
-        healthy = await asyncio.to_thread(self._client.health)
+        healthy = await maybe_await(self._client.health)
         if not healthy:
             raise BackendUnavailableError()
 
         # Get model info
-        info = await asyncio.to_thread(self._client.info)
+        info = await maybe_await(self._client.info)
         self._model_id = info.get("model_id", self._config.default_model)
         self._max_input_tokens = info.get("max_input_length", self._config.max_input_tokens)
         self._max_total_tokens = info.get("max_total_tokens", self._config.max_total_tokens)
@@ -86,11 +96,49 @@ class TgiAdapter(AdapterBase):
         if not self._initialized or self._client is None:
             raise BackendUnavailableError()
 
-    async def generate(self, prompt: str, params: GenerationParams) -> AsyncIterator[Token]:
-        """Stream tokens from TGI."""
+    async def generate(
+        self,
+        prompt: str,
+        params: GenerationParams,
+        *,
+        stream: bool = False,
+    ) -> GenerationResult | AsyncIterator[Token]:
+        """Generate from TGI. Dual-mode: await for result, async-for for streaming."""
         self._ensure_initialized()
         assert self._client is not None
 
+        if stream:
+            return self._generate_stream(prompt, params)
+
+        # Non-streaming: return GenerationResult
+        resp = await maybe_await(
+            self._client.generate,
+            inputs=prompt,
+            max_new_tokens=params.max_tokens,
+            temperature=params.temperature,
+            top_p=params.top_p,
+            stop=params.stop_sequences or None,
+            watermark=self._config.watermark,
+            stream=False,
+        )
+        if isinstance(resp, dict):
+            body = resp
+        else:
+            body = resp.body if hasattr(resp, "body") else resp
+        generated = body.get("generated_text", "")
+        details = body.get("details", {})
+        tokens_out = details.get("generated_tokens", len(generated) // 4)
+        finish = details.get("finish_reason", "stop_sequence")
+        reason = FinishReason.MAX_TOKENS if finish == "length" else FinishReason.STOP
+
+        self._requests_served += 1
+        return GenerationResult(text=generated, tokens_generated=tokens_out, finish_reason=reason)
+
+    async def _generate_stream(
+        self, prompt: str, params: GenerationParams,
+    ) -> AsyncIterator[Token]:
+        """Stream tokens from TGI."""
+        assert self._client is not None
         chunks = await asyncio.to_thread(
             self._client.generate,
             inputs=prompt,
@@ -156,7 +204,7 @@ class TgiAdapter(AdapterBase):
         if not self._initialized or self._client is None:
             return HealthStatus.unavailable()
 
-        healthy = await asyncio.to_thread(self._client.health)
+        healthy = await maybe_await(self._client.health)
         if healthy:
             uptime = int(time.time() * 1000) - self._start_time_ms
             return HealthStatus.healthy(uptime_ms=uptime, requests_served=self._requests_served)

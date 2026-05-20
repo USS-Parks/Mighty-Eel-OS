@@ -1,0 +1,23 @@
+[
+  "adapters/ollama/tests/test_adapter.py::TestOllamaAdapter::test_capabilities",
+  "adapters/ollama/tests/test_adapter.py::TestOllamaAdapter::test_embed",
+  "adapters/ollama/tests/test_adapter.py::TestOllamaAdapter::test_generate_batch",
+  "adapters/ollama/tests/test_adapter.py::TestOllamaAdapter::test_generate_streaming",
+  "adapters/ollama/tests/test_adapter.py::TestOllamaAdapter::test_health_check_healthy",
+  "adapters/ollama/tests/test_adapter.py::TestOllamaAdapter::test_health_check_unavailable",
+  "adapters/ollama/tests/test_adapter.py::TestOllamaAdapter::test_initialize_server_unavailable",
+  "adapters/ollama/tests/test_adapter.py::TestOllamaAdapter::test_initialize_success",
+  "adapters/ollama/tests/test_adapter.py::TestOllamaAdapter::test_shutdown",
+  "adapters/ollama/tests/test_adapter.py::TestOllamaAdapter::test_switch_model",
+  "adapters/ollama/tests/test_adapter.py::TestOllamaAdapter::test_switch_model_not_found",
+  "adapters/ollama/tests/test_adapter.py::TestOllamaClient::test_embed",
+  "adapters/ollama/tests/test_adapter.py::TestOllamaClient::test_health_failure",
+  "adapters/ollama/tests/test_adapter.py::TestOllamaClient::test_health_success",
+  "adapters/ollama/tests/test_adapter.py::TestOllamaClient::test_list_models",
+  "adapters/ollama/tests/test_adapter.py::TestOllamaClient::test_pull_disabled_air_gap",
+  "adapters/ollama/tests/test_adapter.py::TestOllamaConfig::test_base_url",
+  "adapters/ollama/tests/test_adapter.py::TestOllamaConfig::test_defaults",
+  "adapters/ollama/tests/test_adapter.py::TestOllamaConfig::test_from_dict",
+  "adapters/ollama/tests/test_adapter.py::TestRunner::test_load_adapter",
+  "adapters/tests/test_base.py::test_placeholder"
+]

@@ -26,11 +26,9 @@
 //! against liboqs or the pqcrypto crate family at build time.
 
 use std::collections::HashMap;
-use std::sync::Arc;
-
 use async_trait::async_trait;
 use tokio::sync::RwLock;
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 
 use mai_core::vault::{KeyInfo, KeyLevel, PqcProvider, VaultError};
 

@@ -376,18 +376,25 @@ Notes:
 
 ## Summary
 
+**NOTE:** Prompt Roster restructured from 18 to 35 sessions on 2026-05-18. See MAI-BUILD-PROMPT-ROSTER-v2.md for the new plan. Phase labels below reflect the restructured roster.
+
 | Phase | Sessions | Status |
 |---|---|---|
 | A: Specification | 01-05 | Complete (5/5) -- archived |
 | B: Foundation Code | 06-10 | Complete (06+06b+07+08+09+10) -- archived |
-| C: Integration Code | 11-13 | In Progress (Session 11 complete, 12-13 remaining) |
-| D: System Code | 14-16 | Not Started |
-| E: Testing + Packaging | 17-18 | Not Started |
+| C: Integration Code | 11-13 | Complete (11a-11e + 12 + 13) |
+| D-Prep: Wiring Sprint | 14a-14c | Not Started |
+| D: Scheduler Foundation | 15-18 | Not Started |
+| E: Scheduler Intelligence | 19-21 | Not Started |
+| F: Power & Lifecycle | 22-25 | Not Started |
+| G: Security Hardening | 26-28 | Not Started |
+| H: Application Integration | 29-31 | Not Started |
+| I: Advanced Scheduling | 32-33 | Not Started |
+| J: Testing & Packaging | 34-35 | Not Started |
 
-**Sessions Complete:** 11 / 18 (includes 06+06b as one logical session, 11a-11e as one logical session)
-**Deliverables Complete:** 118 / 180
-**Next Session:** 12 (Vault Integration)
-**Next Archive:** After Session 20 (or end of Phase D, whichever comes first)
+**Sessions Complete:** 13 / 35 (includes 06+06b as one logical session, 11a-11e as one logical session)
+**Next Session:** 14a (Adapter IPC Contract + NDJSON Protocol)
+**Next Archive:** After Session 23 (or end of Phase F, whichever comes first)
 
 ---
 

@@ -21,17 +21,14 @@
 //! No external retrieval sources.
 
 use std::collections::HashMap;
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 
-use tracing::{debug, info, warn};
-use uuid::Uuid;
-
-use mai_core::types::{ModelId, ProfileId};
-use mai_core::vault::{CollectionConfig, DistanceMetric, EmbeddingPoint, SearchResult, VaultError};
+use tracing::{debug, info};
+use mai_core::vault::{CollectionConfig, DistanceMetric, EmbeddingPoint, SearchResult};
 
 use crate::types::{
-    AgentError, DocumentChunk, RagConfig, RagRequest, RagResponse,
-    RetrievalResult, SessionId,
+    AgentError, DocumentChunk, RagConfig, RagResponse,
+    RetrievalResult,
 };
 
 // ============================================================================
@@ -308,18 +305,22 @@ impl RagPipeline {
         }
 
         let mut points = Vec::with_capacity(chunks.len());
-        for (i, (chunk, embedding)) in chunks.iter().zip(embeddings.iter()).enumerate() {
-            let mut metadata = chunk.metadata.clone();
-            metadata.insert("document_id".into(), chunk.document_id.clone());
-            metadata.insert("chunk_index".into(), chunk.chunk_index.to_string());
+        for (_i, (chunk, embedding)) in chunks.iter().zip(embeddings.iter()).enumerate() {
+            let mut payload: HashMap<String, serde_json::Value> = chunk
+                .metadata
+                .iter()
+                .map(|(k, v)| (k.clone(), serde_json::Value::String(v.clone())))
+                .collect();
+            payload.insert("document_id".into(), serde_json::Value::String(chunk.document_id.clone()));
+            payload.insert("chunk_index".into(), serde_json::Value::String(chunk.chunk_index.to_string()));
 
             // Use hash of document_id + chunk_index as point ID
             let point_id = compute_point_id(&chunk.document_id, chunk.chunk_index);
 
             points.push(EmbeddingPoint {
-                id: point_id,
+                id: point_id.to_string(),
                 vector: embedding.clone(),
-                metadata,
+                payload,
             });
         }
 
@@ -372,27 +373,38 @@ impl RagPipeline {
         let filtered: Vec<RetrievalResult> = search_results
             .into_iter()
             .filter(|r| r.score >= threshold)
-            .map(|r| RetrievalResult {
-                chunk: DocumentChunk {
-                    document_id: r
-                        .metadata
-                        .get("document_id")
-                        .cloned()
-                        .unwrap_or_default(),
-                    chunk_index: r
-                        .metadata
-                        .get("chunk_index")
-                        .and_then(|s| s.parse().ok())
-                        .unwrap_or(0),
-                    text: r
-                        .metadata
-                        .get("text")
-                        .cloned()
-                        .unwrap_or_default(),
-                    metadata: r.metadata.clone(),
-                },
-                score: r.score,
-                embedding: None,
+            .map(|r| {
+                // Convert serde_json::Value payload back to String metadata
+                let string_meta: HashMap<String, String> = r
+                    .payload
+                    .iter()
+                    .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
+                    .collect();
+                RetrievalResult {
+                    chunk: DocumentChunk {
+                        document_id: r
+                            .payload
+                            .get("document_id")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or_default()
+                            .to_string(),
+                        chunk_index: r
+                            .payload
+                            .get("chunk_index")
+                            .and_then(|v| v.as_str())
+                            .and_then(|s| s.parse().ok())
+                            .unwrap_or(0),
+                        text: r
+                            .payload
+                            .get("text")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or_default()
+                            .to_string(),
+                        metadata: string_meta,
+                    },
+                    score: r.score,
+                    embedding: None,
+                }
             })
             .collect();
 
@@ -446,7 +458,8 @@ impl RagPipeline {
         self.embedding_dim.map(|dim| CollectionConfig {
             name: self.collection_for_profile(profile_id),
             dimension: dim,
-            metric: DistanceMetric::Cosine,
+            distance: DistanceMetric::Cosine,
+            profile_id: profile_id.to_string(),
         })
     }
 
@@ -611,14 +624,14 @@ mod tests {
         let mut pipeline = RagPipeline::new(test_config());
 
         let mut meta = HashMap::new();
-        meta.insert("document_id".into(), "doc-1".into());
-        meta.insert("chunk_index".into(), "0".into());
-        meta.insert("text".into(), "The answer is 42.".into());
+        meta.insert("document_id".into(), serde_json::Value::String("doc-1".into()));
+        meta.insert("chunk_index".into(), serde_json::Value::String("0".into()));
+        meta.insert("text".into(), serde_json::Value::String("The answer is 42.".into()));
 
         let results = vec![SearchResult {
-            point_id: 1,
+            id: "1".to_string(),
             score: 0.85,
-            metadata: meta,
+            payload: meta,
         }];
 
         let response = pipeline.process_retrieval(
@@ -639,9 +652,9 @@ mod tests {
         let mut pipeline = RagPipeline::new(test_config());
 
         let results = vec![SearchResult {
-            point_id: 1,
+            id: "1".to_string(),
             score: 0.3, // Below threshold of 0.5
-            metadata: HashMap::new(),
+            payload: HashMap::new(),
         }];
 
         let response = pipeline.process_retrieval(

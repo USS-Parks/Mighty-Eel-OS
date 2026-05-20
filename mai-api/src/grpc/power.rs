@@ -29,10 +29,10 @@ fn parse_transition_action(action: &str) -> Result<TransitionTrigger, Status> {
     match action.to_lowercase().as_str() {
         "boot" | "system_boot" => Ok(TransitionTrigger::SystemBoot),
         "wake" | "wake_trigger" => Ok(TransitionTrigger::WakeTrigger(
-            mai_core::power::WakeSource::UserRequest,
+            mai_core::power::WakeSource::ApiRequest,
         )),
         "urgent_wake" => Ok(TransitionTrigger::UrgentWake(
-            mai_core::power::WakeSource::UserRequest,
+            mai_core::power::WakeSource::ApiRequest,
         )),
         "promote" | "sentinel_promotion" => Ok(TransitionTrigger::SentinelPromotion),
         "demote" | "inactivity_timeout" => Ok(TransitionTrigger::InactivityTimeout),

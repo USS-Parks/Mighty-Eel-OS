@@ -1,8 +1,8 @@
 # MAI Founding Engineer Handoff
 
 **Project:** Island Mountain Model Abstraction Interface (MAI)
-**Source:** MAI-BUILD-PROMPT-ROSTER.md (Session 65, 2026-05-15)
-**Status:** Phase A+B+C complete. Session 13 complete. Next: Session 14 (Sleep Mode + Power State Machine).
+**Source:** MAI-BUILD-PROMPT-ROSTER-v2.md (restructured 2026-05-18, expanded 18 to 35 sessions)
+**Status:** Phase A+B+C complete. Session 13 complete. Next: Session 14a (Adapter IPC Contract + NDJSON Protocol).
 **Archive:** Detailed Phase A+B code inventory and onboarding walkthrough archived to [HANDOFF-ARCHIVE-01.md](HANDOFF-ARCHIVE-01.md) on 2026-05-17.
 
 ---
@@ -21,7 +21,7 @@ The inference engine is a plugin. The data sovereignty layer is the product.
 
 | Document | Purpose |
 |---|---|
-| [MAI-BUILD-PROMPT-ROSTER.md](MAI-BUILD-PROMPT-ROSTER.md) | All 18 session prompts, deliverables, acceptance criteria |
+| [MAI-BUILD-PROMPT-ROSTER-v2.md](MAI-BUILD-PROMPT-ROSTER-v2.md) | All 35 session prompts, deliverables, acceptance criteria (v1 archived) |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Trust model, component catalog, data flows |
 | [CONVENTIONS.md](CONVENTIONS.md) | Code quality gates, monorepo layout, testing rules |
 | [SESSION-LOG.md](SESSION-LOG.md) | Active progress tracker (Sessions 11-18) |
@@ -42,7 +42,7 @@ The inference engine is a plugin. The data sovereignty layer is the product.
 
 **Agent/RAG Interface (Session 13, 2026-05-18):** New `mai-agent` crate (8 source files + 3 integration test files, ~5434 lines total). Context management with 4 truncation strategies (OldestFirst, MiddleOut, RelevanceScored, HardCutoff). Tool registry with OpenAI-compatible function format, multi-step chain tracking, role-based access control. RAG pipeline with batch embedding, cosine similarity semantic cache, profile-isolated retrieval. STT manager with PCM silence detection, audio buffering, Whisper large-v3 default. Agentic task manager with per-profile concurrency limits, resource budgets (tokens, tool calls, duration), submit/poll/cancel lifecycle. 61 unit tests + 16 integration tests. All types reference real mai-core exports.
 
-**Immediate next step:** Execute **Session 14** (Sleep Mode + Power State Machine). Sessions 14, 15, 16 can run in parallel (different subsystems, shared dependencies met after Session 12).
+**Immediate next step:** Execute **Session 14a** (Adapter IPC Contract + NDJSON Protocol). The wiring sprint (14a-14c) must complete before any new feature work. After 14c, the scheduler track (15-21, 32-33), security track (26-28), and application track (29-31) can run in parallel.
 
 ---
 
@@ -62,14 +62,17 @@ The inference engine is a plugin. The data sovereignty layer is the product.
 
 ## Critical Path (Remaining)
 
-The longest remaining dependency chain:
+The longest remaining dependency chain (restructured):
 
-**15 -> 17 -> 18** (3 sessions sequential, Phase C now complete)
+**14a -> 14b -> 14c -> 15 -> 16 -> 17 -> 18 -> 19 -> 20 -> 21 -> 32 -> 33 -> 34 -> 35** (14 sessions sequential)
 
-Sessions that can overlap (if multiple sessions available):
-- Sessions 14, 15, 16 can run in parallel (different subsystems, shared dependencies met after 12)
+Parallel tracks (after 14c completes):
+- Track A: Scheduler (15-21, 32-33) - critical path
+- Track B: Security (26-28) - independent after 14c
+- Track C: Applications (29-31) - independent after 14c
+- Track D: Power/Lifecycle (22-25) - depends on Session 19
 
-Realistic remaining calendar: 8-12 Cowork/Code sessions (Phase C now complete).
+Realistic remaining calendar: 35-49 Cowork sessions, 24-35 calendar days. See MAI-BUILD-PROMPT-ROSTER-v2.md for effort estimates.
 
 ---
 
@@ -89,9 +92,9 @@ These items are explicitly excluded. See [KNOWN-ISSUES.md](KNOWN-ISSUES.md) for 
 
 ## Production Readiness Checklist
 
-Session 18 concludes with this checklist. Every item must pass before the MAI ships on any hardware:
+Session 35 concludes with this checklist. Every item must pass before the MAI ships on any hardware:
 
-- [ ] All Session 17 tests pass
+- [ ] All Session 34 tests pass
 - [ ] 72-hour burn-in passes on representative Scout hardware
 - [ ] 72-hour burn-in passes on representative Ranger hardware
 - [ ] Air-gap verification passes 72-hour endurance
@@ -101,6 +104,7 @@ Session 18 concludes with this checklist. Every item must pass before the MAI sh
 - [ ] Model update via USB verified
 - [ ] All 7 adapters health-check pass
 - [ ] Power state transitions all verified on hardware
+- [ ] Scheduler topology correctly maps hardware
 - [ ] Documentation reviewed and complete
 - [ ] Performance baseline stored for future regression detection
 
@@ -115,7 +119,8 @@ Session 18 concludes with this checklist. Every item must pass before the MAI sh
 - [SESSION-LOG.md](SESSION-LOG.md): Session progress tracking
 - [KNOWN-ISSUES.md](KNOWN-ISSUES.md): Limitations and deferred items
 - [INDEX.md](INDEX.md): Master file index
-- [MAI-BUILD-PROMPT-ROSTER.md](MAI-BUILD-PROMPT-ROSTER.md): Complete session prompts and deliverables
+- [MAI-BUILD-PROMPT-ROSTER-v2.md](MAI-BUILD-PROMPT-ROSTER-v2.md): Complete session prompts and deliverables (restructured)
+- [MAI-BUILD-PROMPT-ROSTER.md](MAI-BUILD-PROMPT-ROSTER.md): Original session prompts (v1, archived)
 
 ---
 

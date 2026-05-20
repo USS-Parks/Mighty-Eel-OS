@@ -20,11 +20,9 @@
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
-
 use async_trait::async_trait;
 use tokio::sync::RwLock;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, info, warn};
 
 use mai_core::vault::{
     IntegrityResult, ModelStorage, SnapshotInfo, StorageInfo, VaultError, VaultInterface,

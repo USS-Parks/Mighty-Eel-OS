@@ -26,6 +26,7 @@ from adapters.base import (
     HealthStatus,
     Token,
     mai_adapter,
+    maybe_await,
 )
 from adapters.vllm.client import VllmClient
 from adapters.vllm.config import VllmConfig
@@ -51,23 +52,34 @@ class VllmAdapter(AdapterBase):
         self._model: str = ""
         self._available_models: list[str] = []
 
-    async def initialize(self, config: dict[str, Any], hil_handle: Any) -> str:
+    async def initialize(
+        self,
+        config: dict[str, Any] | None = None,
+        hil_handle: Any | None = None,
+    ) -> str:
         """Initialize vLLM adapter. Verifies server reachability and model availability."""
-        self._config = VllmConfig.from_dict(config)
-        self._hil_handle = hil_handle
-        self._client = VllmClient(
-            base_url=self._config.base_url,
-            timeout_ms=self._config.timeout_ms,
-            stream_timeout_ms=self._config.stream_timeout_ms,
-        )
+        if config is not None:
+            self._config = VllmConfig.from_dict(config)
+        elif hasattr(self, "_cfg") and self._cfg is not None:
+            self._config = self._cfg
+        if hil_handle is not None:
+            self._hil_handle = hil_handle
+        if self._client is None:
+            self._client = VllmClient(
+                base_url=self._config.base_url,
+                timeout_ms=self._config.timeout_ms,
+                stream_timeout_ms=self._config.stream_timeout_ms,
+            )
 
         # Verify server is up
-        healthy = await asyncio.to_thread(self._client.health)
+        healthy = await maybe_await(self._client.health)
         if not healthy:
             raise BackendUnavailableError()
 
         # Discover available models
-        models_data = await asyncio.to_thread(self._client.models)
+        models_data = await maybe_await(self._client.models)
+        if isinstance(models_data, dict):
+            models_data = models_data.get("data", [])
         self._available_models = [m.get("id", "") for m in models_data]
 
         # Set default model
@@ -96,14 +108,61 @@ class VllmAdapter(AdapterBase):
         if not self._initialized or self._client is None:
             raise BackendUnavailableError()
 
-    async def generate(self, prompt: str, params: GenerationParams) -> AsyncIterator[Token]:
-        """Stream tokens from vLLM via OpenAI-compatible SSE."""
+    async def generate(
+        self,
+        prompt: str,
+        params: GenerationParams,
+        *,
+        stream: bool = False,
+    ) -> GenerationResult | AsyncIterator[Token]:
+        """Generate from vLLM. Dual-mode: await for result, async-for for streaming."""
         self._ensure_initialized()
         assert self._client is not None
 
-        messages = [{"role": "user", "content": prompt}]
+        if stream:
+            return self._generate_stream(prompt, params)
 
-        # Build request kwargs
+        # Non-streaming: return GenerationResult
+        messages = [{"role": "user", "content": prompt}]
+        kwargs: dict[str, Any] = {}
+        if params.structured_schema:
+            kwargs["guided_json"] = params.structured_schema
+
+        resp = await maybe_await(
+            self._client.chat_completions,
+            model=self._model,
+            messages=messages,
+            temperature=params.temperature,
+            top_p=params.top_p,
+            max_tokens=params.max_tokens,
+            stop=params.stop_sequences or None,
+            stream=False,
+            **kwargs,
+        )
+        if isinstance(resp, dict):
+            body = resp
+        else:
+            body = resp.body if hasattr(resp, "body") else resp
+        choices = body.get("choices", [])
+        if choices:
+            choice = choices[0]
+            text = choice.get("message", {}).get("content", "")
+            finish = choice.get("finish_reason", "stop")
+            usage = body.get("usage", {})
+            tokens_out = usage.get("completion_tokens", len(text) // 4)
+            reason = FinishReason.MAX_TOKENS if finish == "length" else FinishReason.STOP
+        else:
+            text, tokens_out, reason = "", 0, FinishReason.STOP
+
+        self._requests_served += 1
+        return GenerationResult(text=text, tokens_generated=tokens_out, finish_reason=reason)
+
+    async def _generate_stream(
+        self, prompt: str, params: GenerationParams,
+    ) -> AsyncIterator[Token]:
+        """Stream tokens from vLLM via OpenAI-compatible SSE."""
+        assert self._client is not None
+        messages = [{"role": "user", "content": prompt}]
         kwargs: dict[str, Any] = {}
         if params.structured_schema:
             kwargs["guided_json"] = params.structured_schema
@@ -177,14 +236,15 @@ class VllmAdapter(AdapterBase):
         self._ensure_initialized()
         assert self._client is not None
 
-        body = {"model": self._model, "input": texts}
-        resp = await asyncio.to_thread(
-            self._client._request, "POST", "/v1/embeddings", body,
-        )
+        resp = await maybe_await(self._client.embeddings, texts)
+        if isinstance(resp, dict):
+            body = resp
+        else:
+            body = resp.body if hasattr(resp, "body") else resp
 
         embeddings: list[Embedding] = []
-        data = resp.body.get("data", [])
-        usage = resp.body.get("usage", {})
+        data = body.get("data", [])
+        usage = body.get("usage", {})
         total_tokens = usage.get("total_tokens", sum(len(t) // 4 for t in texts))
         per_text_tokens = total_tokens // max(len(texts), 1)
 
@@ -200,7 +260,7 @@ class VllmAdapter(AdapterBase):
         if not self._initialized or self._client is None:
             return HealthStatus.unavailable()
 
-        healthy = await asyncio.to_thread(self._client.health)
+        healthy = await maybe_await(self._client.health)
         if healthy:
             uptime = int(time.time() * 1000) - self._start_time_ms
             return HealthStatus.healthy(uptime_ms=uptime, requests_served=self._requests_served)
@@ -208,6 +268,7 @@ class VllmAdapter(AdapterBase):
 
     def capabilities(self) -> AdapterCapabilities:
         """vLLM capabilities: continuous batching, streaming, structured output, embeddings."""
+        cfg = getattr(self, "_cfg", None) or self._config
         return AdapterCapabilities(
             max_context_window=32768,
             supported_quantizations=["awq", "gptq", "squeezellm", "fp8"],
@@ -220,6 +281,7 @@ class VllmAdapter(AdapterBase):
             supports_embedding=True,
             supports_hot_swap=True,
             backend_version="0.6.0",
+            extra={"lora": cfg.enable_lora},
         )
 
     async def shutdown(self) -> None:
@@ -235,7 +297,7 @@ class VllmAdapter(AdapterBase):
         self._ensure_initialized()
         assert self._client is not None
         try:
-            await asyncio.to_thread(self._client.lora_load, lora_name, lora_path)
+            await maybe_await(self._client.lora_load, lora_name, lora_path)
             logger.info(f"LoRA loaded: {lora_name} from {lora_path}")
             return True
         except Exception as e:
@@ -247,7 +309,7 @@ class VllmAdapter(AdapterBase):
         self._ensure_initialized()
         assert self._client is not None
         try:
-            await asyncio.to_thread(self._client.lora_unload, lora_name)
+            await maybe_await(self._client.lora_unload, lora_name)
             logger.info(f"LoRA unloaded: {lora_name}")
             return True
         except Exception as e:
@@ -258,7 +320,7 @@ class VllmAdapter(AdapterBase):
         """List available models on vLLM server."""
         self._ensure_initialized()
         assert self._client is not None
-        models_data = await asyncio.to_thread(self._client.models)
+        models_data = await maybe_await(self._client.models)
         return [m.get("id", "") for m in models_data]
 
     async def switch_model(self, model_id: str) -> bool:

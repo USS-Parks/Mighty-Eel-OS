@@ -46,7 +46,10 @@ impl proto::mai_inference_server::MaiInference for MaiInferenceService {
         }
 
         let req = request.into_inner();
-        let request_id = Uuid::new_v4().to_string();
+        let request_uuid = Uuid::new_v4();
+        let request_id = request_uuid.to_string();
+        let profile_uuid = Uuid::parse_str(&profile_id)
+            .map_err(|e| Status::internal(format!("invalid profile_id: {e}")))?;
 
         debug!(
             request_id = %request_id,
@@ -74,8 +77,8 @@ impl proto::mai_inference_server::MaiInference for MaiInferenceService {
 
         // Build InferenceRequest matching mai-core's actual struct
         let inference_req = InferenceRequest {
-            id: request_id.clone(),
-            profile_id: profile_id.clone(),
+            id: request_uuid,
+            profile_id: profile_uuid,
             model_name: if req.model.is_empty() {
                 None
             } else {
@@ -154,7 +157,10 @@ impl proto::mai_inference_server::MaiInference for MaiInferenceService {
         }
 
         let req = request.into_inner();
-        let request_id = Uuid::new_v4().to_string();
+        let request_uuid = Uuid::new_v4();
+        let request_id = request_uuid.to_string();
+        let profile_uuid = Uuid::parse_str(&profile_id)
+            .map_err(|e| Status::internal(format!("invalid profile_id: {e}")))?;
         let model = req.model.clone();
 
         debug!(
@@ -179,8 +185,8 @@ impl proto::mai_inference_server::MaiInference for MaiInferenceService {
             .sum();
 
         let inference_req = InferenceRequest {
-            id: request_id.clone(),
-            profile_id: profile_id.clone(),
+            id: request_uuid,
+            profile_id: profile_uuid,
             model_name: if req.model.is_empty() {
                 None
             } else {
@@ -278,7 +284,10 @@ impl proto::mai_inference_server::MaiInference for MaiInferenceService {
         }
 
         let req = request.into_inner();
-        let request_id = Uuid::new_v4().to_string();
+        let request_uuid = Uuid::new_v4();
+        let request_id = request_uuid.to_string();
+        let profile_uuid = Uuid::parse_str(&profile_id)
+            .map_err(|e| Status::internal(format!("invalid profile_id: {e}")))?;
 
         debug!(
             request_id = %request_id,
@@ -294,8 +303,8 @@ impl proto::mai_inference_server::MaiInference for MaiInferenceService {
             .sum();
 
         let inference_req = InferenceRequest {
-            id: request_id.clone(),
-            profile_id: profile_id.clone(),
+            id: request_uuid,
+            profile_id: profile_uuid,
             model_name: if req.model.is_empty() {
                 None
             } else {

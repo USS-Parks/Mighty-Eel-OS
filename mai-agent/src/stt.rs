@@ -22,9 +22,9 @@
 //! All audio processing is local. No cloud transcription services.
 
 use std::collections::HashMap;
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 
-use tracing::{debug, info, warn};
+use tracing::info;
 use uuid::Uuid;
 
 use mai_core::types::{ModelId, ProfileId, RequestId};
@@ -61,7 +61,7 @@ impl AudioBuffer {
     fn new(format: AudioFormat, max_duration_secs: u32, silence_threshold_ms: u32) -> Self {
         // Calculate silence threshold in frames
         let bytes_per_sample = u32::from(format.bit_depth) / 8;
-        let bytes_per_second = format.sample_rate * u32::from(format.channels) * bytes_per_sample;
+        let _bytes_per_second = format.sample_rate * u32::from(format.channels) * bytes_per_sample;
         let frame_duration_ms = 20u32; // 20ms frames typical for WebSocket audio
         let silence_frames = silence_threshold_ms / frame_duration_ms;
 

@@ -18,13 +18,11 @@
 //! Tool execution happens in L4, not in the MAI.
 
 use std::collections::HashMap;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde_json::Value as JsonValue;
 use tracing::{debug, info, warn};
-use uuid::Uuid;
-
-use mai_core::types::{ProfileId, RequestId};
+use mai_core::types::RequestId;
 
 use crate::types::{
     AgentError, SessionId, ToolAccessRole, ToolAuditEntry, ToolCall,
@@ -219,9 +217,15 @@ impl ToolRegistry {
         calls: Vec<ToolCall>,
         caller_role: &ToolAccessRole,
     ) -> Result<Vec<ToolCall>, AgentError> {
-        // Validate all calls first
+        // Validate all calls first (before mutable chain borrow)
         for call in &calls {
             self.validate_tool_call(call, caller_role)?;
+        }
+
+        // Check for parallel calls (before mutable chain borrow)
+        let is_parallel = calls.len() > 1;
+        if is_parallel {
+            self.validate_parallel_calls(&calls, caller_role)?;
         }
 
         let chain = self.chains.get_mut(request_id).ok_or_else(|| {
@@ -237,12 +241,6 @@ impl ToolRegistry {
             return Err(AgentError::ChainStepLimitExceeded {
                 max: chain.max_steps,
             });
-        }
-
-        // Check for parallel calls
-        let is_parallel = calls.len() > 1;
-        if is_parallel {
-            self.validate_parallel_calls(&calls, caller_role)?;
         }
 
         chain.pending_calls = calls.clone();
@@ -280,8 +278,10 @@ impl ToolRegistry {
             )));
         }
 
-        // Match results to pending calls
+        // Match results to pending calls, collecting audits separately
+        // to avoid conflicting borrows on self
         let now = now_epoch_secs();
+        let mut pending_audits = Vec::new();
         for result in &results {
             // Find matching pending call
             let call_idx = chain
@@ -292,7 +292,7 @@ impl ToolRegistry {
             if let Some(idx) = call_idx {
                 let call = chain.pending_calls.remove(idx);
 
-                // Write audit entry
+                // Build audit entry (deferred push)
                 let audit = ToolAuditEntry {
                     timestamp: now,
                     profile_id: profile_id.to_string(),
@@ -304,7 +304,7 @@ impl ToolRegistry {
                     error: result.error.clone(),
                     session_id: chain.session_id.to_string(),
                 };
-                self.push_audit(audit);
+                pending_audits.push(audit);
 
                 chain.completed_steps.push((call, result.clone()));
             } else {
@@ -323,13 +323,19 @@ impl ToolRegistry {
         }
 
         // All pending calls resolved: back to model for next step
-        if chain.pending_calls.is_empty() {
+        let should_continue = if chain.pending_calls.is_empty() {
             chain.state = ToolChainState::AwaitingModel;
-            Ok(true) // Continue: model needs to see results
+            true // Continue: model needs to see results
         } else {
-            // Still waiting for more results
-            Ok(false)
+            false // Still waiting for more results
+        };
+
+        // Now safe to push audits (chain borrow ended at last use above)
+        for audit in pending_audits {
+            self.push_audit(audit);
         }
+
+        Ok(should_continue)
     }
 
     /// Mark a chain as complete (model generated final response, no more calls).
@@ -432,6 +438,8 @@ fn now_epoch_secs() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::Duration;
+    use uuid::Uuid;
 
     fn sample_tool() -> ToolDefinition {
         ToolDefinition {

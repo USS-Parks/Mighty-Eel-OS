@@ -27,6 +27,7 @@ from adapters.base import (
     Token,
     UnsupportedOperationError,
     mai_adapter,
+    maybe_await,
 )
 from adapters.exllamav2.client import ExLlamaV2Client
 from adapters.exllamav2.config import ExLlamaV2Config
@@ -52,23 +53,34 @@ class ExLlamaV2Adapter(AdapterBase):
         self._model: str = ""
         self._loaded_models: list[str] = []
 
-    async def initialize(self, config: dict[str, Any], hil_handle: Any) -> str:
+    async def initialize(
+        self,
+        config: dict[str, Any] | None = None,
+        hil_handle: Any | None = None,
+    ) -> str:
         """Initialize ExLlamaV2 adapter. Queries loaded models."""
-        self._config = ExLlamaV2Config.from_dict(config)
-        self._hil_handle = hil_handle
-        self._client = ExLlamaV2Client(
-            base_url=self._config.base_url,
-            timeout_ms=self._config.timeout_ms,
-            stream_timeout_ms=self._config.stream_timeout_ms,
-        )
+        if config is not None:
+            self._config = ExLlamaV2Config.from_dict(config)
+        elif hasattr(self, "_cfg") and self._cfg is not None:
+            self._config = self._cfg
+        if hil_handle is not None:
+            self._hil_handle = hil_handle
+        if self._client is None:
+            self._client = ExLlamaV2Client(
+                base_url=self._config.base_url,
+                timeout_ms=self._config.timeout_ms,
+                stream_timeout_ms=self._config.stream_timeout_ms,
+            )
 
         # Verify health
-        healthy = await asyncio.to_thread(self._client.health)
+        healthy = await maybe_await(self._client.health)
         if not healthy:
             raise BackendUnavailableError()
 
         # Discover loaded models
-        models_data = await asyncio.to_thread(self._client.models)
+        models_data = await maybe_await(self._client.models)
+        if isinstance(models_data, dict):
+            models_data = models_data.get("data", [])
         self._loaded_models = [m.get("id", "") for m in models_data]
         self._model = self._config.default_model or (
             self._loaded_models[0] if self._loaded_models else ""
@@ -87,11 +99,55 @@ class ExLlamaV2Adapter(AdapterBase):
         if not self._initialized or self._client is None:
             raise BackendUnavailableError()
 
-    async def generate(self, prompt: str, params: GenerationParams) -> AsyncIterator[Token]:
-        """Stream tokens from ExLlamaV2."""
+    async def generate(
+        self,
+        prompt: str,
+        params: GenerationParams,
+        *,
+        stream: bool = False,
+    ) -> GenerationResult | AsyncIterator[Token]:
+        """Generate from ExLlamaV2. Dual-mode: await for result, async-for for streaming."""
         self._ensure_initialized()
         assert self._client is not None
 
+        if stream:
+            return self._generate_stream(prompt, params)
+
+        # Non-streaming: return GenerationResult
+        messages = [{"role": "user", "content": prompt}]
+        resp = await maybe_await(
+            self._client.chat_completions,
+            model=self._model,
+            messages=messages,
+            temperature=params.temperature,
+            top_p=params.top_p,
+            max_tokens=params.max_tokens,
+            stop=params.stop_sequences or None,
+            stream=False,
+        )
+        if isinstance(resp, dict):
+            body = resp
+        else:
+            body = resp.body if hasattr(resp, "body") else resp
+        choices = body.get("choices", [])
+        if choices:
+            choice = choices[0]
+            text = choice.get("message", {}).get("content", "")
+            finish = choice.get("finish_reason", "stop")
+            usage = body.get("usage", {})
+            tokens_out = usage.get("completion_tokens", len(text) // 4)
+            reason = FinishReason.MAX_TOKENS if finish == "length" else FinishReason.STOP
+        else:
+            text, tokens_out, reason = "", 0, FinishReason.STOP
+
+        self._requests_served += 1
+        return GenerationResult(text=text, tokens_generated=tokens_out, finish_reason=reason)
+
+    async def _generate_stream(
+        self, prompt: str, params: GenerationParams,
+    ) -> AsyncIterator[Token]:
+        """Stream tokens from ExLlamaV2."""
+        assert self._client is not None
         messages = [{"role": "user", "content": prompt}]
         chunks = await asyncio.to_thread(
             self._client.chat_completions,
@@ -164,7 +220,7 @@ class ExLlamaV2Adapter(AdapterBase):
         if not self._initialized or self._client is None:
             return HealthStatus.unavailable()
 
-        healthy = await asyncio.to_thread(self._client.health)
+        healthy = await maybe_await(self._client.health)
         if healthy:
             uptime = int(time.time() * 1000) - self._start_time_ms
             return HealthStatus.healthy(uptime_ms=uptime, requests_served=self._requests_served)
@@ -184,6 +240,7 @@ class ExLlamaV2Adapter(AdapterBase):
             supports_embedding=False,
             supports_hot_swap=True,
             backend_version="0.2.0",
+            extra={"multi_model": True},
         )
 
     async def shutdown(self) -> None:
@@ -194,12 +251,12 @@ class ExLlamaV2Adapter(AdapterBase):
 
     # ─── ExLlamaV2-specific methods ──────────────────────��───────────────
 
-    async def load_model(self, model_name: str) -> bool:
+    async def load_model(self, model_name: str, config: dict[str, Any] | None = None) -> bool:
         """Load a model (supports multi-model multiplexing)."""
         self._ensure_initialized()
         assert self._client is not None
         try:
-            await asyncio.to_thread(
+            await maybe_await(
                 self._client.model_load, model_name, self._config.model_dir,
             )
             self._loaded_models.append(model_name)
@@ -214,7 +271,7 @@ class ExLlamaV2Adapter(AdapterBase):
         self._ensure_initialized()
         assert self._client is not None
         try:
-            await asyncio.to_thread(self._client.model_unload)
+            await maybe_await(self._client.model_unload)
             if self._model in self._loaded_models:
                 self._loaded_models.remove(self._model)
             self._model = self._loaded_models[0] if self._loaded_models else ""

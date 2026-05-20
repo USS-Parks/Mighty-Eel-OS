@@ -28,6 +28,7 @@ from adapters.base import (
     Token,
     UnsupportedOperationError,
     mai_adapter,
+    maybe_await,
 )
 from adapters.llamacpp.client import LlamaCppClient
 from adapters.llamacpp.config import LlamaCppConfig
@@ -53,23 +54,32 @@ class LlamaCppAdapter(AdapterBase):
         self._context_size: int = 8192
         self._model_name: str = ""
 
-    async def initialize(self, config: dict[str, Any], hil_handle: Any) -> str:
+    async def initialize(
+        self,
+        config: dict[str, Any] | None = None,
+        hil_handle: Any | None = None,
+    ) -> str:
         """Initialize llama.cpp adapter. Verifies server health and gets model info."""
-        self._config = LlamaCppConfig.from_dict(config)
-        self._hil_handle = hil_handle
-        self._client = LlamaCppClient(
-            base_url=self._config.base_url,
-            timeout_ms=self._config.timeout_ms,
-            stream_timeout_ms=self._config.stream_timeout_ms,
-        )
+        if config is not None:
+            self._config = LlamaCppConfig.from_dict(config)
+        elif hasattr(self, "_cfg") and self._cfg is not None:
+            self._config = self._cfg
+        if hil_handle is not None:
+            self._hil_handle = hil_handle
+        if self._client is None:
+            self._client = LlamaCppClient(
+                base_url=self._config.base_url,
+                timeout_ms=self._config.timeout_ms,
+                stream_timeout_ms=self._config.stream_timeout_ms,
+            )
 
         # Verify server health
-        health = await asyncio.to_thread(self._client.health)
+        health = await maybe_await(self._client.health)
         if health.get("status") == "error":
             raise BackendUnavailableError()
 
         # Get server properties for context size
-        props = await asyncio.to_thread(self._client.props)
+        props = await maybe_await(self._client.props)
         self._context_size = props.get("default_generation_settings", {}).get(
             "n_ctx", self._config.context_size
         )
@@ -88,17 +98,59 @@ class LlamaCppAdapter(AdapterBase):
         if not self._initialized or self._client is None:
             raise BackendUnavailableError()
 
-    async def generate(self, prompt: str, params: GenerationParams) -> AsyncIterator[Token]:
-        """Stream tokens from llama-server."""
+    async def generate(
+        self,
+        prompt: str,
+        params: GenerationParams,
+        *,
+        stream: bool = False,
+    ) -> GenerationResult | AsyncIterator[Token]:
+        """Generate from llama.cpp. Dual-mode: await for result, async-for for streaming."""
         self._ensure_initialized()
         assert self._client is not None
 
+        if stream:
+            return self._generate_stream(prompt, params)
+
+        # Non-streaming: return GenerationResult
+        messages = [{"role": "user", "content": prompt}]
+        resp = await maybe_await(
+            self._client.chat_completions,
+            messages=messages,
+            temperature=params.temperature,
+            top_p=params.top_p,
+            max_tokens=params.max_tokens,
+            stop=params.stop_sequences or None,
+            stream=False,
+        )
+        if isinstance(resp, dict):
+            body = resp
+        else:
+            body = resp.body if hasattr(resp, "body") else resp
+        choices = body.get("choices", [])
+        if choices:
+            choice = choices[0]
+            text = choice.get("message", {}).get("content", "")
+            finish = choice.get("finish_reason", "stop")
+            usage = body.get("usage", {})
+            tokens_out = usage.get("completion_tokens", len(text) // 4)
+            reason = FinishReason.MAX_TOKENS if finish == "length" else FinishReason.STOP
+        else:
+            text, tokens_out, reason = "", 0, FinishReason.STOP
+
+        self._requests_served += 1
+        return GenerationResult(text=text, tokens_generated=tokens_out, finish_reason=reason)
+
+    async def _generate_stream(
+        self, prompt: str, params: GenerationParams,
+    ) -> AsyncIterator[Token]:
+        """Stream tokens from llama-server."""
+        assert self._client is not None
         messages = [{"role": "user", "content": prompt}]
 
-        # Use grammar if structured schema requested (convert JSON schema to GBNF placeholder)
+        # Use grammar if structured schema requested
         grammar = self._config.default_grammar
         if params.structured_schema:
-            # llama.cpp uses GBNF format; pass json schema as grammar hint
             grammar = json.dumps(params.structured_schema) if not grammar else grammar
 
         chunks = await asyncio.to_thread(
@@ -170,7 +222,7 @@ class LlamaCppAdapter(AdapterBase):
         if not self._initialized or self._client is None:
             return HealthStatus.unavailable()
 
-        health = await asyncio.to_thread(self._client.health)
+        health = await maybe_await(self._client.health)
         status = health.get("status", "error")
         if status == "ok":
             uptime = int(time.time() * 1000) - self._start_time_ms
@@ -210,12 +262,12 @@ class LlamaCppAdapter(AdapterBase):
         """Tokenize text using the loaded model's tokenizer."""
         self._ensure_initialized()
         assert self._client is not None
-        return await asyncio.to_thread(self._client.tokenize, text)
+        return await maybe_await(self._client.tokenize, text)
 
     async def get_slots(self) -> list[dict[str, Any]]:
         """Get current inference slot status."""
         self._ensure_initialized()
         assert self._client is not None
-        return await asyncio.to_thread(self._client.slots)
+        return await maybe_await(self._client.slots)
 
 

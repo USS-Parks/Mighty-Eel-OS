@@ -5,8 +5,6 @@ Implements RadixAttention KV cache reuse, constrained decoding
 """
 from __future__ import annotations
 
-import asyncio
-import time
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -16,12 +14,15 @@ from adapters.base import (
     AdapterTimeoutError,
     BackendCrashedError,
     BackendUnavailableError,
+    Embedding,
+    FinishReason,
     GenerationParams,
     GenerationResult,
     HealthStatus,
     Token,
     UnsupportedOperationError,
     mai_adapter,
+    maybe_await,
 )
 from adapters.sglang.client import SglangClient
 from adapters.sglang.config import SglangConfig
@@ -37,19 +38,29 @@ class SglangAdapter(AdapterBase):
         self._client: SglangClient | None = None
         self._model_id: str | None = None
 
-    async def initialize(self) -> None:
-        self._cfg = SglangConfig.from_dict(self._raw_config)
-        self._client = SglangClient(
-            host=self._cfg.host,
-            port=self._cfg.port,
-            timeout=self._cfg.timeout,
-        )
+    async def initialize(
+        self,
+        config: dict[str, Any] | None = None,
+        hil_handle: Any | None = None,
+    ) -> None:
+        if config is not None:
+            self._cfg = SglangConfig.from_dict(config)
+        elif self._cfg is None:
+            self._cfg = SglangConfig.from_dict(self._config)
+        if hil_handle is not None:
+            self._hil_handle = hil_handle
+        if self._client is None:
+            self._client = SglangClient(
+                host=self._cfg.host,
+                port=self._cfg.port,
+                timeout=self._cfg.timeout,
+            )
         # Verify backend is reachable
-        healthy = await asyncio.to_thread(self._client.health)
+        healthy = await maybe_await(self._client.health)
         if not healthy:
             raise BackendUnavailableError("SGLang server not reachable")
         # Discover loaded model
-        models = await asyncio.to_thread(self._client.models)
+        models = await maybe_await(self._client.models)
         if models:
             self._model_id = models[0].get("id") if isinstance(models[0], dict) else models[0]
         self._initialized = True
@@ -86,9 +97,8 @@ class SglangAdapter(AdapterBase):
         if stream:
             return self._stream_generate(prompt, kwargs)
 
-        start = time.monotonic()
         try:
-            resp = await asyncio.to_thread(
+            resp = await maybe_await(
                 self._client.chat_completions,
                 model=self._model_id or "default",
                 messages=[{"role": "user", "content": prompt}],
@@ -103,14 +113,13 @@ class SglangAdapter(AdapterBase):
         choice = resp.get("choices", [{}])[0]
         message = choice.get("message", {})
         usage = resp.get("usage", {})
+        finish = choice.get("finish_reason", "stop")
+        reason = FinishReason.MAX_TOKENS if finish == "length" else FinishReason.STOP
 
         return GenerationResult(
             text=message.get("content", ""),
             tokens_generated=usage.get("completion_tokens", 0),
-            tokens_prompt=usage.get("prompt_tokens", 0),
-            latency_ms=(time.monotonic() - start) * 1000,
-            finish_reason=choice.get("finish_reason", "stop"),
-            model_id=self._model_id or "unknown",
+            finish_reason=reason,
         )
 
     async def _stream_generate(
@@ -120,7 +129,7 @@ class SglangAdapter(AdapterBase):
     ) -> AsyncIterator[Token]:
         assert self._client is not None
         # Get streaming chunks in a thread (returns iterator)
-        chunks = await asyncio.to_thread(
+        chunks = await maybe_await(
             self._client.chat_completions,
             model=self._model_id or "default",
             messages=[{"role": "user", "content": prompt}],
@@ -145,7 +154,7 @@ class SglangAdapter(AdapterBase):
             results.append(result)
         return results
 
-    async def embed(self, _texts: list[str]) -> list[list[float]]:
+    async def embed(self, _texts: list[str]) -> list[Embedding]:
         self._check_initialized()
         raise UnsupportedOperationError(
             "SGLang does not expose a dedicated embedding endpoint",
@@ -153,25 +162,14 @@ class SglangAdapter(AdapterBase):
 
     async def health_check(self) -> HealthStatus:
         if not self._initialized or self._client is None:
-            return HealthStatus(
-                healthy=False,
-                backend_name="sglang",
-                message="Not initialized",
-            )
+            return HealthStatus.unavailable()
         try:
-            healthy = await asyncio.to_thread(self._client.health)
-            return HealthStatus(
-                healthy=healthy,
-                backend_name="sglang",
-                model_loaded=self._model_id,
-                message="OK" if healthy else "Health check failed",
-            )
-        except OSError as exc:
-            return HealthStatus(
-                healthy=False,
-                backend_name="sglang",
-                message=f"Connection error: {exc}",
-            )
+            healthy = await maybe_await(self._client.health)
+            if healthy:
+                return HealthStatus.healthy(uptime_ms=0, requests_served=0)
+            return HealthStatus.unavailable()
+        except OSError:
+            return HealthStatus.unavailable()
 
     def capabilities(self) -> AdapterCapabilities:
         return AdapterCapabilities(
@@ -200,13 +198,13 @@ class SglangAdapter(AdapterBase):
         """Flush the RadixAttention prefix cache."""
         self._check_initialized()
         assert self._client is not None
-        return await asyncio.to_thread(self._client.flush_cache)
+        return await maybe_await(self._client.flush_cache)
 
     async def get_model_info(self) -> dict[str, Any]:
         """Get detailed model info from SGLang server."""
         self._check_initialized()
         assert self._client is not None
-        return await asyncio.to_thread(self._client.get_model_info)
+        return await maybe_await(self._client.get_model_info)
 
     async def generate_native(
         self,
@@ -230,21 +228,20 @@ class SglangAdapter(AdapterBase):
         if regex:
             kwargs["regex"] = regex
 
-        start = time.monotonic()
         try:
-            resp = await asyncio.to_thread(self._client.generate, prompt, **kwargs)
+            resp = await maybe_await(self._client.generate, prompt, **kwargs)
         except TimeoutError as exc:
             raise AdapterTimeoutError(str(exc)) from exc
         except OSError as exc:
             raise BackendCrashedError(str(exc)) from exc
 
+        finish = resp.get("meta_info", {}).get("finish_reason", "stop")
+        reason = FinishReason.MAX_TOKENS if finish == "length" else FinishReason.STOP
+
         return GenerationResult(
             text=resp.get("text", ""),
             tokens_generated=resp.get("meta_info", {}).get("completion_tokens", 0),
-            tokens_prompt=resp.get("meta_info", {}).get("prompt_tokens", 0),
-            latency_ms=(time.monotonic() - start) * 1000,
-            finish_reason=resp.get("meta_info", {}).get("finish_reason", "stop"),
-            model_id=self._model_id or "unknown",
+            finish_reason=reason,
         )
 
     def _check_initialized(self) -> None:

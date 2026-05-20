@@ -19,7 +19,7 @@ use std::collections::HashMap;
 
 use async_trait::async_trait;
 use tokio::sync::RwLock;
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 
 use mai_core::vault::{
     CollectionConfig, DistanceMetric, EmbeddingPoint, SearchResult, VectorStore, VaultError,
