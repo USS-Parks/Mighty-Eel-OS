@@ -526,8 +526,8 @@ impl TaskManager {
 
     fn build_response(&self, task_id: TaskId) -> AgentTaskResponse {
         let task = self.tasks.get(&task_id).expect("task must exist");
-        let duration_ms = if task.started_at > 0 {
-            task.completed_at.saturating_sub(task.started_at)
+        let duration_ms = if task.started_at > 0 && task.completed_at > 0 {
+            task.completed_at.saturating_sub(task.started_at).max(1)
         } else {
             0
         };
