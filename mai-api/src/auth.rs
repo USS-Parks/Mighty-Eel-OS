@@ -451,7 +451,7 @@ pub async fn auth_middleware(
         // Rate limit check (keyed by the key's hash)
         let key_hash = entry.key_hash.clone();
         let profile_id = entry.profile_id.clone();
-        let role = entry.role.clone();
+        let role = entry.role;
         let display_name = entry.display_name.clone();
         drop(store); // Release read lock before rate limit check
 
