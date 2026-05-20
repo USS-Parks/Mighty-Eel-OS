@@ -45,7 +45,7 @@ const CHARS_PER_TOKEN: u32 = 4;
 /// Estimate token count from text length.
 pub fn estimate_tokens(text: &str) -> u32 {
     let chars = u32::try_from(text.len()).unwrap_or(u32::MAX);
-    (chars + CHARS_PER_TOKEN - 1) / CHARS_PER_TOKEN
+    chars.div_ceil(CHARS_PER_TOKEN)
 }
 
 // ============================================================================
@@ -105,7 +105,7 @@ impl ContextManager {
             turn_count: 0,
             created_at: now,
             last_active: now,
-            model_id: model_id.map(Into::into),
+            model_id,
         };
 
         self.sessions.insert(session_id, session);

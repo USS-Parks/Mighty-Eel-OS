@@ -131,7 +131,11 @@ class TensorRtAdapter(AdapterBase):
         tokens_out = body.get("output_tokens", len(text) // 4)
 
         self._requests_served += 1
-        return GenerationResult(text=text, tokens_generated=tokens_out, finish_reason=FinishReason.STOP)
+        return GenerationResult(
+            text=text,
+            tokens_generated=tokens_out,
+            finish_reason=FinishReason.STOP,
+        )
 
     async def _generate_stream(
         self, prompt: str, params: GenerationParams,

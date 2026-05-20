@@ -305,7 +305,7 @@ impl RagPipeline {
         }
 
         let mut points = Vec::with_capacity(chunks.len());
-        for (_i, (chunk, embedding)) in chunks.iter().zip(embeddings.iter()).enumerate() {
+        for (chunk, embedding) in chunks.iter().zip(embeddings.iter()) {
             let mut payload: HashMap<String, serde_json::Value> = chunk
                 .metadata
                 .iter()

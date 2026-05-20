@@ -253,6 +253,7 @@ class ExLlamaV2Adapter(AdapterBase):
 
     async def load_model(self, model_name: str, config: dict[str, Any] | None = None) -> bool:
         """Load a model (supports multi-model multiplexing)."""
+        _ = config
         self._ensure_initialized()
         assert self._client is not None
         try:

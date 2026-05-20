@@ -46,6 +46,7 @@ impl AppState {
     ///
     /// All components must be fully initialized before constructing AppState.
     /// The API server does not own component lifecycle; it borrows via Arc.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         scheduler: Arc<RwLock<Scheduler>>,
         registry: Arc<RwLock<ModelRegistry>>,

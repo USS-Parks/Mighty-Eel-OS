@@ -22,7 +22,7 @@
 //! All audio processing is local. No cloud transcription services.
 
 use std::collections::HashMap;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use tracing::info;
 use uuid::Uuid;
@@ -45,8 +45,6 @@ struct AudioBuffer {
     data: Vec<u8>,
     /// Audio format metadata
     format: AudioFormat,
-    /// When this buffer started accumulating
-    started_at: Instant,
     /// Total duration of audio accumulated (milliseconds)
     duration_ms: u64,
     /// Maximum allowed duration (milliseconds)
@@ -68,7 +66,6 @@ impl AudioBuffer {
         Self {
             data: Vec::new(),
             format,
-            started_at: Instant::now(),
             duration_ms: 0,
             max_duration_ms: u64::from(max_duration_secs) * 1000,
             silence_frames: 0,
@@ -119,11 +116,6 @@ impl AudioBuffer {
     /// Get total accumulated bytes.
     fn byte_count(&self) -> usize {
         self.data.len()
-    }
-
-    /// Get accumulated duration.
-    fn duration(&self) -> Duration {
-        Duration::from_millis(self.duration_ms)
     }
 
     /// Take the buffer contents, leaving it empty.
@@ -333,6 +325,7 @@ impl SttManager {
         let request = self.active_requests.remove(request_id).ok_or_else(|| {
             AgentError::Internal(format!("No active transcription: {request_id}"))
         })?;
+        debug_assert_eq!(request.id, *request_id);
 
         let duration_ms = request.created_at.elapsed().as_millis() as u64;
 
@@ -350,8 +343,10 @@ impl SttManager {
 
         info!(
             %request_id,
+            profile_id = %request.profile_id,
             duration_ms,
             model = %request.model,
+            streaming = request.streaming,
             "Transcription completed"
         );
 

@@ -51,6 +51,7 @@ pub const GRPC_PROFILE_KEY: &str = "x-im-profile";
 ///
 /// Format: `profile_id:role` (e.g., `family-dad:admin`, `kid-timmy:child`)
 /// Returns (profile_id, role_string) or a Status error.
+#[allow(clippy::result_large_err)]
 pub fn extract_grpc_profile<T>(request: &Request<T>) -> Result<(String, String), Status> {
     let metadata = request.metadata();
     let header_value = metadata

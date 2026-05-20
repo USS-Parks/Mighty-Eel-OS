@@ -32,18 +32,12 @@ struct ManagedTask {
     profile_id: String,
     /// Original instruction
     instruction: String,
-    /// Optional session for context continuity
-    session_id: Option<String>,
     /// Current status
     status: AgentTaskStatus,
     /// Resource budget tracking
     budget: ResourceBudget,
-    /// Model used for inference
-    model: Option<String>,
     /// Tools available to this task
     available_tools: Vec<String>,
-    /// Whether to stream progress updates
-    stream_progress: bool,
     /// Progress updates history
     progress_log: Vec<TaskProgress>,
     /// Tool calls made during this task
@@ -58,8 +52,6 @@ struct ManagedTask {
     intermediate_result: Option<String>,
     /// Final result text
     result: Option<String>,
-    /// Task creation timestamp (epoch ms)
-    created_at: u64,
     /// Task start timestamp (epoch ms, 0 if not started)
     started_at: u64,
     /// Task completion timestamp (epoch ms, 0 if not done)
@@ -116,12 +108,9 @@ impl TaskManager {
             id: task_id,
             profile_id: request.profile_id,
             instruction: request.instruction,
-            session_id: request.session_id,
             status: AgentTaskStatus::Pending,
             budget,
-            model: request.model,
             available_tools: request.available_tools.unwrap_or_default(),
-            stream_progress: request.stream_progress,
             progress_log: Vec::new(),
             tool_audit: Vec::new(),
             inference_count: 0,
@@ -129,7 +118,6 @@ impl TaskManager {
             total_steps: None,
             intermediate_result: None,
             result: None,
-            created_at: now_ms,
             started_at: 0,
             completed_at: 0,
         };
@@ -457,7 +445,7 @@ impl TaskManager {
             return 0;
         }
 
-        completed.sort_by(|a, b| b.1.cmp(&a.1));
+        completed.sort_by_key(|entry| std::cmp::Reverse(entry.1));
 
         let to_remove: Vec<TaskId> = completed
             .into_iter()

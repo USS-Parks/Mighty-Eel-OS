@@ -119,7 +119,7 @@ impl ProfileStore for ProfileManager {
         let profiles = self.profiles.read().await;
         let result: Vec<FamilyProfile> = profiles
             .values()
-            .filter(|p| role_filter.map_or(true, |r| p.role == r))
+            .filter(|p| role_filter.is_none_or(|r| p.role == r))
             .cloned()
             .collect();
         Ok(result)

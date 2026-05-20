@@ -45,7 +45,9 @@ class AdapterTimeoutError(AdapterError):
     """Backend exceeded response deadline."""
 
     def __init__(self, timeout_ms: int | str = 0):
-        detail = str(timeout_ms) if isinstance(timeout_ms, str) else f"Timed out after {timeout_ms}ms"
+        detail = (
+            str(timeout_ms) if isinstance(timeout_ms, str) else f"Timed out after {timeout_ms}ms"
+        )
         super().__init__(code="Timeout", detail=detail, timeout_ms=timeout_ms)
 
 
@@ -190,6 +192,7 @@ class Embedding:
 
     vector: list[float]
     input_tokens: int
+    __hash__ = None
 
     def __eq__(self, other: object) -> bool:
         if isinstance(other, Embedding):
@@ -214,13 +217,6 @@ class _HealthyDescriptor:
     def __get__(self, obj: Any, objtype: Any = None) -> Any:
         if obj is None:
             # Class-level access: HealthStatus.healthy(uptime_ms=..., ...)
-            @classmethod  # noqa: B902 (not a real classmethod, just for IDE hints)
-            def factory(cls: type, uptime_ms: int, requests_served: int) -> HealthStatus:
-                return cls(
-                    kind=HealthStatusKind.HEALTHY,
-                    uptime_ms=uptime_ms,
-                    requests_served=requests_served,
-                )
             # Return a bound callable that takes (uptime_ms, requests_served)
             def _factory(uptime_ms: int, requests_served: int) -> HealthStatus:
                 return HealthStatus(

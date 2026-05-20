@@ -245,11 +245,11 @@ fn build_sse_stream(
                                 // Buffer management
                                 buffer_event(&mut replay_buffer, &mut backpressure, sequence, final_bytes.clone());
 
-                                if sequence > skip_until {
-                                    if event_tx.send(Ok(final_bytes)).await.is_err() {
-                                        debug!("SSE client disconnected during final chunk");
-                                        break;
-                                    }
+                                if sequence > skip_until
+                                    && event_tx.send(Ok(final_bytes)).await.is_err()
+                                {
+                                    debug!("SSE client disconnected during final chunk");
+                                    break;
                                 }
 
                                 // Send [DONE] sentinel
@@ -285,11 +285,11 @@ fn build_sse_stream(
 
                             buffer_event(&mut replay_buffer, &mut backpressure, sequence, sse_bytes.clone());
 
-                            if sequence > skip_until {
-                                if event_tx.send(Ok(sse_bytes)).await.is_err() {
-                                    debug!("SSE client disconnected");
-                                    break;
-                                }
+                            if sequence > skip_until
+                                && event_tx.send(Ok(sse_bytes)).await.is_err()
+                            {
+                                debug!("SSE client disconnected");
+                                break;
                             }
                         }
                         Ok(None) => {

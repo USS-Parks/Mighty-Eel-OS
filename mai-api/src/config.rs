@@ -15,7 +15,7 @@ use tokio::sync::watch;
 use tracing::{error, info, warn};
 
 /// Complete server configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ServerConfig {
     /// Server network configuration
     #[serde(default)]
@@ -75,20 +75,15 @@ fn default_bind_address() -> String {
 }
 
 /// Product tier determines default resource limits
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ProductTier {
     /// Single GPU, conservative limits, Ollama primary
+    #[default]
     Scout,
     /// Dual GPU, multi-adapter, higher limits
     Ranger,
     /// 4+ GPU, full adapter fleet, maximum limits
     PackLeader,
-}
-
-impl Default for ProductTier {
-    fn default() -> Self {
-        Self::Scout
-    }
 }
 
 /// Request processing limits (tier-dependent defaults)
@@ -215,20 +210,6 @@ pub struct TlsConfig {
     pub cert_path: PathBuf,
     /// Path to TLS private key (PEM)
     pub key_path: PathBuf,
-}
-
-impl Default for ServerConfig {
-    fn default() -> Self {
-        Self {
-            server: NetworkConfig::default(),
-            tier: ProductTier::default(),
-            limits: RequestLimits::default(),
-            profiles: ProfileStoreConfig::default(),
-            audit: AuditConfig::default(),
-            air_gap: AirGapConfig::default(),
-            tls: None,
-        }
-    }
 }
 
 impl ServerConfig {

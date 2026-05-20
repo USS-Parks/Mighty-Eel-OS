@@ -316,6 +316,7 @@ impl AuditStore for AuditWriter {
 ///
 /// This is the canonical way to create entries for the audit trail.
 /// It computes the entry hash and chains to the provided previous hash.
+#[allow(clippy::too_many_arguments)]
 pub fn build_audit_entry(
     entry_id: String,
     timestamp: u64,

@@ -134,7 +134,7 @@ impl VectorStore for VectorManager {
         let result: Vec<CollectionConfig> = collections
             .values()
             .filter(|c| {
-                profile_filter.map_or(true, |pid| c.config.profile_id == pid)
+                profile_filter.is_none_or(|pid| c.config.profile_id == pid)
             })
             .map(|c| c.config.clone())
             .collect();
@@ -210,7 +210,7 @@ impl VectorStore for VectorManager {
                     payload: point.payload.clone(),
                 }
             })
-            .filter(|r| score_threshold.map_or(true, |t| r.score >= t))
+            .filter(|r| score_threshold.is_none_or(|t| r.score >= t))
             .collect();
 
         // Sort by score descending

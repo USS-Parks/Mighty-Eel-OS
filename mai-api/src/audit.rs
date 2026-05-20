@@ -355,6 +355,7 @@ impl AuditManager {
     }
 
     /// Record an audit entry, extending the hash chain.
+    #[allow(clippy::too_many_arguments)]
     pub async fn record(
         &self,
         profile_id: &str,

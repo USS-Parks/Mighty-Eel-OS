@@ -25,6 +25,7 @@ impl MaiPowerService {
 }
 
 /// Map a client action string to a TransitionTrigger.
+#[allow(clippy::result_large_err)]
 fn parse_transition_action(action: &str) -> Result<TransitionTrigger, Status> {
     match action.to_lowercase().as_str() {
         "boot" | "system_boot" => Ok(TransitionTrigger::SystemBoot),
