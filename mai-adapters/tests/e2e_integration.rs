@@ -22,7 +22,6 @@
 //!   13. test_health_monitoring
 //!   14. test_air_gap_verification
 
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -37,8 +36,8 @@ use mai_core::hotswap::{HotSwapManager, SwapRequest, SwapResult};
 use mai_core::power::{PowerConfig, PowerState, PowerStateMachine, TransitionTrigger, WakeSource};
 use mai_core::registry::ModelRegistry;
 use mai_core::scheduler::{
-    BackpressureAction, ChatMessage, ComplexityScore, InferenceRequest, PromotionResult,
-    RequestPayload, RequestPriority, RequestType, Scheduler, SchedulerConfig, SchedulingStrategy,
+    BackpressureAction, ChatMessage, InferenceRequest, RequestPayload, RequestPriority,
+    RequestType, Scheduler, SchedulerConfig,
 };
 use mai_core::vault::VaultInterface;
 
@@ -497,7 +496,7 @@ async fn test_sentinel_promotion() {
 
     // Simple request: Sentinel can handle it
     let simple = make_request(Some("phi4-mini"), RequestPriority::Normal);
-    let promotion = scheduler.check_promotion(&simple);
+    let _promotion = scheduler.check_promotion(&simple);
     // Scheduler doesn't know actual power state, but it can evaluate complexity
     // Simple 100-token request should NOT trigger promotion
     let complexity = scheduler.evaluate_complexity(&simple);
@@ -577,7 +576,11 @@ async fn test_model_hotswap() {
 
     // Execute model swap
     let mut mgr = HotSwapManager::new(scheduler.clone(), registry.clone(), health.clone());
-    let swap_req = SwapRequest::model_swap("model-old", "model-new", "Upgrade to newer weights");
+    let swap_req = SwapRequest::model_swap(
+        "model-old".to_string(),
+        "model-new".to_string(),
+        "Upgrade to newer weights",
+    );
     let start = Instant::now();
     let result = mgr.execute_swap(swap_req).await.unwrap();
     let swap_duration = start.elapsed();
@@ -639,7 +642,7 @@ async fn test_adapter_crash_recovery() {
     health.check_heartbeats();
     // After one check cycle, missed_heartbeats increments but not yet unhealthy
     // (threshold is 3 missed beats by default)
-    let a_health = health.get_adapter_health(&"adapter-a".to_string()).unwrap();
+    let _a_health = health.get_adapter_health(&"adapter-a".to_string()).unwrap();
     // First check after heartbeat: still has recent heartbeat, so still healthy
 
     // Simulate: mark adapter-a as crashed in scheduler

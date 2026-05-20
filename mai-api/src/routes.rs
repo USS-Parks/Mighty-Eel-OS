@@ -104,8 +104,6 @@ pub fn build_router(state: AppState) -> Router {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     /// Compile-time check: build_router must accept AppState and return Router.
     /// Runtime route testing is deferred to Session 11e integration tests.
     #[test]

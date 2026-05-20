@@ -429,7 +429,7 @@ fn estimate_chat_tokens(req: &ChatCompletionRequest) -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{ApiChatMessage, ChunkChoice, ChunkDelta};
+    use crate::types::ApiChatMessage;
 
     #[test]
     fn test_format_sse_event() {
