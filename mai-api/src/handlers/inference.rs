@@ -231,12 +231,10 @@ pub async fn embeddings(
     // Route to real adapter for embedding
     let embeddings = {
         let mgr = state.adapter_manager.lock().await;
-        mgr.embed(&adapter_name, texts.clone())
-            .await
-            .map_err(|e| {
-                error!(error = %e, adapter = %adapter_name, "Adapter embed failed");
-                ApiError::InternalError
-            })?
+        mgr.embed(&adapter_name, texts.clone()).await.map_err(|e| {
+            error!(error = %e, adapter = %adapter_name, "Adapter embed failed");
+            ApiError::InternalError
+        })?
     };
 
     let data: Vec<EmbeddingData> = embeddings
@@ -552,9 +550,7 @@ fn build_generation_params(req: &ChatCompletionRequest) -> GenerationParams {
 }
 
 /// Build GenerationParams with a JSON schema constraint for structured output.
-fn build_structured_gen_params(
-    req: &StructuredGenerationRequest,
-) -> GenerationParams {
+fn build_structured_gen_params(req: &StructuredGenerationRequest) -> GenerationParams {
     GenerationParams {
         temperature: req.temperature.unwrap_or(0.0),
         top_p: 1.0,

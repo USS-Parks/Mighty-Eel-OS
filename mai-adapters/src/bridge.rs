@@ -140,16 +140,11 @@ pub enum IpcEventKind {
         completion_tokens: u64,
     },
     /// Complete result for non-streaming methods (health, capabilities, heartbeat).
-    Result {
-        data: serde_json::Value,
-    },
+    Result { data: serde_json::Value },
     /// Request completed successfully.
     Done,
     /// Request failed.
-    Error {
-        code: String,
-        message: String,
-    },
+    Error { code: String, message: String },
 }
 
 impl IpcEvent {
@@ -158,43 +153,65 @@ impl IpcEvent {
     pub fn parse(&self) -> Result<IpcEventKind, String> {
         match self.event_type.as_str() {
             "token" => {
-                let text = self.data.get("text")
+                let text = self
+                    .data
+                    .get("text")
                     .and_then(|v| v.as_str())
                     .unwrap_or("")
                     .to_string();
-                let logprob = self.data.get("logprob")
+                let logprob = self
+                    .data
+                    .get("logprob")
                     .and_then(|v| v.as_f64())
                     .map(|f| f as f32);
-                let index = self.data.get("index")
-                    .and_then(|v| v.as_u64())
-                    .unwrap_or(0) as usize;
-                let finish_reason = self.data.get("finish_reason")
+                let index = self.data.get("index").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+                let finish_reason = self
+                    .data
+                    .get("finish_reason")
                     .and_then(|v| v.as_str())
                     .map(|s| s.to_string());
-                Ok(IpcEventKind::Token { text, logprob, index, finish_reason })
+                Ok(IpcEventKind::Token {
+                    text,
+                    logprob,
+                    index,
+                    finish_reason,
+                })
             }
             "usage" => {
-                let prompt_tokens = self.data.get("prompt_tokens")
+                let prompt_tokens = self
+                    .data
+                    .get("prompt_tokens")
                     .and_then(|v| v.as_u64())
                     .ok_or("usage event missing prompt_tokens")?;
-                let completion_tokens = self.data.get("completion_tokens")
+                let completion_tokens = self
+                    .data
+                    .get("completion_tokens")
                     .and_then(|v| v.as_u64())
                     .ok_or("usage event missing completion_tokens")?;
-                Ok(IpcEventKind::Usage { prompt_tokens, completion_tokens })
+                Ok(IpcEventKind::Usage {
+                    prompt_tokens,
+                    completion_tokens,
+                })
             }
             "result" => {
-                let data = self.data.get("data")
+                let data = self
+                    .data
+                    .get("data")
                     .cloned()
                     .unwrap_or(serde_json::Value::Object(self.data.clone()));
                 Ok(IpcEventKind::Result { data })
             }
             "done" => Ok(IpcEventKind::Done),
             "error" => {
-                let code = self.data.get("code")
+                let code = self
+                    .data
+                    .get("code")
                     .and_then(|v| v.as_str())
                     .unwrap_or("InternalError")
                     .to_string();
-                let message = self.data.get("message")
+                let message = self
+                    .data
+                    .get("message")
                     .and_then(|v| v.as_str())
                     .unwrap_or("unknown error")
                     .to_string();
@@ -211,14 +228,22 @@ pub fn ipc_error_to_adapter_error(code: &str, message: &str) -> mai_hil::traits:
     match code {
         "Timeout" => AdapterError::Timeout { timeout_ms: 0 },
         "OutOfMemory" => AdapterError::OutOfMemory,
-        "ModelNotFound" => AdapterError::ModelNotFound { model: message.to_string() },
+        "ModelNotFound" => AdapterError::ModelNotFound {
+            model: message.to_string(),
+        },
         "BackendCrashed" => AdapterError::BackendCrashed,
         "BackendUnavailable" => AdapterError::BackendUnavailable,
         "ContextExceeded" => AdapterError::ContextExceeded { max_context: 0 },
         "RateLimited" => AdapterError::RateLimited,
-        "HardwareFault" => AdapterError::HardwareFault { detail: message.to_string() },
-        "ValidationError" => AdapterError::ValidationError { reason: message.to_string() },
-        "UnsupportedOperation" => AdapterError::UnsupportedOperation { operation: message.to_string() },
+        "HardwareFault" => AdapterError::HardwareFault {
+            detail: message.to_string(),
+        },
+        "ValidationError" => AdapterError::ValidationError {
+            reason: message.to_string(),
+        },
+        "UnsupportedOperation" => AdapterError::UnsupportedOperation {
+            operation: message.to_string(),
+        },
         _ => AdapterError::BackendCrashed, // InternalError and unknown codes
     }
 }

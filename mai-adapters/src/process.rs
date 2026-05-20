@@ -17,8 +17,7 @@ use tokio::sync::{Mutex, mpsc, oneshot};
 use tracing::{debug, error, info, warn};
 
 use crate::bridge::{
-    HandshakeResponse, IpcEvent, IpcRequest, IpcStartupConfig,
-    RpcError, RpcRequest, RpcResponse,
+    HandshakeResponse, IpcEvent, IpcRequest, IpcStartupConfig, RpcError, RpcRequest, RpcResponse,
 };
 use crate::config::{DiscoveredAdapter, FrameworkConfig};
 use crate::errors::FrameworkError;
@@ -297,12 +296,11 @@ impl AdapterProcess {
             entry_class: self.info.entry_module.clone(),
             config: None, // Adapter-specific config added by manager
         };
-        let config_json = serde_json::to_string(&startup_config).map_err(|e| {
-            FrameworkError::ProtocolError {
+        let config_json =
+            serde_json::to_string(&startup_config).map_err(|e| FrameworkError::ProtocolError {
                 name: name.clone(),
                 detail: format!("Failed to serialize startup config: {e}"),
-            }
-        })?;
+            })?;
         stdin_tx
             .send(config_json)
             .await
@@ -435,18 +433,22 @@ impl AdapterProcess {
 
         // Reconstruct full JSON from the IpcEvent to deserialize as HandshakeResponse
         let mut full_obj = serde_json::Map::new();
-        full_obj.insert("type".to_string(), Value::String(handshake_event.event_type.clone()));
-        full_obj.insert("request_id".to_string(), Value::String(handshake_event.request_id.clone()));
+        full_obj.insert(
+            "type".to_string(),
+            Value::String(handshake_event.event_type.clone()),
+        );
+        full_obj.insert(
+            "request_id".to_string(),
+            Value::String(handshake_event.request_id.clone()),
+        );
         for (k, v) in &handshake_event.data {
             full_obj.insert(k.clone(), v.clone());
         }
 
-        let handshake: HandshakeResponse =
-            serde_json::from_value(Value::Object(full_obj)).map_err(|e| {
-                FrameworkError::ProtocolError {
-                    name: name.clone(),
-                    detail: format!("Invalid handshake response: {e}"),
-                }
+        let handshake: HandshakeResponse = serde_json::from_value(Value::Object(full_obj))
+            .map_err(|e| FrameworkError::ProtocolError {
+                name: name.clone(),
+                detail: format!("Invalid handshake response: {e}"),
             })?;
 
         info!(
@@ -486,12 +488,11 @@ impl AdapterProcess {
             payload,
         };
 
-        let request_json = serde_json::to_string(&request).map_err(|e| {
-            FrameworkError::ProtocolError {
+        let request_json =
+            serde_json::to_string(&request).map_err(|e| FrameworkError::ProtocolError {
                 name: name.clone(),
                 detail: format!("Failed to serialize IPC request: {e}"),
-            }
-        })?;
+            })?;
 
         let stdin_tx = self
             .stdin_tx
@@ -506,10 +507,7 @@ impl AdapterProcess {
             .await
             .map_err(|_| FrameworkError::Io {
                 name: name.clone(),
-                source: std::io::Error::new(
-                    std::io::ErrorKind::BrokenPipe,
-                    "stdin channel closed",
-                ),
+                source: std::io::Error::new(std::io::ErrorKind::BrokenPipe, "stdin channel closed"),
             })?;
 
         debug!(adapter = %name, request_id = %request_id, method = %request_type, "IPC request sent");

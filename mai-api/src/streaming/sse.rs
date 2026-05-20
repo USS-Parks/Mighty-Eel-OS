@@ -158,7 +158,11 @@ pub async fn handle_sse_chat(
                         continue; // Not our request
                     }
                     match event.parse() {
-                        Ok(IpcEventKind::Token { text, finish_reason, .. }) => {
+                        Ok(IpcEventKind::Token {
+                            text,
+                            finish_reason,
+                            ..
+                        }) => {
                             seq += 1;
                             let is_final = finish_reason.is_some();
                             let _ = tx_producer
@@ -177,7 +181,9 @@ pub async fn handle_sse_chat(
                                         sequence: seq,
                                         token: None,
                                         is_final: true,
-                                        finish_reason: Some(finish_reason.unwrap_or_else(|| "stop".to_string())),
+                                        finish_reason: Some(
+                                            finish_reason.unwrap_or_else(|| "stop".to_string()),
+                                        ),
                                         produced_at: Instant::now(),
                                     })
                                     .await;

@@ -179,12 +179,11 @@ impl AdapterManager {
             params: IpcInferenceParams::from(&params),
             stream: true,
         };
-        let payload_json = serde_json::to_value(&payload).map_err(|e| {
-            FrameworkError::ProtocolError {
+        let payload_json =
+            serde_json::to_value(&payload).map_err(|e| FrameworkError::ProtocolError {
                 name: adapter_name.to_string(),
                 detail: format!("Failed to serialize inference payload: {e}"),
-            }
-        })?;
+            })?;
 
         let process = process_mutex.lock().await;
         let request_id = process.send_ipc("inference", payload_json).await?;
@@ -213,12 +212,12 @@ impl AdapterManager {
                 })?;
 
         let mut process = process_mutex.lock().await;
-        let ipc_rx = process.take_ipc_event_rx().ok_or_else(|| {
-            FrameworkError::NotReady {
+        let ipc_rx = process
+            .take_ipc_event_rx()
+            .ok_or_else(|| FrameworkError::NotReady {
                 name: adapter_name.to_string(),
                 state: "no ipc event channel".to_string(),
-            }
-        })?;
+            })?;
 
         Ok((request_id, ipc_rx))
     }
@@ -245,12 +244,12 @@ impl AdapterManager {
                 })?;
 
         let mut process = process_mutex.lock().await;
-        let ipc_rx = process.take_ipc_event_rx().ok_or_else(|| {
-            FrameworkError::NotReady {
+        let ipc_rx = process
+            .take_ipc_event_rx()
+            .ok_or_else(|| FrameworkError::NotReady {
                 name: adapter_name.to_string(),
                 state: "no ipc event channel".to_string(),
-            }
-        })?;
+            })?;
 
         let mut tokens = Vec::new();
         let timeout = std::time::Duration::from_millis(self.config.request_timeout_ms);
@@ -267,7 +266,12 @@ impl AdapterManager {
                         continue; // Not our request
                     }
                     match event.parse() {
-                        Ok(IpcEventKind::Token { text, logprob, index, finish_reason }) => {
+                        Ok(IpcEventKind::Token {
+                            text,
+                            logprob,
+                            index,
+                            finish_reason,
+                        }) => {
                             tokens.push(Token {
                                 text,
                                 logprob,

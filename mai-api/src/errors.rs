@@ -170,9 +170,7 @@ impl ApiError {
             Self::InternalError => "An internal error occurred".to_string(),
             Self::HardwareFault => "A hardware fault was detected".to_string(),
             Self::ServiceUnavailable => "Service is temporarily unavailable".to_string(),
-            Self::AdapterCrashed(_) => {
-                "Adapter process crashed, request failed".to_string()
-            }
+            Self::AdapterCrashed(_) => "Adapter process crashed, request failed".to_string(),
             Self::PermissionDenied(detail) => format!("Permission denied: {detail}"),
             Self::Unauthorized => "Authentication required".to_string(),
             Self::ProfileNotFound(_) => "Profile not found".to_string(),

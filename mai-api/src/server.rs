@@ -244,11 +244,8 @@ impl MaiServer {
 
                         // Register adapter with scheduler so route_request
                         // can find it. Models come from config, not capabilities.
-                        let gpu_ids: Vec<String> = entry
-                            .gpu_ids
-                            .iter()
-                            .map(|id| format!("gpu:{id}"))
-                            .collect();
+                        let gpu_ids: Vec<String> =
+                            entry.gpu_ids.iter().map(|id| format!("gpu:{id}")).collect();
 
                         let mut sched = scheduler.write().await;
                         sched.register_adapter(
@@ -438,7 +435,11 @@ fn load_adapter_boot_config(path: Option<&Path>) -> AdapterBootConfig {
                 gpu_ids: at
                     .get("gpu_ids")
                     .and_then(|v| v.as_array())
-                    .map(|arr| arr.iter().filter_map(|v| v.as_integer().map(|i| i as u32)).collect())
+                    .map(|arr| {
+                        arr.iter()
+                            .filter_map(|v| v.as_integer().map(|i| i as u32))
+                            .collect()
+                    })
                     .unwrap_or_default(),
                 max_concurrent: at
                     .get("max_concurrent")
@@ -558,8 +559,8 @@ mod tests {
 
     #[test]
     fn test_with_adapter_config() {
-        let server = MaiServer::default_scout()
-            .with_adapter_config(PathBuf::from("config/adapters.toml"));
+        let server =
+            MaiServer::default_scout().with_adapter_config(PathBuf::from("config/adapters.toml"));
         assert_eq!(
             server.adapter_config_path.as_deref(),
             Some(Path::new("config/adapters.toml"))
