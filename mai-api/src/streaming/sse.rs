@@ -34,9 +34,12 @@ use crate::auth::check_permission;
 use crate::errors::ApiError;
 use crate::state::AppState;
 use crate::types::{
-    ChatCompletionChunk, ChatCompletionRequest, ChunkChoice, ChunkDelta, ProfileInfo,
+    ApiChatMessage, ChatCompletionChunk, ChatCompletionRequest, ChunkChoice, ChunkDelta,
+    ProfileInfo,
 };
+use mai_adapters::bridge::IpcEventKind;
 use mai_core::scheduler::{InferenceRequest, RequestPayload, RequestPriority, RequestType};
+use mai_hil::traits::GenerationParams;
 
 use super::{BackpressureMonitor, StreamId, TokenEvent, TokenReceiver, token_channel};
 
@@ -108,39 +111,143 @@ pub async fn handle_sse_chat(
     let model_id = selection.model_id.clone();
     let adapter_id = selection.adapter_id.clone();
 
-    // Create token channel for adapter to send tokens through.
-    // In full integration, the adapter bridge spawns a task that feeds
-    // tokens into the sender. Here we spawn a placeholder producer
-    // that demonstrates the protocol. Real adapter integration lands
-    // in Session 11e with the server bootstrap.
+    // Create token channel for adapter to feed streaming tokens into.
     let (_tx, rx) = token_channel();
 
-    // Spawn a placeholder token producer (simulates adapter output).
-    // This will be replaced by real adapter IPC in the server bootstrap.
-    let tx_clone = _tx.clone();
+    // Build prompt and generation params from the request
+    let prompt = build_chat_prompt(&req.messages);
+    let gen_params = build_generation_params(&req);
+
+    // Initiate streaming inference via AdapterManager and spawn a
+    // producer task that reads IPC events and feeds TokenEvents.
+    let tx_producer = _tx.clone();
+    let adapter_name_stream = adapter_id.clone();
+    let adapter_mgr = state.adapter_manager.clone();
     let spawn_id = request_id;
     tokio::spawn(async move {
-        // Placeholder: send a role delta, then a [DONE].
-        // Real implementation: adapter bridge feeds tokens here.
-        let _ = tx_clone
-            .send(TokenEvent {
-                sequence: 1,
-                token: None, // Role-only first chunk
-                is_final: false,
-                finish_reason: None,
-                produced_at: Instant::now(),
-            })
-            .await;
-        let _ = tx_clone
-            .send(TokenEvent {
-                sequence: 2,
-                token: None,
-                is_final: true,
-                finish_reason: Some("stop".to_string()),
-                produced_at: Instant::now(),
-            })
-            .await;
-        debug!(request_id = %spawn_id, "Placeholder token producer finished");
+        // Initiate streaming request and get the IPC event channel in one call
+        let (request_id_str, mut ipc_rx) = {
+            let mgr = adapter_mgr.lock().await;
+            match mgr
+                .generate_stream_channel(&adapter_name_stream, prompt, gen_params)
+                .await
+            {
+                Ok(pair) => pair,
+                Err(e) => {
+                    warn!(error = %e, "Failed to start streaming inference");
+                    let _ = tx_producer
+                        .send(TokenEvent {
+                            sequence: 1,
+                            token: None,
+                            is_final: true,
+                            finish_reason: Some("error".to_string()),
+                            produced_at: Instant::now(),
+                        })
+                        .await;
+                    return;
+                }
+            }
+        };
+
+        // Step 3: Read IPC events and feed TokenEvents into the SSE channel
+        let mut seq: u64 = 0;
+        loop {
+            match tokio::time::timeout(TOKEN_TIMEOUT, ipc_rx.recv()).await {
+                Ok(Some(event)) => {
+                    if event.request_id != request_id_str {
+                        continue; // Not our request
+                    }
+                    match event.parse() {
+                        Ok(IpcEventKind::Token { text, finish_reason, .. }) => {
+                            seq += 1;
+                            let is_final = finish_reason.is_some();
+                            let _ = tx_producer
+                                .send(TokenEvent {
+                                    sequence: seq,
+                                    token: Some(text),
+                                    is_final: false,
+                                    finish_reason: None,
+                                    produced_at: Instant::now(),
+                                })
+                                .await;
+                            if is_final {
+                                seq += 1;
+                                let _ = tx_producer
+                                    .send(TokenEvent {
+                                        sequence: seq,
+                                        token: None,
+                                        is_final: true,
+                                        finish_reason: Some(finish_reason.unwrap_or_else(|| "stop".to_string())),
+                                        produced_at: Instant::now(),
+                                    })
+                                    .await;
+                                break;
+                            }
+                        }
+                        Ok(IpcEventKind::Done) => {
+                            seq += 1;
+                            let _ = tx_producer
+                                .send(TokenEvent {
+                                    sequence: seq,
+                                    token: None,
+                                    is_final: true,
+                                    finish_reason: Some("stop".to_string()),
+                                    produced_at: Instant::now(),
+                                })
+                                .await;
+                            break;
+                        }
+                        Ok(IpcEventKind::Error { code, message }) => {
+                            warn!(adapter = %adapter_name_stream, code = %code, msg = %message, "Adapter stream error");
+                            seq += 1;
+                            let _ = tx_producer
+                                .send(TokenEvent {
+                                    sequence: seq,
+                                    token: None,
+                                    is_final: true,
+                                    finish_reason: Some("error".to_string()),
+                                    produced_at: Instant::now(),
+                                })
+                                .await;
+                            break;
+                        }
+                        _ => {} // Usage, Result, parse errors - skip
+                    }
+                }
+                Ok(None) => {
+                    // Channel closed - adapter crashed
+                    warn!(adapter = %adapter_name_stream, "IPC channel closed during streaming");
+                    seq += 1;
+                    let _ = tx_producer
+                        .send(TokenEvent {
+                            sequence: seq,
+                            token: None,
+                            is_final: true,
+                            finish_reason: Some("error".to_string()),
+                            produced_at: Instant::now(),
+                        })
+                        .await;
+                    break;
+                }
+                Err(_) => {
+                    // Timeout
+                    warn!(adapter = %adapter_name_stream, "Token timeout during streaming");
+                    seq += 1;
+                    let _ = tx_producer
+                        .send(TokenEvent {
+                            sequence: seq,
+                            token: None,
+                            is_final: true,
+                            finish_reason: Some("error".to_string()),
+                            produced_at: Instant::now(),
+                        })
+                        .await;
+                    break;
+                }
+            }
+        }
+
+        debug!(request_id = %spawn_id, tokens = seq, "Streaming token producer finished");
     });
 
     // Build the SSE byte stream
@@ -422,6 +529,29 @@ fn estimate_chat_tokens(req: &ChatCompletionRequest) -> u32 {
         .map(|m| m.content.len() + m.role.len())
         .sum();
     (char_count / 4).max(1) as u32
+}
+
+// ─── Prompt / Param Builders (mirrored from inference handler) ────
+
+fn build_chat_prompt(messages: &[ApiChatMessage]) -> String {
+    let mut prompt = String::new();
+    for msg in messages {
+        prompt.push_str(&msg.role);
+        prompt.push_str(": ");
+        prompt.push_str(&msg.content);
+        prompt.push('\n');
+    }
+    prompt
+}
+
+fn build_generation_params(req: &ChatCompletionRequest) -> GenerationParams {
+    GenerationParams {
+        temperature: req.temperature.unwrap_or(0.7),
+        top_p: req.top_p.unwrap_or(1.0),
+        max_tokens: req.max_tokens.map(|v| v as usize).unwrap_or(2048),
+        stop_sequences: req.stop.clone().unwrap_or_default(),
+        structured_schema: None,
+    }
 }
 
 // ─── Tests ─────────────────────────────────────────────────────────

@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use serde_json::Value;
-use tokio::sync::{Mutex, RwLock};
+use tokio::sync::{Mutex, RwLock, mpsc};
 use tracing::{debug, error, info, warn};
 
 use mai_hil::traits::{
@@ -18,9 +18,8 @@ use mai_hil::traits::{
 
 use crate::audit::{AuditBuffer, AuditTimer};
 use crate::bridge::{
-    CapabilitiesResult, EmbedParams, EmbedResult, GenerateBatchParams, GenerateBatchResult,
-    GenerateParams, HealthCheckResult, InitializeParams, InitializeResult,
-    IpcEvent, IpcEventKind, IpcInferencePayload, IpcInferenceParams,
+    EmbedParams, EmbedResult, GenerateBatchParams, GenerateBatchResult, HealthCheckResult,
+    IpcEvent, IpcEventKind, IpcInferenceParams, IpcInferencePayload,
 };
 use crate::config::{DiscoveredAdapter, FrameworkConfig};
 use crate::errors::FrameworkError;
@@ -91,7 +90,7 @@ impl AdapterManager {
     pub async fn start_adapter(
         &self,
         name: &str,
-        adapter_config: AdapterConfig,
+        _adapter_config: AdapterConfig,
     ) -> Result<ManagedAdapter, FrameworkError> {
         let processes = self.processes.read().await;
         let process_mutex = processes
@@ -192,6 +191,36 @@ impl AdapterManager {
 
         debug!(adapter = %adapter_name, request_id = %request_id, "Inference request sent");
         Ok(request_id)
+    }
+
+    /// Send a streaming inference request and return both the request_id
+    /// and the IPC event receiver channel. This allows callers (like SSE
+    /// handlers) to consume tokens as they arrive without blocking.
+    pub async fn generate_stream_channel(
+        &self,
+        adapter_name: &str,
+        prompt: String,
+        params: GenerationParams,
+    ) -> Result<(String, mpsc::Receiver<IpcEvent>), FrameworkError> {
+        let request_id = self.generate_stream(adapter_name, prompt, params).await?;
+
+        let processes = self.processes.read().await;
+        let process_mutex =
+            processes
+                .get(adapter_name)
+                .ok_or_else(|| FrameworkError::AdapterNotFound {
+                    name: adapter_name.to_string(),
+                })?;
+
+        let mut process = process_mutex.lock().await;
+        let ipc_rx = process.take_ipc_event_rx().ok_or_else(|| {
+            FrameworkError::NotReady {
+                name: adapter_name.to_string(),
+                state: "no ipc event channel".to_string(),
+            }
+        })?;
+
+        Ok((request_id, ipc_rx))
     }
 
     /// Send a generate request and collect all tokens (blocking convenience).
@@ -472,7 +501,7 @@ impl AdapterManager {
     pub async fn restart_adapter(
         &self,
         adapter_name: &str,
-        adapter_config: AdapterConfig,
+        _adapter_config: AdapterConfig,
     ) -> Result<(), FrameworkError> {
         let processes = self.processes.read().await;
         let process_mutex =

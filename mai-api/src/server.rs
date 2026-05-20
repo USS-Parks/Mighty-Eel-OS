@@ -14,14 +14,15 @@
 //! (scheduler, registry, health monitor, power state machine, hotswap
 //! manager, audit writer) is visible to both protocols.
 
+use std::collections::HashMap;
 use std::net::SocketAddr;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
 use tokio::net::TcpListener;
 use tokio::signal;
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex, RwLock};
 use tracing::{error, info, warn};
 
 use crate::air_gap::{AirGapChecker, DevSwitchReader};
@@ -32,17 +33,43 @@ use crate::grpc::server::{GrpcServerConfig, build_grpc_server};
 use crate::routes::build_router;
 use crate::state::AppState;
 
+use mai_adapters::config::FrameworkConfig;
+use mai_adapters::manager::AdapterManager;
 use mai_core::health::{HealthConfig, HealthMonitor};
 use mai_core::hotswap::HotSwapManager;
 use mai_core::power::{PowerConfig, PowerStateMachine};
 use mai_core::registry::ModelRegistry;
 use mai_core::scheduler::{Scheduler, SchedulerConfig};
 use mai_core::vault::VaultInterface;
+use mai_hil::traits::AdapterConfig;
+
+/// Parsed adapter configuration from adapters.toml.
+#[derive(Debug, Clone, Default)]
+pub struct AdapterBootConfig {
+    /// Framework-level settings (heartbeat, timeouts, paths).
+    pub framework: FrameworkConfig,
+    /// Per-adapter settings keyed by adapter name.
+    pub adapter_configs: HashMap<String, AdapterBootEntry>,
+    /// Model alias map: user-facing name -> (adapter_name, backend_model).
+    pub model_aliases: HashMap<String, (String, String)>,
+}
+
+/// Boot-time configuration for a single adapter.
+#[derive(Debug, Clone)]
+pub struct AdapterBootEntry {
+    pub enabled: bool,
+    pub host: String,
+    pub port: u16,
+    pub gpu_ids: Vec<u32>,
+    pub max_concurrent: usize,
+    pub models: Vec<String>,
+}
 
 /// Top-level MAI server. Owns the startup sequence and shutdown handle.
 pub struct MaiServer {
     config: ServerConfig,
     config_path: Option<std::path::PathBuf>,
+    adapter_config_path: Option<PathBuf>,
 }
 
 /// Errors that can occur during server startup.
@@ -70,6 +97,7 @@ impl MaiServer {
         Self {
             config,
             config_path: Some(path.to_path_buf()),
+            adapter_config_path: None,
         }
     }
 
@@ -78,6 +106,7 @@ impl MaiServer {
         Self {
             config,
             config_path: None,
+            adapter_config_path: None,
         }
     }
 
@@ -87,7 +116,14 @@ impl MaiServer {
         Self {
             config,
             config_path: None,
+            adapter_config_path: None,
         }
+    }
+
+    /// Set the adapter configuration file path.
+    pub fn with_adapter_config(mut self, path: PathBuf) -> Self {
+        self.adapter_config_path = Some(path);
+        self
     }
 
     /// Run the full startup sequence, block until shutdown signal.
@@ -159,6 +195,76 @@ impl MaiServer {
         let config = Arc::new(RwLock::new(self.config.clone()));
         let auth = AuthState::local_trust();
 
+        // -- Step 3b: Load adapter config and start AdapterManager --
+        let adapter_boot = load_adapter_boot_config(self.adapter_config_path.as_deref());
+        let adapter_manager = AdapterManager::new(adapter_boot.framework.clone());
+        let adapter_manager = Arc::new(Mutex::new(adapter_manager));
+
+        // Discover and start configured adapters
+        {
+            let mgr = adapter_manager.lock().await;
+
+            // Discover adapters from the adapters directory
+            match mgr.discover().await {
+                Ok(discovered) => {
+                    info!(count = discovered.len(), "Adapters discovered");
+                }
+                Err(e) => {
+                    warn!(error = %e, "Adapter discovery failed, continuing without adapters");
+                }
+            }
+
+            // Start each enabled adapter and register with scheduler
+            for (name, entry) in &adapter_boot.adapter_configs {
+                if !entry.enabled {
+                    info!(adapter = %name, "Adapter disabled in config, skipping");
+                    continue;
+                }
+
+                let adapter_cfg = AdapterConfig {
+                    backend_name: name.clone(),
+                    host: entry.host.clone(),
+                    port: entry.port,
+                    model_path: String::new(),
+                    max_concurrent_requests: entry.max_concurrent,
+                    timeout_ms: adapter_boot.framework.request_timeout_ms,
+                    gpu_layers: None,
+                    quantization: None,
+                    extra: std::collections::HashMap::new(),
+                };
+
+                match mgr.start_adapter(name, adapter_cfg).await {
+                    Ok(managed) => {
+                        info!(
+                            adapter = %name,
+                            version = %managed.version,
+                            handle = %managed.handle,
+                            "Adapter started, registering with scheduler"
+                        );
+
+                        // Register adapter with scheduler so route_request
+                        // can find it. Models come from config, not capabilities.
+                        let gpu_ids: Vec<String> = entry
+                            .gpu_ids
+                            .iter()
+                            .map(|id| format!("gpu:{id}"))
+                            .collect();
+
+                        let mut sched = scheduler.write().await;
+                        sched.register_adapter(
+                            name.clone(),
+                            entry.models.clone(),
+                            entry.max_concurrent,
+                            gpu_ids,
+                        );
+                    }
+                    Err(e) => {
+                        error!(adapter = %name, error = %e, "Failed to start adapter");
+                    }
+                }
+            }
+        }
+
         // -- Step 4: Build shared AppState--
         let state = AppState::new(
             scheduler,
@@ -169,6 +275,8 @@ impl MaiServer {
             audit_writer,
             config,
             auth,
+            adapter_manager.clone(),
+            adapter_boot.model_aliases,
         );
 
         info!("All components initialized, building servers");
@@ -232,6 +340,15 @@ impl MaiServer {
 
         // -- Step 7: Graceful drain--
         info!("Shutdown signal received, draining in-flight requests (5s max)");
+
+        // Shut down all adapter processes cleanly
+        {
+            let mgr = adapter_manager.lock().await;
+            if let Err(e) = mgr.shutdown_all().await {
+                error!(error = %e, "Error during adapter shutdown");
+            }
+        }
+
         tokio::time::sleep(Duration::from_secs(1)).await;
         info!("MAI server shut down cleanly");
 
@@ -261,6 +378,118 @@ async fn shutdown_signal() {
     tokio::select! {
         _ = ctrl_c => { info!("ctrl-c received"); }
         _ = terminate => { info!("SIGTERM received"); }
+    }
+}
+
+/// Load adapter boot configuration from a TOML file.
+///
+/// If no path is provided, returns defaults (no adapters configured).
+/// If the file cannot be read, logs a warning and returns defaults.
+fn load_adapter_boot_config(path: Option<&Path>) -> AdapterBootConfig {
+    let path = match path {
+        Some(p) => p,
+        None => {
+            // Try the default location relative to the working directory
+            let default_path = Path::new("config/adapters.toml");
+            if default_path.exists() {
+                default_path
+            } else {
+                info!("No adapter config file found, starting without adapters");
+                return AdapterBootConfig::default();
+            }
+        }
+    };
+
+    let content = match std::fs::read_to_string(path) {
+        Ok(c) => c,
+        Err(e) => {
+            warn!(path = %path.display(), error = %e, "Cannot read adapter config, using defaults");
+            return AdapterBootConfig::default();
+        }
+    };
+
+    let table: toml::Table = match toml::from_str(&content) {
+        Ok(t) => t,
+        Err(e) => {
+            warn!(path = %path.display(), error = %e, "Invalid adapter config TOML, using defaults");
+            return AdapterBootConfig::default();
+        }
+    };
+
+    // Parse framework settings
+    let framework = FrameworkConfig::from_toml(path).unwrap_or_default();
+
+    // Parse per-adapter configs from [adapters.*] sections
+    let mut adapter_configs = HashMap::new();
+    if let Some(adapters_section) = table.get("adapters").and_then(|v| v.as_table()) {
+        for (name, adapter_table) in adapters_section {
+            let at = match adapter_table.as_table() {
+                Some(t) => t,
+                None => continue,
+            };
+            let entry = AdapterBootEntry {
+                enabled: at.get("enabled").and_then(|v| v.as_bool()).unwrap_or(false),
+                host: at
+                    .get("host")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("127.0.0.1")
+                    .to_string(),
+                port: at.get("port").and_then(|v| v.as_integer()).unwrap_or(11434) as u16,
+                gpu_ids: at
+                    .get("gpu_ids")
+                    .and_then(|v| v.as_array())
+                    .map(|arr| arr.iter().filter_map(|v| v.as_integer().map(|i| i as u32)).collect())
+                    .unwrap_or_default(),
+                max_concurrent: at
+                    .get("max_concurrent")
+                    .and_then(|v| v.as_integer())
+                    .unwrap_or(4) as usize,
+                models: at
+                    .get("models")
+                    .and_then(|v| v.as_array())
+                    .map(|arr| {
+                        arr.iter()
+                            .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                            .collect()
+                    })
+                    .unwrap_or_default(),
+            };
+            adapter_configs.insert(name.clone(), entry);
+        }
+    }
+
+    // Parse model aliases from [model_aliases] section
+    let mut model_aliases = HashMap::new();
+    if let Some(aliases_section) = table.get("model_aliases").and_then(|v| v.as_table()) {
+        for (alias, value) in aliases_section {
+            if let Some(alias_table) = value.as_table() {
+                let adapter = alias_table
+                    .get("adapter")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                let model = alias_table
+                    .get("model")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                if !adapter.is_empty() && !model.is_empty() {
+                    model_aliases.insert(alias.clone(), (adapter, model));
+                }
+            }
+        }
+    }
+
+    info!(
+        adapters = adapter_configs.len(),
+        aliases = model_aliases.len(),
+        "Loaded adapter boot configuration"
+    );
+
+    AdapterBootConfig {
+        framework,
+        adapter_configs,
+        model_aliases,
     }
 }
 
@@ -314,6 +543,7 @@ mod tests {
         assert_eq!(server.config.server.port, 8420);
         assert_eq!(server.config.server.grpc_port, 8421);
         assert_eq!(server.config.server.bind_address, "127.0.0.1");
+        assert!(server.adapter_config_path.is_none());
     }
 
     #[test]
@@ -324,6 +554,23 @@ mod tests {
         let server = MaiServer::with_config(config);
         assert_eq!(server.config.server.port, 9090);
         assert_eq!(server.config.server.grpc_port, 9091);
+    }
+
+    #[test]
+    fn test_with_adapter_config() {
+        let server = MaiServer::default_scout()
+            .with_adapter_config(PathBuf::from("config/adapters.toml"));
+        assert_eq!(
+            server.adapter_config_path.as_deref(),
+            Some(Path::new("config/adapters.toml"))
+        );
+    }
+
+    #[test]
+    fn test_load_adapter_boot_config_missing_file() {
+        let boot = load_adapter_boot_config(Some(Path::new("/nonexistent/path.toml")));
+        assert!(boot.adapter_configs.is_empty());
+        assert!(boot.model_aliases.is_empty());
     }
 
     #[test]

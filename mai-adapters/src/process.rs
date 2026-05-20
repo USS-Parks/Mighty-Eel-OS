@@ -6,6 +6,7 @@
 //! - Crash detection and restart with exponential backoff
 //! - Graceful shutdown with drain timeout
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -64,6 +65,8 @@ struct PendingRequest {
     response_tx: oneshot::Sender<Result<Value, RpcError>>,
 }
 
+type PendingIpcRequests = Arc<Mutex<HashMap<String, oneshot::Sender<Result<(), FrameworkError>>>>>;
+
 /// Manages a single adapter subprocess.
 pub struct AdapterProcess {
     /// Adapter discovery info.
@@ -85,7 +88,7 @@ pub struct AdapterProcess {
     /// Pending RPC requests awaiting responses (legacy JSON-RPC).
     pending: Arc<Mutex<std::collections::HashMap<u64, PendingRequest>>>,
     /// Pending IPC requests awaiting done/error events (NDJSON protocol).
-    pending_ipc: Arc<Mutex<std::collections::HashMap<String, oneshot::Sender<Result<(), FrameworkError>>>>>,
+    pending_ipc: PendingIpcRequests,
     /// Child process handle.
     child: Option<Child>,
     /// Channel for incoming events from the adapter (raw lines).
