@@ -2,7 +2,7 @@
 
 **Project:** Island Mountain Model Abstraction Interface (MAI)
 **Source:** MAI-BUILD-PROMPT-ROSTER-v2.md (restructured 2026-05-18, expanded 18 to 35 sessions)
-**Status:** Phase A+B+C+D-Prep complete. Sessions 15-17 (Scheduler Core + GPU Topology + KV Cache Manager) complete. Next: Session 18 (Continuous Batching Awareness).
+**Status:** Phase A+B+C+D complete. Sessions 15-18 (Scheduler Core + GPU Topology + KV Cache Manager + Continuous Batching Engine) complete. Next: Session 19 (Multi-Factor Scorer).
 **Archive:** Detailed Phase A+B code inventory and onboarding walkthrough archived to [HANDOFF-ARCHIVE-01.md](HANDOFF-ARCHIVE-01.md) on 2026-05-17.
 
 ---
@@ -54,7 +54,9 @@ The inference engine is a plugin. The data sovereignty layer is the product.
 
 **KV Cache Manager (Session 17, 2026-05-20):** KV cache management subsystem added to mai-scheduler (6 source files in kv/ module, ~2292 lines, 53 unit tests + 5 integration tests). KvCacheManager trait (object-safe, Send+Sync) with HeuristicKvCacheManager concrete implementation. DashMap for lock-free sequence reads, AtomicU64 for used_bytes, Mutex<ThrashGuard> only for sequential eviction decisions. Multi-factor eviction scoring: idle time + size + priority penalty - reuse prediction. System priority sequences immune (score -1000). Anti-thrashing: minimum residency (30s), recently-evicted penalty (-100), rate limiter (10/sec). Three-tier triggers: proactive (75%, prepare candidates), standard (85%, evict with guards), emergency (95%, bypass residency). Scheduler integration: kv_manager field on DefaultScheduler, can_fit() advisory check in schedule(), deallocate on release_sequence(), ClusterMetrics gains kv_active_sequences/kv_used_bytes/kv_total_bytes. Config via config/kv.toml with 5 model memory factor entries. batch_contribution placeholder for Session 18.
 
-**Immediate next step:** Execute **Session 18** (Continuous Batching Awareness). Sessions 15-17 (Scheduler Core + GPU Topology + KV Cache Manager) are complete. The scheduler track (15-21, 32-33) is the critical path. Security track (26-28) and application track (29-31) can now run in parallel.
+**Continuous Batching Engine (Session 18, 2026-05-20):** New batch/ module in mai-scheduler (5 source files, ~1915 lines, 52 tests). BatchBuilder per-instance orchestrator with 4-phase build_step() cycle: remove completed, emergency preemption, admission drain, record metrics. Dual-threshold VRAM admission control (aggressive <80%, selective 80-90%, eviction-required >90%). Emergency preemption at 95% VRAM targeting sequences closest to completion or lowest priority. System priority never preempted. BatchMetrics with rolling-window averages, admission rate, wait time P50/P95/P99. Integrated into DefaultScheduler: DashMap<InstanceId, Mutex<BatchBuilder>> created on register_instance(), cluster_metrics() aggregates batch stats. KV eviction batch_contribution wired: active batch members get -100 eviction score protection (was 0.0 placeholder). All configurations TOML-deserializable with serde defaults.
+
+**Immediate next step:** Execute **Session 19** (Multi-Factor Scorer). Sessions 15-18 (Scheduler Core + GPU Topology + KV Cache Manager + Continuous Batching) are complete. The scorer integrates topology_penalty, KV eviction cost, batch utilization, and queue depth into a single composite scoring function for the PlacementEngine. The scheduler track (15-21, 32-33) is the critical path. Security track (26-28) and application track (29-31) can now run in parallel.
 
 ---
 

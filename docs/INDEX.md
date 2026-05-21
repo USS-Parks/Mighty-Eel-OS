@@ -1,7 +1,7 @@
 # MAI Build Index
 
 **Project:** Island Mountain Model Abstraction Interface (MAI)
-**Last Updated:** 2026-05-20 (Session 17)
+**Last Updated:** 2026-05-20 (Session 18)
 
 ---
 
@@ -73,7 +73,7 @@ Each session produces specific deliverables. This table maps sessions to their p
 | 15 | Scheduler Core Architecture | mai-scheduler crate (7 files, 41+ tests), Scheduler trait, DefaultScheduler, API integration |
 | 16 | GPU Topology Discovery + Weighted Graph | topology module (5 files, 41 unit tests), integration tests (16 tests), fixtures, config/topology.toml |
 | 17 | KV Cache Manager | kv/ module (6 files, 53 unit tests + 5 integration tests), KvCacheManager trait, HeuristicKvCacheManager, config/kv.toml |
-| 18 | Continuous Batching Awareness | (Not yet started) |
+| 18 | Continuous Batching Engine | batch/ module (5 files, 52 tests), BatchBuilder, AdmissionController, PreemptionPolicy, BatchMetrics, eviction batch_contribution wired |
 
 ---
 
@@ -102,7 +102,7 @@ After the project scaffold is created in Session 06, the monorepo will contain:
 
 ---
 
-## Test Suites Index (Updated Session 17)
+## Test Suites Index (Updated Session 18)
 
 | Suite | Location | Purpose | Session |
 |---|---|---|---|
@@ -154,6 +154,12 @@ After the project scaffold is created in Session 06, the monorepo will contain:
 | KV trigger tests | `mai-scheduler/src/kv/triggers.rs` `#[cfg(test)]` | Proactive/eviction/emergency thresholds, on-demand, boundary cases (8 tests) | 17 |
 | KV manager tests | `mai-scheduler/src/kv/mod.rs` `#[cfg(test)]` | Allocate/deallocate, can_fit, eviction candidates, perform_eviction, emergency bypass (16 tests) | 17 |
 | KV integration tests | `mai-scheduler/src/default.rs` `#[cfg(test)]` | KV attachment, cluster metrics with/without KV, release deallocates, can_fit budget (5 tests) | 17 |
+| Batch metrics tests | `mai-scheduler/src/batch/metrics.rs` `#[cfg(test)]` | Empty snapshot, record steps, rolling window, admission/eviction rates, percentiles (9 tests) | 18 |
+| Batch admission tests | `mai-scheduler/src/batch/admission.rs` `#[cfg(test)]` | Dual-threshold regions, boundary cases, priority/length checks, config update (14 tests) | 18 |
+| Batch preemption tests | `mai-scheduler/src/batch/preemption.rs` `#[cfg(test)]` | Emergency threshold, victim selection, system immunity, scoring formula (10 tests) | 18 |
+| Batch builder tests | `mai-scheduler/src/batch/builder.rs` `#[cfg(test)]` | Enqueue/admit, model mismatch, queue full, completion, batch limit, VRAM regions, preemption (14 tests) | 18 |
+| Batch eviction scoring tests | `mai-scheduler/src/kv/eviction.rs` `#[cfg(test)]` | batch_member_protected, batch_aware_scoring_with_set (2 tests) | 18 |
+| Batch integration tests | `mai-scheduler/src/default.rs` `#[cfg(test)]` | Builder created on register, removed on unregister, cluster metrics batch fields (3 tests) | 18 |
 
 ---
 

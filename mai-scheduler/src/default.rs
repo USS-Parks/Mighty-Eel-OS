@@ -17,11 +17,14 @@
 //! (which is a DashMap per-entry lock, not a global lock).
 
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
 
+use dashmap::DashMap;
 use tracing::{debug, info, warn};
 
 use crate::aliases::AliasResolver;
+use crate::batch::{BatchBuilder, BatchConfig};
 use crate::kv::manager::KvCacheManager;
 use crate::placement::PlacementEngine;
 use crate::registry::InstanceRegistry;
@@ -47,6 +50,11 @@ pub struct DefaultScheduler {
     topology: Option<Arc<GpuTopology>>,
     /// KV cache manager for VRAM-aware placement (Session 17).
     kv_manager: Option<Arc<dyn KvCacheManager>>,
+    /// Per-instance batch builders (Session 18). Keyed by instance ID.
+    /// Each builder is behind a Mutex since `build_step()` needs `&mut self`.
+    batch_builders: DashMap<InstanceId, Mutex<BatchBuilder>>,
+    /// Batch configuration template for new instances.
+    batch_config: BatchConfig,
     /// Atomic counters for cluster metrics.
     total_routed: AtomicU64,
     total_rejected: AtomicU64,
@@ -73,6 +81,8 @@ impl DefaultScheduler {
             config,
             topology: None,
             kv_manager: None,
+            batch_builders: DashMap::new(),
+            batch_config: BatchConfig::default(),
             total_routed: AtomicU64::new(0),
             total_rejected: AtomicU64::new(0),
         }
@@ -97,6 +107,8 @@ impl DefaultScheduler {
             config,
             topology: Some(topology),
             kv_manager: None,
+            batch_builders: DashMap::new(),
+            batch_config: BatchConfig::default(),
             total_routed: AtomicU64::new(0),
             total_rejected: AtomicU64::new(0),
         }
@@ -141,6 +153,24 @@ impl DefaultScheduler {
     /// Returns 0.0 if topology is not configured.
     pub fn topology_penalty(&self, gpu_ids: &[GpuId]) -> f64 {
         self.placement.topology_penalty(gpu_ids)
+    }
+
+    /// Set the batch configuration template. New instances registered after
+    /// this call will use the provided config. Existing builders are not
+    /// retroactively updated (use per-builder config update methods).
+    pub fn set_batch_config(&mut self, config: BatchConfig) {
+        self.batch_config = config;
+    }
+
+    /// Access a batch builder for an instance. Returns None if the instance
+    /// has no builder (not registered or batch system not active).
+    ///
+    /// The caller must lock the Mutex to call `build_step()`, `enqueue()`, etc.
+    pub fn batch_builder(
+        &self,
+        instance: &InstanceId,
+    ) -> Option<dashmap::mapref::one::Ref<'_, InstanceId, Mutex<BatchBuilder>>> {
+        self.batch_builders.get(instance)
     }
 }
 
@@ -259,10 +289,19 @@ impl Scheduler for DefaultScheduler {
     }
 
     fn register_instance(&self, config: InstanceConfig) -> Result<(), SchedulerError> {
+        // Create a batch builder for this instance (Session 18)
+        let batch_builder = BatchBuilder::new(
+            config.model_name.clone(),
+            self.batch_config.clone(),
+        );
+        self.batch_builders
+            .insert(config.id.clone(), Mutex::new(batch_builder));
+
         self.registry.register(config)
     }
 
     fn remove_instance(&self, instance: &InstanceId) {
+        self.batch_builders.remove(instance);
         self.registry.remove(instance);
     }
 
@@ -278,6 +317,40 @@ impl Scheduler for DefaultScheduler {
         let (topo_gpus, topo_cliques) = match &self.topology {
             Some(topo) => (topo.gpu_count() as u32, topo.nvlink_cliques().len() as u32),
             None => (0, 0),
+        };
+
+        // Aggregate batch metrics from all builders (Session 18)
+        let mut batch_size_sum = 0.0_f64;
+        let mut batch_util_sum = 0.0_f64;
+        let mut batch_waiting_total = 0_u32;
+        let mut batch_admission_rate_sum = 0.0_f64;
+        let mut batch_builder_count = 0_u32;
+
+        for entry in self.batch_builders.iter() {
+            if let Ok(builder) = entry.value().lock() {
+                let snap = builder.metrics().snapshot();
+                batch_size_sum += snap.avg_batch_size;
+                batch_util_sum += snap.batch_utilization;
+                batch_admission_rate_sum += snap.admission_rate;
+                batch_waiting_total += builder.waiting_queue_depth();
+                batch_builder_count += 1;
+            }
+        }
+
+        let avg_batch_size = if batch_builder_count > 0 {
+            batch_size_sum / batch_builder_count as f64
+        } else {
+            0.0
+        };
+        let avg_batch_utilization = if batch_builder_count > 0 {
+            batch_util_sum / batch_builder_count as f64
+        } else {
+            0.0
+        };
+        let batch_admission_rate = if batch_builder_count > 0 {
+            batch_admission_rate_sum / batch_builder_count as f64
+        } else {
+            1.0
         };
 
         ClusterMetrics {
@@ -306,6 +379,10 @@ impl Scheduler for DefaultScheduler {
                 .as_ref()
                 .map(|kv| kv.total_bytes())
                 .unwrap_or(0),
+            avg_batch_size,
+            avg_batch_utilization,
+            total_batch_waiting: batch_waiting_total,
+            batch_admission_rate,
         }
     }
 }
@@ -855,5 +932,49 @@ mod tests {
         assert!(kv.can_fit(7, 131_072.0));
         // 100 tokens = ~13 MB, should not fit
         assert!(!kv.can_fit(100, 131_072.0));
+    }
+
+    // --- Session 18: Batch builder integration tests ---
+
+    #[test]
+    fn test_batch_builder_created_on_register() {
+        let sched = DefaultScheduler::new(test_config());
+        sched
+            .register_instance(make_instance("ollama:0", "llama3-8b", "ollama"))
+            .unwrap();
+
+        let builder_ref = sched.batch_builder(&InstanceId::new("ollama:0"));
+        assert!(builder_ref.is_some());
+        let binding = builder_ref.unwrap();
+        let builder = binding.value().lock().unwrap();
+        assert_eq!(builder.model(), "llama3-8b");
+        assert_eq!(builder.max_batch_size(), 16); // default
+    }
+
+    #[test]
+    fn test_batch_builder_removed_on_unregister() {
+        let sched = DefaultScheduler::new(test_config());
+        sched
+            .register_instance(make_instance("ollama:0", "llama3-8b", "ollama"))
+            .unwrap();
+
+        assert!(sched.batch_builder(&InstanceId::new("ollama:0")).is_some());
+        sched.remove_instance(&InstanceId::new("ollama:0"));
+        assert!(sched.batch_builder(&InstanceId::new("ollama:0")).is_none());
+    }
+
+    #[test]
+    fn test_cluster_metrics_batch_fields() {
+        let sched = DefaultScheduler::new(test_config());
+        sched
+            .register_instance(make_instance("ollama:0", "llama3-8b", "ollama"))
+            .unwrap();
+
+        let metrics = sched.cluster_metrics();
+        // No batch activity yet, defaults
+        assert_eq!(metrics.total_batch_waiting, 0);
+        assert_eq!(metrics.avg_batch_size, 0.0);
+        // Admission rate defaults to 1.0 when no attempts
+        assert!((metrics.batch_admission_rate - 1.0).abs() < f64::EPSILON);
     }
 }

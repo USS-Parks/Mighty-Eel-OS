@@ -241,6 +241,17 @@ pub struct InstanceMetrics {
     pub last_request_epoch_ms: u64,
     /// Last sequence ID served (for continuation affinity).
     pub last_sequence_id: Option<SequenceId>,
+    // --- Batch metrics (Session 18) ---
+    /// Current batch size (sequences in active forward pass).
+    pub batch_size: u32,
+    /// Number of sequences waiting in the prefill queue.
+    pub prefill_queue_depth: u32,
+    /// Number of decode slots currently occupied.
+    pub decode_slots_used: u32,
+    /// Batch utilization ratio: actual_batch_size / max_batch_size (0.0..1.0).
+    pub batch_utilization: f64,
+    /// Number of sequences waiting for batch admission.
+    pub batch_waiting_count: u32,
 }
 
 /// Combined config + live metrics for an instance. This is what the
@@ -284,6 +295,15 @@ pub struct ClusterMetrics {
     pub kv_used_bytes: u64,
     /// KV cache: total budget bytes.
     pub kv_total_bytes: u64,
+    // --- Batch metrics (Session 18) ---
+    /// Average batch size across all instances (rolling window).
+    pub avg_batch_size: f64,
+    /// Average batch utilization across all instances.
+    pub avg_batch_utilization: f64,
+    /// Total sequences waiting for batch admission.
+    pub total_batch_waiting: u32,
+    /// Admission rate: requests admitted / requests queued (0.0..1.0).
+    pub batch_admission_rate: f64,
 }
 
 // ---------------------------------------------------------------------------

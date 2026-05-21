@@ -19,7 +19,7 @@
 //!
 //! - Session 16: topology discovery, weighted graph, placement penalty (done).
 //! - Session 17: KV cache manager integrated for cache-aware placement.
-//! - Session 18: continuous batching awareness in instance metrics.
+//! - Session 18: continuous batching engine with admission control (done).
 //! - Session 19: multi-factor scorer replaces least-loaded default.
 //! - Session 20: admission control with request queuing.
 //! - Session 21: autoscaler for dynamic instance count.
@@ -27,6 +27,7 @@
 #![forbid(unsafe_code)]
 
 pub mod aliases;
+pub mod batch;
 pub mod default;
 pub mod kv;
 pub mod placement;
@@ -36,6 +37,7 @@ pub mod topology;
 pub mod types;
 
 // Re-exports for convenience
+pub use batch::{BatchBuilder, BatchConfig, BatchDecision};
 pub use default::DefaultScheduler;
 pub use kv::manager::KvCacheManager;
 pub use kv::{HeuristicKvCacheManager, KvCacheConfig};

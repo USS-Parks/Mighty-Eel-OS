@@ -234,6 +234,7 @@ mod tests {
                     vram_used,
                     last_request_epoch_ms: 0,
                     last_sequence_id: None,
+                    ..Default::default()
                 },
             },
         )

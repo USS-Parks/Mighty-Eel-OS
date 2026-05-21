@@ -563,9 +563,11 @@ mod tests {
         mgr.allocate(system).unwrap();
         mgr.allocate(bg).unwrap();
 
-        let candidates = mgr.eviction_candidates(factor.estimate_bytes(512));
+        // Request enough bytes to return both candidates
+        let candidates = mgr.eviction_candidates(factor.estimate_bytes(512) * 2);
 
-        // Background should come first (highest score)
+        assert_eq!(candidates.len(), 2, "should return both candidates");
+        // Background should come first (highest score = most evictable)
         assert_eq!(candidates[0].0, bg_id);
         // System should be last
         assert_eq!(candidates[1].0, system_id);

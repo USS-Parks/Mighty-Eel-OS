@@ -498,7 +498,7 @@ mod tests {
         let costs = floyd_warshall(&graph, &gpu_ids);
 
         // Direct NV4 link (0->1) should be cheaper than indirect paths
-        let direct_01 = costs.get(&(0, 1)).unwrap();
+        let _direct_01 = costs.get(&(0, 1)).unwrap();
         // Direct SYS link (0->3) vs path through 0->1->3(PHB) or 0->2(PHB)->3(NV4)
         let cost_03 = costs.get(&(0, 3)).unwrap();
 

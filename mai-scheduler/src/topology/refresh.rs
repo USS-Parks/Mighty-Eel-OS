@@ -179,7 +179,6 @@ impl MetricsRefresher {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::topology::graph::GpuGraph;
     use crate::topology::{GpuTopology, TopologyConfig};
 
     fn make_topology() -> Arc<GpuTopology> {

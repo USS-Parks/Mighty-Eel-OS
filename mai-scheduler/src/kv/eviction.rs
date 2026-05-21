@@ -8,15 +8,19 @@
 //! - **Size**: how much VRAM the sequence consumes
 //! - **Priority penalty**: priority-based bias (system priority = never evict)
 //! - **Reuse prediction**: estimated likelihood of future reuse
-//! - **Batch contribution**: placeholder for Session 18's continuous batching
+//! - **Batch contribution**: protection bonus for sequences in the active
+//!   batch (Session 18). Prevents normal eviction from disrupting in-flight
+//!   generation. Emergency removal uses the PreemptionPolicy instead.
 //!
 //! All weights are runtime-configurable via `EvictionConfig`, loaded from
 //! config/kv.toml. This allows tuning via the simulation framework (Session 21).
 
+use std::collections::HashSet;
+
 use serde::{Deserialize, Serialize};
 
 use crate::kv::sequence::SequenceMeta;
-use crate::types::Priority;
+use crate::types::{Priority, SequenceId};
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -54,6 +58,12 @@ pub struct EvictionConfig {
     /// Sequences at or above this size score 1.0 for the size component.
     #[serde(default = "default_max_seq_bytes")]
     pub max_sequence_bytes: u64,
+
+    /// Weight for batch contribution (Session 18). Active batch members get
+    /// a protection bonus that reduces their eviction score. Higher = more
+    /// protection for sequences currently generating tokens.
+    #[serde(default = "default_batch_weight")]
+    pub batch_weight: f64,
 }
 
 fn default_idle_weight() -> f64 {
@@ -77,6 +87,9 @@ fn default_max_idle_secs() -> f64 {
 fn default_max_seq_bytes() -> u64 {
     2_000_000_000 // 2 GB
 }
+fn default_batch_weight() -> f64 {
+    100.0 // Strong protection for active batch members
+}
 
 impl Default for EvictionConfig {
     fn default() -> Self {
@@ -88,6 +101,7 @@ impl Default for EvictionConfig {
             reuse_beta: default_reuse_beta(),
             max_idle_secs: default_max_idle_secs(),
             max_sequence_bytes: default_max_seq_bytes(),
+            batch_weight: default_batch_weight(),
         }
     }
 }
@@ -128,15 +142,52 @@ impl EvictionScorer {
     ///         + (size_weight * size_normalized)
     ///         + priority_penalty
     ///         - (reuse_weight * reuse_score)
-    ///         - batch_contribution  // placeholder, always 0.0 until Session 18
+    ///
+    /// This variant does not account for batch membership. Use
+    /// `score_with_batch()` when batch state is available.
     pub fn score(&self, meta: &SequenceMeta) -> f64 {
+        self.score_inner(meta, false)
+    }
+
+    /// Compute the eviction score with batch membership awareness.
+    ///
+    /// If `is_in_batch` is true, the sequence receives a protection bonus
+    /// equal to `batch_weight`, making it much less likely to be evicted.
+    /// Active batch members should almost never be evicted; use the
+    /// preemption policy for emergency removal instead.
+    pub fn score_with_batch(&self, meta: &SequenceMeta, is_in_batch: bool) -> f64 {
+        self.score_inner(meta, is_in_batch)
+    }
+
+    /// Score sequences with a set of active batch member IDs.
+    ///
+    /// Convenience method for bulk scoring: sequences whose IDs appear in
+    /// `active_batch_ids` receive the batch protection bonus.
+    pub fn score_batch_aware(
+        &self,
+        meta: &SequenceMeta,
+        active_batch_ids: &HashSet<SequenceId>,
+    ) -> f64 {
+        let in_batch = active_batch_ids.contains(&meta.seq_id);
+        self.score_inner(meta, in_batch)
+    }
+
+    /// Inner scoring implementation.
+    fn score_inner(&self, meta: &SequenceMeta, is_in_batch: bool) -> f64 {
         let idle = self.idle_component(meta);
         let size = self.size_component(meta);
         let priority = self.priority_penalty(meta.priority);
         let reuse = self.reuse_score(meta);
 
-        // Batch contribution placeholder (wired in Session 18)
-        let batch_contribution = 0.0_f64;
+        // Batch contribution: active batch members get a protection bonus
+        // that makes them very unlikely to be evicted through normal eviction.
+        // Emergency preemption (Session 18 PreemptionPolicy) handles the case
+        // where active members MUST be removed.
+        let batch_contribution = if is_in_batch {
+            self.config.batch_weight
+        } else {
+            0.0
+        };
 
         (self.config.idle_weight * idle) + (self.config.size_weight * size) + priority
             - (self.config.reuse_weight * reuse)
@@ -176,13 +227,13 @@ impl EvictionScorer {
     ///             + beta * (1.0 / idle_time_seconds.max(1.0))
     ///
     /// High request frequency + recent activity = high reuse likelihood.
+    ///
+    /// `age_minutes` is floored at 1.0 to prevent near-zero ages from
+    /// producing unbounded frequency values that overwhelm idle, size,
+    /// and priority components.
     fn reuse_score(&self, meta: &SequenceMeta) -> f64 {
-        let age_minutes = meta.age().as_secs_f64() / 60.0;
-        let frequency = if age_minutes > 0.0 {
-            meta.request_count as f64 / age_minutes
-        } else {
-            meta.request_count as f64
-        };
+        let age_minutes = (meta.age().as_secs_f64() / 60.0).max(1.0);
+        let frequency = meta.request_count as f64 / age_minutes;
 
         let idle_secs = meta.idle_time().as_secs_f64().max(1.0);
         let recency = 1.0 / idle_secs;
@@ -227,23 +278,22 @@ mod tests {
     fn test_idle_sequence_scores_higher() {
         let scorer = EvictionScorer::new(EvictionConfig::default());
 
-        let fresh = make_meta(512, Priority::Normal);
-        thread::sleep(Duration::from_millis(20));
-        let score_fresh = scorer.score(&fresh);
+        // Create both at the same time so age is equal
+        let idle = make_meta(512, Priority::Normal);
+        let mut fresh = make_meta(512, Priority::Normal);
 
-        // Create another and let it idle
-        let mut idle = make_meta(512, Priority::Normal);
+        // Let both age, then touch fresh to give it higher request count
         thread::sleep(Duration::from_millis(50));
-        // Touch the fresh one to keep it active
-        let fresh_score_2 = scorer.score(&fresh);
-        let idle_score = scorer.score(&idle);
+        fresh.record_request();
 
-        // Idle sequence has been idle longer, should score higher
-        // (more evictable) if all else is equal
-        // Both are Normal priority, same size. The idle one has more idle time.
+        let idle_score = scorer.score(&idle);
+        let fresh_score = scorer.score(&fresh);
+
+        // Idle sequence has fewer requests (lower reuse prediction),
+        // so it should score higher (more evictable).
         assert!(
-            idle_score >= fresh_score_2,
-            "idle ({idle_score}) should score >= fresh ({fresh_score_2})"
+            idle_score >= fresh_score,
+            "idle ({idle_score}) should score >= fresh ({fresh_score})"
         );
     }
 
@@ -357,6 +407,41 @@ mod tests {
         new_config.idle_weight = 2.0;
         scorer.update_config(new_config);
         assert!((scorer.config().idle_weight - 2.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_batch_member_protected() {
+        let scorer = EvictionScorer::new(EvictionConfig::default());
+        let meta = make_meta(512, Priority::Normal);
+
+        let score_no_batch = scorer.score(&meta);
+        let score_in_batch = scorer.score_with_batch(&meta, true);
+
+        // Active batch member should have much lower eviction score
+        assert!(
+            score_in_batch < score_no_batch,
+            "in-batch ({score_in_batch}) should score < not-in-batch ({score_no_batch})"
+        );
+        // The difference should be approximately batch_weight (100.0)
+        let diff = score_no_batch - score_in_batch;
+        assert!(
+            (diff - 100.0).abs() < 0.001,
+            "difference ({diff}) should be ~100.0"
+        );
+    }
+
+    #[test]
+    fn test_batch_aware_scoring_with_set() {
+        let scorer = EvictionScorer::new(EvictionConfig::default());
+        let meta = make_meta(512, Priority::Normal);
+
+        let mut active_ids = std::collections::HashSet::new();
+        active_ids.insert(meta.seq_id);
+
+        let score_active = scorer.score_batch_aware(&meta, &active_ids);
+        let score_inactive = scorer.score_batch_aware(&meta, &std::collections::HashSet::new());
+
+        assert!(score_active < score_inactive);
     }
 
     #[test]
