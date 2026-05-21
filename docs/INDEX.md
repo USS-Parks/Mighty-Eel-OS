@@ -71,9 +71,9 @@ Each session produces specific deliverables. This table maps sessions to their p
 | Session | Title | Primary Outputs |
 |---|---|---|
 | 15 | Scheduler Core Architecture | mai-scheduler crate (7 files, 41+ tests), Scheduler trait, DefaultScheduler, API integration |
-| 16 | Scheduler Integration: API + Streaming | (Not yet started) |
-| 17 | Multi-Factor Placement | (Not yet started) |
-| 18 | Topology-Aware Scheduling | (Not yet started) |
+| 16 | GPU Topology Discovery + Weighted Graph | topology module (5 files, 41 unit tests), integration tests (16 tests), fixtures, config/topology.toml |
+| 17 | KV Cache Manager | (Not yet started) |
+| 18 | Continuous Batching Awareness | (Not yet started) |
 
 ### Phase E: Testing + Packaging (Sessions 17-18)
 
@@ -109,7 +109,7 @@ After the project scaffold is created in Session 06, the monorepo will contain:
 
 ---
 
-## Test Suites Index (Updated Session 15)
+## Test Suites Index (Updated Session 16)
 
 | Suite | Location | Purpose | Session |
 |---|---|---|---|
@@ -149,13 +149,19 @@ After the project scaffold is created in Session 06, the monorepo will contain:
 | Scheduler alias tests | `mai-scheduler/src/aliases.rs` `#[cfg(test)]` | Resolve known, passthrough unknown, has_alias, reload, list (6 tests) | 15 |
 | Scheduler placement tests | `mai-scheduler/src/placement.rs` `#[cfg(test)]` | Least-loaded, VRAM tiebreaker, overload filter, continuation affinity, custom scorer (10 tests) | 15 |
 | Scheduler default tests | `mai-scheduler/src/default.rs` `#[cfg(test)]` | Schedule, alias passthrough, backpressure, preferred backend, 100-thread concurrent (14 tests) | 15 |
+| Topology collector tests | `mai-scheduler/src/topology/collector.rs` `#[cfg(test)]` | nvidia-smi parsing, link types, CPU affinity, degenerate cases (11 tests) | 16 |
+| Topology graph tests | `mai-scheduler/src/topology/graph.rs` `#[cfg(test)]` | Graph construction, edge costs, NVLink detection, NUMA, metrics update (8 tests) | 16 |
+| Topology analysis tests | `mai-scheduler/src/topology/analysis.rs` `#[cfg(test)]` | Floyd-Warshall, best pairs/quads, NVLink cliques, CPU affinity groups (12 tests) | 16 |
+| Topology refresh tests | `mai-scheduler/src/topology/refresh.rs` `#[cfg(test)]` | Anomaly detection, thermal throttle, VRAM exhaustion, metrics refresh (7 tests) | 16 |
+| Topology mod tests | `mai-scheduler/src/topology/mod.rs` `#[cfg(test)]` | Default config, flat topology, single GPU penalty (3 tests) | 16 |
+| Topology integration | `mai-scheduler/tests/topology_integration.rs` | Full pipeline: parse fixtures -> graph -> analysis -> penalty, config sensitivity (16 tests) | 16 |
 | Security tests | tests/integration/ | PQC integrity, tamper detection, sandbox enforcement | 17 |
 | Scenario tests | tests/integration/ | 7 real-world end-to-end scenarios | 17 |
 | Performance baseline | tests/benchmarks/ | 8 performance metrics stored as JSON | 17 |
 
 ---
 
-## Configuration Files Index (Post-Session 15)
+## Configuration Files Index (Post-Session 16)
 
 | File | Purpose | Session |
 |---|---|---|
@@ -164,6 +170,7 @@ After the project scaffold is created in Session 06, the monorepo will contain:
 | configs/pack-leader.toml | Pack Leader tier defaults (4+ GPU, full adapter fleet) | 06 |
 | config/adapters.toml | Adapter boot config (Ollama defaults, model aliases) | 14b |
 | config/scheduler.toml | Scheduler config (strategy, thresholds, model aliases) | 15 |
+| config/topology.toml | Topology config (link weights, refresh interval, anomaly thresholds) | 16 |
 | config/auth_keys.toml | API key auth config template (key hashes, rate limits) | 14c |
 
 ---

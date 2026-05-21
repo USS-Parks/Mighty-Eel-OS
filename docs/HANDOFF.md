@@ -2,7 +2,7 @@
 
 **Project:** Island Mountain Model Abstraction Interface (MAI)
 **Source:** MAI-BUILD-PROMPT-ROSTER-v2.md (restructured 2026-05-18, expanded 18 to 35 sessions)
-**Status:** Phase A+B+C+D-Prep complete. Session 15 (Scheduler Core Architecture) complete. Next: Session 16 (Scheduler Integration).
+**Status:** Phase A+B+C+D-Prep complete. Sessions 15-16 (Scheduler Core + GPU Topology) complete. Next: Session 17 (KV Cache Manager).
 **Archive:** Detailed Phase A+B code inventory and onboarding walkthrough archived to [HANDOFF-ARCHIVE-01.md](HANDOFF-ARCHIVE-01.md) on 2026-05-17.
 
 ---
@@ -50,7 +50,9 @@ The inference engine is a plugin. The data sovereignty layer is the product.
 
 **Scheduler Core Architecture (Session 15, 2026-05-20):** New `mai-scheduler` crate (7 source files, ~1886 lines, 41+ unit tests). Object-safe `Scheduler` trait with `&self` methods for Arc<dyn Scheduler> compatibility in axum State. `DefaultScheduler` composes `InstanceRegistry` (DashMap-backed, lock-free), `PlacementEngine` (pluggable ScoringFn, least-loaded + continuation affinity for KV cache locality), and `AliasResolver` (user-facing names to backend models with preferred backends). Backpressure: System priority bypasses queue limits; Normal/Background rejected when overloaded. Atomic counters for total_routed/total_rejected. 100-thread concurrent scheduling test passes. Integrated into all 4 REST inference handlers, gRPC inference handler, and SSE streaming. Legacy mai-core Scheduler retained for HotSwapManager (migration deferred to Session 22). Config loaded from config/scheduler.toml with 5 model aliases.
 
-**Immediate next step:** Execute **Session 16** (Scheduler Integration: API + Streaming). Session 15 (Scheduler Core Architecture) is complete. The scheduler track (15-21, 32-33) is the critical path. Security track (26-28) and application track (29-31) can now run in parallel.
+**GPU Topology (Session 16, 2026-05-20):** Topology discovery module added to mai-scheduler (5 source files, ~2018 lines, 41 unit tests + 18 integration tests). Parses nvidia-smi topo -m output into weighted GPU interconnect graph with NVLink/PCIe/CPU-bridge/cross-socket edge costs. Precomputes best GPU pairs/quads, NVLink cliques (Bron-Kerbosch), Floyd-Warshall path cost matrix, CPU affinity groups. PlacementEngine gains topology_penalty() method for hardware-aware scoring. Configurable link weights via config/topology.toml. Periodic metrics refresh with anomaly detection (thermal throttle, VRAM exhaustion, stuck utilization). topology_penalty NOT wired into default scorer yet (Session 19 integrates multi-factor scoring). Fixture files for 1/2/4/8-GPU topologies with full integration test suite.
+
+**Immediate next step:** Execute **Session 17** (KV Cache Manager). Sessions 15 (Scheduler Core) and 16 (GPU Topology) are complete. The scheduler track (15-21, 32-33) is the critical path. Security track (26-28) and application track (29-31) can now run in parallel.
 
 ---
 
@@ -72,7 +74,7 @@ The inference engine is a plugin. The data sovereignty layer is the product.
 
 The longest remaining dependency chain (restructured):
 
-**14a -> 14b -> 14c -> 15 -> 16 -> 17 -> 18 -> 19 -> 20 -> 21 -> 32 -> 33 -> 34 -> 35** (14 sessions sequential)
+**14a -> 14b -> 14c -> 15 -> 16 -> 17 -> 18 -> 19 -> 20 -> 21 -> 32 -> 33 -> 34 -> 35** (14 sessions sequential, 15-16 done)
 
 Parallel tracks (after 14c completes):
 - Track A: Scheduler (15-21, 32-33) - critical path

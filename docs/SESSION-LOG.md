@@ -341,29 +341,42 @@ Notes:
 
 ---
 
-### Session 16: L4-L5 Application Integration Scaffolds
+### Session 16: GPU Topology Discovery + Weighted Graph
 
-**Status:** Not Started
-**Phase:** D (System Code)
-**Depends On:** Sessions 11, 12, 13
-**Blocks:** Session 17
-**Started:** --
-**Completed:** --
+**Status:** Complete
+**Phase:** D (Scheduler Foundation)
+**Depends On:** Sessions 15, 06 (HIL)
+**Blocks:** Sessions 17, 19
+**Started:** 2026-05-20
+**Completed:** 2026-05-20
 
 Deliverables:
-- [ ] Summit Chat scaffold with streaming and multi-turn
-- [ ] FamilyVault AI scaffold with CLIP embedding and semantic search
-- [ ] Landfall Scribe scaffold with RAG-augmented document drafting
-- [ ] Legacy Engine scaffold with speech-to-text and knowledge graph
-- [ ] MedRecord Vault scaffold with HIPAA-aware document parsing
-- [ ] HomeBase scaffold with Sentinel model device command interpretation
-- [ ] Estate AI scaffold with digital asset cataloging
-- [ ] Smoke test per scaffold
-- [ ] Integration test per scaffold
-- [ ] Configuration templates per scaffold
-- [ ] Developer documentation: how to extend each scaffold
+- [x] topology/collector.rs: nvidia-smi topo -m parser, LinkType enum (NV4/NV2/NV1/PXB/PHB/SYS/SelfLink), ParsedTopology/ParsedGpu/ParsedLink structs, AdapterGpuMetrics for handshake extension, collect_nvidia_smi() with fallback (464 lines, 11 tests)
+- [x] topology/graph.rs: GpuGraph with GpuNode/GpuLink, edge cost = latency_score * latency_weight + (1/bandwidth) * bw_weight, link normalization table, from_parsed() with configurable weights (393 lines, 8 tests)
+- [x] topology/analysis.rs: PrecomputedTopology with Floyd-Warshall all-pairs shortest path, best_pairs/best_quads sorted by link cost, Bron-Kerbosch NVLink clique detection, cpu_affinity_groups (563 lines, 12 tests)
+- [x] topology/refresh.rs: MetricsRefresher with configurable interval, AnomalyFlag enum (UtilizationStuck/ThermalThrottle/VramExhaustion), process_metrics() anomaly detection (297 lines, 7 tests)
+- [x] topology/mod.rs: GpuTopology public interface, TopologyConfig with tunable weights, discover() with nvidia-smi fallback, topology_penalty() method, LinkWeightConfig (301 lines, 3 tests)
+- [x] config/topology.toml: latency_weight, bw_weight, refresh_interval_ms, anomaly thresholds, link_weights section (45 lines)
+- [x] Scheduler integration: PlacementEngine gains set_topology() + topology_penalty(), DefaultScheduler gains with_topology() constructor + ClusterMetrics topo fields
+- [x] Fixture files: topo_single_gpu.txt, topo_2gpu_nvlink.txt, topo_4gpu_mixed.txt, topo_8gpu_dgx.txt
+- [x] tests/topology_integration.rs: 16 integration tests reading all 4 fixtures through full pipeline (parse -> graph -> analysis -> penalty), config weight sensitivity, PlacementEngine integration (397 lines)
 
-Notes:
+Architecture Notes:
+- Graph is built once at startup (topology is static); only node metrics refresh at runtime
+- Edge cost formula: cost = latency_score * latency_weight + (1.0 / bandwidth_gbps) * bw_weight
+- topology_penalty() returns worst-case pair cost among assigned GPUs (max edge cost)
+- NVLink cliques found via Bron-Kerbosch maximal clique enumeration (correct for small GPU counts <16)
+- Floyd-Warshall path cost matrix enables O(1) lookup for any GPU pair
+- topology_penalty NOT wired into default scorer yet (Session 19 integrates multi-factor scoring)
+- Shared via Arc<GpuTopology> across scheduler components
+
+Audit Notes:
+- Bug fixed: from_parsed() was ignoring TopologyConfig latency_weight/bw_weight, hardcoding 1.0/1.0. Signature updated to accept weights explicitly, all 8 call sites (graph.rs tests, analysis.rs tests, placement.rs test, default.rs test) updated.
+- Bug fixed: unused `used` variable in detect_nvlink_cliques() removed (dead code from pre-Bron-Kerbosch approach).
+- Sandbox disk full throughout session: all edits via file tools, no bash available.
+- Code written by prior Cowork session that crashed before governance updates. This session audited, fixed bugs, wrote integration tests, and updated governance docs.
+
+**Totals:** ~2018 lines source + 397 lines integration test, 41 unit tests + 16 integration tests across 5 source files + 1 test file.
 
 ---
 
@@ -430,7 +443,7 @@ Notes:
 | B: Foundation Code | 06-10 | Complete (06+06b+07+08+09+10) -- archived |
 | C: Integration Code | 11-13 | Complete (11a-11e + 12 + 13) |
 | D-Prep: Wiring Sprint | 14a-14c | Complete (14a+14b+14c) |
-| D: Scheduler Foundation | 15-18 | In Progress (15 complete) |
+| D: Scheduler Foundation | 15-18 | In Progress (15, 16 complete) |
 | E: Scheduler Intelligence | 19-21 | Not Started |
 | F: Power & Lifecycle | 22-25 | Not Started |
 | G: Security Hardening | 26-28 | Not Started |
@@ -438,8 +451,8 @@ Notes:
 | I: Advanced Scheduling | 32-33 | Not Started |
 | J: Testing & Packaging | 34-35 | Not Started |
 
-**Sessions Complete:** 17 / 35 (includes 06+06b as one logical session, 11a-11e as one logical session, 14a-14c as wiring sprint)
-**Next Session:** 16 (Scheduler Integration: API + Streaming)
+**Sessions Complete:** 18 / 35 (includes 06+06b as one logical session, 11a-11e as one logical session, 14a-14c as wiring sprint)
+**Next Session:** 17 (KV Cache Manager)
 **Next Archive:** After Session 23 (or end of Phase F, whichever comes first)
 
 ---
