@@ -452,13 +452,10 @@ pub async fn audit_middleware(audit: Arc<AuditManager>, request: Request, next: 
     let path = request.uri().path().to_string();
 
     // Extract profile if present (injected by profile_middleware)
-    let (profile_id, profile_role) = request
-        .extensions()
-        .get::<ProfileInfo>()
-        .map_or_else(
-            || ("unknown".to_string(), "unknown".to_string()),
-            |p| (p.profile_id.clone(), format!("{:?}", p.role)),
-        );
+    let (profile_id, profile_role) = request.extensions().get::<ProfileInfo>().map_or_else(
+        || ("unknown".to_string(), "unknown".to_string()),
+        |p| (p.profile_id.clone(), format!("{:?}", p.role)),
+    );
 
     let response = next.run(request).await;
 

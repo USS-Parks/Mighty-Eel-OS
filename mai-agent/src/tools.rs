@@ -357,11 +357,7 @@ impl ToolRegistry {
     }
 
     /// Abort a chain.
-    pub fn abort_chain(
-        &mut self,
-        request_id: &RequestId,
-        reason: &str,
-    ) -> Result<(), AgentError> {
+    pub fn abort_chain(&mut self, request_id: &RequestId, reason: &str) -> Result<(), AgentError> {
         let chain = self.chains.get_mut(request_id).ok_or_else(|| {
             AgentError::Internal(format!("No active chain for request {request_id}"))
         })?;
@@ -769,8 +765,7 @@ mod tests {
         let mut reg = ToolRegistry::new();
         let request_id = Uuid::new_v4();
         reg.start_chain(request_id, Uuid::new_v4(), None).unwrap();
-        reg.abort_chain(&request_id, "User cancelled")
-            .unwrap();
+        reg.abort_chain(&request_id, "User cancelled").unwrap();
 
         let chain = reg.get_chain(&request_id).unwrap();
         assert!(matches!(chain.state, ToolChainState::Aborted { .. }));

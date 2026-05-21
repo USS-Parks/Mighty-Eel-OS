@@ -147,11 +147,18 @@ impl ModelStatus {
         matches!(
             (self, target),
             (ModelStatus::ColdStorage, ModelStatus::Loading { .. })
-                | (ModelStatus::Loading { .. } | ModelStatus::Active { .. },
-                    ModelStatus::Loaded)
-                | (ModelStatus::Loading { .. } | ModelStatus::Evicted,
-                    ModelStatus::ColdStorage)
-                | (ModelStatus::Loaded, ModelStatus::Active { .. } | ModelStatus::Evicting)
+                | (
+                    ModelStatus::Loading { .. } | ModelStatus::Active { .. },
+                    ModelStatus::Loaded
+                )
+                | (
+                    ModelStatus::Loading { .. } | ModelStatus::Evicted,
+                    ModelStatus::ColdStorage
+                )
+                | (
+                    ModelStatus::Loaded,
+                    ModelStatus::Active { .. } | ModelStatus::Evicting
+                )
                 | (ModelStatus::Active { .. }, ModelStatus::Evicting)
                 | (ModelStatus::Evicting, ModelStatus::Evicted)
         )

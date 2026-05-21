@@ -104,7 +104,10 @@ impl FrameworkConfig {
         if let Some(v) = fw_section.get("python_path").and_then(toml::Value::as_str) {
             config.python_path = PathBuf::from(v);
         }
-        if let Some(v) = fw_section.get("runner_script").and_then(toml::Value::as_str) {
+        if let Some(v) = fw_section
+            .get("runner_script")
+            .and_then(toml::Value::as_str)
+        {
             config.runner_script = PathBuf::from(v);
         }
         #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]

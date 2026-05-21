@@ -526,9 +526,7 @@ async fn handle_inference_request(
         return Some(ServerMessage::inference_error(
             &request_id,
             "MAI-3001",
-            &format!(
-                "Maximum concurrent requests ({MAX_CONCURRENT_REQUESTS}) reached"
-            ),
+            &format!("Maximum concurrent requests ({MAX_CONCURRENT_REQUESTS}) reached"),
         ));
     }
 

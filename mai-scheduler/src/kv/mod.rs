@@ -174,7 +174,10 @@ impl HeuristicKvCacheManager {
         }
 
         let mut total_freed = 0_u64;
-        let mut guard = self.guard.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut guard = self
+            .guard
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
 
         for (seq_id, _bytes, score) in &candidates {
             if total_freed >= needed_bytes {
@@ -237,7 +240,10 @@ impl HeuristicKvCacheManager {
     /// Get all sequences scored for eviction, sorted descending by score
     /// (highest = most evictable first). Includes anti-thrashing adjustments.
     fn scored_candidates(&self) -> Vec<(SequenceId, u64, f64)> {
-        let guard = self.guard.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let guard = self
+            .guard
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
 
         let mut candidates: Vec<(SequenceId, u64, f64)> = self
             .sequences
@@ -295,7 +301,11 @@ impl KvCacheManager for HeuristicKvCacheManager {
     }
 
     fn can_fit(&self, estimated_tokens: usize, model_factor: f64) -> bool {
-        #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss, clippy::cast_sign_loss)]
+        #[allow(
+            clippy::cast_possible_truncation,
+            clippy::cast_precision_loss,
+            clippy::cast_sign_loss
+        )]
         let estimated_bytes = (estimated_tokens as f64 * model_factor) as u64;
         let used = self.used_bytes.load(Ordering::Relaxed);
         used + estimated_bytes <= self.total_budget

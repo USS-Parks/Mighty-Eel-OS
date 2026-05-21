@@ -112,7 +112,11 @@ pub enum EvictionAction {
 /// `total_bytes` is the total VRAM budget for KV caches.
 ///
 /// Returns the action the manager should take.
-#[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation, clippy::cast_precision_loss)]
+#[allow(
+    clippy::cast_sign_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss
+)]
 pub fn evaluate_triggers(
     used_bytes: u64,
     total_bytes: u64,

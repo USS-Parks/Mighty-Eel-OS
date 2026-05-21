@@ -138,7 +138,10 @@ impl BatchMetrics {
     pub fn record_step(&self, batch_size: u32) {
         self.total_steps.fetch_add(1, Ordering::Relaxed);
 
-        let mut inner = self.inner.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut inner = self
+            .inner
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         if inner.batch_sizes.len() >= inner.window_size {
             inner.batch_sizes.pop_front();
         }
@@ -171,7 +174,10 @@ impl BatchMetrics {
 
     /// Record a queue wait time for a sequence that was admitted.
     pub fn record_wait_time(&self, wait: Duration) {
-        let mut inner = self.inner.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut inner = self
+            .inner
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         if inner.wait_times.len() >= inner.max_wait_samples {
             inner.wait_times.pop_front();
         }
@@ -182,7 +188,10 @@ impl BatchMetrics {
     /// the scheduler scoring engine and ClusterMetrics aggregation.
     #[allow(clippy::cast_precision_loss)] // Acceptable: metric values don't need full u64 precision
     pub fn snapshot(&self) -> BatchMetricsSnapshot {
-        let inner = self.inner.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let inner = self
+            .inner
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
 
         let avg_batch_size = if inner.batch_sizes.is_empty() {
             0.0

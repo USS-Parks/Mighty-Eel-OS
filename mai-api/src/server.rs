@@ -525,13 +525,19 @@ fn load_adapter_boot_config(path: Option<&Path>) -> AdapterBootConfig {
                 continue;
             };
             let entry = AdapterBootEntry {
-                enabled: at.get("enabled").and_then(toml::Value::as_bool).unwrap_or(false),
+                enabled: at
+                    .get("enabled")
+                    .and_then(toml::Value::as_bool)
+                    .unwrap_or(false),
                 host: at
                     .get("host")
                     .and_then(|v| v.as_str())
                     .unwrap_or("127.0.0.1")
                     .to_string(),
-                port: at.get("port").and_then(toml::Value::as_integer).unwrap_or(11434) as u16,
+                port: at
+                    .get("port")
+                    .and_then(toml::Value::as_integer)
+                    .unwrap_or(11434) as u16,
                 gpu_ids: at
                     .get("gpu_ids")
                     .and_then(|v| v.as_array())

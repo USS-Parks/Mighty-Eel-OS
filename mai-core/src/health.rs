@@ -428,11 +428,9 @@ impl HealthMonitor {
     pub fn verify_air_gap(&self) -> Result<(), HealthError> {
         match &self.hardware_health.network_state {
             NetworkState::AirGapCompliant | NetworkState::Connected => Ok(()),
-            NetworkState::NonCompliant { interfaces_up } => {
-                Err(HealthError::AirGapViolation(format!(
-                    "Air-gap switch engaged but interfaces up: {interfaces_up:?}"
-                )))
-            }
+            NetworkState::NonCompliant { interfaces_up } => Err(HealthError::AirGapViolation(
+                format!("Air-gap switch engaged but interfaces up: {interfaces_up:?}"),
+            )),
         }
     }
 
@@ -515,7 +513,11 @@ impl HealthMonitor {
     // ─── Internal helpers ─────────────────────────────────────────────
 
     /// Get current value of a health metric
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss, clippy::cast_precision_loss)]
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        clippy::cast_precision_loss
+    )]
     fn get_metric_value(&self, metric: &HealthMetric) -> Option<f64> {
         match metric {
             HealthMetric::GpuTemperature => self
@@ -568,7 +570,9 @@ impl HealthMonitor {
                     None
                 }
             }
-            HealthMetric::CpuUtilization => Some(f64::from(self.system_health.cpu_utilization) * 100.0),
+            HealthMetric::CpuUtilization => {
+                Some(f64::from(self.system_health.cpu_utilization) * 100.0)
+            }
             HealthMetric::AirGapCompliance => {
                 match self.hardware_health.network_state {
                     NetworkState::NonCompliant { .. } => Some(1.0), // violation

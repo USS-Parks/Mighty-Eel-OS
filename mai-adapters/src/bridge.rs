@@ -169,7 +169,11 @@ impl IpcEvent {
                         val
                     });
                 #[allow(clippy::cast_possible_truncation)]
-                let index = self.data.get("index").and_then(serde_json::Value::as_u64).unwrap_or(0) as usize;
+                let index = self
+                    .data
+                    .get("index")
+                    .and_then(serde_json::Value::as_u64)
+                    .unwrap_or(0) as usize;
                 let finish_reason = self
                     .data
                     .get("finish_reason")

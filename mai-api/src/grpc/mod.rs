@@ -108,8 +108,9 @@ pub fn role_has_permission(role: &str, permission: &str) -> bool {
     match permission {
         "inference" => true, // All roles can do inference
         "list_models" => matches!(role, "admin" | "adult" | "teen"),
-        "manage_models" | "power_control" | "registry_write" | "view_audit"
-        | "manage_profiles" => role == "admin",
+        "manage_models" | "power_control" | "registry_write" | "view_audit" | "manage_profiles" => {
+            role == "admin"
+        }
         _ => false,
     }
 }

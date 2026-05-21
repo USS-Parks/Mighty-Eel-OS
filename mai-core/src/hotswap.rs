@@ -405,9 +405,7 @@ impl HotSwapManager {
                 let registry = self.registry.read().await;
                 if let Some(adapter_id) = registry.get_loaded_adapter(old_id) {
                     scheduler.set_adapter_health(adapter_id, false);
-                    info!(
-                        "Paused routing: adapter {adapter_id} marked unhealthy for model swap",
-                    );
+                    info!("Paused routing: adapter {adapter_id} marked unhealthy for model swap",);
                 } else {
                     return Err(SwapError::ComponentNotFound(format!(
                         "No loaded adapter for model {old_id}"
@@ -457,16 +455,12 @@ impl HotSwapManager {
             };
 
             if in_flight == 0 {
-                info!(
-                    "Drain complete: {total_drained} requests drained for {adapter_id:?}",
-                );
+                info!("Drain complete: {total_drained} requests drained for {adapter_id:?}",);
                 return Ok(total_drained);
             }
 
             if Instant::now() >= deadline {
-                warn!(
-                    "Drain timeout: {in_flight} requests still in flight for {adapter_id:?}",
-                );
+                warn!("Drain timeout: {in_flight} requests still in flight for {adapter_id:?}",);
                 return Err(SwapError::DrainTimeout(in_flight));
             }
 
@@ -544,9 +538,7 @@ impl HotSwapManager {
                 // Register in health monitor
                 let mut health = self.health_monitor.write().await;
                 health.register_adapter(new_adapter.clone());
-                info!(
-                    "Activated new adapter: {new_adapter} (unhealthy until health check)",
-                );
+                info!("Activated new adapter: {new_adapter} (unhealthy until health check)",);
             }
             SwapTarget::Hardware { event } => {
                 match event {

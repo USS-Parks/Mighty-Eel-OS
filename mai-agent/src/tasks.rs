@@ -269,11 +269,7 @@ impl TaskManager {
     }
 
     /// Fail a task with an error reason.
-    pub fn fail(
-        &mut self,
-        task_id: TaskId,
-        reason: &str,
-    ) -> Result<AgentTaskResponse, AgentError> {
+    pub fn fail(&mut self, task_id: TaskId, reason: &str) -> Result<AgentTaskResponse, AgentError> {
         let task = self.get_task_mut(task_id)?;
         Self::assert_active(&task.status)?;
 
@@ -510,9 +506,9 @@ impl TaskManager {
                     .unwrap_or(defaults.default_max_tool_calls)
                     .min(defaults.default_max_tool_calls * 5),
                 tool_calls_used: 0,
-                max_duration: req
-                    .max_duration_secs
-                    .map_or(defaults.default_timeout, |s| Duration::from_secs(s).min(max_dur)),
+                max_duration: req.max_duration_secs.map_or(defaults.default_timeout, |s| {
+                    Duration::from_secs(s).min(max_dur)
+                }),
                 started_at: now_ms,
             },
             None => ResourceBudget {

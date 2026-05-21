@@ -372,10 +372,7 @@ impl Scheduler for DefaultScheduler {
                 .kv_manager
                 .as_ref()
                 .map_or(0, |kv| kv.total_bytes() - kv.free_bytes()),
-            kv_total_bytes: self
-                .kv_manager
-                .as_ref()
-                .map_or(0, |kv| kv.total_bytes()),
+            kv_total_bytes: self.kv_manager.as_ref().map_or(0, |kv| kv.total_bytes()),
             avg_batch_size,
             avg_batch_utilization,
             total_batch_waiting: batch_waiting_total,

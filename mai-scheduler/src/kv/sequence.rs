@@ -200,7 +200,8 @@ impl SequenceMeta {
             if self.avg_inter_request_gap == Duration::ZERO {
                 self.avg_inter_request_gap = gap;
             } else {
-                #[allow(clippy::cast_precision_loss)] // Acceptable: nanosecond EMA doesn't need full u128 precision
+                #[allow(clippy::cast_precision_loss)]
+                // Acceptable: nanosecond EMA doesn't need full u128 precision
                 let old_nanos = self.avg_inter_request_gap.as_nanos() as f64;
                 #[allow(clippy::cast_precision_loss)]
                 let new_nanos = gap.as_nanos() as f64;

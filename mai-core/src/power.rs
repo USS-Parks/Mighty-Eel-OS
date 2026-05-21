@@ -472,12 +472,18 @@ impl PowerStateMachine {
         }
         matches!(
             (from, to),
-            (PowerState::Off | PowerState::Sentinel, PowerState::DeepVaultSleep)
-                | (PowerState::DeepVaultSleep | PowerState::FullInference
-                    | PowerState::ThermalThrottle, PowerState::Sentinel)
-                | (PowerState::DeepVaultSleep | PowerState::Sentinel
-                    | PowerState::ThermalThrottle, PowerState::FullInference)
-                | (PowerState::FullInference, PowerState::ThermalThrottle)
+            (
+                PowerState::Off | PowerState::Sentinel,
+                PowerState::DeepVaultSleep
+            ) | (
+                PowerState::DeepVaultSleep
+                    | PowerState::FullInference
+                    | PowerState::ThermalThrottle,
+                PowerState::Sentinel
+            ) | (
+                PowerState::DeepVaultSleep | PowerState::Sentinel | PowerState::ThermalThrottle,
+                PowerState::FullInference
+            ) | (PowerState::FullInference, PowerState::ThermalThrottle)
         )
     }
 }
