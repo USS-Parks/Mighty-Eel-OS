@@ -768,7 +768,7 @@ mod tests {
             &sid,
             "call-1",
             "homebase.lights",
-            "Lights turned on".to_string(),
+            "Lights turned on",
         )
         .unwrap();
 

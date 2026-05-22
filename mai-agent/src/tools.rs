@@ -590,7 +590,7 @@ mod tests {
             duration_ms: 42,
         }];
         let should_continue = reg
-            .record_results(&request_id, results, "dad-profile")
+            .record_results(&request_id, &results, "dad-profile")
             .unwrap();
         assert!(should_continue);
 
@@ -622,7 +622,7 @@ mod tests {
             .unwrap();
         reg.record_results(
             &request_id,
-            vec![ToolResult {
+            &[ToolResult {
                 call_id: "c1".into(),
                 tool_id: "homebase.lights.set".into(),
                 success: true,
@@ -729,7 +729,7 @@ mod tests {
             .unwrap();
         reg.record_results(
             &request_id,
-            vec![ToolResult {
+            &[ToolResult {
                 call_id: "c1".into(),
                 tool_id: "homebase.lights.set".into(),
                 success: true,
