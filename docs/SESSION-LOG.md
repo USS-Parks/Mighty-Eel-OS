@@ -458,6 +458,43 @@ Architecture Notes:
 
 ---
 
+### Session 19: Multi-Factor Scorer (Scoring Module)
+
+**Status:** In Progress (code complete, wiring + integration tests remain)
+**Phase:** E (Scheduler Intelligence)
+**Depends On:** Sessions 15, 16, 17, 18
+**Blocks:** Sessions 20, 22
+**Started:** 2026-05-21
+
+Deliverables (code complete):
+- [x] scoring/scorer.rs: MultiFactorScorer orchestrator with ScoringConfig (5 weights + continuation_bonus), ScoreBreakdown with Display/Serialize, build_multi_factor_scorer() convenience, into_scoring_fn() ScoringFn bridge, check_continuation() for KV cache hit detection (565 lines, 10 tests)
+- [x] scoring/latency.rs: Queue-based latency estimation. queue_wait + batch_drain normalized against target_latency_ms. LatencyConfig with target_latency_ms (500), avg_step_time_ms (20), per_token_time_ms (5) (203 lines, 7 tests)
+- [x] scoring/memory.rs: VRAM pressure penalty with configurable exponent. usage_ratio^pressure_exponent, quadratic by default. MemoryConfig with pressure_exponent (2.0) (175 lines, 7 tests)
+- [x] scoring/topology_score.rs: GPU interconnect penalty using Session 16 GpuTopology.topology_penalty(). Normalized against max_penalty ceiling. TopologyScoreConfig with max_penalty (10.0). Integration test with real ParsedTopology/GpuGraph (259 lines, 7 tests)
+- [x] scoring/eviction_cost.rs: Eviction cost penalty using KvCacheManager.eviction_candidates(). Sums inverse eviction scores of candidates needed to free space. EvictionCostConfig with max_eviction_cost (50.0), default_bytes_per_token (131072) (207 lines, 3 tests)
+- [x] scoring/batching.rs: Batch fit benefit (subtracted from total). headroom * admission_factor * queue_factor. Three-region VRAM admission (aggressive/selective/eviction). BatchBenefitConfig with aggressive_threshold (0.80), eviction_threshold (0.90), max_queue_depth (128) (244 lines, 7 tests)
+- [x] scoring/mod.rs: Module declarations, re-exports for all scorer types and sub-scorer configs (41 lines)
+- [x] lib.rs: pub mod scoring, re-exports MultiFactorScorer/ScoringConfig/ScoreBreakdown/build_multi_factor_scorer/build_scorer
+
+Remaining (deferred to 19e/19f):
+- [ ] config/scoring.toml: Default scoring configuration file
+- [ ] DefaultScheduler wiring: strategy-based scorer selection, pass topology + kv_manager to builder
+- [ ] Integration tests: 8 scenarios through full DefaultScheduler.schedule() pipeline
+- [ ] Governance updates finalized after 19f
+
+Architecture Notes:
+- Design uses concrete sub-scorer functions, not a trait-based plugin system. Each sub-scorer is a standalone fn in its own module.
+- MultiFactorScorer holds Option<Arc<GpuTopology>> and Option<Arc<dyn KvCacheManager>>, gracefully degrades when subsystems absent
+- into_scoring_fn() wraps Arc<MultiFactorScorer> in a closure matching the existing ScoringFn type, preserving backward compatibility with PlacementEngine
+- Continuation bonus is an absolute value (not normalized), deliberately dominating all other factors when a warm KV cache hit exists
+- All sub-scores normalized to [0.0, 1.0] before weighting; benefits negated in the sum
+- Default weights: latency=2.0, memory=1.5, topology=1.0, eviction=1.0, batching=1.5, continuation_bonus=10.0
+- Sandbox disk full during initial session: all writes via file tools. Module verified by manual cross-reference against all type/trait exports. cargo check deferred to next session with clean sandbox.
+
+**Totals:** ~1,694 lines new source across 7 scoring/ files + lib.rs edits, 41 unit tests (10+7+7+7+3+7).
+
+---
+
 ## Summary
 
 **NOTE:** Prompt Roster restructured from 18 to 35 sessions on 2026-05-18. See MAI-BUILD-PROMPT-ROSTER-v2.md for the new plan. Phase labels below reflect the restructured roster.
@@ -469,15 +506,15 @@ Architecture Notes:
 | C: Integration Code | 11-13 | Complete (11a-11e + 12 + 13) |
 | D-Prep: Wiring Sprint | 14a-14c | Complete (14a+14b+14c) |
 | D: Scheduler Foundation | 15-18 | Complete (15, 16, 17, 18) |
-| E: Scheduler Intelligence | 19-21 | Not Started |
+| E: Scheduler Intelligence | 19-21 | In Progress (19 code complete, wiring/tests remain) |
 | F: Power & Lifecycle | 22-25 | Not Started |
 | G: Security Hardening | 26-28 | Not Started |
 | H: Application Integration | 29-31 | Not Started |
 | I: Advanced Scheduling | 32-33 | Not Started |
 | J: Testing & Packaging | 34-35 | Not Started |
 
-**Sessions Complete:** 20 / 35 (includes 06+06b as one logical session, 11a-11e as one logical session, 14a-14c as wiring sprint)
-**Next Session:** 19 (Multi-Factor Scorer)
+**Sessions Complete:** 20 / 35 (includes 06+06b as one logical session, 11a-11e as one logical session, 14a-14c as wiring sprint). Session 19 code complete, wiring/tests pending.
+**Next Session:** 19e (Scorer Wiring + Config) then 19f (Integration Tests + Governance)
 **Next Archive:** After Session 23 (or end of Phase F, whichever comes first)
 
 ---

@@ -33,6 +33,7 @@ pub mod kv;
 pub mod placement;
 pub mod registry;
 pub mod scheduler;
+pub mod scoring;
 pub mod topology;
 pub mod types;
 
@@ -42,6 +43,9 @@ pub use default::DefaultScheduler;
 pub use kv::manager::KvCacheManager;
 pub use kv::{HeuristicKvCacheManager, KvCacheConfig};
 pub use scheduler::Scheduler;
+pub use scoring::{
+    build_multi_factor_scorer, build_scorer, MultiFactorScorer, ScoreBreakdown, ScoringConfig,
+};
 pub use topology::{GpuTopology, TopologyConfig, TopologyError};
 pub use types::{
     ClusterMetrics, GpuId, InstanceCapabilities, InstanceConfig, InstanceId, InstanceMetrics,
