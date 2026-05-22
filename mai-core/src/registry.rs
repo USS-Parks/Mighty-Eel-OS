@@ -12,7 +12,7 @@ use thiserror::Error;
 use tracing::{debug, info, warn};
 
 use crate::types::{AdapterId, ModelId};
-use crate::vault::{VaultError, VaultInterface};
+use crate::vault::{ModelStorage, VaultError, VaultInterface};
 
 /// Model manifest schema (matches TOML structure)
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -219,6 +219,10 @@ pub enum RegistryError {
     /// USB package not found or unreadable
     #[error("USB package error: {0}")]
     UsbPackageError(String),
+
+    /// Model removal failed
+    #[error("Model removal failed: {0}")]
+    RemovalFailed(String),
 }
 
 impl From<VaultError> for RegistryError {
@@ -231,6 +235,7 @@ impl From<VaultError> for RegistryError {
 pub struct ModelRegistry {
     models: HashMap<ModelId, ModelEntry>,
     vault: Box<dyn VaultInterface>,
+    storage: Option<Box<dyn ModelStorage>>,
 }
 
 /// Internal entry tracking model state and location
@@ -248,7 +253,14 @@ impl ModelRegistry {
         Self {
             models: HashMap::new(),
             vault,
+            storage: None,
         }
+    }
+
+    /// Attach a ModelStorage implementation for extended operations
+    pub fn with_storage(mut self, storage: Box<dyn ModelStorage>) -> Self {
+        self.storage = Some(storage);
+        self
     }
 
     /// Parse and validate a model manifest from TOML string.
@@ -575,6 +587,103 @@ impl ModelRegistry {
                 capabilities: entry.manifest.capabilities.clone(),
             })
             .collect()
+    }
+
+    /// Securely remove a model from the vault and registry
+    pub async fn secure_remove_model(
+        &mut self,
+        model_id: &str,
+        options: &super::models::remove::RemoveOptions,
+    ) -> Result<super::models::remove::RemovalResult, RegistryError> {
+        let model_id_owned = model_id.to_string();
+        let status = self
+            .get_status(&model_id_owned)
+            .ok_or_else(|| RegistryError::ModelNotFound(model_id_owned.clone()))?;
+
+        let is_loaded = matches!(
+            status,
+            ModelStatus::Loaded | ModelStatus::Active { .. } | ModelStatus::Loading { .. }
+        );
+        if is_loaded {
+            return Err(RegistryError::RemovalFailed(format!(
+                "Model {model_id} is currently loaded"
+            )));
+        }
+
+        let mut snapshot_created = false;
+        if let Some(ref storage) = self.storage {
+            if options.create_snapshot {
+                match storage
+                    .create_snapshot(&format!("pre-remove-{model_id}"))
+                    .await
+                {
+                    Ok(_) => {
+                        info!(model_id, "Pre-removal snapshot created");
+                        snapshot_created = true;
+                    }
+                    Err(e) => {
+                        warn!(
+                            error = %e,
+                            "Failed to create pre-removal snapshot"
+                        );
+                    }
+                }
+            }
+
+            if options.secure_overwrite_passes > 0 {
+                info!(
+                    model_id,
+                    passes = options.secure_overwrite_passes,
+                    "Securely removing from vault"
+                );
+                storage.remove_model(model_id).await.map_err(|e| {
+                    RegistryError::RemovalFailed(format!("Vault removal failed: {e}"))
+                })?;
+            }
+        } else {
+            info!("No ModelStorage attached, skipping vault removal");
+        }
+
+        self.models.remove(model_id);
+
+        let audit_entry = format!(
+            "{{\"event\":\"model_removed\",\"model_id\":\"{model_id}\",\"secure_wipe\":{}}}",
+            options.secure_overwrite_passes > 0,
+        );
+        if let Err(e) = self.vault.append_audit_entry(audit_entry.as_bytes()).await {
+            warn!(error = %e, "Failed to write removal audit entry");
+        }
+
+        info!(model_id, "Model securely removed");
+        Ok(super::models::remove::RemovalResult {
+            model_id: model_id.to_string(),
+            secure_wipe: options.secure_overwrite_passes > 0,
+            registry_cleared: true,
+            snapshot_created,
+        })
+    }
+
+    /// Remove a model from the registry (must be in ColdStorage or Evicted).
+    pub fn remove_model_entry(&mut self, model_id: &str) -> Result<(), RegistryError> {
+        let entry = self
+            .models
+            .get(model_id)
+            .ok_or_else(|| RegistryError::ModelNotFound(model_id.to_string()))?;
+
+        let can_remove = matches!(
+            entry.status,
+            ModelStatus::ColdStorage | ModelStatus::Evicted
+        );
+        if !can_remove {
+            return Err(RegistryError::RemovalFailed(format!(
+                "Model {model_id} is in state {} and cannot be removed",
+                entry.status.display_name()
+            )));
+        }
+
+        self.models.remove(model_id);
+        info!(model_id, "Model removed from registry");
+        Ok(())
     }
 
     /// Update model status with transition validation.

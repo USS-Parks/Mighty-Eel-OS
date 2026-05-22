@@ -491,6 +491,47 @@ pub struct AdapterListResponse {
     pub adapters: Vec<AdapterHealthSummary>,
 }
 
+// ─── Model Install/Discover/Remove ──────────────────────────────────
+
+/// Response for model install operations
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModelInstallResponse {
+    pub model_id: String,
+    pub status: String,
+    pub integrity_verified: bool,
+    pub signature_verified: bool,
+    pub message: String,
+}
+
+/// USB package discovery response
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DiscoverResponse {
+    pub packages: Vec<DiscoveredPackage>,
+    pub drives_scanned: usize,
+    pub errors: Vec<String>,
+}
+
+/// A single discovered package
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DiscoveredPackage {
+    pub name: String,
+    pub model_name: String,
+    pub version: String,
+    pub format: String,
+    pub size_bytes: u64,
+    pub model_id: String,
+}
+
+/// Response for model remove operations
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModelRemoveResponse {
+    pub model_id: String,
+    pub status: String,
+    pub secure_wipe: bool,
+    pub snapshot_created: bool,
+    pub message: String,
+}
+
 // ─── Model Load/Unload Response ─────────────────────────────────────
 
 /// Response for model load/unload operations

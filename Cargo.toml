@@ -9,6 +9,7 @@ members = [
     "mai-vault",
     "mai-agent",
     "mai-scheduler",
+    "tools/pkg-builder",
 ]
 
 [workspace.package]

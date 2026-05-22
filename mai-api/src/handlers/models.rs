@@ -14,7 +14,8 @@ use crate::auth::{can_access_model, check_permission};
 use crate::errors::ApiError;
 use crate::state::AppState;
 use crate::types::{
-    ModelCapabilities, ModelDetail, ModelListResponse, ModelOperationResponse, ProfileInfo,
+    DiscoverResponse, DiscoveredPackage, ModelCapabilities, ModelDetail, ModelInstallResponse,
+    ModelListResponse, ModelOperationResponse, ModelRemoveResponse, ProfileInfo,
 };
 
 use mai_core::registry::ModelStatus;
@@ -265,4 +266,128 @@ pub async fn unload_model(
             "Model '{model_id}' is in state {status:?} and cannot be unloaded now"
         ))),
     }
+}
+
+// ─── Discover USB Packages ────────────────────────────────────────────
+
+/// GET /v1/models/discover
+///
+/// Admin-only: scan USB drives for installable .mai-pkg directories.
+pub async fn discover_packages(
+    State(state): State<AppState>,
+    profile: ProfileInfo,
+) -> Result<impl IntoResponse, ApiError> {
+    check_permission(&profile, "manage_models")?;
+
+    let result = mai_core::models::usb::discover_usb_packages();
+
+    let packages: Vec<DiscoveredPackage> = result
+        .packages
+        .iter()
+        .map(|pkg| DiscoveredPackage {
+            name: pkg.name.clone(),
+            model_name: pkg.manifest.model.name.clone(),
+            version: pkg.manifest.model.version.clone(),
+            format: format!("{:?}", pkg.manifest.model.format),
+            size_bytes: pkg.manifest.model.size_bytes,
+            model_id: pkg.model_id(),
+        })
+        .collect();
+
+    let response = DiscoverResponse {
+        packages,
+        drives_scanned: result.drives_scanned.len(),
+        errors: result.errors,
+    };
+
+    Ok(Json(response))
+}
+
+// ─── Install Model from USB ──────────────────────────────────────────
+
+/// POST /v1/models/install
+///
+/// Admin-only: install a model package from USB into the registry.
+pub async fn install_model(
+    State(state): State<AppState>,
+    profile: ProfileInfo,
+    Json(body): Json<InstallRequest>,
+) -> Result<impl IntoResponse, ApiError> {
+    check_permission(&profile, "manage_models")?;
+
+    let mount = std::path::PathBuf::from(&body.usb_mount_point);
+    let mut registry = state.registry.write().await;
+
+    match registry.install_from_usb(&mount, &body.package_name).await {
+        Ok(result) => {
+            info!(
+                model_id = %result.model_id,
+                profile = %profile.profile_id,
+                "Model installed from USB"
+            );
+            Ok(Json(ModelInstallResponse {
+                model_id: result.model_id,
+                status: "installed".to_string(),
+                integrity_verified: result.integrity_verified,
+                signature_verified: result.signature_verified,
+                message: "Model installed successfully from USB".to_string(),
+            }))
+        }
+        Err(e) => {
+            warn!(
+                error = %e,
+                profile = %profile.profile_id,
+                "USB install failed"
+            );
+            Err(ApiError::BadRequest(format!("Install failed: {e}")))
+        }
+    }
+}
+
+// ─── Remove Model ────────────────────────────────────────────────────
+
+/// POST /v1/models/{model_id}/remove
+///
+/// Admin-only: securely remove a model from registry and vault.
+pub async fn remove_model_handler(
+    State(state): State<AppState>,
+    profile: ProfileInfo,
+    Path(model_id): Path<String>,
+) -> Result<impl IntoResponse, ApiError> {
+    check_permission(&profile, "manage_models")?;
+
+    let options = mai_core::models::remove::RemoveOptions::default();
+    let mut registry = state.registry.write().await;
+
+    match registry.secure_remove_model(&model_id, &options).await {
+        Ok(result) => {
+            info!(
+                model_id = %model_id,
+                profile = %profile.profile_id,
+                "Model removed"
+            );
+            Ok(Json(ModelRemoveResponse {
+                model_id: result.model_id,
+                status: "removed".to_string(),
+                secure_wipe: result.secure_wipe,
+                snapshot_created: result.snapshot_created,
+                message: format!("Model '{model_id}' removed successfully"),
+            }))
+        }
+        Err(e) => {
+            warn!(error = %e, profile = %profile.profile_id, "Model removal failed");
+            Err(ApiError::ModelUnavailable(format!("Removal failed: {e}")))
+        }
+    }
+}
+
+// ─── Install Request Body ────────────────────────────────────────────
+
+/// Request body for POST /v1/models/install
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct InstallRequest {
+    /// Package name, e.g. "qwen3-14b-Q4_K_M.mai-pkg"
+    pub package_name: String,
+    /// USB mount point, e.g. "D:" or "/mnt/usb"
+    pub usb_mount_point: String,
 }

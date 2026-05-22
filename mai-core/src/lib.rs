@@ -26,6 +26,7 @@ pub mod cache;
 pub mod circuit_breaker;
 pub mod health;
 pub mod hotswap;
+pub mod models;
 pub mod power;
 pub mod registry;
 pub mod scheduler;

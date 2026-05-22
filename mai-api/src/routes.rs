@@ -64,6 +64,15 @@ pub fn build_router(state: AppState) -> Router {
         .route(
             "/v1/models/{model_id}/unload",
             post(handlers::models::unload_model),
+        )
+        .route(
+            "/v1/models/discover",
+            post(handlers::models::discover_packages),
+        )
+        .route("/v1/models/install", post(handlers::models::install_model))
+        .route(
+            "/v1/models/{model_id}/remove",
+            post(handlers::models::remove_model_handler),
         );
 
     // Health routes (open to all, auth exempt)
