@@ -602,6 +602,41 @@ Verification:
 - `python -m pytest tools/ adapters/` on 2026-05-22: 114/114 passed (18 new Session 32 tests across `tools/trace-tools/tests/`, `tools/simulator/tests/test_simulator_extensions.py`, `tools/simulator/tests/test_replay_compare.py`).
 - End-to-end CLI smoke test: 40-event synthetic trace replayed through all 4 KV policies produced a complete Markdown comparison table with headline findings; deterministic across two identical runs.
 
+## Session 36 Completion
+
+**Date:** 2026-05-22
+**Status:** Complete (BUILD-EXECUTION-PLAN Session 36 acceptance — first Lamprey layer landed)
+**Summary:** New `mai-router` crate with the Lamprey Query Router. Five modules compose into a deterministic routing decision with classification, entity scan, budget check, fallback chain, and audit-grade reason string. p99 decision latency under 5ms verified by acceptance test.
+**Files Changed:**
+- New crate: mai-router/ (added to workspace members)
+- New: mai-router/Cargo.toml — minimal deps (serde, regex, blake3, chrono, thiserror, tracing)
+- New: mai-router/src/lib.rs — module wiring + re-exports
+- New: mai-router/src/classifier.rs (~280 lines) — `RuleBasedClassifier` with five-level `Classification` (Public/Internal/Sensitive/Regulated/Critical) and TOML-loadable patterns
+- New: mai-router/src/entities.rs (~245 lines) — `EntityScanner` over a `EntityDictionary` covering medical / tribal / export-controlled vocabularies; matched text is blake3-hashed never stored raw
+- New: mai-router/src/cost.rs (~248 lines) — `BudgetTracker` with per-role monthly caps, soft cap at 80%, hard cap enforcement, check/record split so failed cloud calls don't burn budget
+- New: mai-router/src/router.rs (~410 lines) — `Router` trait, `RoutingDecision` (Local/Cloud/Denied), `RouteRequest`, `DefaultRouter` composing the modules with documented decision precedence
+- New: mai-router/src/fallback.rs (~270 lines) — `FallbackChain` and `Engine` trait; cloud failure falls back to local, denied decisions short-circuit
+- New: config/router.toml — shipped baseline patterns, dictionaries, and per-role budgets
+- New: mai-router/tests/latency_budget.rs — p99 < 5ms acceptance test over a 1,000-sample mixed corpus
+- Modified: Cargo.toml — added `mai-router` to workspace members
+**Tests Run:**
+- `cargo test -p mai-router --lib`: 39/39 unit tests pass (classifier 8, entities 7, cost 8, router 8, fallback 8).
+- `cargo test -p mai-router --test latency_budget`: p99 under 5ms verified on Windows native (well under in practice).
+- `cargo fmt --all -- --check`: clean.
+- `cargo clippy --workspace -- -D warnings -A clippy::pedantic`: clean.
+- `cargo test --workspace`: every crate green, zero failures.
+**Acceptance Criteria Verified:**
+- Route decision made in < 5ms p99 (`router_p99_decision_under_5ms`).
+- PHI/PII correctly identified and triggers configured routing action (PHI markers → Local at Regulated; SSN regex → Local; TOP SECRET → Denied at Critical).
+- Budget enforcement prevents overruns — hard cap forces local routing (`test_hard_cap_forces_local`); failed cloud call does not burn budget (`test_failed_cloud_call_does_not_burn_budget`).
+- Fallback chain ensures no request drops unnecessarily — cloud failure falls back to local (`test_cloud_failure_falls_back_to_local`); both-fail returns `Exhausted` (actionable error).
+- Router config is entirely file-driven — `config/router.toml` covers patterns, dictionaries, and budgets; no code changes needed to extend.
+- All routing decisions carry a `routing_reason` for audit (every `RoutingDecision` variant has a `reason` field; `Decision::reason()` accessor unifies access).
+**Known Issues Added or Closed:** None new. Hot reload of router config is documented as Session 37 scope (rule engine + SIGHUP).
+**Next Session Notes:** Session 37 (Router Policy Integration) adds the programmable rule engine on top — composable HIPAA / ITAR / OCAP / cost-control / admin-override modules with priority-based evaluation, hot reload, and a CLI rule tester. Session 36's router primitives are the substrate the rule engine wraps.
+
+---
+
 ## Session 35 Completion
 
 **Date:** 2026-05-22
@@ -762,10 +797,10 @@ Verification:
 | I: Application Integration | 29-31 | Not Started |
 | J: Advanced Scheduling | 32-33 | Complete (32, 33) |
 | K: Testing & Packaging | 34-35 | Complete (34, 35) — Gate C closed |
-| L: Compliance Governance | 36-46 | Not Started |
+| L: Compliance Governance | 36-46 | Partial (36 complete — first Lamprey layer) |
 
-**Sessions Complete:** Sessions 1-26 and 32-35 are complete. **Gate C (Core Platform Release) is CLOSED.**
-**Next Session:** Phase L (Lamprey, Sessions 36-46) on the critical path; or finish the security track (Session 27 Vault Crypto, Session 28 Air-Gap Enforcement) and developer track (Sessions 29-31 SDK + apps) before the final acquisition prep in Session 45.
+**Sessions Complete:** Sessions 1-26 and 32-36 are complete. **Gate C (Core Platform Release) is CLOSED.** Phase L (Lamprey) underway — first layer (Router) shipped.
+**Next Session:** Session 37 (Router Policy Integration) — programmable HIPAA / ITAR / OCAP / cost-control / admin-override rule engine on top of the Session 36 router. Security track (27-28) and developer track (29-31) remain safe parallel candidates before the final acquisition prep in Session 45.
 **Next Archive:** After Session 23 (or end of Phase F, whichever comes first)
 
 ---

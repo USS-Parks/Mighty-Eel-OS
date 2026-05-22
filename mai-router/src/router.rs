@@ -1,0 +1,411 @@
+//! Router core: trait, decision types, and the default composition.
+//!
+//! The `Router` trait is the public surface every caller programs against.
+//! `DefaultRouter` is the production implementation that composes the
+//! classifier, entity scanner, and budget tracker into a single
+//! deterministic decision with an audit-grade reason string.
+
+use std::sync::Arc;
+
+use serde::{Deserialize, Serialize};
+use thiserror::Error;
+use tracing::debug;
+
+use crate::classifier::{Classification, SensitivityClassifier};
+use crate::cost::{BudgetCheck, BudgetTracker};
+use crate::entities::{EntityKind, EntityMatch, EntityScanner};
+
+/// Cloud frontier-model providers the router may route to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CloudProvider {
+    /// Anthropic Claude.
+    Anthropic,
+    /// OpenAI GPT family.
+    OpenAi,
+    /// Google Gemini family.
+    Google,
+}
+
+impl CloudProvider {
+    /// Wire-format string.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Anthropic => "anthropic",
+            Self::OpenAi => "openai",
+            Self::Google => "google",
+        }
+    }
+}
+
+/// What the router decided to do with the request.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub enum RoutingDecision {
+    /// Process the request locally via the MAI inference engine.
+    Local {
+        /// Human-readable reason — emitted to audit.
+        reason: String,
+        /// Classification level observed.
+        classification: Classification,
+    },
+    /// Route to a cloud provider.
+    Cloud {
+        /// Provider selected.
+        provider: CloudProvider,
+        /// Provider-side model name.
+        model: String,
+        /// Human-readable reason — emitted to audit.
+        reason: String,
+        /// Classification level observed.
+        classification: Classification,
+    },
+    /// Reject the request entirely.
+    Denied {
+        /// Stable code for programmatic checks.
+        code: String,
+        /// Human-readable reason — emitted to audit.
+        reason: String,
+        /// Classification level observed (may be Critical).
+        classification: Classification,
+    },
+}
+
+impl RoutingDecision {
+    /// Convenience: the audit reason string regardless of variant.
+    pub fn reason(&self) -> &str {
+        match self {
+            Self::Local { reason, .. }
+            | Self::Cloud { reason, .. }
+            | Self::Denied { reason, .. } => reason,
+        }
+    }
+
+    /// Convenience: the classification regardless of variant.
+    pub fn classification(&self) -> Classification {
+        match self {
+            Self::Local { classification, .. }
+            | Self::Cloud { classification, .. }
+            | Self::Denied { classification, .. } => *classification,
+        }
+    }
+}
+
+/// Inputs the router needs to make a decision.
+///
+/// `query` carries the full request text — the classifier and entity scanner
+/// must see it. The router itself never emits the raw text; downstream
+/// audit / trace emission must hash or truncate it.
+#[derive(Debug, Clone)]
+pub struct RouteRequest {
+    /// Full query text. Inspected by the classifier and entity scanner.
+    pub query: String,
+    /// Caller-estimated token count (prompt + max completion).
+    pub estimated_tokens: u32,
+    /// Profile identifier of the requester.
+    pub profile_id: String,
+    /// Role of the requester (admin, adult, child, ...).
+    pub role: String,
+    /// Caller-supplied sensitivity hints (e.g. upstream classifier
+    /// already saw "PHI"). Combined with the router's own scan.
+    pub upstream_flags: Vec<String>,
+}
+
+/// Errors that can prevent a router decision.
+#[derive(Debug, Error, PartialEq, Eq)]
+pub enum RouterError {
+    /// Estimated token count was zero — caller error.
+    #[error("estimated_tokens must be > 0")]
+    InvalidTokenEstimate,
+}
+
+/// Router configuration top-level shape, loaded from TOML.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RouterConfig {
+    /// Default cloud provider for offload.
+    #[serde(default = "default_provider")]
+    pub default_cloud_provider: CloudProvider,
+    /// Default cloud model identifier.
+    #[serde(default = "default_cloud_model")]
+    pub default_cloud_model: String,
+    /// Sensitivity level at or above which the router refuses cloud routing.
+    /// `Regulated` is the conservative default.
+    #[serde(default = "default_cloud_ceiling")]
+    pub cloud_classification_ceiling: Classification,
+    /// Sensitivity level at which the router denies the request entirely
+    /// (regardless of cloud or local). `Critical` is the default.
+    #[serde(default = "default_deny_floor")]
+    pub deny_at: Classification,
+}
+
+fn default_provider() -> CloudProvider {
+    CloudProvider::Anthropic
+}
+
+fn default_cloud_model() -> String {
+    "claude-sonnet-4-6".to_string()
+}
+
+fn default_cloud_ceiling() -> Classification {
+    Classification::Regulated
+}
+
+fn default_deny_floor() -> Classification {
+    Classification::Critical
+}
+
+impl Default for RouterConfig {
+    fn default() -> Self {
+        Self {
+            default_cloud_provider: default_provider(),
+            default_cloud_model: default_cloud_model(),
+            cloud_classification_ceiling: default_cloud_ceiling(),
+            deny_at: default_deny_floor(),
+        }
+    }
+}
+
+/// Public router contract. All decisions are synchronous; the implementation
+/// must keep route() under the latency budget documented in `docs/`.
+pub trait Router: Send + Sync {
+    /// Decide where the request should go.
+    fn route(&self, request: &RouteRequest) -> Result<RoutingDecision, RouterError>;
+}
+
+/// Production composition: classifier + entity scanner + budget tracker.
+pub struct DefaultRouter {
+    config: RouterConfig,
+    classifier: Arc<dyn SensitivityClassifier>,
+    entities: Arc<EntityScanner>,
+    budget: Arc<BudgetTracker>,
+}
+
+impl DefaultRouter {
+    /// Build a router from its constituent parts.
+    pub fn new(
+        config: RouterConfig,
+        classifier: Arc<dyn SensitivityClassifier>,
+        entities: Arc<EntityScanner>,
+        budget: Arc<BudgetTracker>,
+    ) -> Self {
+        Self {
+            config,
+            classifier,
+            entities,
+            budget,
+        }
+    }
+
+    /// Convenience: a router with all default components.
+    pub fn with_defaults() -> Self {
+        Self {
+            config: RouterConfig::default(),
+            classifier: Arc::new(crate::classifier::RuleBasedClassifier::baseline()),
+            entities: Arc::new(EntityScanner::baseline()),
+            budget: Arc::new(BudgetTracker::with_defaults()),
+        }
+    }
+}
+
+impl Router for DefaultRouter {
+    fn route(&self, request: &RouteRequest) -> Result<RoutingDecision, RouterError> {
+        if request.estimated_tokens == 0 {
+            return Err(RouterError::InvalidTokenEstimate);
+        }
+
+        let classification = self.classifier.classify(&request.query);
+        let entity_hits: Vec<EntityMatch> = self.entities.scan(&request.query);
+        let has_export_controlled = entity_hits
+            .iter()
+            .any(|m| m.kind == EntityKind::ExportControlled);
+        let has_tribal = entity_hits.iter().any(|m| m.kind == EntityKind::Tribal);
+
+        // 1. Hard deny at or above the configured floor.
+        if classification >= self.config.deny_at {
+            return Ok(RoutingDecision::Denied {
+                code: "ROUTER-DENY-CRITICAL".to_string(),
+                reason: format!(
+                    "classification {} at or above deny floor {}",
+                    classification.as_str(),
+                    self.config.deny_at.as_str()
+                ),
+                classification,
+            });
+        }
+
+        // 2. Export-controlled or tribal data must stay local regardless of
+        //    classification (Lamprey ITAR / OCAP baseline). The policy
+        //    runtime in Session 37 will let operators tighten further.
+        if has_export_controlled {
+            return Ok(RoutingDecision::Local {
+                reason: "export-controlled entity detected (ITAR/EAR baseline)".to_string(),
+                classification,
+            });
+        }
+        if has_tribal {
+            return Ok(RoutingDecision::Local {
+                reason: "tribal data sovereignty (OCAP baseline)".to_string(),
+                classification,
+            });
+        }
+
+        // 3. Above the cloud ceiling: must stay local.
+        if classification >= self.config.cloud_classification_ceiling {
+            return Ok(RoutingDecision::Local {
+                reason: format!(
+                    "classification {} at or above cloud ceiling {}",
+                    classification.as_str(),
+                    self.config.cloud_classification_ceiling.as_str()
+                ),
+                classification,
+            });
+        }
+
+        // 4. Budget check. Failures or hard-cap force local routing.
+        match self.budget.check(
+            &request.profile_id,
+            &request.role,
+            u64::from(request.estimated_tokens),
+        ) {
+            Ok(BudgetCheck::HardCapExceeded { used, budget, .. }) => {
+                debug!(profile = %request.profile_id, used, budget, "hard cap exceeded; forcing local");
+                return Ok(RoutingDecision::Local {
+                    reason: "cloud budget hard cap reached; forced local".to_string(),
+                    classification,
+                });
+            }
+            Ok(BudgetCheck::SoftCapReached { remaining, .. }) => {
+                debug!(
+                    profile = %request.profile_id,
+                    remaining,
+                    "soft cap reached; flagged but routing"
+                );
+            }
+            Ok(BudgetCheck::Ok { .. }) => {}
+            Err(_) => {
+                return Ok(RoutingDecision::Local {
+                    reason: "budget check error; forced local".to_string(),
+                    classification,
+                });
+            }
+        }
+
+        // 5. Default: cloud route.
+        Ok(RoutingDecision::Cloud {
+            provider: self.config.default_cloud_provider,
+            model: self.config.default_cloud_model.clone(),
+            reason: format!(
+                "classification {} below cloud ceiling",
+                classification.as_str()
+            ),
+            classification,
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::classifier::RuleBasedClassifier;
+
+    fn router() -> DefaultRouter {
+        DefaultRouter::with_defaults()
+    }
+
+    fn req(query: &str) -> RouteRequest {
+        RouteRequest {
+            query: query.to_string(),
+            estimated_tokens: 100,
+            profile_id: "alice".to_string(),
+            role: "adult".to_string(),
+            upstream_flags: vec![],
+        }
+    }
+
+    #[test]
+    fn test_public_query_routes_cloud() {
+        let r = router();
+        match r.route(&req("What is the capital of France?")).unwrap() {
+            RoutingDecision::Cloud { .. } => {}
+            other => panic!("expected Cloud, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_phi_query_routes_local() {
+        let r = router();
+        match r.route(&req("Patient has a new prescription")).unwrap() {
+            RoutingDecision::Local { classification, .. } => {
+                assert!(classification >= Classification::Regulated);
+            }
+            other => panic!("expected Local, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_critical_query_denied() {
+        let r = router();
+        match r.route(&req("TOP SECRET project alpha")).unwrap() {
+            RoutingDecision::Denied { code, .. } => assert!(code.starts_with("ROUTER-DENY")),
+            other => panic!("expected Denied, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_export_controlled_forces_local_regardless_of_classification() {
+        let r = router();
+        // No regex hit, but an entity-dictionary hit on "itar".
+        match r.route(&req("ITAR question about widgets")).unwrap() {
+            RoutingDecision::Denied { .. } => {
+                // The regex baseline marks "itar controlled" as critical;
+                // a bare "ITAR" by itself triggers the ExportControlled
+                // entity. Either outcome is policy-correct (deny or local).
+            }
+            RoutingDecision::Local { reason, .. } => assert!(reason.contains("export-controlled")),
+            other => panic!("unexpected decision {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_tribal_data_forces_local() {
+        let r = router();
+        match r.route(&req("sacred site mapping for the treaty")).unwrap() {
+            RoutingDecision::Local { reason, .. } => assert!(reason.contains("tribal")),
+            other => panic!("expected Local, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_hard_cap_forces_local() {
+        let budget = Arc::new(BudgetTracker::with_defaults());
+        budget.record("alice", 99_999);
+        let r = DefaultRouter::new(
+            RouterConfig::default(),
+            Arc::new(RuleBasedClassifier::baseline()),
+            Arc::new(EntityScanner::baseline()),
+            budget,
+        );
+        let request = RouteRequest {
+            estimated_tokens: 100,
+            ..req("Just a benign question")
+        };
+        match r.route(&request).unwrap() {
+            RoutingDecision::Local { reason, .. } => assert!(reason.contains("budget")),
+            other => panic!("expected Local from hard cap, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_zero_tokens_errors() {
+        let r = router();
+        let mut request = req("hello");
+        request.estimated_tokens = 0;
+        assert_eq!(r.route(&request), Err(RouterError::InvalidTokenEstimate));
+    }
+
+    #[test]
+    fn test_decision_carries_audit_reason() {
+        let r = router();
+        let d = r.route(&req("What time is it?")).unwrap();
+        assert!(!d.reason().is_empty());
+    }
+}

@@ -1,0 +1,84 @@
+# MAI Router Configuration (Lamprey Session 36)
+#
+# This file shapes the default routing posture: local vs cloud, deny floors,
+# sensitivity patterns, entity dictionaries, and per-role budgets. Reload
+# semantics: hot reload lands in Session 37 (rule engine + SIGHUP).
+#
+# The shipped defaults are conservative. Operators are expected to tune
+# patterns and budgets to their deployment domain.
+
+[router]
+# Cloud provider used when the router selects cloud routing.
+default_cloud_provider = "anthropic"
+# Provider-side model identifier.
+default_cloud_model = "claude-sonnet-4-6"
+# Sensitivity level at or above which cloud routing is forbidden.
+# Choices: "public" | "internal" | "sensitive" | "regulated" | "critical".
+cloud_classification_ceiling = "regulated"
+# Sensitivity level at or above which the request is denied entirely.
+deny_at = "critical"
+
+# -- Sensitivity classifier patterns --
+# Each list adds regex patterns that elevate the matched query to the
+# corresponding classification level. Highest matched level wins.
+
+[classifier]
+internal = [
+    "(?i)\\binternal[\\s-]use\\b",
+    "(?i)\\bconfidential\\b",
+]
+
+sensitive = [
+    # Email addresses
+    "\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}\\b",
+    # US phone numbers (xxx-xxx-xxxx)
+    "\\b\\d{3}-\\d{3}-\\d{4}\\b",
+]
+
+regulated = [
+    # US SSN (xxx-xx-xxxx)
+    "\\b\\d{3}-\\d{2}-\\d{4}\\b",
+    # Common PHI markers (HIPAA baseline)
+    "(?i)\\b(patient|diagnosis|prescription|medical[\\s-]record)\\b",
+    # ICD-10 code shape (rough)
+    "\\b[A-TV-Z][0-9][0-9AB]\\.?[0-9A-TV-Z]{0,4}\\b",
+]
+
+critical = [
+    # National-security markers
+    "(?i)\\b(top[\\s-]secret|classified|noforn)\\b",
+    # ITAR markers
+    "(?i)\\bitar[\\s-]controlled\\b",
+]
+
+# -- Compliance entity dictionaries --
+# Dictionary hits influence routing independent of regex classification.
+# Tribal and export-controlled hits force local routing.
+
+[entities]
+medical = [
+    "diagnosis", "prescription", "medical record",
+    "patient", "hospital", "phi",
+]
+tribal = [
+    "treaty", "tribal", "sacred site",
+    "ocap", "indigenous data",
+]
+export_controlled = [
+    "itar", "ear99", "controlled technical data",
+    "munitions list", "missile technology",
+]
+
+# -- Per-role cloud budgets (monthly tokens) --
+# Hard cap at 100% (forces local routing); soft cap defaults to 80%.
+
+[budget]
+default_budget = 100_000
+soft_cap_fraction = 0.8
+
+[budget.per_role]
+admin = 1_000_000
+adult = 100_000
+teen  = 50_000
+child = 10_000
+guest = 5_000
