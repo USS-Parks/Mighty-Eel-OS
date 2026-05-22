@@ -1,0 +1,28 @@
+[sentinel]
+# Product tier: "scout", "ranger", or "pack_leader"
+tier = "ranger"
+
+[sentinel.model]
+name = "phi-4-mini"
+vram_budget_gb = 4
+cpu_only = false
+size_label = "small"
+
+[sentinel.estimator]
+promote_threshold_tokens = 800
+max_output_tokens = 512
+
+[sentinel.promotion]
+target_latency_secs = 8
+promotion_timeout_secs = 30
+placeholder = "Processing your request..."
+max_queue_depth = 32
+
+[sentinel.warmup]
+strategy = "conservative"
+adaptive_threshold = 3
+adaptive_window_secs = 120
+active_hours_start = 8
+active_hours_end = 22
+keep_warm_secs = 300
+max_speculative_warm_secs = 600
