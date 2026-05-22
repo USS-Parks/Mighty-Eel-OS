@@ -602,6 +602,30 @@ Verification:
 - `python -m pytest tools/ adapters/` on 2026-05-22: 114/114 passed (18 new Session 32 tests across `tools/trace-tools/tests/`, `tools/simulator/tests/test_simulator_extensions.py`, `tools/simulator/tests/test_replay_compare.py`).
 - End-to-end CLI smoke test: 40-event synthetic trace replayed through all 4 KV policies produced a complete Markdown comparison table with headline findings; deterministic across two identical runs.
 
+## Session 34 Completion
+
+**Date:** 2026-05-22
+**Status:** Complete (BUILD-EXECUTION-PLAN Gate C integration suite criteria)
+**Summary:** Audited existing integration coverage across the workspace; closed the four genuine gaps (air-gap enforcement, HTTP-level power state transitions, family profiles isolation matrix, zero data leak); produced a coverage map mapping all 16 Session 34 areas to test files; documented hardware-dependent Phase 1 exit criteria as deferred to Session 35 burn-in.
+**Files Changed:**
+- New: mai-api/tests/system_integration.rs (~340 lines) — 7 named integration tests covering the four gap areas + an end-to-end smoke
+- New: docs/INTEGRATION-COVERAGE.md (~85 lines) — the Gate C coverage map, with a clear ✓/◐/✗ status per area and named deferrals for hardware-dependent Phase 1 criteria
+**Tests Run:**
+- `cargo test -p mai-api --test system_integration`: 7/7 pass (air-gap × 3, power-cycle HTTP, profiles matrix, audit schema, end-to-end smoke).
+- `cargo test --workspace`: every crate green, zero failures across the workspace.
+- `cargo fmt --all -- --check`: clean.
+- `cargo clippy --workspace -- -D warnings -A clippy::pedantic`: clean.
+**Acceptance Criteria Verified:**
+- Integration suite runs consistently — full workspace test run includes 324 scheduler lib, 121 mai-api lib, 186 mai-core lib, 65 adapters lib + integration suites in `mai-*/tests/`, plus 114 Python tests, all passing.
+- Failures are actionable — every assertion includes a descriptive message; MAI-XXXX error codes are spec-defined and tested.
+- Major endpoints have test coverage — HTTP REST (chat, embeddings, models, power, health, admin), gRPC (4 tests), SSE streaming (5 tests), auth gates (6 tests).
+- Critical paths tested under realistic conditions — auth rate-limit burst (Session 26 Gate A), trace-driven multi-policy replay (Session 32 Gate C), soft eviction round-trip + preemption boost (Session 33), HTTP-level power state walk (Session 34).
+- Known failing tests documented — none currently failing; hardware-dependent Phase 1 criteria (Scout/Ranger boot timings, two-GPU configs, 72h stability) are explicitly deferred to Session 35 burn-in scope, not categorized as failures.
+**Known Issues Added or Closed:** None. The deferred-to-burn-in items are correctly scoped in `docs/INTEGRATION-COVERAGE.md`.
+**Next Session Notes:** Gate C closing piece is Session 35 (Deployment Packaging) — one-command local launch, burn-in scripts, operator docs. After 35 lands, Gate C is fully closed and the critical path opens onto Phase L (Lamprey, Sessions 36-46).
+
+---
+
 ## Session 33 Completion
 
 **Date:** 2026-05-22
@@ -704,11 +728,11 @@ Verification:
 | H: Security Hardening | 26-28 | Partial (26 complete) |
 | I: Application Integration | 29-31 | Not Started |
 | J: Advanced Scheduling | 32-33 | Complete (32, 33) |
-| K: Testing & Packaging | 34-35 | Not Started |
+| K: Testing & Packaging | 34-35 | Partial (34 complete) |
 | L: Compliance Governance | 36-46 | Not Started |
 
-**Sessions Complete:** Sessions 1-26, 32, and 33 are complete.
-**Next Session:** Session 34 (Integration Test Suite) closes Gate C. Session 27 (Vault Crypto) on the security track and Sessions 29-31 (SDK + apps) on the developer track remain safe parallel candidates.
+**Sessions Complete:** Sessions 1-26 and 32-34 are complete.
+**Next Session:** Session 35 (Deployment Packaging) closes Gate C and the Core Platform Release. Session 27 (Vault Crypto) on the security track and Sessions 29-31 (SDK + apps) on the developer track remain safe parallel candidates.
 **Next Archive:** After Session 23 (or end of Phase F, whichever comes first)
 
 ---
