@@ -796,3 +796,20 @@ All 6 files rewritten from scratch against verified APIs. v2 files verified: zer
 **Files Created:** config/auth_keys.toml, docs/BUILD.md, tests/sdk_integration.py
 
 **Remaining:** Run SDK integration tests against live server with Ollama.
+
+### 2026-05-21: CI Maintenance - cargo fmt + Type Mismatch Fixes
+
+**Problem:** CI failing on two gates: `cargo fmt --check` (25 formatting diffs across 14 files) and `cargo test --workspace` (13 type mismatches in test callsites).
+
+**Root Cause 1 (fmt):** Accumulated rustfmt drift from sandbox sessions where `cargo fmt` was unavailable. Long method chains, multi-lint `#[allow(...)]` attributes, and `matches!()` tuple arms exceeded line width limits.
+
+**Root Cause 2 (type mismatches):** Source signatures for `record_results()` and `from_parsed()` were updated to take references (`&[ToolResult]`, `&ParsedTopology`) but test callsites still passed owned values. Similarly, `inject_tool_result()` signature takes `&str` but one test callsite passed `String`.
+
+**Fix (21 files, 3 commits):**
+- Commit 1: Applied 25 `cargo fmt` formatting fixes across 14 source files in 10 crates (mai-adapters, mai-agent, mai-api, mai-core, mai-scheduler). Pure whitespace/line-breaking changes, no logic.
+- Commit 2: Added `&` to 13 test callsites: 2 in `mai-agent/tests/tool_calling_test.rs` (record_results), 11 in `mai-scheduler/tests/topology_integration.rs` (from_parsed + parsed1/parsed2).
+- Commit 3: Fixed 4 remaining type mismatches in source-level `#[cfg(test)]` modules: 3 in `mai-agent/src/tools.rs` (record_results: `&results`, `vec![]` to `&[]`), 1 in `mai-agent/src/context.rs` (removed `.to_string()` on inject_tool_result arg). Applied resulting `cargo fmt` fix (args fit on one line after shortening).
+
+**Files Modified:** mai-adapters/src/{bridge,config}.rs, mai-agent/src/{tasks,tools,context}.rs, mai-agent/tests/tool_calling_test.rs, mai-api/src/{audit,server}.rs, mai-api/src/grpc/mod.rs, mai-api/src/streaming/ws.rs, mai-core/src/{health,hotswap,power,registry}.rs, mai-scheduler/src/{default}.rs, mai-scheduler/src/batch/metrics.rs, mai-scheduler/src/kv/{mod,sequence,triggers}.rs, mai-scheduler/src/topology/refresh.rs, mai-scheduler/tests/topology_integration.rs
+
+**Verified:** All fmt diffs resolved. All type mismatches resolved. CI should pass both gates.
