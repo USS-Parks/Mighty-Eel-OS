@@ -172,7 +172,7 @@ impl InstanceHealthTracker {
             return 1.0;
         }
         let ratio = recent_avg / all_avg;
-        ratio.min(1.0).max(0.0)
+        ratio.clamp(0.0, 1.0)
     }
 }
 

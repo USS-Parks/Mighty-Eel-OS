@@ -9,7 +9,7 @@ use super::lifecycle::{LifecycleConfig, PerInstanceLifecycle, RequestLifecycle};
 use super::anomaly::{AnomalyConfig, AnomalyDetector, AnomalyEvent, AnomalyKind};
 
 /// Configuration for the feedback processor.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct FeedbackConfig {
     #[serde(default)]
     pub lifecycle: LifecycleConfig,
@@ -17,16 +17,6 @@ pub struct FeedbackConfig {
     pub health: HealthConfig,
     #[serde(default)]
     pub anomaly: AnomalyConfig,
-}
-
-impl Default for FeedbackConfig {
-    fn default() -> Self {
-        Self {
-            lifecycle: LifecycleConfig::default(),
-            health: HealthConfig::default(),
-            anomaly: AnomalyConfig::default(),
-        }
-    }
 }
 
 /// Summary of a request completion, fed into the feedback processor.

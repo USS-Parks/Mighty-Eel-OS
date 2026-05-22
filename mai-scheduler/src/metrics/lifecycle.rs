@@ -53,11 +53,7 @@ impl RequestLifecycle {
         if actual == 0 {
             return None;
         }
-        let diff = if self.predicted_latency_ms > actual {
-            self.predicted_latency_ms - actual
-        } else {
-            actual - self.predicted_latency_ms
-        };
+        let diff = self.predicted_latency_ms.abs_diff(actual);
         Some(diff as f64 / actual as f64)
     }
 }
