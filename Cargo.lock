@@ -1442,6 +1442,8 @@ dependencies = [
 name = "mai-scheduler"
 version = "0.1.0"
 dependencies = [
+ "blake3",
+ "chrono",
  "dashmap",
  "mai-core",
  "serde",

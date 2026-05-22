@@ -580,6 +580,51 @@ Verification:
 
 ---
 
+### Session 32: Production Trace Integration + Replay
+
+**Status:** Complete 2026-05-22 (Gate C criteria satisfied)
+**Phase:** J (Advanced Scheduling)
+**Depends On:** Session 20 (metrics), Session 21 (simulation framework)
+
+Deliverables:
+- [x] mai-scheduler/src/traces/capture.rs: NDJSON trace capture with daily rotation, blake3-hashed session ids, opt-in via TraceConfig (module renamed from `tracing` to avoid the logging-crate name collision)
+- [x] mai-scheduler/src/traces/mod.rs + lib.rs wiring; chrono + blake3 added to mai-scheduler/Cargo.toml
+- [x] tools/trace-tools/anonymize.py: schema-enforcing anonymizer with per-run salt rehash
+- [x] tools/trace-tools/reconstruct.py: session-level grouping with gap and lifetime statistics
+- [x] tools/trace-tools/calibrate.py: KV reuse alpha/beta coefficient calibration from session data, emitting a TOML fragment compatible with config/kv.toml
+- [x] tools/simulator/trace_generator.py: NDJSON-replay WorkloadGenerator preserving inter-request gaps and supporting time scaling
+- [x] tools/simulator/hybrid.py: trace baseline plus configurable synthetic spike for capacity planning
+- [x] tools/simulator/replay_compare.py: trace-driven policy comparison harness, deterministic at (trace, seed, policy)
+- [x] tools/simulator/report.py: Markdown / JSON report renderer with headline-metric highlights, designed for acquisition documentation
+
+Verification:
+- `cargo test -p mai-scheduler --lib` on 2026-05-22: 293/293 passed (4 new `traces::capture::tests`).
+- `python -m pytest tools/ adapters/` on 2026-05-22: 114/114 passed (18 new Session 32 tests across `tools/trace-tools/tests/`, `tools/simulator/tests/test_simulator_extensions.py`, `tools/simulator/tests/test_replay_compare.py`).
+- End-to-end CLI smoke test: 40-event synthetic trace replayed through all 4 KV policies produced a complete Markdown comparison table with headline findings; deterministic across two identical runs.
+
+## Session 32 Completion
+
+**Date:** 2026-05-22
+**Status:** Complete (Roster v2 spec + BUILD-EXECUTION-PLAN Gate C acceptance criteria)
+**Summary:** Production trace capture, anonymization, session reconstruction, KV reuse calibration, simulator replay, hybrid spike injection, and a trace-driven policy comparison harness with acquisition-quality reports.
+**Files Changed:**
+- New: mai-scheduler/src/traces/{capture,mod}.rs
+- New: tools/trace-tools/{anonymize,reconstruct,calibrate}.py + tests
+- New: tools/simulator/{trace_generator,hybrid,replay_compare,report}.py + tests
+- Modified: mai-scheduler/Cargo.toml (chrono + blake3), mai-scheduler/src/lib.rs (traces module wiring)
+**Tests Run:** `cargo test -p mai-scheduler --lib` (293 pass), `pytest tools/ adapters/` (114 pass).
+**Acceptance Criteria Verified:**
+- Production-like traces replayed deterministically (test_run_trace_replay_is_deterministic).
+- Same seed produces same results (verified across two runs of the same trace/policy).
+- Policy comparisons generate tables (Markdown comparison output via report.py).
+- Scheduler decisions explainable (TraceEvent records latency/queue_wait/priority/was_continuation; existing scorer breakdown unchanged).
+- Reports usable in acquisition documentation (replay_compare → report pipeline emits a sectioned Markdown summary with headline findings and reproducibility note).
+- Privacy: capture and anonymize project to a documented allowlist; tests assert no prompt/response text leaks.
+**Known Issues Added or Closed:** None.
+**Next Session Notes:** Critical path moves to Session 33 (multi-instance cross-GPU scheduling + soft eviction). Session 26 (auth hardening) can run in parallel as the trust-floor track per BUILD-EXECUTION-PLAN.md.
+
+---
+
 ## Summary
 
 **NOTE:** Prompt Roster restructured from 18 to 46 sessions. See MAI-BUILD-PROMPT-ROSTER-v2.md for the current plan, including the Lamprey compliance governance layer. Phase labels below reflect the restructured roster.
@@ -596,12 +641,12 @@ Verification:
 | G: Model Lifecycle | 24-25 | Complete (24, 25) |
 | H: Security Hardening | 26-28 | Not Started |
 | I: Application Integration | 29-31 | Not Started |
-| J: Advanced Scheduling | 32-33 | Not Started |
+| J: Advanced Scheduling | 32-33 | Partial (32 complete) |
 | K: Testing & Packaging | 34-35 | Not Started |
 | L: Compliance Governance | 36-46 | Not Started |
 
-**Sessions Complete:** Sessions 1-25 are complete.
-**Next Session:** Session 32 (production trace replay) on the critical path. Security track (26-28) and application track (29-31) remain safe parallel candidates.
+**Sessions Complete:** Sessions 1-25 and 32 are complete.
+**Next Session:** Session 33 (multi-instance cross-GPU scheduling + soft eviction) on the critical path. Security track (26-28) and application track (29-31) remain safe parallel candidates.
 **Next Archive:** After Session 23 (or end of Phase F, whichever comes first)
 
 ---

@@ -37,6 +37,7 @@ pub mod registry;
 pub mod scheduler;
 pub mod scoring;
 pub mod topology;
+pub mod traces;
 pub mod types;
 
 // Re-exports for convenience
