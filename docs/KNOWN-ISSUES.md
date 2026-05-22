@@ -1,7 +1,7 @@
 # MAI Known Issues
 
 **Project:** Island Mountain Model Abstraction Interface (MAI)
-**Last Updated:** 2026-05-20
+**Last Updated:** 2026-05-21
 
 ---
 
@@ -26,6 +26,16 @@ The Cowork sandbox does not include a Rust toolchain. `cargo check`, `cargo clip
 Formatting drift has accumulated across sessions. No functional impact but `cargo fmt` will produce diffs when run locally.
 
 **Action:** Run `cargo fmt --all` once before Session 15. If generated protobuf code causes conflicts, add `#[rustfmt::skip]` or exclude in `rustfmt.toml`. See docs/BUILD.md for details.
+
+### 7. Axum 0.7 vs 0.8 Handler Trait Version Conflict
+
+**Severity:** Medium (affects new 2+-extractor handlers that use body extractors)
+**Affects:** `mai-api/src/handlers/models.rs` (install_model), `mai-api/src/routes.rs`
+**Status:** Workaround in place (Session 24, 2026-05-21)
+
+`tonic 0.12.3` transitively depends on `axum 0.7.9` while `mai-api` directly depends on `axum 0.8.9`. Both export a `Handler` trait. The compiler cannot resolve which `Handler` impl to use for async functions with 2+ extractors when `T3` is a `FromRequest` (body) type that exists in both versions (e.g. `Json<T>`, `Bytes`). Custom `FromRequest` types in `mai-api` also fail because the function type matches the generic pattern of both crate versions before where-clause checking.
+
+**Workaround:** Register body-consuming routes via `post_service(service_fn(...))` (Tower `Service`) instead of `post(handler)` (axum `Handler`). See `routes.rs` and `install_handler_raw` in `handlers/models.rs`.
 
 ### 6. Registry scan_models Placeholder
 

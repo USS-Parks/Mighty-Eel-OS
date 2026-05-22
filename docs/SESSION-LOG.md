@@ -500,20 +500,20 @@ Architecture Notes:
 **NOTE:** Prompt Roster restructured from 18 to 35 sessions on 2026-05-18. See MAI-BUILD-PROMPT-ROSTER-v2.md for the new plan. Phase labels below reflect the restructured roster.
 
 | Phase | Sessions | Status |
-|---|---|---|
+|---|---|---|---|
 | A: Specification | 01-05 | Complete (5/5) -- archived |
 | B: Foundation Code | 06-10 | Complete (06+06b+07+08+09+10) -- archived |
 | C: Integration Code | 11-13 | Complete (11a-11e + 12 + 13) |
 | D-Prep: Wiring Sprint | 14a-14c | Complete (14a+14b+14c) |
-| D: Scheduler Foundation | 15-18 | Complete (15, 16, 17, 18) |
+| D: Scheduler Foundation | 15-18, 24 | Complete (15, 16, 17, 18, 24) |
 | E: Scheduler Intelligence | 19-21 | In Progress (19 code complete, wiring/tests remain) |
-| F: Power & Lifecycle | 22-25 | Not Started |
+| F: Power & Lifecycle | 22-23, 25 | Not Started |
 | G: Security Hardening | 26-28 | Not Started |
 | H: Application Integration | 29-31 | Not Started |
 | I: Advanced Scheduling | 32-33 | Not Started |
 | J: Testing & Packaging | 34-35 | Not Started |
 
-**Sessions Complete:** 20 / 35 (includes 06+06b as one logical session, 11a-11e as one logical session, 14a-14c as wiring sprint). Session 19 code complete, wiring/tests pending.
+**Sessions Complete:** 21 / 35 (includes 06+06b as one logical session, 11a-11e as one logical session, 14a-14c as wiring sprint, 24 as integration seams). Session 19 code complete, wiring/tests pending.
 **Next Session:** 19e (Scorer Wiring + Config) then 19f (Integration Tests + Governance)
 **Next Archive:** After Session 23 (or end of Phase F, whichever comes first)
 
@@ -850,3 +850,55 @@ All 6 files rewritten from scratch against verified APIs. v2 files verified: zer
 **Files Modified:** mai-adapters/src/{bridge,config}.rs, mai-agent/src/{tasks,tools,context}.rs, mai-agent/tests/tool_calling_test.rs, mai-api/src/{audit,server}.rs, mai-api/src/grpc/mod.rs, mai-api/src/streaming/ws.rs, mai-core/src/{health,hotswap,power,registry}.rs, mai-scheduler/src/{default}.rs, mai-scheduler/src/batch/metrics.rs, mai-scheduler/src/kv/{mod,sequence,triggers}.rs, mai-scheduler/src/topology/refresh.rs, mai-scheduler/tests/topology_integration.rs
 
 **Verified:** All fmt diffs resolved. All type mismatches resolved. CI should pass both gates.
+
+---
+
+### 2026-05-21: Session 24 — Integration Seam Fixes + Model Install/Remove Pipeline
+
+**Scope:** Fix pre-existing compilation-blocking axum version conflict in `install_model` handler, refactor install/remove pipelines to eliminate stale intermediate types, and align ProfileRole/ProfilePermissions across vault/API/SDK crates.
+
+**Root Cause 1 (axum version conflict):** `tonic 0.12.3` transitively depends on `axum 0.7.9`, while `mai-api` directly depends on `axum 0.8.9`. Both export a `Handler` trait. The compiler cannot resolve which `Handler` impl to use for async functions with 2+ extractors — the function type matches the generic pattern of both crate versions.
+
+**Fix (Service-based routing):** Registered the `POST /v1/models/install` route via `post_service(service_fn(...))` (Tower `Service`) instead of `post(handler)` (axum `Handler`), bypassing the trait conflict entirely. Raw handler `install_handler_raw` takes `Request<Body>` + `AppState` and manually extracts headers (profile), body (JSON), and permissions.
+
+**Root Cause 2 (install pipeline):** `registry::install_from_usb()` constructed a `ModelPackage` but called `register_cold_model()` directly instead of delegating to `models::install::install_package()`. The two code paths for model registration had diverging logic.
+
+**Fix:** Refactored `install_from_usb()` to construct `ModelPackage` and delegate to `install_package()`. Made both `install_package()` and `remove_model()` take `&mut HashMap<String, ModelEntry>` + trait objects (`&dyn VaultInterface`, `Option<&dyn ModelStorage>`) instead of `&mut ModelRegistry` generically, enabling borrow-safe destructure-based delegation.
+
+**Root Cause 3 (ProfileRole alignment):** Vault's `ProfileRole` enum lacked the `Teen` variant that API and SDK definitions had. `ProfilePermissions` types lacked `From` conversions between vault, API, and SDK crates.
+
+**Fix:** Added `Teen` variant with correct permissions, added `PartialOrd, Ord, Hash` derives. Added `From` conversions between all three `ProfilePermissions` types.
+
+**Deliverables:**
+- [x] ProfileRole `Teen` variant added to vault, permissions defined, PartialOrd/Ord/Hash derives
+- [x] ProfilePermissions `From` conversions between vault/API/SDK crates
+- [x] Install pipeline: `install_from_usb()` delegates to `install_package()`, `register_cold_model()` call removed
+- [x] Remove pipeline: `secure_remove_model()` delegates to `remove_model()` via destructure
+- [x] `unload_model()` made sync (removed `async fn`, `#[allow(clippy::unused_async)]`, updated callers)
+- [x] `required_vram_bytes` field added to `ModelSummary`, populated in all 4 API response builders
+- [x] `compute_hash_tree_root` doc corrected (BLAKE3 not SHA-256)
+- [x] `install_model` handler registered via Tower service (sidesteps axum 0.7 vs 0.8 `Handler` conflict)
+- [x] `ModelEntry` visibility changed to `pub(crate)`, fields `pub(crate)`
+- [x] `install_package()` and `remove_model()` made `pub(crate)` (not used externally)
+- [x] `dyn Fn` progress parameter bound with `+ Sync` for `Send` future compatibility
+- [x] `cargo check --workspace` clean
+- [x] `cargo clippy --workspace -- -D warnings -A clippy::pedantic` clean
+- [x] `cargo test --workspace` — all 700+ tests pass
+- [x] `cargo fmt --check` clean
+- [x] Governance docs updated
+
+**Files Modified (12):**
+- `mai-core/src/vault.rs` — ProfileRole `Teen` variant, ProfilePermissions `From` impls
+- `mai-core/src/registry.rs` — install_from_usb/secure_remove_model refactored, unload_model sync
+- `mai-core/src/models/install.rs` — install_package pub(crate), Sync bound on progress callback
+- `mai-core/src/models/remove.rs` — remove_model pub(crate)
+- `mai-core/src/models/verify.rs` — doc fix (BLAKE3)
+- `mai-core/src/models/mod.rs` — removed stale re-exports
+- `mai-core/src/hotswap.rs` — .await removed from unload_model calls
+- `mai-api/src/handlers/models.rs` — install_handler_raw, InstallRequest, required_vram_bytes
+- `mai-api/src/handlers/system.rs` — required_vram_bytes in audit log
+- `mai-api/src/grpc/models.rs` — required_vram_bytes, unload_model .await removed
+- `mai-api/src/grpc/registry.rs` — required_vram_bytes
+- `mai-api/src/routes.rs` — post_service for install route
+
+**Remaining:** None (all deliverables complete, CI green). Next session: 19e (Scorer Wiring + Config).

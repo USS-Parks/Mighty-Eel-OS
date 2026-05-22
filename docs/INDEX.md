@@ -1,7 +1,7 @@
 # MAI Build Index
 
 **Project:** Island Mountain Model Abstraction Interface (MAI)
-**Last Updated:** 2026-05-21 (Post-Session 18 CI maintenance)
+**Last Updated:** 2026-05-21 (Session 24 — Integration Seam Fixes)
 
 ---
 
@@ -66,7 +66,7 @@ Each session produces specific deliverables. This table maps sessions to their p
 | 14b | Real Inference Path Wiring | AdapterManager in server.rs, real adapter calls in inference.rs, SSE streaming, e2e_inference.sh |
 | 14c | API/SDK Route Alignment + Auth | Auth hardening, rate limiting, SDK streaming, first-boot admin key, BUILD.md |
 
-### Phase D: Scheduler Foundation (Sessions 15-18)
+### Phase D: Scheduler Foundation (Sessions 15-18, 24)
 
 | Session | Title | Primary Outputs |
 |---|---|---|
@@ -74,6 +74,7 @@ Each session produces specific deliverables. This table maps sessions to their p
 | 16 | GPU Topology Discovery + Weighted Graph | topology module (5 files, 41 unit tests), integration tests (16 tests), fixtures, config/topology.toml |
 | 17 | KV Cache Manager | kv/ module (6 files, 53 unit tests + 5 integration tests), KvCacheManager trait, HeuristicKvCacheManager, config/kv.toml |
 | 18 | Continuous Batching Engine | batch/ module (5 files, 52 tests), BatchBuilder, AdmissionController, PreemptionPolicy, BatchMetrics, eviction batch_contribution wired |
+| 24 | Integration Seam Fixes | Model install/remove pipeline refactoring, axum version conflict workaround, ProfileRole/ProfilePermissions alignment |
 
 ---
 
