@@ -37,6 +37,9 @@ pin-project-lite = "0.2"
 sha3 = "0.10"
 hex = "0.4"
 
+# CSPRNG for API key generation (Session 26: OS-backed entropy via OsRng).
+rand = "0.8"
+
 # File watching for config hot-reload
 notify = { version = "7", features = ["macos_kqueue"] }
 

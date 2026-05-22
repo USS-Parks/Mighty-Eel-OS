@@ -691,7 +691,17 @@ pub struct AuditLogResponse {
 pub struct MaiClientConfig {
     /// Base URL (default: http://localhost:8420)
     pub base_url: String,
-    /// Profile ID for authentication (X-IM-Profile header)
+    /// API key for X-IM-Auth-Token authentication (Session 26).
+    ///
+    /// In production deployments the server requires this on every non-health
+    /// request. Profiles are resolved from the key by the server; clients no
+    /// longer self-assert a profile in trusted-network mode.
+    pub api_key: Option<String>,
+    /// Optional profile id sent via the X-IM-Profile header.
+    ///
+    /// Honored by the server only when `allow_internal_profile_header` is
+    /// enabled (off by default) — useful for internal service-to-service
+    /// calls in trusted networks. Prefer `api_key` for real deployments.
     pub profile_id: String,
     /// Default request priority (X-IM-Priority header)
     pub priority: RequestPriority,
@@ -705,11 +715,27 @@ impl Default for MaiClientConfig {
     fn default() -> Self {
         Self {
             base_url: "http://localhost:8420".to_string(),
+            api_key: None,
             profile_id: String::new(),
             priority: RequestPriority::Normal,
             timeout: Duration::from_secs(30),
             extra_headers: HashMap::new(),
         }
+    }
+}
+
+impl MaiClientConfig {
+    /// Header pairs the HTTP client must include on every request. Returned in
+    /// a stable order so consumers can log/inspect them deterministically.
+    pub fn auth_headers(&self) -> Vec<(&'static str, String)> {
+        let mut headers = Vec::new();
+        if let Some(key) = self.api_key.as_ref() {
+            headers.push(("X-IM-Auth-Token", key.clone()));
+        }
+        if !self.profile_id.is_empty() {
+            headers.push(("X-IM-Profile", self.profile_id.clone()));
+        }
+        headers
     }
 }
 
@@ -722,10 +748,15 @@ pub struct MaiClient {
 }
 
 impl MaiClient {
-    /// Create a new client with the given configuration
+    /// Create a new client with the given configuration.
+    ///
+    /// Either `api_key` (the production path, sent as `X-IM-Auth-Token`) or
+    /// `profile_id` (trusted-network internal calls) must be provided.
     pub fn new(config: MaiClientConfig) -> SdkResult<Self> {
-        if config.profile_id.is_empty() {
-            return Err(SdkError::Config("profile_id is required".to_string()));
+        if config.api_key.is_none() && config.profile_id.is_empty() {
+            return Err(SdkError::Config(
+                "either api_key or profile_id must be set".to_string(),
+            ));
         }
         Ok(Self { config })
     }
@@ -899,9 +930,47 @@ mod tests {
     }
 
     #[test]
-    fn client_requires_profile_id() {
-        let config = MaiClientConfig::default();
-        assert!(MaiClient::new(config).is_err());
+    fn client_requires_either_api_key_or_profile_id() {
+        let empty = MaiClientConfig::default();
+        assert!(MaiClient::new(empty).is_err());
+
+        let with_profile = MaiClientConfig {
+            profile_id: "service-foo".to_string(),
+            ..MaiClientConfig::default()
+        };
+        assert!(MaiClient::new(with_profile).is_ok());
+
+        let with_key = MaiClientConfig {
+            api_key: Some("im-test".to_string()),
+            ..MaiClientConfig::default()
+        };
+        assert!(MaiClient::new(with_key).is_ok());
+    }
+
+    #[test]
+    fn auth_headers_prefer_api_key_and_drop_empty_profile() {
+        let cfg = MaiClientConfig {
+            api_key: Some("im-secret".to_string()),
+            profile_id: String::new(),
+            ..MaiClientConfig::default()
+        };
+        let headers = cfg.auth_headers();
+        assert_eq!(headers.len(), 1);
+        assert_eq!(headers[0].0, "X-IM-Auth-Token");
+        assert_eq!(headers[0].1, "im-secret");
+    }
+
+    #[test]
+    fn auth_headers_include_both_when_set() {
+        let cfg = MaiClientConfig {
+            api_key: Some("im-secret".to_string()),
+            profile_id: "service-foo".to_string(),
+            ..MaiClientConfig::default()
+        };
+        let headers = cfg.auth_headers();
+        assert_eq!(headers.len(), 2);
+        assert_eq!(headers[0].0, "X-IM-Auth-Token");
+        assert_eq!(headers[1].0, "X-IM-Profile");
     }
 
     #[test]

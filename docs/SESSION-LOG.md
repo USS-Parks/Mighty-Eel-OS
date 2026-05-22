@@ -602,6 +602,35 @@ Verification:
 - `python -m pytest tools/ adapters/` on 2026-05-22: 114/114 passed (18 new Session 32 tests across `tools/trace-tools/tests/`, `tools/simulator/tests/test_simulator_extensions.py`, `tools/simulator/tests/test_replay_compare.py`).
 - End-to-end CLI smoke test: 40-event synthetic trace replayed through all 4 KV policies produced a complete Markdown comparison table with headline findings; deterministic across two identical runs.
 
+## Session 26 Completion
+
+**Date:** 2026-05-22
+**Status:** Complete (BUILD-EXECUTION-PLAN Gate A acceptance criteria)
+**Summary:** Auth hardening on top of the Session 14c surface — replaced the weak SHA3-of-time key generator with `rand::rngs::OsRng`, added the missing `api_key` field to the Rust SDK config + auth-header helper, added explicit Gate A acceptance tests at the HTTP router level, and wrote `docs/SECURITY.md`.
+**Files Changed:**
+- Modified: mai-api/Cargo.toml (added `rand = "0.8"`)
+- Modified: mai-api/src/auth.rs (CSPRNG-backed `generate_api_key()`, new entropy test)
+- Modified: mai-sdk-rs/src/lib.rs (`api_key: Option<String>` on `MaiClientConfig`, `auth_headers()` helper, relaxed `MaiClient::new()` validation, three new tests)
+- New: mai-api/tests/auth_gate_a.rs (6 acceptance tests against a strict AuthState)
+- New: docs/SECURITY.md (security posture reference for Gate A)
+**Tests Run:**
+- `cargo test -p mai-api --test auth_gate_a`: 6/6 pass.
+- `cargo test -p mai-api auth::` (unit): 25/25 pass (2 new entropy tests).
+- `cargo test -p mai-sdk-rs`: 8/8 pass.
+- `cargo test --workspace`: all crates green, zero failures.
+**Acceptance Criteria Verified:**
+- Missing `X-IM-Auth-Token` → 401 (`gate_a_missing_token_returns_401`).
+- Invalid `X-IM-Auth-Token` → 401 (`gate_a_invalid_token_returns_401`).
+- Valid token reaches authorized endpoints (`gate_a_valid_token_passes_auth`).
+- Rate-limit burst → 429 (`gate_a_rate_limit_returns_429`).
+- Header profile spoofing disabled by default (`profile_header_alone_is_rejected_in_strict_mode`).
+- Admin key is printed once at first boot and never appears in tracing/audit (architectural, verified by inspecting `load_auth_state()`).
+- SDK can authenticate (Python had it; Rust SDK now exposes `api_key` + `auth_headers()`).
+**Known Issues Added or Closed:** None new. Vault crypto (Session 27) and air-gap enforcement (Session 28) remain to complete Release Train 1.
+**Next Session Notes:** Session 27 (Vault Crypto) is next on the security track. Sessions 29-31 (SDK completeness + app scaffolds) are now unblocked per BUILD-EXECUTION-PLAN — Session 26 stabilized the auth model, so they can run in parallel with 27-28.
+
+---
+
 ## Session 32 Completion
 
 **Date:** 2026-05-22
@@ -639,14 +668,14 @@ Verification:
 | E: Scheduler Intelligence | 19-21 | Complete (19, 20, 21) |
 | F: Power & Lifecycle | 22-23, 25 | Complete (22, 23, 25) |
 | G: Model Lifecycle | 24-25 | Complete (24, 25) |
-| H: Security Hardening | 26-28 | Not Started |
+| H: Security Hardening | 26-28 | Partial (26 complete) |
 | I: Application Integration | 29-31 | Not Started |
 | J: Advanced Scheduling | 32-33 | Partial (32 complete) |
 | K: Testing & Packaging | 34-35 | Not Started |
 | L: Compliance Governance | 36-46 | Not Started |
 
-**Sessions Complete:** Sessions 1-25 and 32 are complete.
-**Next Session:** Session 33 (multi-instance cross-GPU scheduling + soft eviction) on the critical path. Security track (26-28) and application track (29-31) remain safe parallel candidates.
+**Sessions Complete:** Sessions 1-26 and 32 are complete.
+**Next Session:** Session 27 (Vault Crypto) on the security track, or Session 33 (multi-instance scheduling) on the critical path. Application track (29-31) is now unblocked.
 **Next Archive:** After Session 23 (or end of Phase F, whichever comes first)
 
 ---

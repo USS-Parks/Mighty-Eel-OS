@@ -155,25 +155,15 @@ pub fn hash_api_key(raw_key: &str) -> String {
 }
 
 /// Generate a cryptographically random API key (32 bytes, hex-encoded = 64 chars).
+///
+/// Uses [`rand::rngs::OsRng`], the platform CSPRNG (`BCryptGenRandom` on
+/// Windows, `getrandom(2)` on Linux). The raw key is returned to the caller
+/// exactly once; only the hash is ever persisted.
 pub fn generate_api_key() -> String {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    // Use a combination of random-ish sources since we may not have
-    // a proper CSPRNG in all environments. In production, use the
-    // TPM or /dev/urandom via the vault.
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default();
-    let seed = format!(
-        "mai-key-{}-{}-{}",
-        now.as_nanos(),
-        std::process::id(),
-        uuid::Uuid::new_v4()
-    );
-    let mut hasher = Sha3_256::new();
-    hasher.update(seed.as_bytes());
-    let hash = hex::encode(hasher.finalize());
-    // Prefix with "im-" for easy identification
-    format!("im-{hash}")
+    use rand::RngCore;
+    let mut bytes = [0u8; 32];
+    rand::rngs::OsRng.fill_bytes(&mut bytes);
+    format!("im-{}", hex::encode(bytes))
 }
 
 // -- Rate Limiter --
@@ -678,7 +668,19 @@ mod tests {
     fn test_generate_api_key_format() {
         let key = generate_api_key();
         assert!(key.starts_with("im-"));
-        assert!(key.len() > 60);
+        // 32 random bytes -> 64 hex chars, plus the "im-" prefix.
+        assert_eq!(key.len(), 67);
+        // Body must be valid hex.
+        assert!(key[3..].chars().all(|c| c.is_ascii_hexdigit()));
+    }
+
+    #[test]
+    fn test_generate_api_key_is_unique() {
+        // CSPRNG should never collide across short bursts.
+        let mut keys = std::collections::HashSet::new();
+        for _ in 0..50 {
+            assert!(keys.insert(generate_api_key()));
+        }
     }
 
     #[test]
