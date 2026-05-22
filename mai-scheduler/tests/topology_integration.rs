@@ -49,7 +49,7 @@ fn test_single_gpu_topology_penalty_zero() {
     let parsed = parse_topo_matrix(&raw).unwrap();
     let config = TopologyConfig::default();
     let graph = GpuGraph::from_parsed(
-        parsed,
+        &parsed,
         &config.link_weights,
         config.latency_weight,
         config.bw_weight,
@@ -87,7 +87,7 @@ fn test_2gpu_nvlink_graph_structure() {
     let parsed = parse_topo_matrix(&raw).unwrap();
     let config = TopologyConfig::default();
     let graph = GpuGraph::from_parsed(
-        parsed,
+        &parsed,
         &config.link_weights,
         config.latency_weight,
         config.bw_weight,
@@ -109,7 +109,7 @@ fn test_2gpu_nvlink_topology_analysis() {
     let parsed = parse_topo_matrix(&raw).unwrap();
     let config = TopologyConfig::default();
     let graph = GpuGraph::from_parsed(
-        parsed,
+        &parsed,
         &config.link_weights,
         config.latency_weight,
         config.bw_weight,
@@ -165,7 +165,7 @@ fn test_4gpu_mixed_cost_ordering() {
     let parsed = parse_topo_matrix(&raw).unwrap();
     let config = TopologyConfig::default();
     let graph = GpuGraph::from_parsed(
-        parsed,
+        &parsed,
         &config.link_weights,
         config.latency_weight,
         config.bw_weight,
@@ -192,7 +192,7 @@ fn test_4gpu_mixed_topology_penalty_ordering() {
     let parsed = parse_topo_matrix(&raw).unwrap();
     let config = TopologyConfig::default();
     let graph = GpuGraph::from_parsed(
-        parsed,
+        &parsed,
         &config.link_weights,
         config.latency_weight,
         config.bw_weight,
@@ -240,7 +240,7 @@ fn test_4gpu_mixed_nvlink_cliques() {
     let parsed = parse_topo_matrix(&raw).unwrap();
     let config = TopologyConfig::default();
     let graph = GpuGraph::from_parsed(
-        parsed,
+        &parsed,
         &config.link_weights,
         config.latency_weight,
         config.bw_weight,
@@ -314,7 +314,7 @@ fn test_8gpu_dgx_topology_structure() {
     let parsed = parse_topo_matrix(&raw).unwrap();
     let config = TopologyConfig::default();
     let graph = GpuGraph::from_parsed(
-        parsed,
+        &parsed,
         &config.link_weights,
         config.latency_weight,
         config.bw_weight,
@@ -350,7 +350,7 @@ fn test_8gpu_dgx_cpu_affinity_groups() {
     let parsed = parse_topo_matrix(&raw).unwrap();
     let config = TopologyConfig::default();
     let graph = GpuGraph::from_parsed(
-        parsed,
+        &parsed,
         &config.link_weights,
         config.latency_weight,
         config.bw_weight,
@@ -378,7 +378,7 @@ fn test_config_weights_affect_edge_cost() {
     // Default weights
     let config1 = TopologyConfig::default();
     let graph1 = GpuGraph::from_parsed(
-        parsed1,
+        &parsed1,
         &config1.link_weights,
         config1.latency_weight,
         config1.bw_weight,
@@ -389,7 +389,7 @@ fn test_config_weights_affect_edge_cost() {
     let mut config2 = TopologyConfig::default();
     config2.latency_weight = 2.0;
     let graph2 = GpuGraph::from_parsed(
-        parsed2,
+        &parsed2,
         &config2.link_weights,
         config2.latency_weight,
         config2.bw_weight,
@@ -410,7 +410,7 @@ fn test_placement_engine_topology_integration() {
     let parsed = parse_topo_matrix(&raw).unwrap();
     let config = TopologyConfig::default();
     let graph = GpuGraph::from_parsed(
-        parsed,
+        &parsed,
         &config.link_weights,
         config.latency_weight,
         config.bw_weight,

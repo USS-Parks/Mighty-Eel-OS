@@ -126,7 +126,7 @@ fn full_tool_chain_round_trip() {
     }];
 
     registry
-        .record_results(&request_id, results, "profile-parent")
+        .record_results(&request_id, &results, "profile-parent")
         .expect("Should accept results");
 
     // Step 6: Chain should still be active (more steps possible)
@@ -219,7 +219,7 @@ fn chain_step_limit_enforced() {
             duration_ms: 10,
         }];
         registry
-            .record_results(&request_id, results, "admin")
+            .record_results(&request_id, &results, "admin")
             .unwrap();
     }
 
