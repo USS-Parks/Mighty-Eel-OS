@@ -42,14 +42,25 @@ use mai_core::power::{PowerConfig, PowerStateMachine};
 use mai_core::registry::ModelRegistry;
 use mai_core::vault::VaultInterface;
 use mai_hil::traits::AdapterConfig;
-use mai_scheduler::metrics::{MetricsCollector, MetricsConfig};
 use mai_scheduler::{
-    DefaultScheduler, GpuId, InstanceCapabilities, InstanceConfig, InstanceId,
-    SchedulerConfig as NewSchedulerConfig,
+    DefaultScheduler, GpuId, GpuTopology, HeuristicKvCacheManager, InstanceCapabilities,
+    InstanceConfig, InstanceId, KvCacheConfig, SchedulerConfig as NewSchedulerConfig,
+    ScoringConfig, TopologyConfig,
+    metrics::{MetricsCollector, MetricsConfig},
 };
 
 /// Default path for auth keys config file.
 const AUTH_KEYS_CONFIG_PATH: &str = "config/auth_keys.toml";
+/// Default path for scheduler config when the server runs from the repo root.
+const SCHEDULER_CONFIG_PATH: &str = "config/scheduler.toml";
+/// Fallback scheduler config path when running from the workspace root.
+const API_SCHEDULER_CONFIG_PATH: &str = "mai-api/config/scheduler.toml";
+/// Default path for multi-factor scoring config.
+const SCORING_CONFIG_PATH: &str = "config/scoring.toml";
+/// Default path for KV cache config.
+const KV_CONFIG_PATH: &str = "config/kv.toml";
+/// Default path for GPU topology config.
+const TOPOLOGY_CONFIG_PATH: &str = "config/topology.toml";
 
 /// Parsed adapter configuration from adapters.toml.
 #[derive(Debug, Clone, Default)]
@@ -184,10 +195,9 @@ impl MaiServer {
 
         // -- Step 3: Initialize mai-core components--
 
-        // Load scheduler config from scheduler.toml (Session 15)
-        let scheduler_config = load_scheduler_config();
-        let scheduler: Arc<dyn mai_scheduler::Scheduler> =
-            Arc::new(DefaultScheduler::new(scheduler_config));
+        // Load scheduler, topology, KV, and multi-factor scoring config
+        // before publishing the scheduler behind the trait object.
+        let scheduler: Arc<dyn mai_scheduler::Scheduler> = Arc::new(build_configured_scheduler());
 
         // until Session 12 provides the real vault.
         let vault = StubVault;
@@ -603,18 +613,42 @@ fn load_adapter_boot_config(path: Option<&Path>) -> AdapterBootConfig {
     }
 }
 
+/// Build the production scheduler with startup config wiring.
+///
+/// Session 19 activates multi-factor scoring here: topology and KV handles are
+/// attached before `config/scoring.toml` is applied, so scorer rebuild captures
+/// every runtime dependency.
+fn build_configured_scheduler() -> DefaultScheduler {
+    let scheduler_config = load_scheduler_config();
+    let topology = load_gpu_topology();
+    let kv_manager: Arc<dyn mai_scheduler::KvCacheManager> =
+        Arc::new(HeuristicKvCacheManager::new(load_kv_config()));
+
+    let mut scheduler = DefaultScheduler::with_topology(scheduler_config, topology);
+    scheduler.set_kv_manager(kv_manager);
+
+    if let Some(scoring_config) = load_scoring_config() {
+        scheduler.set_scoring_config(scoring_config);
+        info!("Multi-factor scheduler scoring activated from config");
+    } else {
+        warn!("No scoring config found; scheduler will use least-loaded scoring");
+    }
+
+    scheduler
+}
+
 /// Load scheduler configuration from config/scheduler.toml.
 ///
 /// Falls back to defaults if the file is missing or invalid.
 /// Aliases are loaded from the `[aliases]` section.
 fn load_scheduler_config() -> NewSchedulerConfig {
-    let path = Path::new("config/scheduler.toml");
+    let path = resolve_config_path(SCHEDULER_CONFIG_PATH, Some(API_SCHEDULER_CONFIG_PATH));
     if !path.exists() {
         info!("No scheduler config file found, using defaults");
         return NewSchedulerConfig::default();
     }
 
-    let content = match std::fs::read_to_string(path) {
+    let content = match std::fs::read_to_string(&path) {
         Ok(c) => c,
         Err(e) => {
             warn!(path = %path.display(), error = %e, "Cannot read scheduler config, using defaults");
@@ -638,6 +672,161 @@ fn load_scheduler_config() -> NewSchedulerConfig {
             NewSchedulerConfig::default()
         }
     }
+}
+
+/// Load multi-factor scoring config from config/scoring.toml.
+///
+/// The checked-in file uses a `[scoring]` wrapper so future config files can
+/// grow sibling sections without changing the scheduler crate's config type.
+fn load_scoring_config() -> Option<ScoringConfig> {
+    load_scoring_config_from_path(Path::new(SCORING_CONFIG_PATH))
+}
+
+#[derive(serde::Deserialize)]
+struct ScoringConfigFile {
+    scoring: ScoringConfig,
+}
+
+fn load_scoring_config_from_path(path: &Path) -> Option<ScoringConfig> {
+    if !path.exists() {
+        return None;
+    }
+
+    let content = match std::fs::read_to_string(path) {
+        Ok(c) => c,
+        Err(e) => {
+            warn!(path = %path.display(), error = %e, "Cannot read scoring config");
+            return None;
+        }
+    };
+
+    match toml::from_str::<ScoringConfigFile>(&content) {
+        Ok(file) => {
+            info!(
+                path = %path.display(),
+                latency_weight = file.scoring.latency_weight,
+                memory_weight = file.scoring.memory_weight,
+                topology_weight = file.scoring.topology_weight,
+                eviction_weight = file.scoring.eviction_weight,
+                batching_weight = file.scoring.batching_weight,
+                "Loaded multi-factor scoring configuration"
+            );
+            Some(file.scoring)
+        }
+        Err(wrapper_error) => match toml::from_str::<ScoringConfig>(&content) {
+            Ok(config) => {
+                info!(path = %path.display(), "Loaded direct scoring configuration");
+                Some(config)
+            }
+            Err(direct_error) => {
+                warn!(
+                    path = %path.display(),
+                    wrapper_error = %wrapper_error,
+                    direct_error = %direct_error,
+                    "Invalid scoring config TOML, leaving scorer unchanged"
+                );
+                None
+            }
+        },
+    }
+}
+
+/// Load KV cache config and fall back to conservative defaults.
+fn load_kv_config() -> KvCacheConfig {
+    load_kv_config_from_path(Path::new(KV_CONFIG_PATH))
+}
+
+fn load_kv_config_from_path(path: &Path) -> KvCacheConfig {
+    if !path.exists() {
+        info!("No KV config file found, using defaults");
+        return KvCacheConfig::default();
+    }
+
+    let content = match std::fs::read_to_string(path) {
+        Ok(c) => c,
+        Err(e) => {
+            warn!(path = %path.display(), error = %e, "Cannot read KV config, using defaults");
+            return KvCacheConfig::default();
+        }
+    };
+
+    match toml::from_str::<KvCacheConfig>(&content) {
+        Ok(config) => {
+            info!(
+                path = %path.display(),
+                budget_bytes = config.total_budget_bytes,
+                model_factors = config.model_factors.len(),
+                "Loaded KV cache configuration"
+            );
+            config
+        }
+        Err(e) => {
+            warn!(path = %path.display(), error = %e, "Invalid KV config TOML, using defaults");
+            KvCacheConfig::default()
+        }
+    }
+}
+
+/// Load topology config and discover the GPU topology.
+fn load_gpu_topology() -> Arc<GpuTopology> {
+    let config = load_topology_config_from_path(Path::new(TOPOLOGY_CONFIG_PATH));
+    match GpuTopology::discover(&config) {
+        Ok(topology) => {
+            let topology = Arc::new(topology);
+            info!(
+                gpus = topology.gpu_count(),
+                nvlink_cliques = topology.nvlink_cliques().len(),
+                "GPU topology loaded"
+            );
+            topology
+        }
+        Err(e) => {
+            warn!(error = %e, "GPU topology discovery failed, using flat topology");
+            Arc::new(GpuTopology::flat(&TopologyConfig::default()))
+        }
+    }
+}
+
+fn load_topology_config_from_path(path: &Path) -> TopologyConfig {
+    if !path.exists() {
+        info!("No topology config file found, using defaults");
+        return TopologyConfig::default();
+    }
+
+    let content = match std::fs::read_to_string(path) {
+        Ok(c) => c,
+        Err(e) => {
+            warn!(path = %path.display(), error = %e, "Cannot read topology config, using defaults");
+            return TopologyConfig::default();
+        }
+    };
+
+    match toml::from_str::<TopologyConfig>(&content) {
+        Ok(config) => {
+            info!(path = %path.display(), "Loaded topology configuration");
+            config
+        }
+        Err(e) => {
+            warn!(path = %path.display(), error = %e, "Invalid topology config TOML, using defaults");
+            TopologyConfig::default()
+        }
+    }
+}
+
+fn resolve_config_path(primary: &str, fallback: Option<&str>) -> PathBuf {
+    let primary = PathBuf::from(primary);
+    if primary.exists() {
+        return primary;
+    }
+
+    if let Some(fallback) = fallback {
+        let fallback = PathBuf::from(fallback);
+        if fallback.exists() {
+            return fallback;
+        }
+    }
+
+    primary
 }
 
 /// Stub vault implementation for server bootstrap.
@@ -683,6 +872,12 @@ impl VaultInterface for StubVault {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use mai_scheduler::Scheduler;
+
+    fn temp_config_path(name: &str) -> PathBuf {
+        let unique = format!("mai-{name}-{}.toml", uuid::Uuid::new_v4());
+        std::env::temp_dir().join(unique)
+    }
 
     #[test]
     fn test_default_scout_creates_server() {
@@ -737,6 +932,105 @@ mod tests {
         assert!(err.to_string().contains("bad port"));
         let err = ServerError::AirGap("switch offline".to_string());
         assert!(err.to_string().contains("switch offline"));
+    }
+
+    #[test]
+    fn test_load_scoring_config_from_wrapped_toml() {
+        let path = temp_config_path("scoring-wrapped");
+        std::fs::write(
+            &path,
+            r#"
+[scoring]
+latency_weight = 3.25
+memory_weight = 1.0
+topology_weight = 2.0
+eviction_weight = 0.5
+batching_weight = 4.0
+continuation_bonus = 8.0
+"#,
+        )
+        .unwrap();
+
+        let config = load_scoring_config_from_path(&path).unwrap();
+        assert!((config.latency_weight - 3.25).abs() < f64::EPSILON);
+        assert!((config.batching_weight - 4.0).abs() < f64::EPSILON);
+
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn test_load_scoring_config_accepts_direct_toml() {
+        let path = temp_config_path("scoring-direct");
+        std::fs::write(
+            &path,
+            r#"
+latency_weight = 0.5
+memory_weight = 6.0
+topology_weight = 0.0
+eviction_weight = 0.0
+batching_weight = 0.0
+continuation_bonus = 0.0
+"#,
+        )
+        .unwrap();
+
+        let config = load_scoring_config_from_path(&path).unwrap();
+        assert!((config.memory_weight - 6.0).abs() < f64::EPSILON);
+
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn test_load_kv_and_topology_configs_from_files() {
+        let kv_path = temp_config_path("kv");
+        std::fs::write(&kv_path, "total_budget_bytes = 123456\n").unwrap();
+        let kv = load_kv_config_from_path(&kv_path);
+        assert_eq!(kv.total_budget_bytes, 123456);
+        let _ = std::fs::remove_file(kv_path);
+
+        let topology_path = temp_config_path("topology");
+        std::fs::write(
+            &topology_path,
+            r#"
+latency_weight = 2.0
+bw_weight = 3.0
+refresh_interval_ms = 250
+"#,
+        )
+        .unwrap();
+        let topology = load_topology_config_from_path(&topology_path);
+        assert!((topology.latency_weight - 2.0).abs() < f64::EPSILON);
+        assert_eq!(topology.refresh_interval_ms, 250);
+        let _ = std::fs::remove_file(topology_path);
+    }
+
+    #[test]
+    fn test_build_configured_scheduler_activates_runtime_handles() {
+        let scheduler = build_configured_scheduler();
+
+        assert!(scheduler.topology().is_some());
+        assert!(scheduler.kv_manager().is_some());
+
+        scheduler
+            .register_instance(InstanceConfig {
+                id: InstanceId::new("ollama:llama3"),
+                model_name: "llama3".to_string(),
+                adapter_type: "ollama".to_string(),
+                gpu_ids: vec![GpuId::new(0)],
+                max_batch_size: 4,
+                vram_allocated: 8_000_000_000,
+                capabilities: InstanceCapabilities::default(),
+            })
+            .unwrap();
+
+        let decision = scheduler
+            .schedule(&mai_scheduler::ScheduleRequest::new(
+                "lamprey/fast",
+                mai_scheduler::Priority::Normal,
+            ))
+            .unwrap();
+
+        assert_eq!(decision.instance_id, InstanceId::new("ollama:llama3"));
     }
 
     #[test]

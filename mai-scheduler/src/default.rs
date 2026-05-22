@@ -30,7 +30,7 @@ use crate::kv::manager::KvCacheManager;
 use crate::placement::PlacementEngine;
 use crate::registry::InstanceRegistry;
 use crate::scheduler::Scheduler;
-use crate::scoring::{ScoringConfig, build_multi_factor_scorer};
+use crate::scoring::{ScoringConfig, build_multi_factor_scorer_with_reason};
 use crate::topology::GpuTopology;
 use crate::types::{
     ClusterMetrics, GpuId, InstanceConfig, InstanceId, ScheduleDecision, ScheduleRequest,
@@ -202,12 +202,12 @@ impl DefaultScheduler {
         let Some(ref config) = self.scoring_config else {
             return;
         };
-        let scorer = build_multi_factor_scorer(
+        let (scorer, reason_fn) = build_multi_factor_scorer_with_reason(
             config.clone(),
             self.topology.clone(),
             self.kv_manager.clone(),
         );
-        self.placement.set_scorer(scorer);
+        self.placement.set_scorer_with_reason(scorer, reason_fn);
     }
 }
 
@@ -1055,6 +1055,82 @@ mod tests {
 
     // --- Session 19e: Scorer integration tests ---
 
+    fn three_gpu_test_topology() -> Arc<crate::topology::GpuTopology> {
+        use crate::topology::collector::{LinkType, ParsedGpu, ParsedLink, ParsedTopology};
+        use crate::topology::graph::GpuGraph;
+        use crate::topology::{GpuTopology, LinkWeightConfig, TopologyConfig};
+
+        let parsed = ParsedTopology {
+            gpus: vec![
+                ParsedGpu {
+                    gpu_id: GpuId(0),
+                    name: "GPU0".into(),
+                    cpu_affinity: Some(0),
+                },
+                ParsedGpu {
+                    gpu_id: GpuId(1),
+                    name: "GPU1".into(),
+                    cpu_affinity: Some(0),
+                },
+                ParsedGpu {
+                    gpu_id: GpuId(2),
+                    name: "GPU2".into(),
+                    cpu_affinity: Some(32),
+                },
+            ],
+            links: vec![
+                ParsedLink {
+                    from: GpuId(0),
+                    to: GpuId(1),
+                    link_type: LinkType::NV4,
+                },
+                ParsedLink {
+                    from: GpuId(1),
+                    to: GpuId(0),
+                    link_type: LinkType::NV4,
+                },
+                ParsedLink {
+                    from: GpuId(0),
+                    to: GpuId(2),
+                    link_type: LinkType::SYS,
+                },
+                ParsedLink {
+                    from: GpuId(2),
+                    to: GpuId(0),
+                    link_type: LinkType::SYS,
+                },
+                ParsedLink {
+                    from: GpuId(1),
+                    to: GpuId(2),
+                    link_type: LinkType::SYS,
+                },
+                ParsedLink {
+                    from: GpuId(2),
+                    to: GpuId(1),
+                    link_type: LinkType::SYS,
+                },
+            ],
+            cpu_affinity: [(GpuId(0), 0), (GpuId(1), 0), (GpuId(2), 32)]
+                .into_iter()
+                .collect(),
+        };
+        let graph = GpuGraph::from_parsed(&parsed, &LinkWeightConfig::default(), 1.0, 1.0);
+        Arc::new(GpuTopology::from_graph(graph, TopologyConfig::default()))
+    }
+
+    fn register_topology_pair(sched: &DefaultScheduler) {
+        let mut nvlink_instance = make_instance("inst-nvlink", "llama3-8b", "ollama");
+        nvlink_instance.gpu_ids = vec![GpuId(0), GpuId(1)];
+        nvlink_instance.vram_allocated = 16_000_000_000;
+
+        let mut sys_instance = make_instance("inst-sys", "llama3-8b", "vllm");
+        sys_instance.gpu_ids = vec![GpuId(0), GpuId(2)];
+        sys_instance.vram_allocated = 16_000_000_000;
+
+        sched.register_instance(sys_instance).unwrap();
+        sched.register_instance(nvlink_instance).unwrap();
+    }
+
     #[test]
     fn test_scorer_wired_with_scoring_config() {
         let mut sched = DefaultScheduler::new(test_config());
@@ -1186,6 +1262,277 @@ mod tests {
         let decision = sched.schedule(&req).unwrap();
         // Should pick inst-b (less loaded)
         assert_eq!(decision.instance_id, InstanceId::new("inst-b"));
+    }
+
+    #[test]
+    fn test_schedule_multi_factor_prefers_lower_topology_cost() {
+        let mut sched = DefaultScheduler::with_topology(test_config(), three_gpu_test_topology());
+        sched.set_scoring_config(ScoringConfig {
+            latency_weight: 0.0,
+            memory_weight: 0.0,
+            topology_weight: 10.0,
+            eviction_weight: 0.0,
+            batching_weight: 0.0,
+            continuation_bonus: 0.0,
+            ..ScoringConfig::default()
+        });
+        register_topology_pair(&sched);
+
+        let req = ScheduleRequest::new("lamprey/fast", Priority::Normal);
+        let decision = sched.schedule(&req).unwrap();
+
+        assert_eq!(decision.instance_id, InstanceId::new("inst-nvlink"));
+        assert_eq!(decision.assigned_gpus, vec![GpuId(0), GpuId(1)]);
+        assert!(decision.placement_reason.starts_with("multi-factor("));
+    }
+
+    #[test]
+    fn test_schedule_multi_factor_with_topology_and_kv_handles() {
+        use crate::kv::{HeuristicKvCacheManager, KvCacheConfig};
+        use crate::topology::{GpuTopology, TopologyConfig};
+
+        let topo = Arc::new(GpuTopology::flat(&TopologyConfig::default()));
+        let kv_config = KvCacheConfig {
+            total_budget_bytes: 4_000_000_000,
+            ..KvCacheConfig::default()
+        };
+        let kv = Arc::new(HeuristicKvCacheManager::new(kv_config));
+
+        let mut sched = DefaultScheduler::with_topology(test_config(), topo);
+        sched.set_kv_manager(kv);
+        sched.set_scoring_config(ScoringConfig::default());
+        sched
+            .register_instance(make_instance("ollama:0", "llama3-8b", "ollama"))
+            .unwrap();
+
+        let req = ScheduleRequest::new("lamprey/fast", Priority::Normal);
+        let decision = sched.schedule(&req).unwrap();
+        let metrics = sched.cluster_metrics();
+
+        assert_eq!(decision.instance_id, InstanceId::new("ollama:0"));
+        assert_eq!(metrics.total_requests_routed, 1);
+        assert_eq!(metrics.topology_gpu_count, 1);
+        assert_eq!(metrics.kv_total_bytes, 4_000_000_000);
+    }
+
+    #[test]
+    fn test_session_19f_schedule_pipeline_eight_scenarios() {
+        use crate::kv::{HeuristicKvCacheManager, KvCacheConfig};
+
+        let mut full = DefaultScheduler::with_topology(test_config(), three_gpu_test_topology());
+        let kv = Arc::new(HeuristicKvCacheManager::new(KvCacheConfig {
+            total_budget_bytes: 4_000_000_000,
+            ..KvCacheConfig::default()
+        }));
+        full.set_kv_manager(kv);
+        full.set_scoring_config(ScoringConfig::default());
+        register_topology_pair(&full);
+
+        let first = full
+            .schedule(&ScheduleRequest::new("lamprey/fast", Priority::Normal))
+            .unwrap();
+        assert!(first.placement_reason.starts_with("multi-factor("));
+        assert!(first.placement_reason.contains("lat="));
+        assert!(first.placement_reason.contains("mem="));
+        assert!(first.placement_reason.contains("topo="));
+        assert!(first.placement_reason.contains("evict="));
+        assert!(first.placement_reason.contains("batch=-"));
+
+        let metrics = full.cluster_metrics();
+        assert_eq!(metrics.topology_gpu_count, 3);
+        assert_eq!(metrics.kv_total_bytes, 4_000_000_000);
+
+        let mut topology_only =
+            DefaultScheduler::with_topology(test_config(), three_gpu_test_topology());
+        topology_only.set_scoring_config(ScoringConfig {
+            latency_weight: 0.0,
+            memory_weight: 0.0,
+            topology_weight: 10.0,
+            eviction_weight: 0.0,
+            batching_weight: 0.0,
+            continuation_bonus: 0.0,
+            ..ScoringConfig::default()
+        });
+        register_topology_pair(&topology_only);
+        let topology_decision = topology_only
+            .schedule(&ScheduleRequest::new("lamprey/fast", Priority::Normal))
+            .unwrap();
+        assert_eq!(
+            topology_decision.instance_id,
+            InstanceId::new("inst-nvlink")
+        );
+
+        let mut memory_only =
+            DefaultScheduler::with_topology(test_config(), three_gpu_test_topology());
+        memory_only.set_scoring_config(ScoringConfig {
+            latency_weight: 0.0,
+            memory_weight: 10.0,
+            topology_weight: 0.0,
+            eviction_weight: 0.0,
+            batching_weight: 0.0,
+            continuation_bonus: 0.0,
+            ..ScoringConfig::default()
+        });
+        register_topology_pair(&memory_only);
+        memory_only.instance_registry().update_metrics(
+            &InstanceId::new("inst-nvlink"),
+            |metrics| {
+                metrics.vram_used = 15_000_000_000;
+            },
+        );
+        let memory_decision = memory_only
+            .schedule(&ScheduleRequest::new("lamprey/fast", Priority::Normal))
+            .unwrap();
+        assert_eq!(memory_decision.instance_id, InstanceId::new("inst-sys"));
+
+        let mut latency_only =
+            DefaultScheduler::with_topology(test_config(), three_gpu_test_topology());
+        latency_only.set_scoring_config(ScoringConfig {
+            latency_weight: 10.0,
+            memory_weight: 0.0,
+            topology_weight: 0.0,
+            eviction_weight: 0.0,
+            batching_weight: 0.0,
+            continuation_bonus: 0.0,
+            ..ScoringConfig::default()
+        });
+        register_topology_pair(&latency_only);
+        latency_only.instance_registry().update_metrics(
+            &InstanceId::new("inst-nvlink"),
+            |metrics| {
+                metrics.queue_depth = 20;
+                metrics.active_sequences = 20;
+            },
+        );
+        let latency_decision = latency_only
+            .schedule(&ScheduleRequest::new("lamprey/fast", Priority::Normal))
+            .unwrap();
+        assert_eq!(latency_decision.instance_id, InstanceId::new("inst-sys"));
+
+        let mut batching_only =
+            DefaultScheduler::with_topology(test_config(), three_gpu_test_topology());
+        batching_only.set_scoring_config(ScoringConfig {
+            latency_weight: 0.0,
+            memory_weight: 0.0,
+            topology_weight: 0.0,
+            eviction_weight: 0.0,
+            batching_weight: 10.0,
+            continuation_bonus: 0.0,
+            ..ScoringConfig::default()
+        });
+        register_topology_pair(&batching_only);
+        batching_only
+            .instance_registry()
+            .update_metrics(&InstanceId::new("inst-sys"), |metrics| {
+                metrics.batch_utilization = 0.95;
+                metrics.batch_waiting_count = 128;
+                metrics.decode_slots_used = 16;
+            });
+        let batching_decision = batching_only
+            .schedule(&ScheduleRequest::new("lamprey/fast", Priority::Normal))
+            .unwrap();
+        assert_eq!(
+            batching_decision.instance_id,
+            InstanceId::new("inst-nvlink")
+        );
+
+        let mut eviction_only = DefaultScheduler::new(test_config());
+        eviction_only.set_kv_manager(Arc::new(HeuristicKvCacheManager::new(KvCacheConfig {
+            total_budget_bytes: 1,
+            ..KvCacheConfig::default()
+        })));
+        eviction_only.set_scoring_config(ScoringConfig {
+            latency_weight: 0.0,
+            memory_weight: 0.0,
+            topology_weight: 0.0,
+            eviction_weight: 10.0,
+            batching_weight: 0.0,
+            continuation_bonus: 0.0,
+            ..ScoringConfig::default()
+        });
+        eviction_only
+            .register_instance(make_instance("ollama:0", "llama3-8b", "ollama"))
+            .unwrap();
+        let eviction_decision = eviction_only
+            .schedule(&ScheduleRequest {
+                prompt_tokens: 1024,
+                max_tokens: 1024,
+                ..ScheduleRequest::new("lamprey/fast", Priority::Normal)
+            })
+            .unwrap();
+        assert!(eviction_decision.placement_reason.contains("evict=1.000"));
+
+        let mut overload_config = test_config();
+        overload_config.overload_queue_threshold = 1;
+        let mut overload =
+            DefaultScheduler::with_topology(overload_config, three_gpu_test_topology());
+        overload.set_scoring_config(ScoringConfig {
+            latency_weight: 10.0,
+            memory_weight: 0.0,
+            topology_weight: 0.0,
+            eviction_weight: 0.0,
+            batching_weight: 0.0,
+            continuation_bonus: 0.0,
+            ..ScoringConfig::default()
+        });
+        register_topology_pair(&overload);
+        overload
+            .instance_registry()
+            .update_metrics(&InstanceId::new("inst-nvlink"), |metrics| {
+                metrics.queue_depth = 2;
+            });
+        overload
+            .instance_registry()
+            .update_metrics(&InstanceId::new("inst-sys"), |metrics| {
+                metrics.queue_depth = 8;
+            });
+        let overload_decision = overload
+            .schedule(&ScheduleRequest::new("lamprey/fast", Priority::Normal))
+            .unwrap();
+        assert_eq!(
+            overload_decision.instance_id,
+            InstanceId::new("inst-nvlink")
+        );
+
+        let mut rebuild = DefaultScheduler::with_topology(test_config(), three_gpu_test_topology());
+        register_topology_pair(&rebuild);
+        rebuild.set_scoring_config(ScoringConfig {
+            latency_weight: 0.0,
+            memory_weight: 0.0,
+            topology_weight: 10.0,
+            eviction_weight: 0.0,
+            batching_weight: 0.0,
+            continuation_bonus: 0.0,
+            ..ScoringConfig::default()
+        });
+        assert_eq!(
+            rebuild
+                .schedule(&ScheduleRequest::new("lamprey/fast", Priority::Normal))
+                .unwrap()
+                .instance_id,
+            InstanceId::new("inst-nvlink")
+        );
+        rebuild
+            .instance_registry()
+            .update_metrics(&InstanceId::new("inst-nvlink"), |metrics| {
+                metrics.vram_used = 15_000_000_000;
+            });
+        rebuild.set_scoring_config(ScoringConfig {
+            latency_weight: 0.0,
+            memory_weight: 10.0,
+            topology_weight: 0.0,
+            eviction_weight: 0.0,
+            batching_weight: 0.0,
+            continuation_bonus: 0.0,
+            ..ScoringConfig::default()
+        });
+        assert_eq!(
+            rebuild
+                .schedule(&ScheduleRequest::new("lamprey/fast", Priority::Normal))
+                .unwrap()
+                .instance_id,
+            InstanceId::new("inst-sys")
+        );
     }
 
     #[test]

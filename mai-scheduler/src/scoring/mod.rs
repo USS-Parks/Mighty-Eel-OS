@@ -35,6 +35,7 @@ pub use eviction_cost::EvictionCostConfig;
 pub use latency::LatencyConfig;
 pub use memory::MemoryConfig;
 pub use scorer::{
-    MultiFactorScorer, ScoreBreakdown, ScoringConfig, build_multi_factor_scorer, build_scorer,
+    MultiFactorScorer, ScoreBreakdown, ScoringConfig, build_multi_factor_scorer,
+    build_multi_factor_scorer_with_reason, build_scorer,
 };
 pub use topology_score::TopologyScoreConfig;

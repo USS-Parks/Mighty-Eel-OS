@@ -2,7 +2,7 @@
 
 **Project:** Island Mountain Model Abstraction Interface (MAI)
 **Alignment Note:** Governance status aligned with current code on 2026-05-22.
-**Last Updated:** 2026-05-21 (Session 24 — Integration Seam Fixes)
+**Last Updated:** 2026-05-22 (Session 25 OTA + model lifecycle)
 
 ---
 
@@ -19,7 +19,7 @@ These documents govern the MAI build. Read them before writing code.
 | [INDEX.md](INDEX.md) | This file. Master index of all project documents | Finding anything |
 | [KNOWN-ISSUES.md](KNOWN-ISSUES.md) | Out-of-scope items, deferred work, architectural limitations, open questions | Wondering "should I build this?" |
 | [PROJECT.md](PROJECT.md) | Original scope, 5-phase plan, 18-session timeline, effort estimates, coverage matrix | Historical scope reference |
-| [SESSION-LOG.md](SESSION-LOG.md) | Active session progress (current baseline: 1-18 and 22-24 complete; 19 in progress) | Before and after each session |
+| [SESSION-LOG.md](SESSION-LOG.md) | Active session progress (current baseline: Sessions 1-25 complete) | Before and after each session |
 | [SESSION-LOG-ARCHIVE-01.md](SESSION-LOG-ARCHIVE-01.md) | Completed sessions 01-10 (Phase A+B) with full notes and deliverable lists | Reviewing past session details |
 | [HANDOFF-ARCHIVE-01.md](HANDOFF-ARCHIVE-01.md) | Archived onboarding walkthrough and Phase A+B code inventory | Reference only |
 | [SESSION-RULES.md](SESSION-RULES.md) | Dependency enforcement, acceptance criteria protocol, quality gates, session workflow | Conducting any session |
@@ -81,9 +81,18 @@ Each session produces specific deliverables. This table maps sessions to their p
 
 | Session | Title | Primary Outputs |
 |---|---|---|
-| 19 | Multi-Factor Scorer | scoring/ module, ScoringConfig, config/scoring.toml, DefaultScheduler scorer hooks; server autoload and full integration tests remain |
-| 20 | Feedback Loop + Metrics Collection | Not started |
-| 21 | Simulation Framework | Not started |
+| 19 | Multi-Factor Scorer | scoring/ module, ScoringConfig, config/scoring.toml, API startup autoload, topology/KV handles, score breakdown, Session 19f schedule tests |
+| 20 | Feedback Loop + Metrics Collection | metrics/ module, MetricsCollector, lifecycle/feedback/health/anomaly/store, telemetry handler, config/metrics.toml |
+| 21 | Simulation Framework | tools/simulator engine, GPU model, workload generator, KV policies, metrics, experiments, config, README |
+
+### Phase F: Power & Lifecycle (Sessions 22-25)
+
+| Session | Title | Primary Outputs |
+|---|---|---|
+| 22 | Power State Machine | mai-core power refactor, scheduler-facing power controller, config/power.toml |
+| 23 | Sentinel Mode | Sentinel estimator/runtime/promotion/warmup modules, config/sentinel.toml |
+| 24 | Model Install/Remove Seams | Install/remove pipeline refactor, route conflict fix, required_vram_bytes propagation |
+| 25 | OTA Update Pipeline + Model Lifecycle | update/lifecycle/preload modules, benchmark/update REST routes, docs/UPDATE-PROTOCOL.md |
 
 ### Phase L: Compliance Governance (Sessions 36-46)
 
@@ -111,6 +120,7 @@ After the project scaffold is created in Session 06, the monorepo will contain:
 | mai-vault | Rust | Trusted | 12 | 12 |
 | mai-agent | Rust | Trusted (L3-L4 boundary) | 13 | 13 |
 | mai-scheduler | Rust | Trusted | 15 | 15 |
+| tools/simulator | Python | Dev/test tooling | 21 | 21 |
 | adapters/ollama | Python | Untrusted | 06 (scaffold) | 08 |
 | adapters/vllm | Python | Untrusted | 06 (scaffold) | 09 |
 | adapters/llamacpp | Python | Untrusted | 06 (scaffold) | 09 |
@@ -121,7 +131,26 @@ After the project scaffold is created in Session 06, the monorepo will contain:
 
 ---
 
-## Test Suites Index (Updated Session 18)
+## Key Module Index (Updated Session 25)
+
+| Module/File | Purpose | Session |
+|---|---|---|
+| `mai-scheduler/src/scoring/` | Multi-factor scheduler scoring: latency, memory, topology, eviction, batching | 19 |
+| `mai-scheduler/src/metrics/` | Feedback loop, lifecycle tracking, health scoring, anomaly detection, ring buffers | 20 |
+| `mai-api/src/handlers/telemetry.rs` | REST telemetry endpoints for scheduler metrics, instance metrics, health, anomalies | 20 |
+| `tools/simulator/` | Offline simulator for scheduling, KV, batching, workload, and policy experiments | 21 |
+| `mai-core/src/power/` | Power state machine refactor, transitions, demotion logic | 22 |
+| `mai-scheduler/src/power.rs` | Scheduler-facing power controller | 22 |
+| `mai-core/src/sentinel/` | Sentinel estimator, runtime, promotion, and warmup path | 23 |
+| `mai-core/src/models/update.rs` | OTA manifest client boundary, differential shard planning, license/tier validation, resumable downloads | 25 |
+| `mai-core/src/models/lifecycle.rs` | Installed model listing, load/unload, benchmark, export, affinity tracking | 25 |
+| `mai-core/src/models/preload.rs` | Sentinel-first and affinity-based preload planning | 25 |
+| `mai-api/src/handlers/updates.rs` | REST update check, background download start, and status endpoints | 25 |
+| `docs/UPDATE-PROTOCOL.md` | Privacy-preserving update server and mirror protocol | 25 |
+
+---
+
+## Test Suites Index (Updated Session 25)
 
 | Suite | Location | Purpose | Session |
 |---|---|---|---|
@@ -179,10 +208,18 @@ After the project scaffold is created in Session 06, the monorepo will contain:
 | Batch builder tests | `mai-scheduler/src/batch/builder.rs` `#[cfg(test)]` | Enqueue/admit, model mismatch, queue full, completion, batch limit, VRAM regions, preemption (14 tests) | 18 |
 | Batch eviction scoring tests | `mai-scheduler/src/kv/eviction.rs` `#[cfg(test)]` | batch_member_protected, batch_aware_scoring_with_set (2 tests) | 18 |
 | Batch integration tests | `mai-scheduler/src/default.rs` `#[cfg(test)]` | Builder created on register, removed on unregister, cluster metrics batch fields (3 tests) | 18 |
+| Scoring unit tests | `mai-scheduler/src/scoring/*.rs` `#[cfg(test)]` | Multi-factor scorer and sub-score correctness (41 tests) | 19 |
+| Session 19f schedule pipeline | `mai-scheduler/src/default.rs` `#[cfg(test)]` | 8 full `DefaultScheduler.schedule()` scenarios with topology, KV, batching, score breakdown, overload fallback, runtime rebuild | 19 |
+| Metrics feedback tests | `mai-scheduler/src/metrics/*.rs` `#[cfg(test)]` | Lifecycle, feedback, health scoring, anomaly detection, ring buffer, MetricsCollector | 20 |
+| Telemetry API tests | `mai-api/src/server.rs` and handler compile coverage | Startup config handles and telemetry handler wiring | 20 |
+| OTA update tests | `mai-core/src/models/update.rs` `#[cfg(test)]` | No-identity manifest check, differential shards, resumable range download, license/tier validation, seasonal tier limits | 25 |
+| Model lifecycle tests | `mai-core/src/models/lifecycle.rs` `#[cfg(test)]` | Load-benchmark-unload round trip, installed listing affinity, export config, affinity order | 25 |
+| Preload planning tests | `mai-core/src/models/preload.rs` `#[cfg(test)]` | Sentinel, preferred, and affinity preload ordering | 25 |
+| Update handler tests | `mai-api/src/handlers/updates.rs` `#[cfg(test)]` | Background download status progression | 25 |
 
 ---
 
-## Configuration Files Index (Post-Session 19 In Progress)
+## Configuration Files Index (Post-Session 21)
 
 | File | Purpose | Session |
 |---|---|---|
@@ -194,7 +231,9 @@ After the project scaffold is created in Session 06, the monorepo will contain:
 | config/topology.toml | Topology config (link weights, refresh interval, anomaly thresholds) | 16 |
 | config/auth_keys.toml | API key auth config template (key hashes, rate limits) | 14c |
 | config/kv.toml | KV cache config (budget, eviction weights, anti-thrash, triggers, model factors) | 17 |
-| config/scoring.toml | Multi-factor scorer weights and normalization settings (server autoload still pending) | 19 |
+| config/scoring.toml | Multi-factor scorer weights and normalization settings; autoloaded by API startup | 19 |
+| config/metrics.toml | Feedback loop and metrics collector settings | 20 |
+| tools/simulator/config.toml | Simulator hardware, workload, policy, and experiment settings | 21 |
 
 ---
 

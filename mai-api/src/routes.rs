@@ -62,7 +62,10 @@ pub fn build_router(state: AppState) -> Router {
     let state_for_install = state.clone();
     let model_routes = Router::new()
         .route("/v1/models", get(handlers::models::list_models))
-        .route("/v1/models/{model_id}", get(handlers::models::get_model))
+        .route(
+            "/v1/models/{model_id}",
+            get(handlers::models::get_model).delete(handlers::models::remove_model_handler),
+        )
         .route(
             "/v1/models/{model_id}/load",
             post(handlers::models::load_model),
@@ -70,6 +73,10 @@ pub fn build_router(state: AppState) -> Router {
         .route(
             "/v1/models/{model_id}/unload",
             post(handlers::models::unload_model),
+        )
+        .route(
+            "/v1/models/{model_id}/benchmark",
+            post(handlers::models::benchmark_model).get(handlers::models::get_model_benchmark),
         )
         .route(
             "/v1/models/discover",
@@ -88,6 +95,15 @@ pub fn build_router(state: AppState) -> Router {
             "/v1/models/{model_id}/remove",
             post(handlers::models::remove_model_handler),
         );
+
+    // OTA update routes (Session 25)
+    let update_routes = Router::new()
+        .route("/v1/updates/check", get(handlers::updates::check_updates))
+        .route(
+            "/v1/updates/download",
+            post(handlers::updates::start_update_download),
+        )
+        .route("/v1/updates/status", get(handlers::updates::update_status));
 
     // Health routes (open to all, auth exempt)
     let health_routes = Router::new()
@@ -144,6 +160,7 @@ pub fn build_router(state: AppState) -> Router {
     Router::new()
         .merge(inference_routes)
         .merge(model_routes)
+        .merge(update_routes)
         .merge(health_routes)
         .merge(system_routes)
         .merge(telemetry_routes)

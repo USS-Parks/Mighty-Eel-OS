@@ -48,11 +48,12 @@ pub use metrics::{MetricsCollector, MetricsConfig};
 pub use power::{PowerControllerConfig, PowerStateController};
 pub use scheduler::Scheduler;
 pub use scoring::{
-    MultiFactorScorer, ScoreBreakdown, ScoringConfig, build_multi_factor_scorer, build_scorer,
+    MultiFactorScorer, ScoreBreakdown, ScoringConfig, build_multi_factor_scorer,
+    build_multi_factor_scorer_with_reason, build_scorer,
 };
 pub use topology::{GpuTopology, TopologyConfig, TopologyError};
 pub use types::{
     ClusterMetrics, GpuId, InstanceCapabilities, InstanceConfig, InstanceId, InstanceMetrics,
     InstanceState, ModelAlias, Priority, ScheduleDecision, ScheduleRequest, SchedulerConfig,
-    SchedulerError, ScoringFn, SequenceId,
+    SchedulerError, ScoringFn, ScoringReasonFn, SequenceId,
 };

@@ -24,6 +24,7 @@ use tracing::{debug, warn};
 use crate::topology::GpuTopology;
 use crate::types::{
     GpuId, InstanceId, InstanceState, ScheduleDecision, ScheduleRequest, SchedulerError, ScoringFn,
+    ScoringReasonFn,
 };
 
 /// The placement engine. Holds references to the registry and alias resolver,
@@ -31,6 +32,8 @@ use crate::types::{
 pub struct PlacementEngine {
     /// Scoring function. Lower score = better candidate.
     scoring_fn: ScoringFn,
+    /// Optional score breakdown formatter for diagnostics.
+    scoring_reason_fn: Option<ScoringReasonFn>,
     /// Queue depth threshold for overload filtering.
     overload_threshold: u32,
     /// GPU topology for hardware-aware placement scoring.
@@ -43,6 +46,7 @@ impl PlacementEngine {
     pub fn new(overload_threshold: u32) -> Self {
         Self {
             scoring_fn: Box::new(least_loaded_scorer),
+            scoring_reason_fn: None,
             overload_threshold,
             topology: None,
         }
@@ -52,6 +56,7 @@ impl PlacementEngine {
     pub fn with_scorer(overload_threshold: u32, scorer: ScoringFn) -> Self {
         Self {
             scoring_fn: scorer,
+            scoring_reason_fn: None,
             overload_threshold,
             topology: None,
         }
@@ -60,6 +65,13 @@ impl PlacementEngine {
     /// Replace the scoring function at runtime (used by Session 19).
     pub fn set_scorer(&mut self, scorer: ScoringFn) {
         self.scoring_fn = scorer;
+        self.scoring_reason_fn = None;
+    }
+
+    /// Replace the scoring function and its diagnostic formatter at runtime.
+    pub fn set_scorer_with_reason(&mut self, scorer: ScoringFn, reason_fn: ScoringReasonFn) {
+        self.scoring_fn = scorer;
+        self.scoring_reason_fn = Some(reason_fn);
     }
 
     /// Set the GPU topology for hardware-aware placement (Session 16).
@@ -160,7 +172,9 @@ impl PlacementEngine {
         let (best_id, best_state, _score) =
             best.ok_or_else(|| SchedulerError::NoInstanceAvailable(request.model_alias.clone()))?;
 
-        let reason = if pool.len() == 1 {
+        let reason = if let Some(reason_fn) = &self.scoring_reason_fn {
+            reason_fn(best_state, request)
+        } else if pool.len() == 1 {
             "only-candidate".to_string()
         } else {
             "least-loaded".to_string()

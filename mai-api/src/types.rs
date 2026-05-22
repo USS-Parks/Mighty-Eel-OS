@@ -547,6 +547,93 @@ pub struct ModelOperationResponse {
     pub message: String,
 }
 
+/// Response for model benchmark operations
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModelBenchmarkResponse {
+    pub model_id: String,
+    pub tokens_per_sec: f64,
+    pub ttft_ms: u64,
+    pub memory_used_bytes: u64,
+    pub completed_at_epoch: u64,
+}
+
+impl From<mai_core::models::BenchmarkResult> for ModelBenchmarkResponse {
+    fn from(result: mai_core::models::BenchmarkResult) -> Self {
+        Self {
+            model_id: result.model_id,
+            tokens_per_sec: result.tokens_per_sec,
+            ttft_ms: result.ttft_ms,
+            memory_used_bytes: result.memory_used_bytes,
+            completed_at_epoch: result.completed_at_epoch,
+        }
+    }
+}
+
+/// Update check response
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateCheckResponse {
+    pub available: Vec<UpdateModelInfo>,
+    pub current: Vec<String>,
+}
+
+/// Available update model info
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateModelInfo {
+    pub name: String,
+    pub version: String,
+    pub size: u64,
+    pub url: String,
+    pub tier: String,
+}
+
+impl From<mai_core::models::UpdateModel> for UpdateModelInfo {
+    fn from(model: mai_core::models::UpdateModel) -> Self {
+        Self {
+            name: model.name,
+            version: model.version,
+            size: model.size,
+            url: model.url,
+            tier: model.tier.as_str().to_string(),
+        }
+    }
+}
+
+/// Start background update download request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateDownloadRequest {
+    pub name: String,
+    pub version: String,
+    pub url: String,
+    #[serde(default)]
+    pub auto_install: bool,
+}
+
+/// Start background update download response
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateDownloadResponse {
+    pub download_id: String,
+    pub status: String,
+    pub message: String,
+}
+
+/// Update download status response
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateStatusResponse {
+    pub downloads: Vec<UpdateDownloadStatus>,
+}
+
+/// Single background update status
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateDownloadStatus {
+    pub download_id: String,
+    pub name: String,
+    pub version: String,
+    pub status: String,
+    pub progress_percent: u8,
+    pub bytes_downloaded: u64,
+    pub message: String,
+}
+
 // ─── Registry Scan Response ─────────────────────────────────────────
 
 /// Response for registry scan operation

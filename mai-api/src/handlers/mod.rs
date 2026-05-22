@@ -9,3 +9,4 @@ pub mod inference;
 pub mod models;
 pub mod system;
 pub mod telemetry;
+pub mod updates;

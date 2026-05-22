@@ -7,18 +7,28 @@
 use axum::Json;
 use axum::extract::{FromRequest, Path, State};
 use axum::response::IntoResponse;
+use std::sync::OnceLock;
 use std::time::{SystemTime, UNIX_EPOCH};
+use tokio::sync::Mutex;
 use tracing::{debug, info, warn};
 
 use crate::auth::{can_access_model, check_permission};
 use crate::errors::ApiError;
 use crate::state::AppState;
 use crate::types::{
-    DiscoverResponse, DiscoveredPackage, ModelCapabilities, ModelDetail, ModelInstallResponse,
-    ModelListResponse, ModelOperationResponse, ModelRemoveResponse, ProfileInfo,
+    DiscoverResponse, DiscoveredPackage, ModelBenchmarkResponse, ModelCapabilities, ModelDetail,
+    ModelInstallResponse, ModelListResponse, ModelOperationResponse, ModelRemoveResponse,
+    ProfileInfo,
 };
 
+use mai_core::models::ModelLifecycleManager;
 use mai_core::registry::ModelStatus;
+
+static LIFECYCLE_MANAGER: OnceLock<Mutex<ModelLifecycleManager>> = OnceLock::new();
+
+fn lifecycle_manager() -> &'static Mutex<ModelLifecycleManager> {
+    LIFECYCLE_MANAGER.get_or_init(|| Mutex::new(ModelLifecycleManager::new()))
+}
 
 /// Raw handler for POST /v1/models/install.
 ///
@@ -228,6 +238,7 @@ pub async fn load_model(
     check_permission(&profile, "manage_models")?;
 
     let mut registry = state.registry.write().await;
+    let mut lifecycle = lifecycle_manager().lock().await;
 
     // Check model exists
     if registry.get_model(&model_id).is_none() {
@@ -241,26 +252,21 @@ pub async fn load_model(
 
     match status {
         ModelStatus::ColdStorage => {
-            // Initiate loading
-            registry
-                .update_status(
-                    &model_id,
-                    ModelStatus::Loading {
-                        progress_percent: 0,
-                    },
-                )
+            lifecycle
+                .load_model(&mut registry, &model_id, None)
+                .await
                 .map_err(|e| {
-                    warn!(error = %e, model = %model_id, "Failed to start model load");
-                    ApiError::InternalError
+                    warn!(error = %e, model = %model_id, "Failed to load model");
+                    ApiError::ModelUnavailable(e.to_string())
                 })?;
 
-            info!(model = %model_id, profile = %profile.profile_id, "Model load initiated");
+            info!(model = %model_id, profile = %profile.profile_id, "Model loaded");
 
             Ok(Json(ModelOperationResponse {
                 operation: "load".to_string(),
                 model_id: model_id.clone(),
-                status: "loading".to_string(),
-                message: format!("Model '{model_id}' load initiated from cold storage"),
+                status: "loaded".to_string(),
+                message: format!("Model '{model_id}' loaded to VRAM"),
             }))
         }
         ModelStatus::Loaded | ModelStatus::Active { .. } => Ok(Json(ModelOperationResponse {
@@ -297,6 +303,7 @@ pub async fn unload_model(
     check_permission(&profile, "manage_models")?;
 
     let mut registry = state.registry.write().await;
+    let mut lifecycle = lifecycle_manager().lock().await;
 
     // Check model exists
     if registry.get_model(&model_id).is_none() {
@@ -309,22 +316,20 @@ pub async fn unload_model(
 
     match status {
         ModelStatus::Loaded | ModelStatus::Active { .. } => {
-            registry
-                .update_status(&model_id, ModelStatus::Evicting)
+            lifecycle
+                .unload_model(&mut registry, &model_id)
                 .map_err(|e| {
-                    warn!(error = %e, model = %model_id, "Failed to start model unload");
-                    ApiError::InternalError
+                    warn!(error = %e, model = %model_id, "Failed to unload model");
+                    ApiError::ModelUnavailable(e.to_string())
                 })?;
 
-            info!(model = %model_id, profile = %profile.profile_id, "Model unload initiated");
+            info!(model = %model_id, profile = %profile.profile_id, "Model unloaded");
 
             Ok(Json(ModelOperationResponse {
                 operation: "unload".to_string(),
                 model_id: model_id.clone(),
-                status: "evicting".to_string(),
-                message: format!(
-                    "Model '{model_id}' unload initiated, draining in-flight requests"
-                ),
+                status: "cold_storage".to_string(),
+                message: format!("Model '{model_id}' unloaded to cold storage"),
             }))
         }
         ModelStatus::ColdStorage | ModelStatus::Evicted => Ok(Json(ModelOperationResponse {
@@ -337,6 +342,45 @@ pub async fn unload_model(
             "Model '{model_id}' is in state {status:?} and cannot be unloaded now"
         ))),
     }
+}
+
+// ─── Benchmark Model ───────────────────────────────────────────────────────
+
+/// POST /v1/models/{model_id}/benchmark
+///
+/// Admin-only: run the standard model benchmark.
+pub async fn benchmark_model(
+    State(state): State<AppState>,
+    profile: ProfileInfo,
+    Path(model_id): Path<String>,
+) -> Result<impl IntoResponse, ApiError> {
+    check_permission(&profile, "manage_models")?;
+
+    let registry = state.registry.read().await;
+    let mut lifecycle = lifecycle_manager().lock().await;
+    let result = lifecycle
+        .benchmark_model(&registry, &model_id)
+        .map_err(|e| ApiError::ModelUnavailable(e.to_string()))?;
+
+    info!(model = %model_id, profile = %profile.profile_id, "Model benchmark completed");
+    Ok(Json(ModelBenchmarkResponse::from(result)))
+}
+
+/// GET /v1/models/{model_id}/benchmark
+///
+/// Returns the last benchmark result for a model.
+pub async fn get_model_benchmark(
+    profile: ProfileInfo,
+    Path(model_id): Path<String>,
+) -> Result<impl IntoResponse, ApiError> {
+    check_permission(&profile, "manage_models")?;
+
+    let lifecycle = lifecycle_manager().lock().await;
+    let result = lifecycle
+        .last_benchmark(&model_id)
+        .cloned()
+        .ok_or_else(|| ApiError::ModelUnavailable("No benchmark result found".to_string()))?;
+    Ok(Json(ModelBenchmarkResponse::from(result)))
 }
 
 // ─── Discover USB Packages ────────────────────────────────────────────

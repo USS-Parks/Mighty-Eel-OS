@@ -165,6 +165,23 @@ impl InstanceRegistry {
             debug!(instance = %id, "Instance metrics reset (power state transition)");
         }
     }
+
+    /// Mutate an instance's metrics in place.
+    ///
+    /// Used by health, telemetry, and integration tests to feed observed
+    /// runtime measurements into placement scoring.
+    pub fn update_metrics(
+        &self,
+        id: &InstanceId,
+        update: impl FnOnce(&mut InstanceMetrics),
+    ) -> bool {
+        if let Some(mut entry) = self.instances.get_mut(id) {
+            update(&mut entry.metrics);
+            true
+        } else {
+            false
+        }
+    }
 }
 
 impl Default for InstanceRegistry {

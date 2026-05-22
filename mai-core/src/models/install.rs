@@ -166,7 +166,7 @@ pub(crate) async fn install_package(
 mod tests {
     use super::*;
     use crate::registry::ModelRegistry;
-    use crate::vault::{SnapshotInfo, VaultError, VaultInterface as _};
+    use crate::vault::{SnapshotInfo, VaultError};
     use std::path::Path;
 
     struct MockVault;

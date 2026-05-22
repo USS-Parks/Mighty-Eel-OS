@@ -33,7 +33,7 @@ use crate::scoring::latency::{LatencyConfig, latency_penalty};
 use crate::scoring::memory::{MemoryConfig, memory_penalty};
 use crate::scoring::topology_score::{TopologyScoreConfig, topology_penalty};
 use crate::topology::GpuTopology;
-use crate::types::{InstanceState, ScheduleRequest};
+use crate::types::{InstanceState, ScheduleRequest, ScoringFn, ScoringReasonFn};
 
 // ---------------------------------------------------------------------------
 // Score breakdown (debug output)
@@ -288,12 +288,29 @@ impl MultiFactorScorer {
     /// Note: the closure returns only the composite score (f64), not the
     /// breakdown. The breakdown is available via `score()` for callers that
     /// need it (e.g., the enhanced placement engine).
-    pub fn into_scoring_fn(self) -> crate::types::ScoringFn {
+    pub fn into_scoring_fn(self) -> ScoringFn {
         let scorer = Arc::new(self);
         Box::new(move |state: &InstanceState, request: &ScheduleRequest| {
             let (total, _breakdown) = scorer.score(state, request);
             total
         })
+    }
+
+    /// Build scoring and diagnostic closures that share the same scorer.
+    pub fn into_scoring_parts(self) -> (ScoringFn, ScoringReasonFn) {
+        let scorer = Arc::new(self);
+        let scoring_scorer = Arc::clone(&scorer);
+        let scoring_fn: ScoringFn =
+            Box::new(move |state: &InstanceState, request: &ScheduleRequest| {
+                let (total, _breakdown) = scoring_scorer.score(state, request);
+                total
+            });
+        let reason_fn: ScoringReasonFn =
+            Box::new(move |state: &InstanceState, request: &ScheduleRequest| {
+                let (_total, breakdown) = scorer.score(state, request);
+                breakdown.to_reason_string()
+            });
+        (scoring_fn, reason_fn)
     }
 }
 
@@ -308,7 +325,7 @@ pub fn build_multi_factor_scorer(
     config: ScoringConfig,
     topology: Option<Arc<GpuTopology>>,
     kv_manager: Option<Arc<dyn KvCacheManager>>,
-) -> crate::types::ScoringFn {
+) -> ScoringFn {
     let mut scorer = MultiFactorScorer::new(config);
     if let Some(topo) = topology {
         scorer = scorer.with_topology(topo);
@@ -317,6 +334,22 @@ pub fn build_multi_factor_scorer(
         scorer = scorer.with_kv_manager(kv);
     }
     scorer.into_scoring_fn()
+}
+
+/// Build a scoring function and a matching placement-reason formatter.
+pub fn build_multi_factor_scorer_with_reason(
+    config: ScoringConfig,
+    topology: Option<Arc<GpuTopology>>,
+    kv_manager: Option<Arc<dyn KvCacheManager>>,
+) -> (ScoringFn, ScoringReasonFn) {
+    let mut scorer = MultiFactorScorer::new(config);
+    if let Some(topo) = topology {
+        scorer = scorer.with_topology(topo);
+    }
+    if let Some(kv) = kv_manager {
+        scorer = scorer.with_kv_manager(kv);
+    }
+    scorer.into_scoring_parts()
 }
 
 /// Build a multi-factor scorer and return the Arc'd scorer itself (not just

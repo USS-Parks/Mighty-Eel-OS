@@ -380,6 +380,11 @@ impl Default for SchedulerConfig {
 /// placement engine, making it replaceable at runtime.
 pub type ScoringFn = Box<dyn Fn(&InstanceState, &ScheduleRequest) -> f64 + Send + Sync>;
 
+/// Optional diagnostic companion to a scoring function.
+///
+/// Returns a compact human-readable breakdown for the chosen placement.
+pub type ScoringReasonFn = Box<dyn Fn(&InstanceState, &ScheduleRequest) -> String + Send + Sync>;
+
 // ---------------------------------------------------------------------------
 // Errors
 // ---------------------------------------------------------------------------
