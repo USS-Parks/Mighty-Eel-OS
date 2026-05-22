@@ -602,6 +602,39 @@ Verification:
 - `python -m pytest tools/ adapters/` on 2026-05-22: 114/114 passed (18 new Session 32 tests across `tools/trace-tools/tests/`, `tools/simulator/tests/test_simulator_extensions.py`, `tools/simulator/tests/test_replay_compare.py`).
 - End-to-end CLI smoke test: 40-event synthetic trace replayed through all 4 KV policies produced a complete Markdown comparison table with headline findings; deterministic across two identical runs.
 
+## Session 33 Completion
+
+**Date:** 2026-05-22
+**Status:** Complete (Roster v2 + BUILD-EXECUTION-PLAN Gate C acceptance criteria)
+**Summary:** Five new production-grade scheduler primitives (soft eviction, two-tier cache controller, priority preemption with starvation guard, cross-instance load balancer, TTL decision cache) plus a Gate C acceptance integration test file.
+**Files Changed:**
+- New: mai-scheduler/src/kv/offload.rs (~320 lines) — `OffloadManager` with `SoftEvictionState` (Active/Offloading/Offloaded/Restoring), CPU pinned-memory budget, atomic transitions
+- New: mai-scheduler/src/kv/tiered.rs (~225 lines) — stateless `TieredCacheController` proposing demote/promote/evict actions based on idle thresholds
+- New: mai-scheduler/src/preemption.rs (~205 lines) — `PreemptionManager` enforcing System > High > Normal > Background hierarchy; resume applies a one-step priority boost
+- New: mai-scheduler/src/balancer.rs (~290 lines) — `LoadBalancer` scoring migration candidates against queue gap vs topology cost, sorted by net benefit
+- New: mai-scheduler/src/decision_cache.rs (~260 lines) — TTL-bounded `DecisionCache` keyed on (model_alias, priority, load_bucket) with hit/miss counters
+- New: mai-scheduler/tests/gate_c_session33.rs — 8 named Gate C acceptance tests
+- Modified: mai-scheduler/src/lib.rs + mai-scheduler/src/kv/mod.rs — module wiring
+**Tests Run:**
+- `cargo test -p mai-scheduler --lib`: 324/324 (31 new unit tests: offload 4, tiered 8, preemption 7, balancer 5, decision_cache 7).
+- `cargo test -p mai-scheduler --test gate_c_session33`: 8/8 acceptance tests.
+- `cargo test --workspace`: every crate green, zero failures.
+**Acceptance Criteria Verified:**
+- Scheduler chooses among multiple eligible instances (`gate_c_session33_multiple_eligible_instances_resolved`).
+- Warm KV continuation is preferred (`gate_c_session33_continuation_prefers_warm_instance`).
+- Placement decisions include debug breakdowns (`gate_c_session33_decision_carries_placement_reason`).
+- Overload returns `SystemOverloaded` (`gate_c_session33_overload_rejects_non_system_priority`).
+- No-candidate case is surfaced (`gate_c_session33_unknown_alias_returns_no_instance`).
+- Soft eviction preserves state across round-trip (`gate_c_session33_soft_eviction_round_trip_with_preemption_resume_boost`).
+- Load balancer emits migration under sustained imbalance (`gate_c_session33_load_balancer_emits_migration_under_sustained_imbalance`).
+- Decision cache > 70% hit rate under steady load (`gate_c_session33_decision_cache_hits_under_steady_load`).
+- Priority preemption respects hierarchy + starvation boost (covered in same test above + 7 dedicated unit tests).
+- Two-tier transitions at threshold boundaries (8 dedicated unit tests in `kv::tiered`).
+**Known Issues Added or Closed:** None. The new primitives are not yet wired into `DefaultScheduler::schedule()` itself — they live as standalone, callable surfaces that the integration test suite (Session 34) and the Lamprey policy runtime (Session 41) will exercise end-to-end.
+**Next Session Notes:** Session 34 (Integration Test Suite + System Validation) is the Gate C closing piece. The five new primitives now have unit + acceptance coverage; Session 34 should add full-stack tests that exercise them through the real HTTP/gRPC path.
+
+---
+
 ## Session 26 Completion
 
 **Date:** 2026-05-22
@@ -670,12 +703,12 @@ Verification:
 | G: Model Lifecycle | 24-25 | Complete (24, 25) |
 | H: Security Hardening | 26-28 | Partial (26 complete) |
 | I: Application Integration | 29-31 | Not Started |
-| J: Advanced Scheduling | 32-33 | Partial (32 complete) |
+| J: Advanced Scheduling | 32-33 | Complete (32, 33) |
 | K: Testing & Packaging | 34-35 | Not Started |
 | L: Compliance Governance | 36-46 | Not Started |
 
-**Sessions Complete:** Sessions 1-26 and 32 are complete.
-**Next Session:** Session 27 (Vault Crypto) on the security track, or Session 33 (multi-instance scheduling) on the critical path. Application track (29-31) is now unblocked.
+**Sessions Complete:** Sessions 1-26, 32, and 33 are complete.
+**Next Session:** Session 34 (Integration Test Suite) closes Gate C. Session 27 (Vault Crypto) on the security track and Sessions 29-31 (SDK + apps) on the developer track remain safe parallel candidates.
 **Next Archive:** After Session 23 (or end of Phase F, whichever comes first)
 
 ---

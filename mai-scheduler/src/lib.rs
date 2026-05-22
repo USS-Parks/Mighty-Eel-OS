@@ -27,12 +27,15 @@
 #![forbid(unsafe_code)]
 
 pub mod aliases;
+pub mod balancer;
 pub mod batch;
+pub mod decision_cache;
 pub mod default;
 pub mod kv;
 pub mod metrics;
 pub mod placement;
 pub mod power;
+pub mod preemption;
 pub mod registry;
 pub mod scheduler;
 pub mod scoring;

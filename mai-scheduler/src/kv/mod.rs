@@ -19,7 +19,9 @@
 pub mod eviction;
 pub mod guard;
 pub mod manager;
+pub mod offload;
 pub mod sequence;
+pub mod tiered;
 pub mod triggers;
 
 use std::collections::HashMap;
