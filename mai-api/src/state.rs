@@ -16,6 +16,7 @@ use mai_core::health::HealthMonitor;
 use mai_core::hotswap::HotSwapManager;
 use mai_core::power::PowerStateMachine;
 use mai_core::registry::ModelRegistry;
+use mai_scheduler::metrics::MetricsCollector;
 use mai_scheduler::Scheduler;
 
 /// Shared application state for all request handlers.
@@ -42,6 +43,8 @@ pub struct AppState {
     pub auth: AuthState,
     /// Adapter manager: spawns and manages Python adapter subprocesses
     pub adapter_manager: Arc<Mutex<AdapterManager>>,
+    /// Metrics collector: request lifecycle, health scoring, anomaly detection
+    pub metrics_collector: Arc<MetricsCollector>,
 }
 
 impl AppState {
@@ -60,6 +63,7 @@ impl AppState {
         config: Arc<RwLock<ServerConfig>>,
         auth: AuthState,
         adapter_manager: Arc<Mutex<AdapterManager>>,
+        metrics_collector: Arc<MetricsCollector>,
     ) -> Self {
         Self {
             scheduler,
@@ -71,6 +75,7 @@ impl AppState {
             config,
             auth,
             adapter_manager,
+            metrics_collector,
         }
     }
 }

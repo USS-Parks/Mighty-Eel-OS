@@ -42,6 +42,7 @@ use mai_core::power::{PowerConfig, PowerStateMachine};
 use mai_core::registry::ModelRegistry;
 use mai_core::vault::VaultInterface;
 use mai_hil::traits::AdapterConfig;
+use mai_scheduler::metrics::{MetricsCollector, MetricsConfig};
 use mai_scheduler::{
     DefaultScheduler, GpuId, InstanceCapabilities, InstanceConfig, InstanceId,
     SchedulerConfig as NewSchedulerConfig,
@@ -297,6 +298,7 @@ impl MaiServer {
         }
 
         // -- Step 4: Build shared AppState--
+        let metrics_collector = Arc::new(MetricsCollector::new(MetricsConfig::default()));
         let state = AppState::new(
             scheduler,
             registry,
@@ -307,6 +309,7 @@ impl MaiServer {
             config,
             auth,
             adapter_manager.clone(),
+            metrics_collector,
         );
 
         info!("All components initialized, building servers");

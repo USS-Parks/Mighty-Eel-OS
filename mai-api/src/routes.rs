@@ -95,6 +95,25 @@ pub fn build_router(state: AppState) -> Router {
             get(handlers::system::get_profile),
         );
 
+    // Telemetry / metrics routes (Session 20)
+    let telemetry_routes = Router::new()
+        .route(
+            "/v1/scheduler/metrics",
+            get(handlers::telemetry::scheduler_metrics),
+        )
+        .route(
+            "/v1/scheduler/instances/{id}/metrics",
+            get(handlers::telemetry::instance_metrics),
+        )
+        .route(
+            "/v1/scheduler/instances/{id}/health",
+            get(handlers::telemetry::instance_health),
+        )
+        .route(
+            "/v1/scheduler/anomalies",
+            get(handlers::telemetry::scheduler_anomalies),
+        );
+
     // WebSocket streaming route (Session 11c)
     let ws_routes = Router::new().route("/v1/ws", any(streaming::ws::ws_upgrade));
 
@@ -104,6 +123,7 @@ pub fn build_router(state: AppState) -> Router {
         .merge(model_routes)
         .merge(health_routes)
         .merge(system_routes)
+        .merge(telemetry_routes)
         .merge(ws_routes)
         .layer(middleware::from_fn_with_state(
             state.clone(),

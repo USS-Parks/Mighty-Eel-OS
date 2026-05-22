@@ -30,6 +30,7 @@ pub mod aliases;
 pub mod batch;
 pub mod default;
 pub mod kv;
+pub mod metrics;
 pub mod placement;
 pub mod registry;
 pub mod scheduler;
@@ -42,6 +43,7 @@ pub use batch::{BatchBuilder, BatchConfig, BatchDecision};
 pub use default::DefaultScheduler;
 pub use kv::manager::KvCacheManager;
 pub use kv::{HeuristicKvCacheManager, KvCacheConfig};
+pub use metrics::{MetricsCollector, MetricsConfig};
 pub use scheduler::Scheduler;
 pub use scoring::{
     build_multi_factor_scorer, build_scorer, MultiFactorScorer, ScoreBreakdown, ScoringConfig,

@@ -8,3 +8,4 @@ pub mod health;
 pub mod inference;
 pub mod models;
 pub mod system;
+pub mod telemetry;

@@ -94,6 +94,9 @@ fn build_test_state() -> AppState {
     let adapter_manager = AdapterManager::new(FrameworkConfig::default());
     let adapter_manager = Arc::new(Mutex::new(adapter_manager));
 
+    let metrics_collector = Arc::new(mai_scheduler::metrics::MetricsCollector::new(
+        mai_scheduler::metrics::MetricsConfig::default(),
+    ));
     AppState::new(
         scheduler,
         registry,
@@ -104,6 +107,7 @@ fn build_test_state() -> AppState {
         config,
         auth,
         adapter_manager,
+        metrics_collector,
     )
 }
 

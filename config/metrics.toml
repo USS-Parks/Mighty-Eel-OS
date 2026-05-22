@@ -1,0 +1,16 @@
+[feedback]
+lifecycle_window_size = 1000
+
+[feedback.health]
+latency_variance_window = 50
+error_rate_window = 100
+vram_trend_window = 20
+health_threshold = 0.3
+
+[feedback.anomaly]
+latency_spike_multiplier = 3.0
+vram_trend_window = 10
+throughput_drop_ratio = 0.5
+queue_buildup_window = 5
+
+max_anomaly_events = 1000
