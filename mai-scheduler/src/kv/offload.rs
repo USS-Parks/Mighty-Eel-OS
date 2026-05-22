@@ -127,11 +127,7 @@ impl OffloadManager {
     }
 
     /// Begin an offload: reserve CPU bytes and mark the sequence Offloading.
-    pub fn begin_offload(
-        &self,
-        seq_id: SequenceId,
-        cpu_bytes: u64,
-    ) -> Result<(), OffloadError> {
+    pub fn begin_offload(&self, seq_id: SequenceId, cpu_bytes: u64) -> Result<(), OffloadError> {
         let mut used = self.cpu_used_bytes.lock().unwrap();
         let would_use = used.saturating_add(cpu_bytes);
         if would_use > self.config.cpu_budget_bytes {
@@ -162,12 +158,20 @@ impl OffloadManager {
 
     /// Finish an offload — caller has finished copying bytes to CPU.
     pub fn complete_offload(&self, seq_id: SequenceId) -> Result<(), OffloadError> {
-        self.transition(seq_id, SoftEvictionState::Offloading, SoftEvictionState::Offloaded)
+        self.transition(
+            seq_id,
+            SoftEvictionState::Offloading,
+            SoftEvictionState::Offloaded,
+        )
     }
 
     /// Begin restoring an offloaded sequence back to GPU.
     pub fn begin_restore(&self, seq_id: SequenceId) -> Result<(), OffloadError> {
-        self.transition(seq_id, SoftEvictionState::Offloaded, SoftEvictionState::Restoring)
+        self.transition(
+            seq_id,
+            SoftEvictionState::Offloaded,
+            SoftEvictionState::Restoring,
+        )
     }
 
     /// Finish a restore — caller has finished copying bytes back to GPU.

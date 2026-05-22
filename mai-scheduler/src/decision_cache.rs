@@ -11,8 +11,8 @@
 //! different loads still hit the same entry.
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
@@ -156,14 +156,21 @@ impl DecisionCache {
 
     /// `(hits, misses)` counters.
     pub fn stats(&self) -> (u64, u64) {
-        (self.hits.load(Ordering::Relaxed), self.misses.load(Ordering::Relaxed))
+        (
+            self.hits.load(Ordering::Relaxed),
+            self.misses.load(Ordering::Relaxed),
+        )
     }
 
     /// Cache hit ratio in `[0.0, 1.0]`. Returns 0.0 when neither has fired.
     pub fn hit_rate(&self) -> f64 {
         let (h, m) = self.stats();
         let total = h + m;
-        if total == 0 { 0.0 } else { h as f64 / total as f64 }
+        if total == 0 {
+            0.0
+        } else {
+            h as f64 / total as f64
+        }
     }
 }
 

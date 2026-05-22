@@ -182,12 +182,7 @@ async fn gate_a_invalid_token_returns_401() {
 #[tokio::test]
 async fn gate_a_valid_token_passes_auth() {
     let app = build_router(build_strict_state(None));
-    let req = request_with_headers(
-        "GET",
-        "/v1/models",
-        &[("X-IM-Auth-Token", VALID_KEY)],
-        "",
-    );
+    let req = request_with_headers("GET", "/v1/models", &[("X-IM-Auth-Token", VALID_KEY)], "");
     let resp = app.oneshot(req).await.unwrap();
     // The handler may still 5xx because no models are loaded, but auth must
     // not block. The key invariant is: not a 401/403 from middleware.
@@ -199,9 +194,8 @@ async fn gate_a_valid_token_passes_auth() {
 async fn gate_a_rate_limit_returns_429() {
     // Limit: 2 requests per 60s window for this key.
     let app = build_router(build_strict_state(Some((2, 60))));
-    let make_req = || {
-        request_with_headers("GET", "/v1/models", &[("X-IM-Auth-Token", VALID_KEY)], "")
-    };
+    let make_req =
+        || request_with_headers("GET", "/v1/models", &[("X-IM-Auth-Token", VALID_KEY)], "");
 
     let first = app.clone().oneshot(make_req()).await.unwrap();
     assert_ne!(first.status(), StatusCode::TOO_MANY_REQUESTS);
@@ -222,12 +216,7 @@ async fn gate_a_rate_limit_returns_429() {
 #[tokio::test]
 async fn profile_header_alone_is_rejected_in_strict_mode() {
     let app = build_router(build_strict_state(None));
-    let req = request_with_headers(
-        "GET",
-        "/v1/models",
-        &[("X-IM-Profile", "admin:admin")],
-        "",
-    );
+    let req = request_with_headers("GET", "/v1/models", &[("X-IM-Profile", "admin:admin")], "");
     let resp = app.oneshot(req).await.unwrap();
     assert_eq!(
         resp.status(),

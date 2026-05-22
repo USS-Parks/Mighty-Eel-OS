@@ -78,17 +78,17 @@ impl PreemptionManager {
         incoming: Priority,
     ) -> Result<PreemptedSequence, PreemptionError> {
         if !can_preempt(incoming, existing) {
-            return Err(PreemptionError::NotPreemptable {
-                incoming,
-                existing,
-            });
+            return Err(PreemptionError::NotPreemptable { incoming, existing });
         }
         let record = PreemptedSequence {
             seq_id,
             original_priority: existing,
             preempted_at: Instant::now(),
         };
-        self.preempted.lock().unwrap().insert(seq_id, record.clone());
+        self.preempted
+            .lock()
+            .unwrap()
+            .insert(seq_id, record.clone());
         Ok(record)
     }
 
@@ -147,14 +147,18 @@ mod tests {
     fn test_normal_cannot_preempt_normal() {
         let m = PreemptionManager::new();
         let result = m.preempt(SequenceId::new(), Priority::Normal, Priority::Normal);
-        assert!(matches!(result, Err(PreemptionError::NotPreemptable { .. })));
+        assert!(matches!(
+            result,
+            Err(PreemptionError::NotPreemptable { .. })
+        ));
     }
 
     #[test]
     fn test_high_preempts_background_and_resume_boosts() {
         let m = PreemptionManager::new();
         let seq = SequenceId::new();
-        m.preempt(seq, Priority::Background, Priority::High).unwrap();
+        m.preempt(seq, Priority::Background, Priority::High)
+            .unwrap();
         assert!(m.is_preempted(seq));
         let resumed = m.resume(seq).unwrap();
         // Background → Normal on resume (starvation prevention).
@@ -195,7 +199,8 @@ mod tests {
         // (boosted to High because Normal → High).
         let m = PreemptionManager::new();
         let seq = SequenceId::new();
-        m.preempt(seq, Priority::Background, Priority::High).unwrap();
+        m.preempt(seq, Priority::Background, Priority::High)
+            .unwrap();
         let first = m.resume(seq).unwrap();
         assert_eq!(first, Priority::Normal);
 

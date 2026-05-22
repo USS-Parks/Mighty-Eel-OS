@@ -177,7 +177,11 @@ fn topology_cost(
             count += 1;
         }
     }
-    if count == 0 { 0.0 } else { total / count as f64 }
+    if count == 0 {
+        0.0
+    } else {
+        total / count as f64
+    }
 }
 
 #[cfg(test)]
@@ -285,9 +289,6 @@ mod tests {
 
         // Pure-CPU instances also resolve to zero cost (no gpu pairs).
         let instances_cpu = vec![instance("a", 40, &[]), instance("b", 5, &[])];
-        assert_eq!(
-            lb.evaluate(&[candidate], &instances_cpu, None).len(),
-            1,
-        );
+        assert_eq!(lb.evaluate(&[candidate], &instances_cpu, None).len(), 1,);
     }
 }

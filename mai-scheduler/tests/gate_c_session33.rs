@@ -13,8 +13,8 @@ use mai_scheduler::decision_cache::{DecisionCache, DecisionKey};
 use mai_scheduler::kv::offload::{OffloadConfig, OffloadManager, SoftEvictionState};
 use mai_scheduler::preemption::{PreemptionManager, can_preempt};
 use mai_scheduler::types::{
-    GpuId, InstanceCapabilities, InstanceConfig, InstanceId, ModelAlias, Priority,
-    ScheduleRequest, SchedulerConfig, SchedulerError, SequenceId,
+    GpuId, InstanceCapabilities, InstanceConfig, InstanceId, ModelAlias, Priority, ScheduleRequest,
+    SchedulerConfig, SchedulerError, SequenceId,
 };
 use mai_scheduler::{DefaultScheduler, Scheduler};
 
@@ -52,8 +52,12 @@ fn make_instance(id: &str, adapter: &str) -> InstanceConfig {
 #[test]
 fn gate_c_session33_multiple_eligible_instances_resolved() {
     let sched = DefaultScheduler::new(test_config());
-    sched.register_instance(make_instance("ollama:0", "ollama")).unwrap();
-    sched.register_instance(make_instance("vllm:0", "vllm")).unwrap();
+    sched
+        .register_instance(make_instance("ollama:0", "ollama"))
+        .unwrap();
+    sched
+        .register_instance(make_instance("vllm:0", "vllm"))
+        .unwrap();
 
     let req = ScheduleRequest::new("demo/fast", Priority::Normal);
     let decision = sched.schedule(&req).expect("should resolve a candidate");
@@ -69,8 +73,12 @@ fn gate_c_session33_multiple_eligible_instances_resolved() {
 #[test]
 fn gate_c_session33_continuation_prefers_warm_instance() {
     let sched = DefaultScheduler::new(test_config());
-    sched.register_instance(make_instance("ollama:0", "ollama")).unwrap();
-    sched.register_instance(make_instance("vllm:0", "vllm")).unwrap();
+    sched
+        .register_instance(make_instance("ollama:0", "ollama"))
+        .unwrap();
+    sched
+        .register_instance(make_instance("vllm:0", "vllm"))
+        .unwrap();
 
     let req1 = ScheduleRequest::new("demo/fast", Priority::Normal);
     let first = sched.schedule(&req1).unwrap();
@@ -92,7 +100,9 @@ fn gate_c_session33_continuation_prefers_warm_instance() {
 #[test]
 fn gate_c_session33_decision_carries_placement_reason() {
     let sched = DefaultScheduler::new(test_config());
-    sched.register_instance(make_instance("ollama:0", "ollama")).unwrap();
+    sched
+        .register_instance(make_instance("ollama:0", "ollama"))
+        .unwrap();
 
     let req = ScheduleRequest::new("demo/fast", Priority::Normal);
     let decision = sched.schedule(&req).unwrap();
@@ -107,7 +117,9 @@ fn gate_c_session33_decision_carries_placement_reason() {
 #[test]
 fn gate_c_session33_overload_rejects_non_system_priority() {
     let sched = DefaultScheduler::new(test_config()); // max_total_queue_depth = 4
-    sched.register_instance(make_instance("ollama:0", "ollama")).unwrap();
+    sched
+        .register_instance(make_instance("ollama:0", "ollama"))
+        .unwrap();
 
     for _ in 0..4 {
         let req = ScheduleRequest::new("demo/fast", Priority::Normal);
@@ -115,7 +127,10 @@ fn gate_c_session33_overload_rejects_non_system_priority() {
     }
     let req = ScheduleRequest::new("demo/fast", Priority::Normal);
     let result = sched.schedule(&req);
-    assert!(matches!(result, Err(SchedulerError::SystemOverloaded(_, _))));
+    assert!(matches!(
+        result,
+        Err(SchedulerError::SystemOverloaded(_, _))
+    ));
 }
 
 // -- Criterion 5: no-candidate case is surfaced ----------------------------
@@ -123,7 +138,9 @@ fn gate_c_session33_overload_rejects_non_system_priority() {
 #[test]
 fn gate_c_session33_unknown_alias_returns_no_instance() {
     let sched = DefaultScheduler::new(test_config());
-    sched.register_instance(make_instance("ollama:0", "ollama")).unwrap();
+    sched
+        .register_instance(make_instance("ollama:0", "ollama"))
+        .unwrap();
 
     let req = ScheduleRequest::new("does-not-exist", Priority::Normal);
     let result = sched.schedule(&req);
@@ -153,7 +170,9 @@ fn gate_c_session33_soft_eviction_round_trip_with_preemption_resume_boost() {
 
     // Preemption path with starvation prevention.
     assert!(can_preempt(Priority::High, Priority::Background));
-    preempt.preempt(seq, Priority::Background, Priority::High).unwrap();
+    preempt
+        .preempt(seq, Priority::Background, Priority::High)
+        .unwrap();
     let resumed = preempt.resume(seq).unwrap();
     assert_eq!(resumed, Priority::Normal);
 }
