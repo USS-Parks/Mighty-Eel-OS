@@ -1,8 +1,8 @@
 # MAI Founding Engineer Handoff
 
 **Project:** Island Mountain Model Abstraction Interface (MAI)
-**Source:** MAI-BUILD-PROMPT-ROSTER-v2.md (restructured 2026-05-18, expanded 18 to 35 sessions)
-**Status:** Phase A+B+C+D complete. Session 19 scoring module code complete (7 files, ~1694 lines, 41 tests). Wiring into DefaultScheduler + integration tests remain (19e/19f). Next: Session 19e (Scorer Wiring + Config).
+**Source:** MAI-BUILD-PROMPT-ROSTER-v2.md (restructured 2026-05-18, expanded to 46 sessions with Lamprey compliance governance)
+**Status:** Sessions 1-18 and 22-24 complete. Session 19 is in progress: scoring module code is complete (7 files, ~1694 lines, 41 tests), `config/scoring.toml` exists, and `DefaultScheduler` has scorer config/rebuild hooks. Server startup autoload, strategy-based default activation, and full scheduler integration tests remain.
 **Archive:** Detailed Phase A+B code inventory and onboarding walkthrough archived to [HANDOFF-ARCHIVE-01.md](HANDOFF-ARCHIVE-01.md) on 2026-05-17.
 
 ---
@@ -21,18 +21,18 @@ The inference engine is a plugin. The data sovereignty layer is the product.
 
 | Document | Purpose |
 |---|---|
-| [MAI-BUILD-PROMPT-ROSTER-v2.md](MAI-BUILD-PROMPT-ROSTER-v2.md) | All 35 session prompts, deliverables, acceptance criteria (v1 archived) |
+| [MAI-BUILD-PROMPT-ROSTER-v2.md](MAI-BUILD-PROMPT-ROSTER-v2.md) | All 46 session prompts, deliverables, acceptance criteria (v1 archived) |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Trust model, component catalog, data flows |
 | [CONVENTIONS.md](CONVENTIONS.md) | Code quality gates, monorepo layout, testing rules |
-| [SESSION-LOG.md](SESSION-LOG.md) | Active progress tracker (Sessions 11-18) |
+| [SESSION-LOG.md](SESSION-LOG.md) | Active progress tracker (current baseline: Sessions 1-18, 22-24 complete; 19 in progress) |
 | [SESSION-LOG-ARCHIVE-01.md](SESSION-LOG-ARCHIVE-01.md) | Completed sessions (01-10) with full notes |
 | [SESSION-RULES.md](SESSION-RULES.md) | Dependency enforcement, acceptance criteria, quality gates |
 | [KNOWN-ISSUES.md](KNOWN-ISSUES.md) | Deferred work, open questions |
 | [INDEX.md](INDEX.md) | Master file index |
 
-### Codebase (Phase C Complete)
+### Codebase (Current Baseline)
 
-5 Rust crates and 7 Python adapters are implemented. The mai-api crate (Session 11, all 5 sub-sessions complete) contains 27 source files (~12,400 lines), 3 integration test suites (16 tests), and proto/mai.proto (534 lines). The REST API has 20 endpoints plus a WebSocket at /v1/ws across 5 route groups (inference, models, health, system, streaming) with profile-based auth on all routes. The gRPC server runs on port 8421 with 6 MAI services + grpc.health.v1, tonic-reflection, and shared AppState. The mai-core kernel, mai-hil drivers, and mai-adapters framework are all production code with 86+ unit tests, 14 E2E integration tests, and 8 benchmarks passing. Session 11 adds 94 unit tests + 16 integration tests. See SESSION-LOG.md for detailed deliverable lists.
+The workspace now contains the core MAI crates plus `mai-vault`, `mai-agent`, `mai-scheduler`, SDK crates, the package builder, and 7 Python backend adapters. The REST/gRPC API, vault interfaces, agent/RAG layer, scheduler foundation, topology graph, KV cache manager, continuous batching engine, scoring module, power/sentinel path, and model install/remove seams are all present. Session 19 is not complete until the scoring configuration is automatically loaded into the running server and full `DefaultScheduler.schedule()` integration scenarios pass.
 
 **CI fixes applied 2026-05-17:** (1) pytest collection failures fixed (missing `adapters/__init__.py`, added `conftest.py`). (2) `AdapterBase.__init__` now accepts optional config dict; all 6 non-Ollama adapters updated to match. (3) Stale test assertions corrected (llamacpp context_size, tensorrt ports).
 
@@ -58,9 +58,9 @@ The inference engine is a plugin. The data sovereignty layer is the product.
 
 **Continuous Batching Engine (Session 18, 2026-05-20):** New batch/ module in mai-scheduler (5 source files, ~1915 lines, 52 tests). BatchBuilder per-instance orchestrator with 4-phase build_step() cycle: remove completed, emergency preemption, admission drain, record metrics. Dual-threshold VRAM admission control (aggressive <80%, selective 80-90%, eviction-required >90%). Emergency preemption at 95% VRAM targeting sequences closest to completion or lowest priority. System priority never preempted. BatchMetrics with rolling-window averages, admission rate, wait time P50/P95/P99. Integrated into DefaultScheduler: DashMap<InstanceId, Mutex<BatchBuilder>> created on register_instance(), cluster_metrics() aggregates batch stats. KV eviction batch_contribution wired: active batch members get -100 eviction score protection (was 0.0 placeholder). All configurations TOML-deserializable with serde defaults.
 
-**Multi-Factor Scorer (Session 19, 2026-05-21):** New `scoring/` module in mai-scheduler (7 source files, ~1694 lines, 41 unit tests). `MultiFactorScorer` orchestrator combines 5 sub-scorers: latency penalty (queue wait + batch drain), memory pressure (quadratic VRAM curve), topology penalty (worst-pair GPU interconnect cost), eviction cost (inverse value of candidates that would need eviction), and batching benefit (headroom * admission region * queue factor). Continuation routing: warm KV cache hit gets an absolute bonus (default 10.0) that dominates all other factors. All sub-scores normalized to [0.0, 1.0] before weighting. `into_scoring_fn()` wraps `Arc<MultiFactorScorer>` in a closure matching the existing `ScoringFn` type for backward-compatible integration with `PlacementEngine::set_scorer()`. Default weights: latency=2.0, memory=1.5, topology=1.0, eviction=1.0, batching=1.5. All configs TOML-deserializable with serde defaults. Sub-scorers gracefully return 0.0 when subsystems (topology, KV manager) are absent.
+**Multi-Factor Scorer (Session 19, 2026-05-21):** New `scoring/` module in mai-scheduler (7 source files, ~1694 lines, 41 unit tests). `MultiFactorScorer` orchestrator combines 5 sub-scorers: latency penalty (queue wait + batch drain), memory pressure (quadratic VRAM curve), topology penalty (worst-pair GPU interconnect cost), eviction cost (inverse value of candidates that would need eviction), and batching benefit (headroom * admission region * queue factor). Continuation routing: warm KV cache hit gets an absolute bonus (default 10.0) that dominates all other factors. All sub-scores normalized to [0.0, 1.0] before weighting. `into_scoring_fn()` wraps `Arc<MultiFactorScorer>` in a closure matching the existing `ScoringFn` type for backward-compatible integration with `PlacementEngine::set_scorer()`. Default weights: latency=2.0, memory=1.5, topology=1.0, eviction=1.0, batching=1.5. All configs TOML-deserializable with serde defaults. Sub-scorers gracefully return 0.0 when subsystems (topology, KV manager) are absent. Current code also has `config/scoring.toml`, `DefaultScheduler::set_scoring_config()`, `DefaultScheduler::set_scorer()`, and rebuild tests; the API server still does not autoload `config/scoring.toml` at startup.
 
-**Immediate next step:** Execute **Session 19e** (Scorer Wiring + Config). The scoring module code is complete but not yet wired into DefaultScheduler. 19e creates `config/scoring.toml`, adds strategy-based scorer selection to DefaultScheduler initialization (if `strategy = "multi-factor"`, build the scorer and call `set_scorer()`), and passes existing `Arc<GpuTopology>` and `Arc<dyn KvCacheManager>` into the builder. **Session 19f** follows with integration tests covering all 8 roster scenarios through the full `DefaultScheduler.schedule()` pipeline plus governance doc finalization. After 19f, the scheduler track continues with Session 20 (Feedback Loop). Security track (26-28) and application track (29-31) can run in parallel now.
+**Immediate next step:** Finish **Session 19**. The remaining work is server startup/config integration: load `config/scoring.toml`, activate the multi-factor scorer when configured, thread available topology/KV handles into the scorer, and add full `DefaultScheduler.schedule()` integration tests for the roster scenarios. After Session 19 is complete, continue with Session 20 (Feedback Loop). Security track (26-28) and application track (29-31) can run in parallel once their dependencies are satisfied.
 
 ---
 
@@ -82,7 +82,7 @@ The inference engine is a plugin. The data sovereignty layer is the product.
 
 The longest remaining dependency chain (restructured):
 
-**14a -> 14b -> 14c -> 15 -> 16 -> 17 -> 18 -> 19 -> 20 -> 21 -> 32 -> 33 -> 34 -> 35** (14 sessions sequential, 15-18 done, 19 code complete/wiring pending)
+**finish 19 -> 20 -> 21 -> 32 -> 33 -> 34 -> 35 -> 36 -> 37 -> 38 -> 39 -> 40 -> 41 -> 42 -> 43 -> 44 -> 45 -> 46**
 
 Parallel tracks (after 14c completes):
 - Track A: Scheduler (15-21, 32-33) - critical path
@@ -90,7 +90,7 @@ Parallel tracks (after 14c completes):
 - Track C: Applications (29-31) - independent after 14c
 - Track D: Power/Lifecycle (22-25) - depends on Session 19
 
-Realistic remaining calendar: 35-49 Cowork sessions, 24-35 calendar days. See MAI-BUILD-PROMPT-ROSTER-v2.md for effort estimates.
+See MAI-BUILD-PROMPT-ROSTER-v2.md for current 46-session effort estimates and the Lamprey compliance governance layer sequence.
 
 ---
 

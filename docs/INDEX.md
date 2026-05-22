@@ -1,6 +1,7 @@
 # MAI Build Index
 
 **Project:** Island Mountain Model Abstraction Interface (MAI)
+**Alignment Note:** Governance status aligned with current code on 2026-05-22.
 **Last Updated:** 2026-05-21 (Session 24 — Integration Seam Fixes)
 
 ---
@@ -11,14 +12,14 @@ These documents govern the MAI build. Read them before writing code.
 
 | File | Purpose | Read When |
 |---|---|---|
-| [MAI-BUILD-PROMPT-ROSTER-v2.md](MAI-BUILD-PROMPT-ROSTER-v2.md) | Complete session prompts, deliverables, and acceptance criteria for all 35 sessions (v2 restructured) | Starting any session |
+| [MAI-BUILD-PROMPT-ROSTER-v2.md](MAI-BUILD-PROMPT-ROSTER-v2.md) | Complete session prompts, deliverables, and acceptance criteria for all 46 sessions (v2 restructured + Lamprey governance) | Starting any session |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Tock-to-MAI architecture map, trust boundaries, component catalog, data flows, power state machine | Understanding system structure |
 | [CONVENTIONS.md](CONVENTIONS.md) | Language assignments, code quality gates, monorepo layout, testing rules, git conventions | Writing any code |
 | [HANDOFF.md](HANDOFF.md) | Founding engineer orientation, critical warnings, current state, what will bite you | First day on the project |
 | [INDEX.md](INDEX.md) | This file. Master index of all project documents | Finding anything |
 | [KNOWN-ISSUES.md](KNOWN-ISSUES.md) | Out-of-scope items, deferred work, architectural limitations, open questions | Wondering "should I build this?" |
-| [PROJECT.md](PROJECT.md) | Scope, 5-phase plan, 18-session timeline, effort estimates, coverage matrix | Understanding scope and schedule |
-| [SESSION-LOG.md](SESSION-LOG.md) | Active session progress (Sessions 11-18) | Before and after each session |
+| [PROJECT.md](PROJECT.md) | Original scope, 5-phase plan, 18-session timeline, effort estimates, coverage matrix | Historical scope reference |
+| [SESSION-LOG.md](SESSION-LOG.md) | Active session progress (current baseline: 1-18 and 22-24 complete; 19 in progress) | Before and after each session |
 | [SESSION-LOG-ARCHIVE-01.md](SESSION-LOG-ARCHIVE-01.md) | Completed sessions 01-10 (Phase A+B) with full notes and deliverable lists | Reviewing past session details |
 | [HANDOFF-ARCHIVE-01.md](HANDOFF-ARCHIVE-01.md) | Archived onboarding walkthrough and Phase A+B code inventory | Reference only |
 | [SESSION-RULES.md](SESSION-RULES.md) | Dependency enforcement, acceptance criteria protocol, quality gates, session workflow | Conducting any session |
@@ -75,6 +76,23 @@ Each session produces specific deliverables. This table maps sessions to their p
 | 17 | KV Cache Manager | kv/ module (6 files, 53 unit tests + 5 integration tests), KvCacheManager trait, HeuristicKvCacheManager, config/kv.toml |
 | 18 | Continuous Batching Engine | batch/ module (5 files, 52 tests), BatchBuilder, AdmissionController, PreemptionPolicy, BatchMetrics, eviction batch_contribution wired |
 | 24 | Integration Seam Fixes | Model install/remove pipeline refactoring, axum version conflict workaround, ProfileRole/ProfilePermissions alignment |
+
+### Phase E: Scheduler Intelligence (Sessions 19-21)
+
+| Session | Title | Primary Outputs |
+|---|---|---|
+| 19 | Multi-Factor Scorer | scoring/ module, ScoringConfig, config/scoring.toml, DefaultScheduler scorer hooks; server autoload and full integration tests remain |
+| 20 | Feedback Loop + Metrics Collection | Not started |
+| 21 | Simulation Framework | Not started |
+
+### Phase L: Compliance Governance (Sessions 36-46)
+
+| Layer | Sessions | Primary Outputs |
+|---|---|---|
+| L1 Router | 36-37 | Query router, sensitivity/entity detection, programmable routing policies |
+| L2 Policy | 38-41 | HIPAA, ITAR/EAR, OCAP, conflict resolution, compliance policy runtime |
+| L3 Audit | 42-44 | Compliance audit log, report generation, management dashboard/API |
+| Acquisition Prep | 45-46 | Documentation package, demos, end-to-end compliance integration tests |
 
 ---
 
@@ -164,7 +182,7 @@ After the project scaffold is created in Session 06, the monorepo will contain:
 
 ---
 
-## Configuration Files Index (Post-Session 17)
+## Configuration Files Index (Post-Session 19 In Progress)
 
 | File | Purpose | Session |
 |---|---|---|
@@ -176,6 +194,7 @@ After the project scaffold is created in Session 06, the monorepo will contain:
 | config/topology.toml | Topology config (link weights, refresh interval, anomaly thresholds) | 16 |
 | config/auth_keys.toml | API key auth config template (key hashes, rate limits) | 14c |
 | config/kv.toml | KV cache config (budget, eviction weights, anti-thrash, triggers, model factors) | 17 |
+| config/scoring.toml | Multi-factor scorer weights and normalization settings (server autoload still pending) | 19 |
 
 ---
 

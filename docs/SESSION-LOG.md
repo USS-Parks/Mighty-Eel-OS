@@ -460,7 +460,7 @@ Architecture Notes:
 
 ### Session 19: Multi-Factor Scorer (Scoring Module)
 
-**Status:** In Progress (code complete, wiring + integration tests remain)
+**Status:** In Progress (scoring module complete; config file and DefaultScheduler rebuild hooks present; server autoload + integration tests remain)
 **Phase:** E (Scheduler Intelligence)
 **Depends On:** Sessions 15, 16, 17, 18
 **Blocks:** Sessions 20, 22
@@ -476,11 +476,14 @@ Deliverables (code complete):
 - [x] scoring/mod.rs: Module declarations, re-exports for all scorer types and sub-scorer configs (41 lines)
 - [x] lib.rs: pub mod scoring, re-exports MultiFactorScorer/ScoringConfig/ScoreBreakdown/build_multi_factor_scorer/build_scorer
 
-Remaining (deferred to 19e/19f):
-- [ ] config/scoring.toml: Default scoring configuration file
-- [ ] DefaultScheduler wiring: strategy-based scorer selection, pass topology + kv_manager to builder
+Additional progress found in current code:
+- [x] config/scoring.toml: Default scoring configuration file
+- [x] DefaultScheduler wiring hooks: `set_scoring_config()`, `set_scorer()`, and scorer rebuild with topology + kv_manager handles
+
+Remaining:
+- [ ] Server startup config integration: load `config/scoring.toml` and activate multi-factor scoring from runtime config
 - [ ] Integration tests: 8 scenarios through full DefaultScheduler.schedule() pipeline
-- [ ] Governance updates finalized after 19f
+- [ ] Governance updates finalized after Session 19 completion
 
 Architecture Notes:
 - Design uses concrete sub-scorer functions, not a trait-based plugin system. Each sub-scorer is a standalone fn in its own module.
@@ -489,7 +492,7 @@ Architecture Notes:
 - Continuation bonus is an absolute value (not normalized), deliberately dominating all other factors when a warm KV cache hit exists
 - All sub-scores normalized to [0.0, 1.0] before weighting; benefits negated in the sum
 - Default weights: latency=2.0, memory=1.5, topology=1.0, eviction=1.0, batching=1.5, continuation_bonus=10.0
-- Sandbox disk full during initial session: all writes via file tools. Module verified by manual cross-reference against all type/trait exports. cargo check deferred to next session with clean sandbox.
+- Initial Session 19 work deferred cargo verification because that sandbox was constrained. Current workspace verification on 2026-05-22: `cargo check --workspace` passes.
 
 **Totals:** ~1,694 lines new source across 7 scoring/ files + lib.rs edits, 41 unit tests (10+7+7+7+3+7).
 
@@ -497,7 +500,7 @@ Architecture Notes:
 
 ## Summary
 
-**NOTE:** Prompt Roster restructured from 18 to 35 sessions on 2026-05-18. See MAI-BUILD-PROMPT-ROSTER-v2.md for the new plan. Phase labels below reflect the restructured roster.
+**NOTE:** Prompt Roster restructured from 18 to 46 sessions. See MAI-BUILD-PROMPT-ROSTER-v2.md for the current plan, including the Lamprey compliance governance layer. Phase labels below reflect the restructured roster.
 
 | Phase | Sessions | Status |
 |---|---|---|---|
@@ -507,14 +510,16 @@ Architecture Notes:
 | D-Prep: Wiring Sprint | 14a-14c | Complete (14a+14b+14c) |
 | D: Scheduler Foundation | 15-18, 24 | Complete (15, 16, 17, 18, 24) |
 | E: Scheduler Intelligence | 19-21 | In Progress (19 code complete, wiring/tests remain) |
-| F: Power & Lifecycle | 22-23, 25 | Not Started |
-| G: Security Hardening | 26-28 | Not Started |
-| H: Application Integration | 29-31 | Not Started |
-| I: Advanced Scheduling | 32-33 | Not Started |
-| J: Testing & Packaging | 34-35 | Not Started |
+| F: Power & Lifecycle | 22-23, 25 | Partial (22-23 complete, 25 not started) |
+| G: Model Lifecycle | 24-25 | Partial (24 complete, 25 not started) |
+| H: Security Hardening | 26-28 | Not Started |
+| I: Application Integration | 29-31 | Not Started |
+| J: Advanced Scheduling | 32-33 | Not Started |
+| K: Testing & Packaging | 34-35 | Not Started |
+| L: Compliance Governance | 36-46 | Not Started |
 
-**Sessions Complete:** 21 / 35 (includes 06+06b as one logical session, 11a-11e as one logical session, 14a-14c as wiring sprint, 24 as integration seams). Session 19 code complete, wiring/tests pending.
-**Next Session:** 19e (Scorer Wiring + Config) then 19f (Integration Tests + Governance)
+**Sessions Complete:** Sessions 1-18 and 22-24 are complete. Session 19 is in progress; code/config hooks exist, server autoload and full integration tests remain.
+**Next Session:** Finish Session 19 (server scoring config integration + DefaultScheduler integration tests), then Session 20.
 **Next Archive:** After Session 23 (or end of Phase F, whichever comes first)
 
 ---
@@ -901,4 +906,4 @@ All 6 files rewritten from scratch against verified APIs. v2 files verified: zer
 - `mai-api/src/grpc/registry.rs` — required_vram_bytes
 - `mai-api/src/routes.rs` — post_service for install route
 
-**Remaining:** None (all deliverables complete, CI green). Next session: 19e (Scorer Wiring + Config).
+**Remaining:** None for Session 24 (all deliverables complete, CI green). Next active work: finish Session 19 server scoring config integration and scheduler integration tests.

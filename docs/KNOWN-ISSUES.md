@@ -7,25 +7,25 @@
 
 ## Active Issues
 
-### 1. No Rust Toolchain in Cowork Sandbox
+### 1. Rust Toolchain Availability
 
 **Severity:** Low (development workflow only)
 **Affects:** Sessions 11a-11e, all future sessions
-**Status:** Workaround in place
+**Status:** Resolved in current workspace
 
-The Cowork sandbox does not include a Rust toolchain. `cargo check`, `cargo clippy`, and `cargo fmt` cannot run in-session. All Rust code is verified by manual cross-reference (imports, types, field names) during audit passes. Full compilation verification must be done locally after each session.
+This workspace currently has Cargo available (`cargo 1.95.0`). Earlier sessions ran in a sandbox without a Rust toolchain, so older handoff notes may say `cargo check`, `cargo clippy`, and `cargo fmt` could not run in-session. That limitation no longer applies here.
 
-**Action:** Run `cargo check --workspace && cargo clippy --workspace && cargo fmt --all` locally after every session.
+**Action:** Run the standard Rust gates in-session when practical: `cargo check --workspace`, `cargo clippy --workspace -- -D warnings -A clippy::pedantic`, and `cargo fmt --check`.
 
 ### 2. cargo fmt Drift
 
 **Severity:** Low (cosmetic)
 **Affects:** All Rust files
-**Status:** Open
+**Status:** Resolved 2026-05-21, monitor for new drift
 
-Formatting drift has accumulated across sessions. No functional impact but `cargo fmt` will produce diffs when run locally.
+Formatting drift accumulated across earlier sessions, then was resolved by the 2026-05-21 CI fix pass across 14 Rust files.
 
-**Action:** Run `cargo fmt --all` once before Session 15. If generated protobuf code causes conflicts, add `#[rustfmt::skip]` or exclude in `rustfmt.toml`. See docs/BUILD.md for details.
+**Action:** Keep running `cargo fmt --check` before marking code sessions complete. If generated protobuf code causes conflicts, add `#[rustfmt::skip]` or exclude in `rustfmt.toml`. See docs/BUILD.md for details.
 
 ### 7. Axum 0.7 vs 0.8 Handler Trait Version Conflict
 
