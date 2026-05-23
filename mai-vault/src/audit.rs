@@ -17,39 +17,83 @@
 //! of chain integrity without re-verifying every individual entry.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
 
 use mai_core::vault::{
-    AuditStore, ComplianceReport, VaultAuditAction, VaultAuditEntry, VaultAuditStatus, VaultError,
+    AuditStore, ComplianceReport, PqcProvider, VaultAuditAction, VaultAuditEntry, VaultAuditStatus,
+    VaultError,
 };
 
 use crate::config::AuditConfig;
+use crate::pqc::PqcEngine;
 
 /// Genesis hash (all zeros) for the first entry in the chain.
 const GENESIS_HASH: &str = "0000000000000000000000000000000000000000000000000000000000000000";
+
+/// Hex-encode bytes (lowercase). Local helper — the `blake3` crate already
+/// provides hex output for hashes, but raw ML-DSA signatures need plain hex.
+fn hex_encode(bytes: &[u8]) -> String {
+    use std::fmt::Write;
+    let mut out = String::with_capacity(bytes.len() * 2);
+    for b in bytes {
+        let _ = write!(out, "{b:02x}");
+    }
+    out
+}
+
+/// Decode a lowercase-hex string. Returns `None` on malformed input.
+fn hex_decode(s: &str) -> Option<Vec<u8>> {
+    if s.len() % 2 != 0 {
+        return None;
+    }
+    (0..s.len())
+        .step_by(2)
+        .map(|i| u8::from_str_radix(&s[i..i + 2], 16).ok())
+        .collect()
+}
 
 /// Vault audit trail writer.
 ///
 /// Maintains an append-only, hash-chained sequence of audit entries.
 /// Entries are stored in memory and persisted to disk on append.
+///
+/// When constructed via [`AuditWriter::with_pqc`], the writer signs the
+/// chain head with ML-DSA-87 once every [`AuditConfig::sign_interval`]
+/// appended entries. Each checkpoint signature is stored in the
+/// `pqc_signature` field of the entry that triggered it.
 pub struct AuditWriter {
     config: AuditConfig,
     /// Ordered list of audit entries (append-only).
     entries: RwLock<Vec<VaultAuditEntry>>,
     /// Hash of the most recent entry.
     last_hash: RwLock<String>,
+    /// Optional PQC engine for periodic chain-head signatures.
+    pqc: Option<Arc<PqcEngine>>,
 }
 
 impl AuditWriter {
-    /// Create a new audit writer.
+    /// Create a new audit writer with no checkpoint signing.
     pub fn new(config: AuditConfig) -> Self {
         Self {
             config,
             entries: RwLock::new(Vec::new()),
             last_hash: RwLock::new(GENESIS_HASH.to_string()),
+            pqc: None,
+        }
+    }
+
+    /// Create an audit writer that signs the chain head every
+    /// [`AuditConfig::sign_interval`] entries using `pqc`.
+    pub fn with_pqc(config: AuditConfig, pqc: Arc<PqcEngine>) -> Self {
+        Self {
+            config,
+            entries: RwLock::new(Vec::new()),
+            last_hash: RwLock::new(GENESIS_HASH.to_string()),
+            pqc: Some(pqc),
         }
     }
 
@@ -170,8 +214,31 @@ impl AuditStore for AuditWriter {
             "Appending audit entry"
         );
 
-        (*last).clone_from(&entry.entry_hash);
-        entries.push(entry.clone());
+        // Sign the chain head every `sign_interval` entries when a PQC engine
+        // is wired. The resulting ML-DSA-87 signature is stored as hex on the
+        // entry that triggered the checkpoint.
+        let new_count = (entries.len() as u64).saturating_add(1);
+        let mut stored = entry.clone();
+        if let Some(pqc) = self.pqc.as_ref() {
+            let interval = self.config.sign_interval.max(1);
+            if new_count % interval == 0 {
+                match pqc.sign_package(entry.entry_hash.as_bytes()).await {
+                    Ok(sig) => {
+                        stored.pqc_signature = Some(hex_encode(&sig));
+                        info!(
+                            entry_index = new_count,
+                            interval, "Audit chain checkpoint signed (ML-DSA-87)"
+                        );
+                    }
+                    Err(e) => {
+                        warn!(error = %e, "Failed to sign audit checkpoint; entry stored unsigned");
+                    }
+                }
+            }
+        }
+
+        (*last).clone_from(&stored.entry_hash);
+        entries.push(stored);
         drop(entries);
         drop(last);
 
@@ -247,6 +314,23 @@ impl AuditStore for AuditWriter {
                         entry.entry_hash
                     ),
                 });
+            }
+
+            // Verify ML-DSA-87 checkpoint signature when present.
+            if let (Some(sig_hex), Some(pqc)) = (&entry.pqc_signature, self.pqc.as_ref()) {
+                let sig = hex_decode(sig_hex).ok_or_else(|| VaultError::AuditChainBroken {
+                    index: i as u64,
+                    detail: format!("malformed pqc_signature hex at index {i}"),
+                })?;
+                let ok = pqc
+                    .verify_package(entry.entry_hash.as_bytes(), &sig)
+                    .await?;
+                if !ok {
+                    return Err(VaultError::AuditChainBroken {
+                        index: i as u64,
+                        detail: format!("ML-DSA-87 checkpoint signature invalid at index {i}"),
+                    });
+                }
             }
 
             expected_prev.clone_from(&entry.entry_hash);
@@ -571,6 +655,104 @@ mod tests {
         let report = writer.export_compliance(0, 9999).await.unwrap();
         assert_eq!(report.total_entries, 1);
         assert!(report.chain_intact);
+    }
+
+    #[tokio::test]
+    async fn test_checkpoint_signature_written_and_verified() {
+        use crate::config::PqcConfig;
+        use std::path::PathBuf;
+        let tmp = TempDir::new().unwrap();
+        let mut cfg = test_audit_config(&tmp);
+        cfg.sign_interval = 3; // sign every 3rd entry
+
+        let pqc_cfg = PqcConfig {
+            kem_algorithm: "ML-KEM-1024".into(),
+            dsa_algorithm: "ML-DSA-87".into(),
+            key_store_path: PathBuf::from("/tmp/test-keys"),
+            symmetric_cipher: "AES-256-GCM".into(),
+        };
+        let pqc = std::sync::Arc::new(PqcEngine::new(pqc_cfg));
+        pqc.initialize().await.unwrap();
+
+        let writer = AuditWriter::with_pqc(cfg, pqc.clone());
+        writer.initialize().await.unwrap();
+
+        let mut prev = GENESIS_HASH.to_string();
+        for i in 0..6u64 {
+            let entry = make_entry(
+                &format!("e{i}"),
+                1000 + i,
+                "admin",
+                VaultAuditAction::SystemStartup,
+                &prev,
+            );
+            prev = entry.entry_hash.clone();
+            writer.append(&entry).await.unwrap();
+        }
+
+        let all = writer.read_recent(10).await.unwrap();
+        // Entries at indices 2 and 5 (1-based 3 and 6) should be signed.
+        assert!(all[2].pqc_signature.is_some(), "entry 3 must be signed");
+        assert!(all[5].pqc_signature.is_some(), "entry 6 must be signed");
+        assert!(all[0].pqc_signature.is_none(), "entry 1 must not be signed");
+        assert!(all[1].pqc_signature.is_none(), "entry 2 must not be signed");
+
+        // verify_chain must succeed when checkpoint sigs are valid.
+        let verified = writer.verify_chain().await.unwrap();
+        assert_eq!(verified, 6);
+    }
+
+    #[tokio::test]
+    async fn test_tampered_checkpoint_signature_detected() {
+        use crate::config::PqcConfig;
+        use std::path::PathBuf;
+        let tmp = TempDir::new().unwrap();
+        let mut cfg = test_audit_config(&tmp);
+        cfg.sign_interval = 2;
+
+        let pqc_cfg = PqcConfig {
+            kem_algorithm: "ML-KEM-1024".into(),
+            dsa_algorithm: "ML-DSA-87".into(),
+            key_store_path: PathBuf::from("/tmp/test-keys"),
+            symmetric_cipher: "AES-256-GCM".into(),
+        };
+        let pqc = std::sync::Arc::new(PqcEngine::new(pqc_cfg));
+        pqc.initialize().await.unwrap();
+
+        let writer = AuditWriter::with_pqc(cfg, pqc.clone());
+        writer.initialize().await.unwrap();
+
+        let e1 = make_entry(
+            "e1",
+            1000,
+            "admin",
+            VaultAuditAction::SystemStartup,
+            GENESIS_HASH,
+        );
+        writer.append(&e1).await.unwrap();
+        let e2 = make_entry(
+            "e2",
+            1001,
+            "admin",
+            VaultAuditAction::ModelLoad,
+            &e1.entry_hash,
+        );
+        writer.append(&e2).await.unwrap();
+
+        // Corrupt the signature on the checkpointed entry.
+        {
+            let mut entries = writer.entries.write().await;
+            if let Some(sig) = entries[1].pqc_signature.as_mut() {
+                // Flip one hex character to make the signature invalid.
+                sig.replace_range(0..2, if &sig[0..2] == "00" { "ff" } else { "00" });
+            }
+        }
+
+        let result = writer.verify_chain().await;
+        assert!(
+            matches!(result, Err(VaultError::AuditChainBroken { .. })),
+            "tampered checkpoint signature must be detected, got {result:?}"
+        );
     }
 
     #[tokio::test]

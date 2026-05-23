@@ -20,6 +20,7 @@
 
 pub mod audit;
 pub mod config;
+pub mod init;
 pub mod pqc;
 pub mod profiles;
 pub mod tpm;

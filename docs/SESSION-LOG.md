@@ -602,6 +602,37 @@ Verification:
 - `python -m pytest tools/ adapters/` on 2026-05-22: 114/114 passed (18 new Session 32 tests across `tools/trace-tools/tests/`, `tools/simulator/tests/test_simulator_extensions.py`, `tools/simulator/tests/test_replay_compare.py`).
 - End-to-end CLI smoke test: 40-event synthetic trace replayed through all 4 KV policies produced a complete Markdown comparison table with headline findings; deterministic across two identical runs.
 
+## Session 27 Completion
+
+**Date:** 2026-05-22
+**Status:** Complete (BUILD-EXECUTION-PLAN Phase H, vault-crypto half of Gate A1)
+**Summary:** Replaced every cryptographic stub in `mai-vault` with real implementations behind a dual feature-flag backend. ML-KEM-1024 (FIPS 203) and ML-DSA-87 (FIPS 204) now power the PQC engine via `pqc-dev` (RustCrypto `ml-kem` + `ml-dsa`, default, no C deps) or `pqc-prod` (liboqs-backed `pqcrypto-mlkem` + `pqcrypto-mldsa`, required for FIPS-validated builds). Bulk model-weight encryption switched from XOR to AES-256-GCM under an HKDF-SHA3-256 key derived from each KEM shared secret. Software TPM replaced XOR seal/unseal with XChaCha20-Poly1305 keyed by a PCR-state-derived HKDF; PCR drift now fails AEAD authentication rather than a plaintext equality check. Audit chain gained optional ML-DSA-87 checkpoint signing every `sign_interval` entries, wired through a new `AuditWriter::with_pqc` constructor and validated end-to-end by `verify_chain`. `ZfsVault::verify_signature` no longer unconditionally returns `Ok(true)` — it delegates to `PqcProvider::verify_package` or errors when no engine is wired; `append_audit_entry` likewise delegates to `AuditStore`. New `mai-vault::init::first_boot` orchestrates the cold-start sequence (master keypair → TPM seal → storage tree → audit chain → admin key) and completes well under the 30-second budget.
+**Files Changed:**
+- Modified: mai-vault/Cargo.toml (feature gates `pqc-dev`/`pqc-prod`/`tpm-hardware`/`zfs-storage`; real PQC + AEAD deps)
+- Modified: mai-vault/src/pqc.rs (full rewrite, real ML-KEM-1024 + ML-DSA-87 + AES-256-GCM + HKDF)
+- Modified: mai-vault/src/tpm.rs (XChaCha20-Poly1305 software TPM, HKDF-SHA3-256 PCR derivation, real AEAD seal/unseal)
+- Modified: mai-vault/src/audit.rs (ML-DSA-87 checkpoint signing, `with_pqc` constructor, signature verification in `verify_chain`, hex helpers)
+- Modified: mai-vault/src/zfs.rs (PQC + AuditWriter wiring via `with_engines`, real delegation for `verify_signature` / `append_audit_entry`)
+- Modified: mai-vault/src/lib.rs (`pub mod init`)
+- New: mai-vault/src/init.rs (first-boot orchestration + sub-30s acceptance test)
+**Tests Run:**
+- `cargo test -p mai-vault --lib` (default `pqc-dev`): 55/55 pass.
+- `cargo test -p mai-vault --no-default-features --features pqc-prod --lib`: 55/55 pass.
+- `cargo test --workspace --lib`: all crates green (1028 lib tests).
+- `cargo check --workspace`: clean.
+**Acceptance Criteria Verified:**
+- No XOR, no deterministic fill keys, no `Ok(true)` signature stubs remain in any production code path (PqcEngine, TpmManager, ZfsVault all delegate to real cryptography or return explicit errors).
+- ML-KEM-1024 encapsulation produces matching shared secrets and rejects foreign keys via implicit-rejection divergence (`test_kem_decap_wrong_key_diverges`).
+- ML-DSA-87 signatures verify and fail on tampered messages (`test_dsa_tamper_detection`, `test_aead_tamper_detection`).
+- TPM-sealed material is recoverable only with the matching PCR state (`test_pcr_mismatch_blocks_unseal`, `test_pcr_recovery_after_reset`) — drift now triggers AEAD authentication failure.
+- Audit chain checkpoint signatures are written at the configured interval and detected when tampered (`test_checkpoint_signature_written_and_verified`, `test_tampered_checkpoint_signature_detected`).
+- First-boot completes in <30 s and produces a verifiable audit chain plus TPM round-trippable master blob (`first_boot_completes_under_30s`).
+- Both PQC backends compile and pass the same test suite, satisfying the dual-path acceptance shape.
+**Known Issues Added or Closed:** Hardware TPM via `tss-esapi` and native ZFS via the `zfs` CLI remain feature-gated for Linux-only deployments — defaults use real-AEAD software fallbacks. Pre-existing clippy `-D warnings` failures in `mai-core/sentinel/*` are unchanged.
+**Next Session Notes:** Session 28 (Air-Gap Enforcement + Network Isolation) closes Gate A1. Trust Manifold backfill BF-3 (signed bundles) can borrow `AuditWriter::with_pqc` checkpoint signing for bundle attestations.
+
+---
+
 ## Session 40 Completion
 
 **Date:** 2026-05-22

@@ -21,14 +21,18 @@
 use async_trait::async_trait;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
 
 use mai_core::vault::{
-    IntegrityResult, ModelStorage, SnapshotInfo, StorageInfo, VaultError, VaultInterface,
+    AuditStore, IntegrityResult, ModelStorage, PqcProvider, SnapshotInfo, StorageInfo, VaultError,
+    VaultInterface,
 };
 
+use crate::audit::AuditWriter;
 use crate::config::VaultConfig;
+use crate::pqc::PqcEngine;
 
 /// ZFS-backed vault providing encrypted model storage.
 ///
@@ -41,6 +45,10 @@ pub struct ZfsVault {
     model_index: RwLock<HashMap<String, ModelEntry>>,
     /// Snapshot metadata cache
     snapshots: RwLock<Vec<SnapshotInfo>>,
+    /// PQC engine for `verify_signature` delegation (optional).
+    pqc: Option<Arc<PqcEngine>>,
+    /// Audit writer for `append_audit_entry` delegation (optional).
+    audit: Option<Arc<AuditWriter>>,
 }
 
 /// Internal model tracking entry.
@@ -65,6 +73,23 @@ impl ZfsVault {
             config,
             model_index: RwLock::new(HashMap::new()),
             snapshots: RwLock::new(Vec::new()),
+            pqc: None,
+            audit: None,
+        }
+    }
+
+    /// Create a vault wired to a PQC engine and audit writer.
+    ///
+    /// With both engines wired, `verify_signature` delegates to ML-DSA-87
+    /// verification and `append_audit_entry` writes to the hash-chained
+    /// audit log instead of returning placeholder values.
+    pub fn with_engines(config: VaultConfig, pqc: Arc<PqcEngine>, audit: Arc<AuditWriter>) -> Self {
+        Self {
+            config,
+            model_index: RwLock::new(HashMap::new()),
+            snapshots: RwLock::new(Vec::new()),
+            pqc: Some(pqc),
+            audit: Some(audit),
         }
     }
 
@@ -297,24 +322,30 @@ impl VaultInterface for ZfsVault {
     }
 
     async fn append_audit_entry(&self, entry: &[u8]) -> Result<(), VaultError> {
-        // Delegate to AuditStore implementation when wired.
-        // For now, log and succeed.
+        let audit = self
+            .audit
+            .as_ref()
+            .ok_or_else(|| VaultError::AuditStoreError("AuditWriter not wired to vault".into()))?;
+        let parsed: mai_core::vault::VaultAuditEntry = serde_json::from_slice(entry)
+            .map_err(|e| VaultError::AuditStoreError(format!("audit entry decode: {e}")))?;
         debug!(
-            bytes = entry.len(),
-            "Vault received audit entry (delegate to AuditStore)"
+            entry_id = %parsed.entry_id,
+            "Vault delegating audit entry to AuditWriter"
         );
-        Ok(())
+        audit.append(&parsed).await
     }
 
     async fn verify_signature(&self, data: &[u8], signature: &[u8]) -> Result<bool, VaultError> {
-        // Delegate to PqcProvider implementation when wired.
-        // For now, return true (signature verification placeholder).
+        let pqc = self
+            .pqc
+            .as_ref()
+            .ok_or_else(|| VaultError::PqcError("PqcEngine not wired to vault".into()))?;
         debug!(
             data_bytes = data.len(),
             sig_bytes = signature.len(),
-            "Vault signature verification (delegate to PqcProvider)"
+            "Vault delegating signature verification to PqcProvider"
         );
-        Ok(true)
+        pqc.verify_package(data, signature).await
     }
 }
 
@@ -603,6 +634,46 @@ mod tests {
 
         vault.remove_model("remove-me").await.unwrap();
         assert!(!vault.model_exists("remove-me").await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_verify_signature_requires_wired_pqc_engine() {
+        let tmp = TempDir::new().unwrap();
+        let vault = ZfsVault::new(test_config(&tmp));
+        // Without a wired engine, verify_signature must NOT silently succeed.
+        let result = vault.verify_signature(b"data", b"sig").await;
+        assert!(matches!(result, Err(VaultError::PqcError(_))));
+    }
+
+    #[tokio::test]
+    async fn test_verify_signature_delegates_to_pqc_engine() {
+        use crate::audit::AuditWriter;
+        use crate::config::{AuditConfig, PqcConfig};
+        use std::sync::Arc;
+
+        let tmp = TempDir::new().unwrap();
+        let pqc = Arc::new(PqcEngine::new(PqcConfig {
+            kem_algorithm: "ML-KEM-1024".into(),
+            dsa_algorithm: "ML-DSA-87".into(),
+            key_store_path: tmp.path().join("keys"),
+            symmetric_cipher: "AES-256-GCM".into(),
+        }));
+        pqc.initialize().await.unwrap();
+        let audit = Arc::new(AuditWriter::new(AuditConfig {
+            db_path: tmp.path().join("audit.json"),
+            wal_mode: true,
+            sign_interval: 100,
+            max_entries: 0,
+        }));
+        audit.initialize().await.unwrap();
+
+        let vault = ZfsVault::with_engines(test_config(&tmp), pqc.clone(), audit);
+
+        let data = b"vault signature delegation test";
+        let sig = pqc.sign_package(data).await.unwrap();
+        assert!(vault.verify_signature(data, &sig).await.unwrap());
+        // Tampered data must fail.
+        assert!(!vault.verify_signature(b"tampered", &sig).await.unwrap());
     }
 
     #[tokio::test]
