@@ -1,0 +1,18 @@
+# Map files from the build-package.sh staging tree into the binary
+# package. Paths are relative to debian/staging/.
+usr/bin/mai-api                          usr/bin/
+usr/bin/mai-ship-validate                usr/bin/
+usr/lib/mai/adapters                     usr/lib/mai/
+usr/lib/mai/compliance-dashboard         usr/lib/mai/
+usr/lib/mai/scripts                      usr/lib/mai/
+usr/share/doc/mai                        usr/share/doc/
+lib/systemd/system/mai-api.service              lib/systemd/system/
+lib/systemd/system/mai-dashboard.service        lib/systemd/system/
+lib/systemd/system/mai-adapter-manager.service  lib/systemd/system/
+lib/systemd/system/mai-healthcheck.service      lib/systemd/system/
+lib/systemd/system/mai-healthcheck.timer        lib/systemd/system/
+etc/mai/profile.toml                     etc/mai/
+etc/mai/auth_keys.toml                   etc/mai/
+etc/mai/dashboard-logging.json           etc/mai/
+etc/mai/policies                         etc/mai/
+etc/mai/trust-anchors                    etc/mai/

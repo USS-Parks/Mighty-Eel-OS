@@ -1,0 +1,24 @@
+[Unit]
+Description=Island Mountain MAI periodic health check
+Documentation=file:///usr/share/doc/mai/README.md
+After=mai-api.service
+Requires=mai-api.service
+
+[Service]
+Type=oneshot
+User=mai
+Group=mai
+WorkingDirectory=/var/lib/mai
+Environment=MAI_PROFILE=ship
+Environment=MAI_API_URL=http://127.0.0.1:8420
+ExecStart=/usr/lib/mai/scripts/mai-healthcheck.sh
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=mai-healthcheck
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadOnlyPaths=/etc/mai /var/lib/mai
+ReadWritePaths=/var/log/mai

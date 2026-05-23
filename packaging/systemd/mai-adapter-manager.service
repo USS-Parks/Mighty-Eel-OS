@@ -1,0 +1,46 @@
+[Unit]
+Description=Island Mountain MAI adapter manager (LoRA/QLoRA hot-swap)
+Documentation=file:///usr/share/doc/mai/README.md
+After=mai-api.service
+PartOf=mai-api.service
+
+[Service]
+Type=simple
+User=mai
+Group=mai
+WorkingDirectory=/var/lib/mai
+Environment=MAI_PROFILE=ship
+Environment=MAI_ADAPTERS_DIR=/usr/lib/mai/adapters
+Environment=MAI_STATE_DIR=/var/lib/mai
+ExecStart=/usr/bin/mai-api --config /etc/mai/profile.toml --role adapter-manager
+Restart=on-failure
+RestartSec=5s
+StartLimitBurst=5
+StartLimitIntervalSec=60s
+TimeoutStopSec=30s
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=mai-adapter-manager
+
+# Privilege hardening (inherits api hardening; adapters need a writable
+# scratch dir under state for hot-swap staging)
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+SystemCallArchitectures=native
+ReadWritePaths=/var/lib/mai /var/log/mai /run/mai
+ReadOnlyPaths=/etc/mai /usr/lib/mai/adapters
+
+LimitNOFILE=16384
+LimitNPROC=2048
+
+[Install]
+WantedBy=multi-user.target

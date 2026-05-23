@@ -1,0 +1,14 @@
+[Unit]
+Description=Island Mountain MAI periodic health check timer
+Documentation=file:///usr/share/doc/mai/README.md
+Requires=mai-healthcheck.service
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+AccuracySec=15s
+Persistent=true
+Unit=mai-healthcheck.service
+
+[Install]
+WantedBy=timers.target

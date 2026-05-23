@@ -1,0 +1,158 @@
+#!/bin/sh
+# packaging/scripts/postinstall.sh - runs AFTER files are installed.
+#
+# Responsibilities (idempotent):
+#   * Create the `mai` system user and group.
+#   * Create the runtime directory layout under /var/lib/mai, /var/log/mai,
+#     /run/mai, /var/backups/mai with restrictive permissions.
+#   * chown installed config and state to mai:mai.
+#   * Build a deterministic Python venv for the compliance dashboard.
+#   * Reload systemd and tell the operator what to do next.
+#
+# This script does NOT auto-enable or auto-start any service. The
+# operator must run `systemctl enable --now mai-api.service` once they
+# have reviewed /etc/mai/profile.toml and seeded /etc/mai/auth_keys.toml.
+
+set -eu
+
+PKG_NAME="mai"
+ACTION="${1:-configure}"
+MAI_USER="mai"
+MAI_GROUP="mai"
+MAI_HOME="/var/lib/mai"
+DASHBOARD_DIR="/usr/lib/mai/compliance-dashboard"
+DASHBOARD_VENV="${DASHBOARD_DIR}/.venv"
+PYTHON_BIN="${MAI_PYTHON_BIN:-python3}"
+
+log() {
+    printf "[%s postinst] %s\n" "${PKG_NAME}" "$*"
+}
+
+create_user() {
+    if ! getent group "${MAI_GROUP}" >/dev/null 2>&1; then
+        log "creating system group ${MAI_GROUP}"
+        addgroup --system "${MAI_GROUP}"
+    fi
+    if ! getent passwd "${MAI_USER}" >/dev/null 2>&1; then
+        log "creating system user ${MAI_USER}"
+        adduser --system --ingroup "${MAI_GROUP}" \
+            --home "${MAI_HOME}" --no-create-home \
+            --shell /usr/sbin/nologin "${MAI_USER}"
+    fi
+}
+
+ensure_dir() {
+    path="$1"
+    mode="$2"
+    if [ ! -d "${path}" ]; then
+        log "creating ${path} (mode ${mode})"
+        install -d -m "${mode}" -o "${MAI_USER}" -g "${MAI_GROUP}" "${path}"
+    else
+        chown "${MAI_USER}:${MAI_GROUP}" "${path}"
+        chmod "${mode}" "${path}"
+    fi
+}
+
+create_layout() {
+    ensure_dir /var/lib/mai          0750
+    ensure_dir /var/lib/mai/vault    0750
+    ensure_dir /var/lib/mai/audit    0750
+    ensure_dir /var/lib/mai/trust    0750
+    ensure_dir /var/lib/mai/models   0750
+    ensure_dir /var/lib/mai/reports  0750
+    ensure_dir /var/log/mai          0750
+    ensure_dir /run/mai              0755
+    ensure_dir /var/backups/mai      0750
+    ensure_dir /etc/mai/policies     0750
+    ensure_dir /etc/mai/trust-anchors 0750
+}
+
+fix_config_perms() {
+    for f in /etc/mai/profile.toml \
+             /etc/mai/auth_keys.toml \
+             /etc/mai/dashboard-logging.json; do
+        if [ -f "${f}" ]; then
+            chown root:"${MAI_GROUP}" "${f}"
+            chmod 0640 "${f}"
+        fi
+    done
+}
+
+build_dashboard_venv() {
+    if [ ! -f "${DASHBOARD_DIR}/requirements.txt" ]; then
+        log "dashboard requirements.txt missing, skipping venv build"
+        return 0
+    fi
+    if [ ! -x "$(command -v "${PYTHON_BIN}")" ]; then
+        log "WARNING: ${PYTHON_BIN} not found; skipping dashboard venv"
+        return 0
+    fi
+
+    if [ ! -d "${DASHBOARD_VENV}" ]; then
+        log "creating dashboard venv at ${DASHBOARD_VENV}"
+        "${PYTHON_BIN}" -m venv "${DASHBOARD_VENV}"
+    fi
+
+    log "installing dashboard dependencies (offline mode if wheels present)"
+    if [ -d "${DASHBOARD_DIR}/wheels" ]; then
+        "${DASHBOARD_VENV}/bin/pip" install --no-index \
+            --find-links "${DASHBOARD_DIR}/wheels" \
+            -r "${DASHBOARD_DIR}/requirements.txt"
+    else
+        "${DASHBOARD_VENV}/bin/pip" install --disable-pip-version-check \
+            -r "${DASHBOARD_DIR}/requirements.txt"
+    fi
+    chown -R "${MAI_USER}:${MAI_GROUP}" "${DASHBOARD_VENV}"
+}
+
+reload_systemd() {
+    if command -v systemctl >/dev/null 2>&1; then
+        log "reloading systemd"
+        systemctl daemon-reload || true
+    fi
+}
+
+print_next_steps() {
+    cat <<EOF
+
+================================================================
+  MAI ${PKG_NAME} installed.
+
+  Next steps (operator):
+    1. Review /etc/mai/profile.toml (set tenant id, paths, anchors).
+    2. Seed /etc/mai/auth_keys.toml with the API key store.
+    3. Drop ML-DSA-87 trust anchors into /etc/mai/trust-anchors/.
+    4. Run: mai-ship-validate --profile /etc/mai/profile.toml
+       Exit code 0 means ship-ready; anything else blocks startup.
+    5. Enable + start: systemctl enable --now mai-api.service
+    6. Optional dashboard: systemctl enable --now mai-dashboard.service
+    7. Enable periodic health check: systemctl enable --now mai-healthcheck.timer
+
+  Logs:        journalctl -u mai-api.service -f
+  State:       ${MAI_HOME}
+  Config:      /etc/mai/
+  Backups:     /var/backups/mai
+
+================================================================
+EOF
+}
+
+main() {
+    log "postinstall (action=${ACTION})"
+    case "${ACTION}" in
+        configure|install|upgrade)
+            create_user
+            create_layout
+            fix_config_perms
+            build_dashboard_venv
+            reload_systemd
+            print_next_steps
+            ;;
+        *)
+            log "action ${ACTION} not handled, skipping postinstall steps"
+            ;;
+    esac
+    log "postinstall complete"
+}
+
+main "$@"

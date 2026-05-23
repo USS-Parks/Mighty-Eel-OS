@@ -1,0 +1,58 @@
+[Unit]
+Description=Island Mountain MAI compliance dashboard
+Documentation=file:///usr/share/doc/mai/README.md
+After=network-online.target mai-api.service
+Wants=network-online.target
+Requires=mai-api.service
+RequiresMountsFor=/var/lib/mai /etc/mai
+
+[Service]
+Type=simple
+User=mai
+Group=mai
+WorkingDirectory=/usr/lib/mai/compliance-dashboard
+Environment=MAI_PROFILE=ship
+Environment=MAI_SHIP_PROFILE=/etc/mai/profile.toml
+Environment=MAI_DASHBOARD_HOST=127.0.0.1
+Environment=MAI_DASHBOARD_PORT=8430
+Environment=MAI_API_URL=http://127.0.0.1:8420
+ExecStart=/usr/lib/mai/compliance-dashboard/.venv/bin/uvicorn app:app \
+    --host ${MAI_DASHBOARD_HOST} \
+    --port ${MAI_DASHBOARD_PORT} \
+    --no-server-header \
+    --log-config /etc/mai/dashboard-logging.json
+Restart=on-failure
+RestartSec=5s
+StartLimitBurst=5
+StartLimitIntervalSec=60s
+TimeoutStartSec=60s
+TimeoutStopSec=30s
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=mai-dashboard
+
+# Privilege hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+SystemCallArchitectures=native
+ReadWritePaths=/var/log/mai /run/mai
+ReadOnlyPaths=/etc/mai /var/lib/mai /usr/lib/mai/compliance-dashboard
+
+# Resource limits
+LimitNOFILE=8192
+LimitNPROC=512
+
+[Install]
+WantedBy=multi-user.target

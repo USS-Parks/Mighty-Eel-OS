@@ -1,0 +1,39 @@
+#!/usr/bin/make -f
+# Debian build rules for the mai package.
+#
+# The package is assembled by scripts/build-package.sh, which produces a
+# staging tree that this rules file copies into debian/mai. Cargo and
+# Python builds happen out-of-tree to keep the package build fast and
+# offline-friendly.
+
+export DH_VERBOSE = 1
+export CARGO_HOME ?= $(CURDIR)/debian/cargo-home
+export STAGING_DIR ?= $(CURDIR)/debian/staging
+export PKG_NAME = mai
+
+%:
+	dh $@
+
+override_dh_auto_build:
+	@echo "build-package.sh is the source of truth for binary builds."
+	@test -d $(STAGING_DIR) || { \
+	    echo "ERROR: $(STAGING_DIR) missing."; \
+	    echo "Run scripts/build-package.sh before dpkg-buildpackage."; \
+	    exit 1; \
+	}
+
+override_dh_auto_install:
+	mkdir -p debian/$(PKG_NAME)
+	cp -a $(STAGING_DIR)/. debian/$(PKG_NAME)/
+
+override_dh_installsystemd:
+	dh_installsystemd --no-enable --no-start mai-api.service
+	dh_installsystemd --no-enable --no-start mai-dashboard.service
+	dh_installsystemd --no-enable --no-start mai-adapter-manager.service
+	dh_installsystemd --no-enable --no-start mai-healthcheck.timer
+
+override_dh_auto_test:
+	@echo "Tests are gated by scripts/build-package.sh before staging."
+
+override_dh_strip:
+	dh_strip --no-automatic-dbgsym

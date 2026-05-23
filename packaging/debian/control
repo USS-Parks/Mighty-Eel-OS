@@ -1,0 +1,40 @@
+Source: mai
+Section: net
+Priority: optional
+Maintainer: Island Mountain <ops@islandmountain.io>
+Build-Depends:
+ debhelper-compat (= 13),
+ cargo (>= 1.85) | rustc (>= 1.85),
+ python3 (>= 3.11),
+ python3-venv,
+ python3-pip
+Standards-Version: 4.6.2
+Homepage: https://github.com/USS-Parks/im-mighty-eel-mai
+Rules-Requires-Root: no
+
+Package: mai
+Architecture: amd64
+Depends:
+ ${shlibs:Depends},
+ ${misc:Depends},
+ adduser,
+ libc6 (>= 2.34),
+ python3 (>= 3.11),
+ python3-venv,
+ systemd
+Recommends:
+ zfsutils-linux,
+ prometheus-node-exporter
+Description: Island Mountain MAI on-prem inference and compliance platform
+ The MAI server provides REST and gRPC inference endpoints with an
+ integrated compliance layer (Lamprey) that enforces HIPAA, ITAR, and
+ tribal data-sovereignty (OCAP) policy at request time. This package
+ ships the production "ship" profile only; demo defaults are rejected
+ by the production guard on every boot.
+ .
+ Components installed:
+   * mai-api      - REST + gRPC inference server (systemd unit included)
+   * mai-ship-validate - readiness validator (must exit 0 to bind)
+   * mai-healthcheck   - periodic local probe (systemd timer)
+   * compliance dashboard - FastAPI operator console
+   * config templates and trust-anchor directory layout
