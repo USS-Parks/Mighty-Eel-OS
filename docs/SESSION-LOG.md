@@ -3,7 +3,7 @@
 **Project:** Island Mountain Model Abstraction Interface (MAI)
 **Source:** MAI-BUILD-PROMPT-ROSTER-v2.md (current at 46 sessions plus Trust Manifold backfill lane)
 **Instructions:** Update this file after each session completes. Mark deliverables as they are finished. Log blockers and notes as they arise.
-**Active Scope:** Phase H onward — Sessions 26-44 + BF-1..BF-7. Mainline next: Session 45 (Acquisition Documentation Package).
+**Active Scope:** Phase H onward — Sessions 26-45 + BF-1..BF-7. Mainline next: Session 46 (Compliance Demo Suite + Gate D).
 
 ---
 
@@ -475,13 +475,13 @@ Verification:
 | I: Application Integration | 29-31 | Complete per plan scope (29 SDK; 30 plan-spec six scaffolds in commit `70fa5a0`); roster S31 Part 2 optional under plan §739 |
 | J: Advanced Scheduling | 32-33 | Complete (32, 33) |
 | K: Testing & Packaging | 34-35 | Complete (34, 35) — **Gate C closed** |
-| L: Compliance Governance | 36-46 | **Sessions 36-44 + BF-1..BF-7 complete**; mainline next is Session 45 (Acquisition Documentation Package), then Session 46 (Compliance Demo Suite) for Gate D |
+| L: Compliance Governance | 36-46 | **Sessions 36-45 + BF-1..BF-7 complete**; mainline next is Session 46 (Compliance Demo Suite) for Gate D |
 
-**Sessions Complete:** 1-30, 32-44 + BF-1..BF-7. **Gate C** (Core Platform Release) closed in Session 35. **Trust Manifold backfill lane** (Appendix A of the plan) closed in BF-7 — every Lamprey session accepts trust context, every audit entry carries credential correlation, every deployment posture is documented, and the buyer demo runs end to end.
+**Sessions Complete:** 1-30, 32-45 + BF-1..BF-7. **Gate C** (Core Platform Release) closed in Session 35. **Trust Manifold backfill lane** (Appendix A of the plan) closed in BF-7. **Session 45** (Acquisition Documentation Package, 2026-05-23) added 13 new diligence-grade docs (~3768 lines) extending the BF-7 seed across architecture, scheduler, Lamprey, air-gap, API, SDK, competitive, IP, integration, and four demo scripts.
 
-**Test Footprint (post-BF-7):** 1196 Rust workspace lib tests + 17 mai-api integration tests + 94 Python SDK tests + 20 compliance dashboard tests + 61 application-scaffold tests. All green on 2026-05-22 night.
+**Test Footprint (post-S45):** 1196 Rust workspace lib tests + 17 mai-api integration tests + 94 Python SDK tests + 20 compliance dashboard tests + 61 application-scaffold tests. Unchanged by S45 (docs-only session).
 
-**Active Work:** Session 45 — Acquisition Documentation Package. The BF-7 docs (`docs/{ACQUISITION-PACKAGE,BUYER-INTEGRATION-GUIDE,DEMO-SUITE}.md`) are the absorption seed; S45 extends them with the remaining architecture / scheduler / API / SDK / competitive / IP material per plan §1326.
+**Active Work:** Session 46 — Compliance Demo Suite. The four S45 demo scripts under `docs/acquisition/demos/` are the absorption seed; S46 turns them into automated end-to-end test scenarios and closes Gate D.
 
 **Next Coordination Gate:** Gate D (Acquisition-Ready Release) closes after Session 46 — end-to-end Trust Manifold + Healthcare + Defense + Tribal Sovereignty + Multi-Domain Conflict + Dashboard demos all reproducible.
 
@@ -653,3 +653,90 @@ The entries below are chronological (append order). Earlier sessions in this fil
 - Modified: `docs/INDEX.md`; `apps/openbao-trust-demo/{main.py,README.md,tests/test_smoke.py,tests/test_integration.py}`; `apps/operator/{main.py,tests/test_smoke.py,tests/test_integration.py}`.
 
 **Next Session Notes:** Mainline cleared for Session 45. The BF-7 docs are the absorption seed — S45 must extend (not duplicate) them with the full architecture overview, scheduler proof brief, API/SDK reference, competitive analysis, and IP position memo per plan §1326.
+
+---
+
+### 2026-05-23: Session 45 — Acquisition Documentation Package
+
+**Status:** Complete. Plan §1326 + roster §3668 satisfied. 13 new diligence-grade docs land (~3768 lines), extending the BF-7 seed without duplicating it. Docs-only session — no code, no test changes, no behaviour changes.
+
+**Why now:** Mainline next per memory + git was S45. The BF-7 seed was already committed (`docs/{ACQUISITION-PACKAGE,BUYER-INTEGRATION-GUIDE,DEMO-SUITE}.md`); S45's job was to extend it across the remaining deliverable list in plan §1326 (architecture overview, scheduler brief, Lamprey brief, air-gap brief, API reference, SDK reference, competitive analysis, IP position memo, acquirer integration guide, four demo scripts).
+
+**What landed (new files, line counts as measured):**
+
+| Path | Lines | Purpose |
+|---|---:|---|
+| `docs/SCHEDULER-BRIEF.md` | 287 | Topology, KV, batching, scoring, balancer, decision cache, power, trace replay |
+| `docs/LAMPREY-BRIEF.md` | 297 | Three-layer Lamprey stack: router, policy, audit; HIPAA/ITAR/EAR/OCAP + composer |
+| `docs/AIR-GAP-BRIEF.md` | 209 | `ConnectivityState`, loopback bind, trust-cache interaction, audit coverage |
+| `docs/API-REFERENCE.md` | 409 | Live REST surface mirroring `mai-api/src/routes.rs`, incl. BF-6 trust + S44 compliance |
+| `docs/SDK-REFERENCE.md` | 299 | Python SDK namespace reference, error hierarchy, retry, CLI, async parity |
+| `docs/acquisition/ARCHITECTURE.md` | 349 | Top-down architecture overlay; three integration shapes A/B/C |
+| `docs/acquisition/COMPETITIVE.md` | 310 | vs Guardrails AI / NeMo Guardrails / Minder / Cloudflare AIG / Bedrock / Azure |
+| `docs/acquisition/IP.md` | 302 | 4 patent candidates + trade secrets + open-source boundary recommendations |
+| `docs/acquisition/INTEGRATION.md` | 361 | Acquirer-embed deeper guide; custom modules, SIEM bridge, build/test surface |
+| `docs/acquisition/demos/healthcare.md` | 196 | Demo 1 — HIPAA scenario, ten-minute walkthrough |
+| `docs/acquisition/demos/defense.md` | 242 | Demo 2 — ITAR/EAR scenario with deny + allow paths |
+| `docs/acquisition/demos/tribal.md` | 222 | Demo 3 — OCAP nine-stage pipeline, three sub-scenarios |
+| `docs/acquisition/demos/multi-domain.md` | 285 | Demo 4 — HIPAA+OCAP composer fold rules + precedence chain |
+
+**Total:** 13 new docs, 3768 lines, zero null bytes, all line-count + tail verification clean per CLAUDE.md anti-truncation protocol.
+
+**Files modified:**
+- `docs/INDEX.md` — added 13 new doc entries under Project Governance Documents; bumped Last Updated stamp.
+- `docs/SESSION-LOG.md` — this entry; Summary block updated to reflect S45 complete.
+
+**Plan §1326 deliverables check:**
+
+| Deliverable | Where it lives |
+|---|---|
+| architecture overview | `docs/acquisition/ARCHITECTURE.md` + existing `docs/MAI-MASTER-ARCHITECTURE.md` |
+| scheduler technical brief | `docs/SCHEDULER-BRIEF.md` |
+| OpenBao Trust Manifold brief | existing `docs/TRUST-MANIFOLD.md` (linked from new docs) |
+| Lamprey compliance governance brief | `docs/LAMPREY-BRIEF.md` |
+| security model | existing `docs/SECURITY.md` (linked from new docs) |
+| air-gap enforcement brief | `docs/AIR-GAP-BRIEF.md` |
+| local trust cache brief | existing `docs/LOCAL-TRUST-CACHE.md` (linked from new docs) |
+| audit correlation brief | existing `docs/AUDIT-CORRELATION.md` (linked from new docs) |
+| API reference | `docs/API-REFERENCE.md` |
+| SDK reference | `docs/SDK-REFERENCE.md` |
+| deployment guide | existing `docs/DEPLOYMENT.md` (linked from new docs) |
+| competitive analysis | `docs/acquisition/COMPETITIVE.md` |
+| IP position memo | `docs/acquisition/IP.md` |
+| buyer integration guide | BF-7's `docs/BUYER-INTEGRATION-GUIDE.md` + `docs/acquisition/INTEGRATION.md` (acquirer-embed-focused) |
+| demo scripts | `docs/acquisition/demos/{healthcare,defense,tribal,multi-domain}.md` + BF-7's `docs/DEMO-SUITE.md` |
+
+All 15 deliverables present. None duplicated — net-new docs link to the existing top-level briefs rather than re-stating them.
+
+**Roster §3668 deliverables check:**
+
+- [x] `docs/acquisition/ARCHITECTURE.md` — three-layer stack documentation
+- [x] `docs/acquisition/COMPETITIVE.md` — competitive analysis (named: Guardrails AI, NeMo Guardrails, Minder, Cloudflare AI Gateway, AWS Bedrock Guardrails, Azure AI Content Safety, Helicone/LiteLLM/Kong)
+- [x] `docs/acquisition/IP.md` — 4 patent candidates with prior-art notes (not legal advice)
+- [x] `docs/acquisition/demos/` — 4 technical demo scripts (healthcare, defense, tribal, multi-domain)
+- [x] `docs/acquisition/INTEGRATION.md` — acquirer integration guide (custom modules, SIEM bridge, build/test surface)
+
+Roster acceptance criteria check:
+- [x] Architecture documentation complete enough for acquirer technical due diligence
+- [x] Competitive analysis correctly identifies differentiation from each named competitor
+- [x] IP position documents 4 patentable inventions
+- [x] All 4 demos walk end-to-end with pass/fail criteria, expected outputs, and verification steps
+- [x] Integration guide is sufficient for an acquirer engineering team to evaluate embed feasibility
+
+**Plan §A.14 "Before Session 45 Closes" check:**
+
+The acquisition package must explain:
+- [x] why OpenBao is used instead of custom credential management — see `acquisition/ARCHITECTURE.md` §"Key architectural decisions" #3 + BF-7's `BUYER-INTEGRATION-GUIDE.md`
+- [x] how live cloud trust is separated from local claim verification — see `LAMPREY-BRIEF.md`, `LOCAL-TRUST-CACHE.md`, and `acquisition/ARCHITECTURE.md` trust-boundary diagram
+- [x] how offline trust bundles preserve rural and air-gap operation — see `AIR-GAP-BRIEF.md` + `LOCAL-TRUST-CACHE.md`
+- [x] how credential events link to Lamprey compliance audit records — see `LAMPREY-BRIEF.md` §Audit + `AUDIT-CORRELATION.md` + every demo's correlation-IDs sub-section
+
+**Anti-truncation discipline:** Per CLAUDE.md, every new doc was written via the Write tool (native Windows, no Cowork sandbox in play this session) followed immediately by `wc -l`/`tail -3`/null-byte scan. All 13 new docs cleared the verification; subagent integrity verification pass scheduled before staging.
+
+**Notes:**
+- BF-7's S30 scaffold regression repair (openbao-trust-demo, operator) and the SESSION-LOG split into ARCHIVE-02 happened in parallel commits during the same calendar day — both already on `main` before S45's docs landed.
+- Plan vs roster reconciliation: plan §1326 lists 15 flat deliverables; roster §3668 organises into `docs/acquisition/`. Both honored — new acquirer-specific docs land under `docs/acquisition/` per roster; brief documents requested by the plan that don't map cleanly to a roster subdir live at the top level (`SCHEDULER-BRIEF.md`, `LAMPREY-BRIEF.md`, `AIR-GAP-BRIEF.md`, `API-REFERENCE.md`, `SDK-REFERENCE.md`).
+- Test counts unchanged (1196 Rust lib + 17 mai-api integration + 94 SDK + 20 dashboard + 61 scaffold = unchanged from post-BF-7 baseline). S45 is docs-only; no code touched.
+- Memory snapshot (`project_mai_build_state.md`) will be updated post-commit to reflect S45 complete and S46 as the new mainline target.
+
+**Next Session Notes:** Mainline target is Session 46 — Compliance Demo Suite + Integration Testing. The four S45 demo scripts (`docs/acquisition/demos/*.md`) are the absorption seed; S46 turns each into an automated end-to-end test scenario with green CI evidence. After S46 → Gate D (Acquisition-Ready Release).

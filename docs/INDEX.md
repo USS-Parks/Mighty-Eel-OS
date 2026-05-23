@@ -2,7 +2,7 @@
 
 **Project:** Island Mountain Model Abstraction Interface (MAI)
 **Alignment Note:** Governance status aligned with current code on 2026-05-23.
-**Last Updated:** 2026-05-23 (post-BF-7: SESSION-LOG split into ARCHIVE-02, HANDOFF + KNOWN-ISSUES refreshed)
+**Last Updated:** 2026-05-23 (Session 45 acquisition documentation package)
 
 ---
 
@@ -28,6 +28,19 @@ These documents govern the MAI build. Read them before writing code.
 | [ACQUISITION-PACKAGE.md](ACQUISITION-PACKAGE.md) | Five-point buyer thesis with code/test citations (BF-7, feeds Session 45) | Acquirer diligence; investor narrative |
 | [BUYER-INTEGRATION-GUIDE.md](BUYER-INTEGRATION-GUIDE.md) | OpenBao-backed trust boundary + 7-step integration sequence + boundary-review checklist (BF-7) | Acquirer integration engineering; security architecture review |
 | [DEMO-SUITE.md](DEMO-SUITE.md) | Trust Manifold 8-step scenario + supporting demos + reproducibility checklist (BF-7, feeds Session 46) | Acquirer technical review; sales engineering |
+| [SCHEDULER-BRIEF.md](SCHEDULER-BRIEF.md) | Scheduler technical brief: topology, KV, batching, scoring, balancer, decision cache, power, trace replay (S45) | Scheduling-architect diligence |
+| [LAMPREY-BRIEF.md](LAMPREY-BRIEF.md) | Lamprey three-layer governance stack: router, policy, audit; module + composer reference (S45) | Compliance / governance diligence |
+| [AIR-GAP-BRIEF.md](AIR-GAP-BRIEF.md) | Air-gap as routing input: ConnectivityState, loopback bind, trust-cache interaction, audit coverage (S45) | Security / network policy reviewers |
+| [API-REFERENCE.md](API-REFERENCE.md) | Live REST surface: inference, models, health, system, scheduler telemetry, trust (BF-6), compliance (S44) (S45) | Integration engineers, SDK authors |
+| [SDK-REFERENCE.md](SDK-REFERENCE.md) | Python SDK namespace reference: client.models / chat / scheduler / trust / compliance / auth + errors + CLI (S45) | Application developers, embed teams |
+| [acquisition/ARCHITECTURE.md](acquisition/ARCHITECTURE.md) | Top-down architecture overlay for acquirer diligence: three-layer Lamprey + MAI + Trust Manifold; integration shapes A/B/C (S45) | Acquirer architecture review |
+| [acquisition/COMPETITIVE.md](acquisition/COMPETITIVE.md) | Competitive analysis vs Guardrails AI / NeMo Guardrails / Minder / Cloudflare AI Gateway / AWS Bedrock / Azure (S45) | M&A analysts, product strategy |
+| [acquisition/IP.md](acquisition/IP.md) | IP position memo: 4 patent candidates + trade secrets + open-source boundary recommendations (S45; not legal advice) | IP counsel, corp dev |
+| [acquisition/INTEGRATION.md](acquisition/INTEGRATION.md) | Acquirer integration guide (deeper than buyer guide): custom modules, SIEM bridge, config semantics, build/test surface (S45) | Acquirer engineering embed team |
+| [acquisition/demos/healthcare.md](acquisition/demos/healthcare.md) | Demo 1 — HIPAA scenario walkthrough (S45) | Acquirer technical reviewer |
+| [acquisition/demos/defense.md](acquisition/demos/defense.md) | Demo 2 — ITAR/EAR scenario walkthrough (S45) | Acquirer technical reviewer |
+| [acquisition/demos/tribal.md](acquisition/demos/tribal.md) | Demo 3 — OCAP tribal sovereignty walkthrough with all 9 pipeline stages (S45) | Acquirer technical reviewer; tribal data governance |
+| [acquisition/demos/multi-domain.md](acquisition/demos/multi-domain.md) | Demo 4 — multi-module conflict resolution (HIPAA + OCAP), composer fold rules, precedence chain (S45) | Acquirer technical reviewer |
 
 ---
 
