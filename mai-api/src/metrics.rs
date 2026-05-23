@@ -415,18 +415,10 @@ impl MetricsRegistry {
             .families
             .entry(name.to_string())
             .or_insert_with(|| (MetricKind::Histogram, String::new()));
-        if !inner
-            .histograms
-            .contains_key(&(name.to_string(), labels.clone()))
-        {
-            inner
-                .histograms
-                .insert((name.to_string(), labels.clone()), HistogramState::new());
-        }
         let hist = inner
             .histograms
-            .get(&(name.to_string(), labels))
-            .expect("just inserted");
+            .entry((name.to_string(), labels))
+            .or_insert_with(HistogramState::new);
         hist.observe_ms(value_ms);
     }
 
