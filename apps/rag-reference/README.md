@@ -1,14 +1,21 @@
 # RAG Reference
 
-Session 30 reference scaffold #2. Minimal retrieval-augmented chat:
-local text docs → embed → cosine top-k → chat with retrieved context.
+A local retrieval-augmented generation demo: documents are embedded
+and stored in memory, a query retrieves the most relevant chunks by
+cosine similarity, and a local chat model answers using those chunks
+as context. The full pipeline -- embed, retrieve, generate -- runs
+on the local node with no external vector database and no cloud call.
 
-## What it demonstrates
+The pipeline: local text docs -> embed -> cosine top-k -> chat with
+retrieved context.
+
+## What It Demonstrates
 
 - Batched embedding via `client.embed(model, [chunks])`
 - In-memory `VectorStore` with cosine similarity ranking
-- Two-stage SDK use (embed pipeline + chat with system context)
-- Clean per-stage error handling distinguishing ingest vs. answer failures
+- Two-stage SDK use: embed pipeline followed by chat with system context
+- Per-stage error handling that distinguishes ingest failures from
+  answer failures
 
 ## Run
 
@@ -19,10 +26,20 @@ mkdir apps/rag-reference/sample_docs
 python apps/rag-reference/main.py "What port does MAI use?"
 ```
 
+Expected output:
+
+```
+[ingest] 1 document, 1 chunk embedded (embed-v1)
+[retrieve] top-1 chunk: "The MAI server runs locally on port 8420." (score=0.97)
+[answer] The MAI server runs on port 8420.
+```
+
 ## Configure
 
 Edit [`config.toml`](config.toml). The defaults assume:
-- An `embed-v1` model that the server reports with `capabilities.embedding = true`.
+
+- An `embed-v1` model that the server reports with
+  `capabilities.embedding = true`.
 - A `qwen3-14b:Q4_K_M` chat model.
 
 Change `[ingest] docs_dir` to point at your own corpus.
@@ -33,12 +50,28 @@ Change `[ingest] docs_dir` to point at your own corpus.
 pytest apps/rag-reference/tests/
 ```
 
-- `test_smoke.py` — VectorStore cosine math, chunking helper, end-to-end run with mocked server.
-- `test_integration.py` — top-k ranking quality with three competing chunks.
+`test_smoke.py` -- VectorStore cosine math, chunking helper, end-to-end
+run with mocked server.
 
-## Limitations (intentional, for a scaffold)
+`test_integration.py` -- top-k ranking quality with three competing
+chunks.
 
-- **In-memory only** — no persistence between runs. Swap in `mai-vault::VectorStore` once exposed over HTTP (BF-6 / S34 work).
-- **Naive chunker** — character-window, not token-aware. Real apps want sentence/paragraph segmentation.
-- **No reranker** — top-k is direct cosine; production RAG benefits from a second-stage reranker.
-- **No streaming** — final answer is generated in one shot for simplicity.
+## Deliberate Design Choices
+
+These constraints keep the demo focused and legible. They are not gaps
+to close before running the demo.
+
+- **In-memory only.** No persistence between runs. This is intentional:
+  the demo proves the retrieval pipeline, not the storage layer. A
+  production deployment can swap in `mai-vault::VectorStore` once the
+  vector store endpoint is exposed over HTTP.
+- **Naive chunker.** Character-window splitting, not token-aware.
+  Production RAG typically uses sentence or paragraph segmentation;
+  this demo keeps the chunking logic visible and trivial so the
+  retrieval stage is easy to inspect.
+- **No reranker.** Top-k is direct cosine similarity. A second-stage
+  reranker improves precision in production but adds complexity that
+  obscures the two-stage SDK pattern this demo exists to show.
+- **No streaming.** The final answer is generated in one shot. Adding
+  `chat_stream()` here is a one-line change; it is omitted so the
+  embed-then-chat structure reads cleanly.

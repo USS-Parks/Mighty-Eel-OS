@@ -16,7 +16,7 @@ introduced in SHIP-01).
 | `local-mai-node`    | integration appliance | `MlDsaBundleVerifier`     | local WAL          | local vault   | none          | listed   |
 | `ship`              | regulated customer  | `MlDsaBundleVerifier`       | persistent WAL + PQC | real vault   | rejected      | loopback |
 
-\* `airgap-demo` historically used a stub vault for portability. The
+* `airgap-demo` historically used a stub vault for portability. The
 hardening plan does not change `airgap-demo` semantics — it adds a
 strictly stricter posture (`ship`) above it.
 
@@ -83,9 +83,9 @@ The test target name is `ship_profile`; both the unit tests in
 | Session  | Status   | Adds to `ship` enforcement                                                |
 |----------|----------|----------------------------------------------------------------------------|
 | SHIP-02  | **done** | Centralised `production_guard.rs` with 40 `PROD-*` check IDs + stop-gap `mai-api validate --profile <PATH> [--json]` CLI. |
-| SHIP-03  | pending  | `build_vault` selects a real backend; ship rejects `StubVault` at boot.   |
-| SHIP-04  | pending  | Persistent API audit writer; ship rejects `MemoryAuditWriter` at boot.    |
-| SHIP-05  | pending  | Compliance audit sealer; ship replaces `NullSealer` with vault-backed AEAD. |
+| SHIP-03  | **done** | `build_vault` selects a real backend; ship rejects `StubVault` at the builder; wiring deferred to SHIP-07 convergence. |
+| SHIP-04  | **done** | `WalAuditWriter` (mai-api/src/audit_wal.rs) — JSON-lines append-only WAL, replay+verify on `open()`, rotation, 7-year retention metadata. Wiring deferred to SHIP-07 convergence. |
+| SHIP-05  | parallel | Compliance audit sealer builder; ship replaces `NullSealer` with vault-backed AEAD (parallel session). |
 | SHIP-06  | pending  | Trust production mode; ship rejects synthetic exchange + accept-all verifier. |
 | SHIP-07  | pending  | `/v1/system/production-readiness` endpoint + full `mai-ship-validate` binary. |
 | SHIP-08+ | pending  | Packaging, backup/restore, observability, burn-in, docs, final gate.      |

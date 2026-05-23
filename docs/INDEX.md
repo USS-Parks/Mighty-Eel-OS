@@ -1,57 +1,99 @@
-# MAI Build Index
+# MAI Document Index
 
 **Project:** Island Mountain Model Abstraction Interface (MAI)
-**Alignment Note:** Governance status aligned with current code on 2026-05-23.
-**Last Updated:** 2026-05-23 (Session 46 compliance demo suite + Gate D)
+**Last Updated:** 2026-05-23
 
 ---
 
-## Project Governance Documents
+## Start Here by Role
 
-These documents govern the MAI build. Read them before writing code.
+| If you are... | Go to |
+|---|---|
+| Reviewing the product thesis | [ACQUISITION-PACKAGE.md](ACQUISITION-PACKAGE.md) |
+| Running the demo suite | [DEMO-SUITE.md](DEMO-SUITE.md) |
+| Reviewing integration architecture | [BUYER-INTEGRATION-GUIDE.md](BUYER-INTEGRATION-GUIDE.md) |
+| Reviewing the scheduler design | [SCHEDULER-BRIEF.md](SCHEDULER-BRIEF.md) |
+| Reviewing the compliance governance stack | [LAMPREY-BRIEF.md](LAMPREY-BRIEF.md) |
+| Reviewing the air-gap security model | [AIR-GAP-BRIEF.md](AIR-GAP-BRIEF.md) |
+| Running the acquisition demo scenarios | [acquisition/demos/](acquisition/demos/) |
+| Building against the Python SDK | [SDK-REFERENCE.md](SDK-REFERENCE.md) |
+| Calling the REST API directly | [API-REFERENCE.md](API-REFERENCE.md) |
+| Operating a local node | [DEPLOYMENT.md](DEPLOYMENT.md) |
+| Starting as a new engineer | [HANDOFF.md](HANDOFF.md) |
+| Troubleshooting a first-run error | [KNOWN-ISSUES.md](KNOWN-ISSUES.md) |
+
+---
+
+## External Review and Acquisition Documents
+
+These documents are written for buyers, security architects, integration
+engineers, and technical reviewers. Start here if you are not on the
+build team.
 
 | File | Purpose | Read When |
 |---|---|---|
-| [MAI-BUILD-PROMPT-ROSTER-v2.md](MAI-BUILD-PROMPT-ROSTER-v2.md) | Complete session prompts, deliverables, and acceptance criteria for all 46 sessions (v2 restructured + Lamprey governance) | Starting any session |
+| [ACQUISITION-PACKAGE.md](ACQUISITION-PACKAGE.md) | Five-point buyer thesis with code and test citations | Acquirer diligence; investor narrative |
+| [BUYER-INTEGRATION-GUIDE.md](BUYER-INTEGRATION-GUIDE.md) | OpenBao-backed trust boundary, 7-step integration sequence, boundary-review checklist | Acquirer integration engineering; security architecture review |
+| [DEMO-SUITE.md](DEMO-SUITE.md) | Trust Manifold 8-step scenario, supporting demos, reproducibility checklist | Acquirer technical review; sales engineering |
+| [SCHEDULER-BRIEF.md](SCHEDULER-BRIEF.md) | Scheduler technical brief: topology, KV, batching, scoring, balancer, decision cache, power, trace replay | Scheduling-architect diligence |
+| [LAMPREY-BRIEF.md](LAMPREY-BRIEF.md) | Lamprey three-layer governance stack: router, policy, audit; module and composer reference | Compliance and governance diligence |
+| [AIR-GAP-BRIEF.md](AIR-GAP-BRIEF.md) | Air-gap as routing input: ConnectivityState, loopback bind, trust-cache interaction, audit coverage | Security and network policy reviewers |
+| [API-REFERENCE.md](API-REFERENCE.md) | Live REST surface: inference, models, health, system, scheduler telemetry, trust, compliance | Integration engineers, SDK authors |
+| [SDK-REFERENCE.md](SDK-REFERENCE.md) | Python SDK namespace reference: client.models / chat / scheduler / trust / compliance / auth, errors, CLI | Application developers, embed teams |
+| [acquisition/ARCHITECTURE.md](acquisition/ARCHITECTURE.md) | Top-down architecture overlay: three-layer Lamprey, MAI, Trust Manifold; integration shapes A/B/C | Acquirer architecture review |
+| [acquisition/COMPETITIVE.md](acquisition/COMPETITIVE.md) | Competitive analysis vs Guardrails AI, NeMo Guardrails, Minder, Cloudflare AI Gateway, AWS Bedrock, Azure | M&A analysts, product strategy |
+| [acquisition/IP.md](acquisition/IP.md) | IP position memo: 4 patent candidates, trade secrets, open-source boundary recommendations (not legal advice) | IP counsel, corp dev |
+| [acquisition/INTEGRATION.md](acquisition/INTEGRATION.md) | Acquirer integration guide: custom modules, SIEM bridge, config semantics, build and test surface | Acquirer engineering embed team |
+| [acquisition/demos/healthcare.md](acquisition/demos/healthcare.md) | Demo 1 -- HIPAA scenario walkthrough | Acquirer technical reviewer |
+| [acquisition/demos/defense.md](acquisition/demos/defense.md) | Demo 2 -- ITAR/EAR scenario walkthrough | Acquirer technical reviewer |
+| [acquisition/demos/tribal.md](acquisition/demos/tribal.md) | Demo 3 -- OCAP tribal sovereignty walkthrough with all 9 pipeline stages | Acquirer technical reviewer; tribal data governance |
+| [acquisition/demos/multi-domain.md](acquisition/demos/multi-domain.md) | Demo 4 -- multi-module conflict resolution (HIPAA + OCAP), composer fold rules, precedence chain | Acquirer technical reviewer |
+| [acquisition/READY.md](acquisition/READY.md) | Gate D production readiness -- test, demo, and perf evidence; known issues; certification statement | Acquirer reviewer; release sign-off |
+| [KNOWN-ISSUES.md](KNOWN-ISSUES.md) | Out-of-scope items, deferred work, architectural limitations, open questions | Troubleshooting; "should I build this?" |
+
+---
+
+## Internal Governance Documents
+
+These documents govern the MAI build. They are written for engineers
+on the project. Read them before writing code.
+
+| File | Purpose | Read When |
+|---|---|---|
+| [HANDOFF.md](HANDOFF.md) | Founding engineer orientation, critical warnings, current state, what will bite you | First day on the project |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Tock-to-MAI architecture map, trust boundaries, component catalog, data flows, power state machine | Understanding system structure |
 | [CONVENTIONS.md](CONVENTIONS.md) | Language assignments, code quality gates, monorepo layout, testing rules, git conventions | Writing any code |
-| [HANDOFF.md](HANDOFF.md) | Founding engineer orientation, critical warnings, current state, what will bite you | First day on the project |
-| [INDEX.md](INDEX.md) | This file. Master index of all project documents | Finding anything |
-| [KNOWN-ISSUES.md](KNOWN-ISSUES.md) | Out-of-scope items, deferred work, architectural limitations, open questions | Wondering "should I build this?" |
-| [PROJECT.md](PROJECT.md) | Original scope, 5-phase plan, 18-session timeline, effort estimates, coverage matrix | Historical scope reference |
-| [SESSION-LOG.md](SESSION-LOG.md) | Session progress for completed Phase H through Gate D scope (Sessions 26-46 + BF-1..BF-7) | Before and after each session |
+| [SESSION-RULES.md](SESSION-RULES.md) | Dependency enforcement, acceptance criteria protocol, quality gates, session workflow | Conducting any session |
+| [IPC-PROTOCOL.md](IPC-PROTOCOL.md) | NDJSON IPC wire format spec for Rust-Python adapter communication | Working on adapter IPC |
+| [SESSION-LOG.md](SESSION-LOG.md) | Session progress for Phase H through Gate D scope (Sessions 26-46 + BF-1..BF-7) | Before and after each session |
 | [SESSION-LOG-ARCHIVE-01.md](SESSION-LOG-ARCHIVE-01.md) | Completed sessions 01-10 (Phases A+B) | Reviewing past session details |
 | [SESSION-LOG-ARCHIVE-02.md](SESSION-LOG-ARCHIVE-02.md) | Completed sessions 11-25 (Phases C through G), archived 2026-05-23 | Reviewing past session details |
 | [SESSION-LOG-ARCHIVE-03.md](SESSION-LOG-ARCHIVE-03.md) | Completed sessions 26-46 plus BF-1..BF-7 (Security through Gate D), archived 2026-05-23 | Reviewing Gate D build history |
 | [HANDOFF-ARCHIVE-01.md](HANDOFF-ARCHIVE-01.md) | Archived onboarding walkthrough and Phase A+B code inventory | Reference only |
-| [SESSION-RULES.md](SESSION-RULES.md) | Dependency enforcement, acceptance criteria protocol, quality gates, session workflow | Conducting any session |
-| [IPC-PROTOCOL.md](IPC-PROTOCOL.md) | NDJSON IPC wire format spec for Rust-Python adapter communication | Working on adapter IPC (Sessions 14a-14c) |
-| [ACQUISITION-PACKAGE.md](ACQUISITION-PACKAGE.md) | Five-point buyer thesis with code/test citations (BF-7, feeds Session 45) | Acquirer diligence; investor narrative |
-| [BUYER-INTEGRATION-GUIDE.md](BUYER-INTEGRATION-GUIDE.md) | OpenBao-backed trust boundary + 7-step integration sequence + boundary-review checklist (BF-7) | Acquirer integration engineering; security architecture review |
-| [DEMO-SUITE.md](DEMO-SUITE.md) | Trust Manifold 8-step scenario + supporting demos + reproducibility checklist (BF-7, feeds Session 46) | Acquirer technical review; sales engineering |
-| [SCHEDULER-BRIEF.md](SCHEDULER-BRIEF.md) | Scheduler technical brief: topology, KV, batching, scoring, balancer, decision cache, power, trace replay (S45) | Scheduling-architect diligence |
-| [LAMPREY-BRIEF.md](LAMPREY-BRIEF.md) | Lamprey three-layer governance stack: router, policy, audit; module + composer reference (S45) | Compliance / governance diligence |
-| [AIR-GAP-BRIEF.md](AIR-GAP-BRIEF.md) | Air-gap as routing input: ConnectivityState, loopback bind, trust-cache interaction, audit coverage (S45) | Security / network policy reviewers |
-| [API-REFERENCE.md](API-REFERENCE.md) | Live REST surface: inference, models, health, system, scheduler telemetry, trust (BF-6), compliance (S44) (S45) | Integration engineers, SDK authors |
-| [SDK-REFERENCE.md](SDK-REFERENCE.md) | Python SDK namespace reference: client.models / chat / scheduler / trust / compliance / auth + errors + CLI (S45) | Application developers, embed teams |
-| [acquisition/ARCHITECTURE.md](acquisition/ARCHITECTURE.md) | Top-down architecture overlay for acquirer diligence: three-layer Lamprey + MAI + Trust Manifold; integration shapes A/B/C (S45) | Acquirer architecture review |
-| [acquisition/COMPETITIVE.md](acquisition/COMPETITIVE.md) | Competitive analysis vs Guardrails AI / NeMo Guardrails / Minder / Cloudflare AI Gateway / AWS Bedrock / Azure (S45) | M&A analysts, product strategy |
-| [acquisition/IP.md](acquisition/IP.md) | IP position memo: 4 patent candidates + trade secrets + open-source boundary recommendations (S45; not legal advice) | IP counsel, corp dev |
-| [acquisition/INTEGRATION.md](acquisition/INTEGRATION.md) | Acquirer integration guide (deeper than buyer guide): custom modules, SIEM bridge, config semantics, build/test surface (S45) | Acquirer engineering embed team |
-| [acquisition/demos/healthcare.md](acquisition/demos/healthcare.md) | Demo 1 — HIPAA scenario walkthrough (S45) | Acquirer technical reviewer |
-| [acquisition/demos/defense.md](acquisition/demos/defense.md) | Demo 2 — ITAR/EAR scenario walkthrough (S45) | Acquirer technical reviewer |
-| [acquisition/demos/tribal.md](acquisition/demos/tribal.md) | Demo 3 — OCAP tribal sovereignty walkthrough with all 9 pipeline stages (S45) | Acquirer technical reviewer; tribal data governance |
-| [acquisition/demos/multi-domain.md](acquisition/demos/multi-domain.md) | Demo 4 — multi-module conflict resolution (HIPAA + OCAP), composer fold rules, precedence chain (S45) | Acquirer technical reviewer |
-| [acquisition/READY.md](acquisition/READY.md) | Gate D production readiness — test/demo/perf evidence, known issues, certification statement (S46) | Acquirer reviewer; release sign-off |
-| [SESSION-46-PLAN.md](SESSION-46-PLAN.md) | Session 46 plan: scope, file layout, test inventory, perf targets, READY.md outline, Gate D checklist (S46) | Session 46 implementer |
+| [MAI-BUILD-PROMPT-ROSTER-v2.md](MAI-BUILD-PROMPT-ROSTER-v2.md) | Complete session prompts, deliverables, and acceptance criteria for all 46 sessions | Starting any session |
+| [PROJECT.md](PROJECT.md) | Original scope, 5-phase plan, 18-session timeline, effort estimates, coverage matrix | Historical scope reference |
+| [SESSION-46-PLAN.md](SESSION-46-PLAN.md) | Session 46 plan: scope, file layout, test inventory, perf targets, Gate D checklist | Session 46 implementer |
+| [INDEX.md](INDEX.md) | This file | Finding anything |
 
-The S46 compliance demo suite is implemented in `mai-compliance/tests/compliance_demos.rs` (6 scenarios) and `mai-compliance/tests/compliance_perf.rs` (3 perf baselines). Run with `cargo test -p mai-compliance --test compliance_demos` and `... --test compliance_perf -- --nocapture`.
+---
+
+## Running the Compliance Demo Suite
+
+The Session 46 compliance demo suite is implemented in
+`mai-compliance/tests/compliance_demos.rs` (6 scenarios) and
+`mai-compliance/tests/compliance_perf.rs` (3 perf baselines).
+
+```powershell
+cargo test -p mai-compliance --test compliance_demos
+cargo test -p mai-compliance --test compliance_perf -- --nocapture
+```
 
 ---
 
 ## Session-to-Document Map
 
-Each session produces specific deliverables. This table maps sessions to their primary output types.
+Each session produces specific deliverables. This table maps sessions
+to their primary output types.
 
 ### Phase A: Specification (Sessions 01-05)
 
@@ -59,7 +101,7 @@ Each session produces specific deliverables. This table maps sessions to their p
 |---|---|---|
 | 01 | MAI Master Architecture Specification | Architecture doc (40-60 pages), project scaffold, dependency graph, glossary |
 | 02 | Hardware Interface Layer (HIL) Specification | HIL trait defs (Rust), driver specs, power state machine diagram, air-gap daemon spec |
-| 03 | Backend Adapter Framework Specification | Adapter traits (Rust + Python), per-backend specs (7 backends), lifecycle + sandboxing specs |
+| 03 | Backend Adapter Framework Specification | Adapter traits (Rust + Python), per-backend specs (7 backends), lifecycle and sandboxing specs |
 | 04 | MAI Core Kernel Specification | Scheduler spec, registry spec, health monitor spec, power state machine spec, hot-swap spec |
 | 05 | MAI API Surface Specification | OpenAPI 3.1 YAML, Proto3 defs, Python SDK skeleton, Rust SDK skeleton, auth/error specs |
 
@@ -107,7 +149,7 @@ Each session produces specific deliverables. This table maps sessions to their p
 | 20 | Feedback Loop + Metrics Collection | metrics/ module, MetricsCollector, lifecycle/feedback/health/anomaly/store, telemetry handler, config/metrics.toml |
 | 21 | Simulation Framework | tools/simulator engine, GPU model, workload generator, KV policies, metrics, experiments, config, README |
 
-### Phase F: Power & Lifecycle (Sessions 22-25)
+### Phase F: Power and Lifecycle (Sessions 22-25)
 
 | Session | Title | Primary Outputs |
 |---|---|---|
@@ -127,9 +169,7 @@ Each session produces specific deliverables. This table maps sessions to their p
 
 ---
 
-## Crate / Package Index (Post-Session 06)
-
-After the project scaffold is created in Session 06, the monorepo will contain:
+## Crate and Package Index
 
 | Crate/Package | Language | Trust Level | Session Created | Session Implemented |
 |---|---|---|---|---|
@@ -153,7 +193,7 @@ After the project scaffold is created in Session 06, the monorepo will contain:
 
 ---
 
-## Key Module Index (Updated Session 25)
+## Key Module Index
 
 | Module/File | Purpose | Session |
 |---|---|---|
@@ -172,7 +212,7 @@ After the project scaffold is created in Session 06, the monorepo will contain:
 
 ---
 
-## Test Suites Index (Updated Session 25)
+## Test Suites Index
 
 | Suite | Location | Purpose | Session |
 |---|---|---|---|
@@ -231,7 +271,7 @@ After the project scaffold is created in Session 06, the monorepo will contain:
 | Batch eviction scoring tests | `mai-scheduler/src/kv/eviction.rs` `#[cfg(test)]` | batch_member_protected, batch_aware_scoring_with_set (2 tests) | 18 |
 | Batch integration tests | `mai-scheduler/src/default.rs` `#[cfg(test)]` | Builder created on register, removed on unregister, cluster metrics batch fields (3 tests) | 18 |
 | Scoring unit tests | `mai-scheduler/src/scoring/*.rs` `#[cfg(test)]` | Multi-factor scorer and sub-score correctness (41 tests) | 19 |
-| Session 19f schedule pipeline | `mai-scheduler/src/default.rs` `#[cfg(test)]` | 8 full `DefaultScheduler.schedule()` scenarios with topology, KV, batching, score breakdown, overload fallback, runtime rebuild | 19 |
+| Session 19f schedule pipeline | `mai-scheduler/src/default.rs` `#[cfg(test)]` | 8 full DefaultScheduler.schedule() scenarios with topology, KV, batching, score breakdown, overload fallback, runtime rebuild | 19 |
 | Metrics feedback tests | `mai-scheduler/src/metrics/*.rs` `#[cfg(test)]` | Lifecycle, feedback, health scoring, anomaly detection, ring buffer, MetricsCollector | 20 |
 | Telemetry API tests | `mai-api/src/server.rs` and handler compile coverage | Startup config handles and telemetry handler wiring | 20 |
 | OTA update tests | `mai-core/src/models/update.rs` `#[cfg(test)]` | No-identity manifest check, differential shards, resumable range download, license/tier validation, seasonal tier limits | 25 |
@@ -241,7 +281,7 @@ After the project scaffold is created in Session 06, the monorepo will contain:
 
 ---
 
-## Configuration Files Index (Post-Session 21)
+## Configuration Files Index
 
 | File | Purpose | Session |
 |---|---|---|
@@ -259,4 +299,4 @@ After the project scaffold is created in Session 06, the monorepo will contain:
 
 ---
 
-*Document derived from MAI-BUILD-PROMPT-ROSTER.md | 2026-05-15 | Island Mountain AI | Confidential*
+*Island Mountain AI | Confidential*

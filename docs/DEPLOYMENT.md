@@ -1,4 +1,4 @@
-# MAI Deployment Guide (Session 35)
+# MAI Deployment Guide
 
 Operator-facing guide for launching, validating, and running the MAI API
 server. For build prerequisites and developer workflows, see
@@ -17,10 +17,10 @@ Or on Windows / PowerShell:
 scripts\launch.ps1
 ```
 
-That's it. The launcher prefers an existing release binary at
+The launcher prefers an existing release binary at
 `target/release/mai-api` (or `mai-api.exe`); otherwise it falls back to
 `cargo run -p mai-api`. First boot prints a one-time admin API key to
-stdout — **save it before the log noise starts.**
+stdout -- **save it before the log noise starts.**
 
 ```text
 ========================================
@@ -90,8 +90,9 @@ MAI_API_KEY=im-... python tools/smoke/smoke_client.py
 ```
 
 The smoke client probes health, model list, and scheduler metrics using
-only the standard library — no SDK install required. This is the Gate C
-"SDK runs against packaged deployment" evidence.
+only the standard library -- no SDK install required. A clean run
+confirms the API server is up, at least one model is registered, and the
+scheduler is reporting metrics.
 
 ## Burn-In
 
@@ -103,10 +104,10 @@ scripts/burn-in.sh --output results/2026-05-22
 
 Outputs land in a timestamped directory under `results/`:
 
-- `cargo-test.log` — full workspace test run
-- `pytest.log` — Python regression suite
-- `policy-comparison.json` — trace replay across all KV policies (Session 32)
-- `phase1-deferred.txt` — explicit list of hardware-dependent criteria
+- `cargo-test.log` -- full workspace test run
+- `pytest.log` -- Python regression suite
+- `policy-comparison.json` -- trace replay across all KV policies
+- `phase1-deferred.txt` -- explicit list of hardware-dependent criteria
   that this burn-in does not execute
 
 See [`INTEGRATION-COVERAGE.md`](INTEGRATION-COVERAGE.md) for the full
@@ -130,7 +131,7 @@ coverage map.
 
 The admin key is printed before the server tries to bind a port. If
 binding fails (port already in use, permissions issue), the server exits
-after the print. Save the key — it is still valid — then resolve the
+after the print. Save the key -- it is still valid -- then resolve the
 bind issue and restart.
 
 ### `health-check.sh` returns 1 with `degraded`
@@ -153,12 +154,12 @@ key in the environment does not match any entry in
 `config/auth_keys.toml`. See [SECURITY.md](SECURITY.md) for key
 generation and rotation.
 
-### Burn-in `replay.log` says no input trace
+### Burn-in policy comparison says no input trace
 
-The default burn-in runs the policy comparison harness, which requires
-an NDJSON trace as input. Capture a trace from a running deployment with
-the Session 32 capture module enabled (`TraceConfig.enabled = true`),
-then point the replay tool at the resulting file:
+The policy comparison harness requires an NDJSON trace as input. Capture
+a trace from a running deployment with the trace capture module enabled
+(`TraceConfig.enabled = true` in `config/simulator.toml`), then point
+the replay tool at the resulting file:
 
 ```bash
 python tools/simulator/replay_compare.py path/to/trace.ndjson \
@@ -178,14 +179,26 @@ scripts/launch.sh 2>>logs/mai-$(date +%Y%m%d).log
 JSON-formatted logs (for ingestion) are enabled by setting
 `MAI_LOG_FORMAT=json`.
 
-The audit log is separate and lives in the writer configured at startup;
-the default `MemoryAuditWriter` is in-process and lost on shutdown.
-Production deployments wire a persistent writer.
+The audit log is separate from the application log and lives in the
+writer configured at startup. The default `MemoryAuditWriter` is
+in-process and is lost on shutdown -- it is suitable for demo and
+development use only. Production deployments should wire a persistent
+writer; see `mai-compliance/src/audit/writers/` for the available
+implementations and `config/audit.toml` for the writer selection
+configuration.
 
-## What This Guide Does Not Cover
+## Design Boundaries
 
-- Production deployment to managed cloud (out of scope; MAI is local-
-  first and air-gap-capable by design)
-- Backup and disaster recovery for the vault (Session 27 deliverable)
-- Multi-host clustering (not on the roster; single-host by design)
-- TLS termination (assume a reverse proxy in front of the API server)
+MAI is a local-first, air-gap-capable inference and governance server.
+The following are deliberate design constraints, not gaps:
+
+- **No managed cloud deployment.** Regulated payloads do not leave the
+  local node. This is an architectural guarantee, not a configuration
+  option.
+- **No multi-host clustering.** Single-host by design. Scale is handled
+  by the scheduler's multi-GPU topology awareness within one node.
+- **No built-in TLS termination.** Place a reverse proxy (nginx, Caddy,
+  or equivalent) in front of the API server for TLS at the edge.
+- **Vault backup and disaster recovery** requires a site-specific
+  persistent writer configuration. See `mai-compliance/src/audit/writers/`
+  for starting points.
