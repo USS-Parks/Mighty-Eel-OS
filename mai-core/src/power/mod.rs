@@ -520,8 +520,18 @@ mod tests {
     fn test_reset_demotion_timer() {
         let mut psm =
             PowerStateMachine::with_state(PowerConfig::default(), PowerState::FullInference);
+        // Ensure `before` is meaningfully > 0; on fast hosts two
+        // `Instant::now()` calls back-to-back can return the same value
+        // (monotonic clock granularity) and the post-reset duration
+        // would then be nonzero, falsely failing the `<=` check.
+        std::thread::sleep(std::time::Duration::from_millis(5));
         let before = psm.idle_duration();
         psm.reset_demotion_timer();
-        assert!(psm.idle_duration() <= before);
+        assert!(
+            psm.idle_duration() <= before,
+            "idle after reset ({:?}) should be <= idle before reset ({:?})",
+            psm.idle_duration(),
+            before,
+        );
     }
 }
