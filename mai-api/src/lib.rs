@@ -35,6 +35,12 @@ pub mod types;
 // SHIP-01: Production profile skeleton (parsing-only; runtime wiring in SHIP-02+)
 pub mod ship_profile;
 
+// SHIP-02: Production readiness guard (config-only checks; runtime checks in SHIP-03+)
+pub mod production_guard;
+
+// SHIP-03: Vault builder (selects ZfsVault / LocalDevStubVault by ship profile)
+pub mod vault_builder;
+
 // Session 11b: REST API Endpoints
 pub mod handlers;
 pub mod routes;
@@ -52,6 +58,10 @@ pub mod server;
 // Public re-exports for SDK consumers and binary entry point
 pub use config::ServerConfig;
 pub use errors::ApiError;
+pub use production_guard::{
+    CheckSeverity, CheckStatus, ProductionCheck, ProductionReadinessReport, ReadinessCounts,
+};
 pub use server::MaiServer;
 pub use server::ServerError;
 pub use ship_profile::{ShipProfile, ShipProfileError, load_ship_profile, parse_ship_profile};
+pub use vault_builder::{VaultBuildError, build_vault};

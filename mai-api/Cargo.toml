@@ -48,6 +48,9 @@ mai-hil = { path = "../mai-hil" }
 mai-adapters = { path = "../mai-adapters" }
 mai-scheduler = { path = "../mai-scheduler" }
 mai-compliance = { path = "../mai-compliance" }
+# SHIP-03: ZfsVault is the production vault backend selected by vault_builder.
+# Default features keep pure-Rust PQC; no liboqs/ZFS C deps pulled in.
+mai-vault = { path = "../mai-vault" }
 
 # gRPC reflection for grpcurl/grpcui discovery
 tonic-reflection = "0.12"
@@ -60,6 +63,8 @@ prost-build = "0.13"
 tokio-test = { workspace = true }
 mockall = { workspace = true }
 reqwest = { version = "0.12", features = ["json"] }
+# SHIP-03: tempdir-backed vault root for vault_builder integration tests.
+tempfile = "3"
 
 [lints]
 workspace = true

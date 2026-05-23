@@ -5,9 +5,11 @@
 //! `MaiServer::run()` which handles the full startup-to-shutdown lifecycle.
 //!
 //! Usage:
-//!   mai-api                         # Scout tier defaults
-//!   mai-api /etc/mai/server.toml    # Load config from file
-//!   mai-api --config path.toml      # Explicit flag form
+//!   mai-api                                       # Scout tier defaults
+//!   mai-api /etc/mai/server.toml                  # Load config from file
+//!   mai-api --config path.toml                    # Explicit flag form
+//!   mai-api validate --profile deployment/ship/profile.toml [--json]
+//!                                                 # SHIP-02 readiness check
 
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -16,9 +18,19 @@ use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
 
 use mai_api::MaiServer;
+use mai_api::production_guard::ProductionReadinessReport;
+use mai_api::ship_profile::load_ship_profile;
 
 #[tokio::main]
 async fn main() -> ExitCode {
+    // The SHIP-02 `validate` subcommand bypasses the tracing subscriber
+    // so its stdout is the report and nothing else. Other paths set
+    // tracing up first.
+    let args: Vec<String> = std::env::args().collect();
+    if args.get(1).map(|s| s.as_str()) == Some("validate") {
+        return run_validate_subcommand(&args[2..]);
+    }
+
     // Initialize structured logging with RUST_LOG env filter support.
     // Default level: info for mai crates, warn for everything else.
     tracing_subscriber::fmt()
@@ -57,6 +69,82 @@ async fn main() -> ExitCode {
             error!(error = %e, "MAI server exited with error");
             ExitCode::FAILURE
         }
+    }
+}
+
+/// SHIP-02 stop-gap CLI. The full `mai-ship-validate` binary lands in
+/// SHIP-07; this subcommand exists so operators can dry-run the
+/// production guard against a profile today.
+///
+/// Exit codes:
+/// - 0: every Critical check passes (Deferred checks are not failures)
+/// - 1: at least one Critical check failed
+/// - 2: profile could not be loaded
+fn run_validate_subcommand(args: &[String]) -> ExitCode {
+    let mut profile_path: Option<PathBuf> = None;
+    let mut json = false;
+    let mut i = 0;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--profile" | "-p" => {
+                if i + 1 >= args.len() {
+                    eprintln!("error: --profile requires a path argument");
+                    return ExitCode::from(2);
+                }
+                profile_path = Some(PathBuf::from(&args[i + 1]));
+                i += 2;
+            }
+            "--json" => {
+                json = true;
+                i += 1;
+            }
+            "-h" | "--help" => {
+                println!("Usage: mai-api validate --profile <PATH> [--json]");
+                println!();
+                println!("Run the SHIP-02 production readiness guard against a");
+                println!("ship profile. Config-only checks today; runtime checks");
+                println!("(vault open, audit append, trust bundle verify) land in");
+                println!("SHIP-03..SHIP-06 and currently report DEFERRED.");
+                return ExitCode::SUCCESS;
+            }
+            other => {
+                eprintln!("error: unknown argument {other:?}");
+                return ExitCode::from(2);
+            }
+        }
+    }
+
+    let Some(path) = profile_path else {
+        eprintln!("error: --profile <PATH> is required");
+        return ExitCode::from(2);
+    };
+
+    let profile = match load_ship_profile(&path) {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("error: failed to load {}: {e}", path.display());
+            return ExitCode::from(2);
+        }
+    };
+
+    let report = ProductionReadinessReport::evaluate(&profile);
+
+    if json {
+        match report.to_json() {
+            Ok(s) => println!("{s}"),
+            Err(e) => {
+                eprintln!("error: failed to serialize report: {e}");
+                return ExitCode::from(2);
+            }
+        }
+    } else {
+        print!("{}", report.render_human());
+    }
+
+    if report.is_ship_ready() {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::FAILURE
     }
 }
 

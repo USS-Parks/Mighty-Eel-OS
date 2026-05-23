@@ -80,15 +80,32 @@ The test target name is `ship_profile`; both the unit tests in
 
 ## What changes after SHIP-01
 
-| Session  | Adds to `ship` enforcement                                                |
-|----------|----------------------------------------------------------------------------|
-| SHIP-02  | Centralised `production_guard.rs` with PROD-* check IDs.                  |
-| SHIP-03  | `build_vault` selects a real backend; ship rejects `StubVault` at boot.   |
-| SHIP-04  | Persistent API audit writer; ship rejects `MemoryAuditWriter` at boot.    |
-| SHIP-05  | Compliance audit sealer; ship replaces `NullSealer` with vault-backed AEAD. |
-| SHIP-06  | Trust production mode; ship rejects synthetic exchange + accept-all verifier. |
-| SHIP-07  | `/v1/system/production-readiness` endpoint + `mai-ship-validate` CLI.     |
-| SHIP-08+ | Packaging, backup/restore, observability, burn-in, docs, final gate.      |
+| Session  | Status   | Adds to `ship` enforcement                                                |
+|----------|----------|----------------------------------------------------------------------------|
+| SHIP-02  | **done** | Centralised `production_guard.rs` with 40 `PROD-*` check IDs + stop-gap `mai-api validate --profile <PATH> [--json]` CLI. |
+| SHIP-03  | pending  | `build_vault` selects a real backend; ship rejects `StubVault` at boot.   |
+| SHIP-04  | pending  | Persistent API audit writer; ship rejects `MemoryAuditWriter` at boot.    |
+| SHIP-05  | pending  | Compliance audit sealer; ship replaces `NullSealer` with vault-backed AEAD. |
+| SHIP-06  | pending  | Trust production mode; ship rejects synthetic exchange + accept-all verifier. |
+| SHIP-07  | pending  | `/v1/system/production-readiness` endpoint + full `mai-ship-validate` binary. |
+| SHIP-08+ | pending  | Packaging, backup/restore, observability, burn-in, docs, final gate.      |
+
+### SHIP-02 readiness output
+
+```
+$ mai-api validate --profile deployment/ship/profile.toml
+MAI Production Readiness: PASS
+Profile: ship (mode=Production)
+Checks: 34 pass / 0 fail / 6 deferred / 0 skipped
+
+[PASS]     PROD-CONFIG-001: profile.mode = production
+...
+[DEFERRED] PROD-VAULT-100: vault opens, sealed master key loads, root directory is writable (lands in SHIP-03)
+[DEFERRED] PROD-AUDIT-100: API audit WAL writable, chain verifies, append round-trip succeeds (lands in SHIP-04)
+...
+```
+
+Deferred checks are surfaced (not silently skipped) so operators see the known gaps. Each deferred check names the SHIP session that closes it.
 
 ## Related docs
 
