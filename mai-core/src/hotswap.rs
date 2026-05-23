@@ -798,11 +798,13 @@ mod tests {
         }
     }
 
-    fn make_test_components() -> (
+    type TestComponents = (
         Arc<RwLock<Scheduler>>,
         Arc<RwLock<ModelRegistry>>,
         Arc<RwLock<HealthMonitor>>,
-    ) {
+    );
+
+    fn make_test_components() -> TestComponents {
         let config = SchedulerConfig {
             strategy: SchedulingStrategy::LeastLoaded,
             ..SchedulerConfig::default()

@@ -10,6 +10,7 @@ members = [
     "mai-agent",
     "mai-scheduler",
     "mai-router",
+    "mai-compliance",
     "tools/pkg-builder",
     "tools/rule-tester",
 ]

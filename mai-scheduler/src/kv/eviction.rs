@@ -405,8 +405,10 @@ mod tests {
         let mut scorer = EvictionScorer::new(EvictionConfig::default());
         assert!((scorer.config().idle_weight - 1.0).abs() < f64::EPSILON);
 
-        let mut new_config = EvictionConfig::default();
-        new_config.idle_weight = 2.0;
+        let new_config = EvictionConfig {
+            idle_weight: 2.0,
+            ..EvictionConfig::default()
+        };
         scorer.update_config(new_config);
         assert!((scorer.config().idle_weight - 2.0).abs() < f64::EPSILON);
     }
@@ -448,8 +450,10 @@ mod tests {
 
     #[test]
     fn test_size_component_zero_max() {
-        let mut config = EvictionConfig::default();
-        config.max_sequence_bytes = 0;
+        let config = EvictionConfig {
+            max_sequence_bytes: 0,
+            ..EvictionConfig::default()
+        };
         let scorer = EvictionScorer::new(config);
         let meta = make_meta(512, Priority::Normal);
 

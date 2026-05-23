@@ -1,0 +1,47 @@
+# MAI HIPAA Compliance Configuration (Session 38)
+#
+# Deserializes into mai_compliance::{PhiDetectorConfig, BaaConfig,
+# DeidConfig} at server startup. Operators should tune thresholds and the
+# BAA mode to match their Business Associate Agreement terms.
+#
+# Three baseline BAA modes ship; the active mode determines whether PHI
+# may ever appear on a cloud route.
+
+# -- PHI Detector --
+[phi]
+# Minimum confidence to surface in the PhiReport. Choices:
+#   "possible"  — catch everything (most noise, most coverage)
+#   "probable"  — drop weak keyword hits (default for general deployments)
+#   "explicit"  — only structurally unambiguous PHI (SSN, MRN, email, ...)
+min_confidence = "probable"
+
+# -- BAA Enforcement --
+# The active mode is determined by the [baa.mode] tag below. Switch to a
+# different posture by replacing the inline-table value.
+
+[baa.mode]
+mode = "standard"
+
+# Strict posture: uncomment to require local routing for ANY PHI hit at
+# any confidence level. Strongest default for healthcare deployments.
+# [baa.mode]
+# mode = "strict"
+
+# Custom posture: example for a healthcare network that has a BAA
+# permitting cloud routing for explicit-only PHI EXCEPT for SSNs and
+# MRNs. Uncomment to use.
+#
+# [baa.mode]
+# mode = "custom"
+# [baa.mode.Custom]
+# max_cloud_confidence = "explicit"
+# never_leave_local = ["ssn", "medical_record_number"]
+
+# -- De-Identification --
+[deid]
+# Composite re-identification risk in [0.0, 1.0] above which the
+# redacted text is considered unsafe for cloud forwarding.
+safe_threshold = 0.4
+# Placeholder template. {kind} is replaced with the snake_case
+# identifier name (e.g. "ssn", "email_address").
+placeholder_template = "[PHI:{kind}]"

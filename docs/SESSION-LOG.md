@@ -602,6 +602,39 @@ Verification:
 - `python -m pytest tools/ adapters/` on 2026-05-22: 114/114 passed (18 new Session 32 tests across `tools/trace-tools/tests/`, `tools/simulator/tests/test_simulator_extensions.py`, `tools/simulator/tests/test_replay_compare.py`).
 - End-to-end CLI smoke test: 40-event synthetic trace replayed through all 4 KV policies produced a complete Markdown comparison table with headline findings; deterministic across two identical runs.
 
+## Session 38 Completion
+
+**Date:** 2026-05-22
+**Status:** Complete (BUILD-EXECUTION-PLAN Session 38 acceptance — HIPAA compliance engine landed)
+**Summary:** New `mai-compliance` crate with the full HIPAA stack: 18-identifier PHI detector with three-tier confidence, BAA enforcement (Standard / Strict / Custom modes), de-identification with re-id risk scoring, and medical entity enrichment (ICD-10 / RxNorm / lab values). Detection p99 verified under 10ms.
+**Files Changed:**
+- New crate: mai-compliance/ (added to workspace members)
+- New: mai-compliance/Cargo.toml — minimal deps (serde, regex, blake3, thiserror, tracing)
+- New: mai-compliance/src/lib.rs — module wiring + re-exports
+- New: mai-compliance/src/phi.rs (~400 lines) — `PhiDetector` with patterns for all 18 HIPAA Safe Harbor identifiers, `PhiConfidence` tiers (Possible &lt; Probable &lt; Explicit, ordered correctly so `>=` gates work), `PhiReport` with hits, highest_confidence, per-identifier counts, blake3-hashed matched_text (never raw)
+- New: mai-compliance/src/baa.rs (~342 lines) — `BaaEnforcer` with `BaaMode { Standard, Strict, Custom { max_cloud_confidence, never_leave_local } }`, returns `BaaDecision { allowed, reason, violations }`; pure over the report (never sees raw text)
+- New: mai-compliance/src/deid.rs (~260 lines) — `Redactor` replaces PHI spans with `[PHI:&lt;kind&gt;]` placeholders (template-configurable); composite re-id risk score uses confidence boost + density + breadth; zero-false-negative guarantee verified by double-scan test
+- New: mai-compliance/src/medical_entities.rs (~260 lines) — `IcdValidator` (format + extraction), `MedicationDictionary` (RxNorm-style baseline with case-insensitive scan), `parse_lab_values` (numeric + unit parsing with unit allowlist to suppress false hits)
+- New: config/compliance/hipaa.toml — operator-facing config with PHI/BAA/Deid sections, all three BAA modes documented inline
+- New: mai-compliance/tests/phi_perf.rs — p99 &lt; 10ms acceptance test over a representative 8-string mixed corpus, 500 samples
+- Modified: Cargo.toml — added `mai-compliance` to workspace members
+**Tests Run:**
+- `cargo test -p mai-compliance --lib`: 42/42 (phi 15, baa 8, deid 10, medical_entities 9).
+- `cargo test -p mai-compliance --test phi_perf`: p99 well under 10ms.
+- `cargo fmt --all -- --check`: clean.
+- `cargo clippy --workspace -- -D warnings -A clippy::pedantic`: clean.
+- `cargo test --workspace`: every crate green, zero failures.
+**Acceptance Criteria Verified:**
+- All 18 PHI identifiers have at least one detector pattern with appropriate confidence tier (`phi::baseline_patterns`).
+- BAA enforcement matches configured agreement type (`baa::tests::test_standard_blocks_any_phi`, `test_strict_blocks_even_low_confidence`, `test_custom_never_leave_local_takes_precedence`).
+- De-identification removes detectable PHI with zero false negatives (`deid::tests::test_no_phi_survives_double_scan`).
+- Medical entity detection enriches routing decisions (ICD-10, medication, lab-value extractors all return structured hits suitable for `FactSet` enrichment).
+- HIPAA module is standalone — wiring into the rule engine `FactSet` will land as part of Session 41 policy runtime so the integration shape can be co-designed with the audit (Session 42) and report generator (Session 43).
+**Known Issues Added or Closed:** None new. The Name identifier is intentionally `Possible`-only — robust name detection without a dictionary or NER model would produce too many false positives; operators tighten via custom dictionaries when needed.
+**Next Session Notes:** Session 39 (ITAR/EAR Compliance Engine) extends `mai-compliance` with USML category detection, technical-data classification, and dual-use technology rules. Same crate, additive surface, no breaking changes expected to the Session 38 modules.
+
+---
+
 ## Session 37 Completion
 
 **Date:** 2026-05-22
@@ -833,10 +866,10 @@ Verification:
 | I: Application Integration | 29-31 | Not Started |
 | J: Advanced Scheduling | 32-33 | Complete (32, 33) |
 | K: Testing & Packaging | 34-35 | Complete (34, 35) — Gate C closed |
-| L: Compliance Governance | 36-46 | Partial (36, 37 complete — Lamprey policy framework) |
+| L: Compliance Governance | 36-46 | Partial (36-38 complete — Router + Policy + HIPAA) |
 
-**Sessions Complete:** Sessions 1-26 and 32-37 are complete. **Gate C (Core Platform Release) is CLOSED.** Phase L (Lamprey) underway — first two layers (Router + Policy Framework) shipped.
-**Next Session:** Session 38 (HIPAA Compliance Engine) — new `mai-compliance` crate with the 18-PHI-identifier detector and BAA enforcement, plugging into the Session 37 policy framework. Security track (27-28) and developer track (29-31) remain safe parallel candidates before final acquisition prep in Session 45.
+**Sessions Complete:** Sessions 1-26 and 32-38 are complete. **Gate C (Core Platform Release) is CLOSED.** Phase L (Lamprey) underway — Router + Policy Framework + HIPAA engine shipped.
+**Next Session:** Session 39 (ITAR/EAR Compliance Engine) — extends `mai-compliance` with USML category detection, technical-data classification, and dual-use technology rules. Security track (27-28) and developer track (29-31) remain safe parallel candidates before final acquisition prep in Session 45.
 **Next Archive:** After Session 23 (or end of Phase F, whichever comes first)
 
 ---

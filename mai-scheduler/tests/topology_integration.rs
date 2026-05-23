@@ -386,8 +386,10 @@ fn test_config_weights_affect_edge_cost() {
     let cost1 = graph1.link_cost(GpuId(0), GpuId(3)); // SYS link
 
     // Double the latency weight
-    let mut config2 = TopologyConfig::default();
-    config2.latency_weight = 2.0;
+    let config2 = TopologyConfig {
+        latency_weight: 2.0,
+        ..TopologyConfig::default()
+    };
     let graph2 = GpuGraph::from_parsed(
         &parsed2,
         &config2.link_weights,

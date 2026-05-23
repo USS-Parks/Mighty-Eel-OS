@@ -281,7 +281,7 @@ async fn test_scheduler_metrics_under_load() {
 
     // Each adapter should have gotten 3 requests
     assert_eq!(routed_to.len(), 3);
-    for (_adapter, count) in &routed_to {
+    for count in routed_to.values() {
         assert_eq!(*count, 3, "Round-robin should distribute evenly");
     }
 

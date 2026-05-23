@@ -241,11 +241,11 @@ impl SecureLoadContext for CpuDriver {
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_cpu_driver_default() {
+    #[tokio::test]
+    async fn test_cpu_driver_default() {
         let driver = CpuDriver::default();
-        // Should construct without panic
-        assert!(true);
+        let state = driver.get_power_state().await.unwrap();
+        assert_eq!(state, PowerState::FullInference);
     }
 
     #[tokio::test]

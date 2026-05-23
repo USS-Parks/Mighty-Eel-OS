@@ -285,7 +285,11 @@ mod tests {
             target: InstanceId::new("b"),
         };
         // With no topology supplied, cost is 0, migration still proceeds.
-        assert_eq!(lb.evaluate(&[candidate.clone()], &instances, None).len(), 1);
+        assert_eq!(
+            lb.evaluate(std::slice::from_ref(&candidate), &instances, None)
+                .len(),
+            1
+        );
 
         // Pure-CPU instances also resolve to zero cost (no gpu pairs).
         let instances_cpu = vec![instance("a", 40, &[]), instance("b", 5, &[])];

@@ -242,9 +242,11 @@ mod tests {
     #[test]
     fn test_updated_metrics_queue_decrement() {
         let processor = FeedbackProcessor::new(FeedbackConfig::default());
-        let mut metrics = InstanceMetrics::default();
-        metrics.queue_depth = 5;
-        metrics.active_sequences = 3;
+        let metrics = InstanceMetrics {
+            queue_depth: 5,
+            active_sequences: 3,
+            ..InstanceMetrics::default()
+        };
         let updated = processor.process_completion(report("i:0", 50, false), &metrics);
         assert_eq!(updated.queue_depth, 4);
         assert_eq!(updated.active_sequences, 2);

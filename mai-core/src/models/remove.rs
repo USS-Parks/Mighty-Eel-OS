@@ -294,7 +294,7 @@ mod tests {
         assert!(removal.secure_wipe);
 
         let model_id = "test-model:1.0.0:Q4_K_M".to_string();
-        assert!(registry.models.get(&model_id).is_none());
+        assert!(!registry.models.contains_key(&model_id));
     }
 
     #[tokio::test]

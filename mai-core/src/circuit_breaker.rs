@@ -274,13 +274,15 @@ mod tests {
     use std::time::Duration;
 
     fn make_breaker() -> CircuitBreaker {
-        let mut cfg = CircuitBreakerConfig::default();
-        cfg.trip_threshold = 3;
-        cfg.rate_threshold = 0.5;
-        cfg.rate_window = Duration::from_secs(10);
-        cfg.cooldown_base = Duration::from_millis(100);
-        cfg.cooldown_max = Duration::from_secs(1);
-        cfg.rate_min_samples = 5; // Need 5 samples before rate check activates
+        let cfg = CircuitBreakerConfig {
+            trip_threshold: 3,
+            rate_threshold: 0.5,
+            rate_window: Duration::from_secs(10),
+            cooldown_base: Duration::from_millis(100),
+            cooldown_max: Duration::from_secs(1),
+            rate_min_samples: 5, // Need 5 samples before rate check activates
+            ..CircuitBreakerConfig::default()
+        };
         CircuitBreaker::new(cfg)
     }
 
@@ -312,12 +314,14 @@ mod tests {
     fn test_circuit_trips_on_rate_not_consecutive() {
         // Test rate-based trip specifically: interleave so consecutive count
         // never reaches threshold, but rate exceeds threshold.
-        let mut cfg = CircuitBreakerConfig::default();
-        cfg.trip_threshold = 10; // High, so consecutive won't trigger
-        cfg.rate_threshold = 0.5;
-        cfg.rate_window = Duration::from_secs(10);
-        cfg.cooldown_base = Duration::from_millis(100);
-        cfg.rate_min_samples = 4;
+        let cfg = CircuitBreakerConfig {
+            trip_threshold: 10, // High, so consecutive won't trigger
+            rate_threshold: 0.5,
+            rate_window: Duration::from_secs(10),
+            cooldown_base: Duration::from_millis(100),
+            rate_min_samples: 4,
+            ..CircuitBreakerConfig::default()
+        };
         let mut cb = CircuitBreaker::new(cfg);
 
         cb.record_success(); // total=1
