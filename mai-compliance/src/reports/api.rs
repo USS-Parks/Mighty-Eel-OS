@@ -228,7 +228,11 @@ impl ReportManager {
 
     /// Number of records currently held.
     pub fn record_count(&self) -> usize {
-        self.state.lock().expect("report manager poisoned").records.len()
+        self.state
+            .lock()
+            .expect("report manager poisoned")
+            .records
+            .len()
     }
 
     /// Generate a report end-to-end: engine → certifier → record.
@@ -575,11 +579,11 @@ impl ReportManagerBuilder {
 mod tests {
     use super::*;
     use crate::audit::AuditRecordInput;
+    use crate::policy::PolicyBundle;
     use crate::policy::bundle::{ClassificationResult, RequestMetadata};
     use crate::policy::composer::{
         AggregateDecision, ComplianceReason, Destination, ModuleId as ModId,
     };
-    use crate::policy::PolicyBundle;
     use crate::trust::TrustContext;
 
     fn sample_bundle() -> PolicyBundle {
@@ -722,7 +726,10 @@ mod tests {
         assert!(results[0].is_ok());
         let list = mgr.list();
         assert_eq!(list.len(), 1);
-        assert!(list[0].protected, "scheduled output should inherit protected flag");
+        assert!(
+            list[0].protected,
+            "scheduled output should inherit protected flag"
+        );
         assert_eq!(list[0].schedule_id.as_ref().unwrap().as_str(), "s1");
 
         // Running again immediately should not fire (period not elapsed).

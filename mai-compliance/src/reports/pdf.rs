@@ -212,8 +212,7 @@ pub fn verify_certified_report<V: BundleVerifier>(
     report: &CertifiedReport,
     verifier: Option<&V>,
 ) -> Result<(), VerifyError> {
-    let canonical =
-        serde_json::to_vec(&report.document.payload).map_err(VerifyError::Serialize)?;
+    let canonical = serde_json::to_vec(&report.document.payload).map_err(VerifyError::Serialize)?;
     let mut h = Hasher::new();
     h.update(&canonical);
     let digest = *h.finalize().as_bytes();

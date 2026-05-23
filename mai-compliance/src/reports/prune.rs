@@ -169,8 +169,7 @@ mod tests {
     #[test]
     fn per_type_retention_overrides_default() {
         let mut cfg = PruneConfig::default();
-        cfg.retention_by_type
-            .insert("system_activity".into(), 30);
+        cfg.retention_by_type.insert("system_activity".into(), 30);
         let want = 30u64 * 24 * 60 * 60 * 1_000_000_000;
         assert_eq!(cfg.retention_nanos(&ReportType::SystemActivity), want);
     }

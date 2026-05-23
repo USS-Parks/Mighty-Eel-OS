@@ -56,11 +56,7 @@ fn phi_access_section(rows: &[AuditQueryRow]) -> ReportSection {
         .iter()
         .filter(|r| r.entry.modules_applied.contains(&ModuleId::Hipaa))
         .collect();
-    let _ = writeln!(
-        body,
-        "{} HIPAA-scoped decisions in window.",
-        phi_rows.len()
-    );
+    let _ = writeln!(body, "{} HIPAA-scoped decisions in window.", phi_rows.len());
     for r in phi_rows.iter().take(50) {
         let _ = writeln!(
             body,
