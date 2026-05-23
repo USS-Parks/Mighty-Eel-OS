@@ -9,11 +9,13 @@ MAI instance, using mocked cloud-bridge endpoints until BF-6 lands:
     2. ``audit_correlation_id()`` — derives a stable per-session ID
        from the claim, suitable for joining the S42 audit log.
     3. ``check_local_trust_bundle()`` — calls
-       ``client.trust.bundle_status()``. The SDK currently raises
-       ``TrustNotProvisionedError`` (BF-6 stub); we fall back to a
-       ``"stub"`` state and continue.
+       ``client.trust.bundle_status()`` (BF-6 live endpoint).
+       Falls back to an ``"unreachable"`` snapshot if the server is down
+       so the audit summary still emits a stable shape.
     4. ``exchange_for_session_token()`` — calls
-       ``client.auth.exchange_token(claim)``. Same BF-6 fallback path.
+       ``client.auth.exchange_token(claim.subject_id, ...)`` (BF-6 live
+       endpoint). Falls back to a claim-derived placeholder token if the
+       server is unreachable.
     5. ``build_lamprey_metadata()`` — assembles the audit payload that
        S42's ``AuditFeed`` consumes (claim_id, tenant_id, subject_hash,
        service_identity, trust_bundle_version, route_decision,
@@ -22,8 +24,9 @@ MAI instance, using mocked cloud-bridge endpoints until BF-6 lands:
     7. ``print_audit_summary()`` — emits the metadata + correlation
        ID as JSON to stdout for replay tooling.
 
-Once BF-6 lands, steps 1, 3, 4 hit real endpoints; steps 2, 5, 6, 7
-stay unchanged. That continuity is the point of the scaffold.
+BF-6 landed alongside Session 44 (2026-05-22): steps 3 and 4 now hit
+real local endpoints; step 1 still simulates the cloud OpenBao bridge
+until that bring-up. Steps 2, 5, 6, 7 are unchanged from S30.
 """
 
 from __future__ import annotations
@@ -40,7 +43,6 @@ from pathlib import Path
 from typing import Any
 
 from mai import ChatMessage, MaiClient, MaiClientConfig, MaiError, TrustClaim
-from mai._namespaces import TrustNotProvisionedError
 
 DEFAULT_CONFIG = Path(__file__).with_name("config.toml")
 
@@ -132,25 +134,25 @@ class BundleSnapshot:
 
 def check_local_trust_bundle(client: MaiClient,
                              fallback_version: str) -> BundleSnapshot:
-    """Query the SDK's trust bundle status with a BF-6 fallback."""
+    """Query the SDK's trust bundle status.
+
+    BF-6 (S44) wired the endpoint live, so a healthy server always returns
+    a real ``TrustBundleStatus``. The fallback branch is the air-gap /
+    server-down posture: the demo must still emit an audit-ready summary
+    even if the local trust cache is unreachable.
+    """
     try:
         st = client.trust.bundle_status()
-    except TrustNotProvisionedError as e:
-        return BundleSnapshot(
-            state="stub", bundle_version=fallback_version,
-            connectivity="air_gapped", signature_verified=False,
-            detail=str(e),
-        )
     except MaiError as e:
         return BundleSnapshot(
-            state="stub", bundle_version=fallback_version,
+            state="unreachable", bundle_version=fallback_version,
             connectivity="error", signature_verified=False,
             detail=f"{type(e).__name__}: {e}",
         )
     return BundleSnapshot(
-        state="live", bundle_version=st.bundle_version,
+        state="live", bundle_version=st.bundle_version or fallback_version,
         connectivity=st.connectivity,
-        signature_verified=st.signature_verified,
+        signature_verified=not st.is_emergency_only,
     )
 
 
@@ -159,13 +161,23 @@ def check_local_trust_bundle(client: MaiClient,
 # ---------------------------------------------------------------------------
 
 def exchange_for_session_token(client: MaiClient, claim: TrustClaim) -> str:
-    """Trade the claim for a server session token. BF-6 fallback returns
-    a placeholder token derived from the claim id so downstream calls
-    can still surface a stable correlation."""
+    """Trade the claim for a server session token via BF-6's live
+    ``POST /v1/auth/exchange_token``.
+
+    Falls back to a claim-derived placeholder if the server is unreachable
+    so the audit summary still carries a stable correlation marker. The
+    local-dev token handler returns ``mode = "local-dev"``; production
+    OpenBao deployment replaces only the handler body, not the wire shape.
+    """
     try:
-        return client.auth.exchange_token(claim)
-    except TrustNotProvisionedError:
-        return f"bf6-pending:{claim.claim_id}"
+        resp = client.auth.exchange_token(
+            claim.subject_id,
+            tenant_id=claim.tenant_id,
+            scopes=list(claim.compliance_scopes),
+        )
+    except MaiError:
+        return f"local-fallback:{claim.claim_id}"
+    return resp.token
 
 
 # ---------------------------------------------------------------------------

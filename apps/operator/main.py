@@ -17,7 +17,6 @@ from pathlib import Path
 from typing import Any
 
 from mai import MaiClient, MaiClientConfig, MaiError
-from mai._namespaces import TrustNotProvisionedError
 
 DEFAULT_CONFIG = Path(__file__).with_name("config.toml")
 
@@ -55,9 +54,6 @@ def _safe(name: str, fn) -> Panel:  # type: ignore[no-untyped-def]
     """Run a collector, catching MaiError into a Panel(ok=False)."""
     try:
         return fn()
-    except TrustNotProvisionedError as e:
-        return Panel(name=name, ok=False, summary="not-provisioned",
-                     error=str(e))
     except MaiError as e:
         return Panel(name=name, ok=False, summary="ERROR",
                      error=f"{type(e).__name__}: {e}")
@@ -184,17 +180,19 @@ def panel_trust(client: MaiClient) -> Panel:
 
 
 def _do_trust(client: MaiClient) -> Panel:
-    # BF-6 stub: bundle_status raises TrustNotProvisionedError today.
-    status = client.trust.bundle_status()
+    """BF-6 live: read /v1/trust/status for the consolidated dashboard view."""
+    status = client.trust.status()
     return Panel(
         name="trust", ok=True,
-        summary=f"bundle={status.bundle_version} "
-                f"connectivity={status.connectivity}",
+        summary=f"mode={status.mode} bundle={status.bundle_version or '-'}",
         detail={
+            "mode": status.mode,
             "bundle_version": status.bundle_version,
-            "connectivity": status.connectivity,
-            "signature_verified": status.signature_verified,
+            "last_refresh_secs": status.last_refresh_secs,
+            "age_secs": status.age_secs,
             "claim_count": status.claim_count,
+            "offline_backlog": status.offline_backlog,
+            "airgap": status.airgap,
         },
     )
 

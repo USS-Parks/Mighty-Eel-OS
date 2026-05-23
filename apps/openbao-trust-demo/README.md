@@ -12,10 +12,10 @@ Walks the full Trust Manifold three-ring pipeline end-to-end:
 +-----------------------+        +----------------------------+        +-----------------------+
 ```
 
-The scaffold simulates the cloud bridge locally because BF-6 (the
-SDK-side wiring for real `client.trust.*` + `client.auth.exchange_token`
-endpoints) lands later. The wire shape is the same — only the source
-of the claim swaps.
+BF-6 landed alongside Session 44 (2026-05-22), so steps 3 and 4 now
+make real HTTP calls into `mai-api`'s local trust + auth handlers.
+The cloud OpenBao bridge in step 1 is still simulated locally until
+live OpenBao bring-up — only that source-of-claim swap is left.
 
 ## What it demonstrates
 
@@ -25,10 +25,13 @@ of the claim swaps.
 2. **`audit_correlation_id()`** — stable per-claim ID used by Session 42's
    audit log to join cloud-side events with local-side decisions.
 3. **`check_local_trust_bundle()`** — calls `client.trust.bundle_status()`
-   and gracefully falls back when the SDK raises `TrustNotProvisionedError`
-   (BF-6 stub today).
-4. **`exchange_for_session_token()`** — same pattern against
-   `client.auth.exchange_token()`.
+   against the BF-6 live endpoint. Falls back to an `unreachable`
+   snapshot if the server is down so the audit summary still emits a
+   stable shape.
+4. **`exchange_for_session_token()`** — calls
+   `client.auth.exchange_token(claim.subject_id, ...)` against the BF-6
+   live endpoint. Falls back to a claim-derived placeholder token if
+   the server is unreachable.
 5. **`build_lamprey_metadata()`** — assembles the payload S42's
    `AuditFeed` consumes (claim_id, tenant_id, subject_hash,
    service_identity, trust_bundle_version, route_decision,
@@ -66,22 +69,21 @@ Edit [`config.toml`](config.toml). Sections:
 pytest apps/openbao-trust-demo/tests/
 ```
 
-- `test_smoke.py` — every pipeline step in isolation, BF-6 stub
-  fallbacks, dry-run mode, config defaults.
+- `test_smoke.py` — every pipeline step in isolation against BF-6 live
+  endpoints, with unreachable-server fallback coverage, dry-run mode,
+  and config defaults.
 - `test_integration.py` — full seven-step run with `httpx.MockTransport`,
-  including a verified-bundle path (monkeypatched) and an expired-claim
-  refusal path.
+  including a degraded-bundle path and an expired-claim refusal path.
 
-## When BF-6 lands
+## When live OpenBao bring-up lands
 
-Three call sites change:
+Only one call site changes:
 
 1. `simulate_bridge_authentication()` becomes
    `cloud_bridge.authenticate(user_id, device_fingerprint)`.
-2. `check_local_trust_bundle()` keeps the same name, but the SDK no
-   longer raises and `bundle_status()` returns a real `TrustBundleStatus`.
-3. `exchange_for_session_token()` returns a real signed token.
 
-Everything else — the correlation ID, the metadata assembly, the audit
-print — stays identical. That continuity is the contract this scaffold
-freezes in.
+Steps 3 and 4 already hit live endpoints; only the body of
+`POST /v1/auth/exchange_token` swaps from the local-dev token stub to
+real OpenBao Transit signing. Everything else — the correlation ID,
+the metadata assembly, the audit print — stays identical. That
+continuity is the contract this scaffold freezes in.

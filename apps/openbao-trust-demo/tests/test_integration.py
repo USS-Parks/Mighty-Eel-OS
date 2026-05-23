@@ -13,7 +13,6 @@ import pytest
 
 from mai import MaiClient, MaiClientConfig
 from mai.retry import RetryPolicy
-from mai.types import TrustBundleStatus
 
 APP_ROOT = Path(__file__).resolve().parents[1]
 
@@ -45,11 +44,27 @@ def _mk_client(handler: Callable[[httpx.Request], httpx.Response]) -> MaiClient:
 def test_full_pipeline_runs_end_to_end(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """All seven steps, BF-6 stubs in place. The chat endpoint must be hit
-    with the audit metadata pinned into the system prompt."""
+    """All seven steps against BF-6 live endpoints. Chat must receive the
+    audit metadata pinned into its system message and the audit summary
+    must reflect the live bundle state."""
     chat_bodies: list[dict] = []
 
     def handler(req: httpx.Request) -> httpx.Response:
+        if req.url.path == "/v1/trust/bundle_status":
+            return httpx.Response(200, json={
+                "bundle_version": "bundle-2026-05-22",
+                "last_refresh_secs": 1_700_000_000,
+                "age_secs": 60,
+                "connectivity": "connected",
+                "is_emergency_only": False,
+            })
+        if req.url.path == "/v1/auth/exchange_token":
+            return httpx.Response(200, json={
+                "token": "live-token-abc", "token_type": "Bearer",
+                "subject_id": "alice@example.com", "tenant_id": "im-demo",
+                "scopes": [], "issued_at_secs": 1_700_000_000,
+                "expires_at_secs": 1_700_000_300, "mode": "local-dev",
+            })
         if req.url.path == "/v1/chat/completions":
             chat_bodies.append(json.loads(req.content.decode()))
             return httpx.Response(200, json={
@@ -83,7 +98,8 @@ def test_full_pipeline_runs_end_to_end(
     audit = json.loads(out[json_start:])
     assert audit["route_decision"] == "local_only"
     assert audit["service_identity"] == "openbao-trust-bridge"
-    assert audit["bundle_state"] == "stub"  # BF-6 not provisioned
+    assert audit["bundle_state"] == "live"  # BF-6 live endpoint
+    assert audit["bundle_connectivity"] == "connected"
     assert audit["correlation_id"].startswith("openbao-demo-claim-")
 
     # The chat call had to carry the audit metadata in the system message.
@@ -95,36 +111,30 @@ def test_full_pipeline_runs_end_to_end(
     assert audit["correlation_id"] in sys_msg
 
 
-def test_verified_bundle_promotes_state_to_live(
+def test_degraded_bundle_marks_signature_unverified(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """If the SDK can actually serve bundle_status (post-BF-6), the snapshot
-    should be reported as ``live`` and downstream metadata reflects it."""
+    """An emergency-only bundle (signature can't be re-verified) maps to
+    ``signature_verified=False`` so the audit summary reflects the
+    degraded mode the operator must see."""
     main = _load_main()
 
-    def handler(_: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, json={})
-
-    # Stand in for the post-BF-6 SDK: return a real TrustBundleStatus.
-    def fake_bundle_status(_self):  # type: ignore[no-untyped-def]
-        return TrustBundleStatus(
-            bundle_version="bundle-2026-05-22",
-            fetched_at_unix=1_700_000_000,
-            expires_at_unix=1_700_300_000,
-            connectivity="connected",
-            signature_verified=True,
-            claim_count=7,
-        )
-
-    from mai._namespaces import Trust
-    monkeypatch.setattr(Trust, "bundle_status", fake_bundle_status)
+    def handler(req: httpx.Request) -> httpx.Response:
+        assert req.url.path == "/v1/trust/bundle_status"
+        return httpx.Response(200, json={
+            "bundle_version": "bundle-stale",
+            "last_refresh_secs": 1_000,
+            "age_secs": 999_999,
+            "connectivity": "stale_not_expired",
+            "is_emergency_only": True,
+        })
 
     with _mk_client(handler) as client:
         snap = main.check_local_trust_bundle(client, "fallback-version")
     assert snap.state == "live"
-    assert snap.bundle_version == "bundle-2026-05-22"
-    assert snap.connectivity == "connected"
-    assert snap.signature_verified is True
+    assert snap.bundle_version == "bundle-stale"
+    assert snap.connectivity == "stale_not_expired"
+    assert snap.signature_verified is False
 
 
 def test_expired_claim_refused_with_exit_code_5(
@@ -173,6 +183,18 @@ def test_custom_prompt_overrides_config_default(
     seen_user_prompts: list[str] = []
 
     def handler(req: httpx.Request) -> httpx.Response:
+        if req.url.path == "/v1/trust/bundle_status":
+            return httpx.Response(200, json={
+                "bundle_version": "v", "connectivity": "connected",
+                "is_emergency_only": False,
+            })
+        if req.url.path == "/v1/auth/exchange_token":
+            return httpx.Response(200, json={
+                "token": "t", "token_type": "Bearer",
+                "subject_id": "s", "tenant_id": "im-demo",
+                "scopes": [], "issued_at_secs": 1, "expires_at_secs": 2,
+                "mode": "local-dev",
+            })
         if req.url.path == "/v1/chat/completions":
             body = json.loads(req.content.decode())
             user = next(m["content"] for m in body["messages"]

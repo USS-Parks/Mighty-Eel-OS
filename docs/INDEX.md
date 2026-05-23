@@ -2,7 +2,7 @@
 
 **Project:** Island Mountain Model Abstraction Interface (MAI)
 **Alignment Note:** Governance status aligned with current code on 2026-05-22.
-**Last Updated:** 2026-05-22 (Session 25 OTA + model lifecycle)
+**Last Updated:** 2026-05-22 (BF-7 acquisition + demo narrative)
 
 ---
 
@@ -24,6 +24,9 @@ These documents govern the MAI build. Read them before writing code.
 | [HANDOFF-ARCHIVE-01.md](HANDOFF-ARCHIVE-01.md) | Archived onboarding walkthrough and Phase A+B code inventory | Reference only |
 | [SESSION-RULES.md](SESSION-RULES.md) | Dependency enforcement, acceptance criteria protocol, quality gates, session workflow | Conducting any session |
 | [IPC-PROTOCOL.md](IPC-PROTOCOL.md) | NDJSON IPC wire format spec for Rust-Python adapter communication | Working on adapter IPC (Sessions 14a-14c) |
+| [ACQUISITION-PACKAGE.md](ACQUISITION-PACKAGE.md) | Five-point buyer thesis with code/test citations (BF-7, feeds Session 45) | Acquirer diligence; investor narrative |
+| [BUYER-INTEGRATION-GUIDE.md](BUYER-INTEGRATION-GUIDE.md) | OpenBao-backed trust boundary + 7-step integration sequence + boundary-review checklist (BF-7) | Acquirer integration engineering; security architecture review |
+| [DEMO-SUITE.md](DEMO-SUITE.md) | Trust Manifold 8-step scenario + supporting demos + reproducibility checklist (BF-7, feeds Session 46) | Acquirer technical review; sales engineering |
 
 ---
 

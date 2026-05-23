@@ -93,37 +93,94 @@ def test_audit_correlation_id_format() -> None:
     assert result.claim.claim_id in cid
 
 
-# --- step 3: trust bundle stub fallback -----------------------------------
+# --- step 3: trust bundle live happy path + unreachable fallback ---------
 
-def test_check_local_trust_bundle_falls_back_on_bf6_stub() -> None:
+def test_check_local_trust_bundle_reads_bf6_live_endpoint() -> None:
     main = _load_main()
 
-    def handler(_: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, json={})  # not called — SDK raises
+    def handler(req: httpx.Request) -> httpx.Response:
+        assert req.url.path == "/v1/trust/bundle_status"
+        return httpx.Response(200, json={
+            "bundle_version": "bundle-2026-05-22",
+            "last_refresh_secs": 1_700_000_000,
+            "age_secs": 42,
+            "connectivity": "connected",
+            "is_emergency_only": False,
+        })
 
     with _mk_client(handler) as client:
         snap = main.check_local_trust_bundle(client, "local-dev-v1")
-    assert snap.state == "stub"
-    assert snap.bundle_version == "local-dev-v1"
-    assert snap.connectivity == "air_gapped"
-    assert snap.signature_verified is False
-    assert "not yet provisioned" in snap.detail.lower() or snap.detail
+    assert snap.state == "live"
+    assert snap.bundle_version == "bundle-2026-05-22"
+    assert snap.connectivity == "connected"
+    assert snap.signature_verified is True
 
 
-# --- step 4: token exchange stub fallback ---------------------------------
-
-def test_exchange_for_session_token_falls_back_on_bf6_stub() -> None:
+def test_check_local_trust_bundle_falls_back_when_server_unreachable() -> None:
+    """BF-6 endpoint is live but the server is degraded — the demo must still
+    produce an audit-ready snapshot rather than crash."""
     main = _load_main()
 
     def handler(_: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, json={})
+        return httpx.Response(503, json={"error": {
+            "code": "MAI-503", "message": "trust cache offline",
+            "type": "service_unavailable",
+        }})
+
+    with _mk_client(handler) as client:
+        snap = main.check_local_trust_bundle(client, "local-dev-v1")
+    assert snap.state == "unreachable"
+    assert snap.bundle_version == "local-dev-v1"
+    assert snap.connectivity == "error"
+    assert snap.signature_verified is False
+
+
+# --- step 4: token exchange live + unreachable ----------------------------
+
+def test_exchange_for_session_token_uses_bf6_live_endpoint() -> None:
+    main = _load_main()
+
+    captured: list[dict] = []
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        assert req.url.path == "/v1/auth/exchange_token"
+        captured.append(json.loads(req.content.decode()))
+        return httpx.Response(200, json={
+            "token": "local-dev-token-xyz",
+            "token_type": "Bearer",
+            "subject_id": "s",
+            "tenant_id": "t",
+            "scopes": ["pii"],
+            "issued_at_secs": 1_700_000_000,
+            "expires_at_secs": 1_700_000_300,
+            "mode": "local-dev",
+        })
+
+    result = main.simulate_bridge_authentication(
+        {"claim_ttl_seconds": 60},
+        {"tenant_id": "t", "subject_id": "s", "compliance_scopes": ["pii"]},
+    )
+    with _mk_client(handler) as client:
+        token = main.exchange_for_session_token(client, result.claim)
+    assert token == "local-dev-token-xyz"
+    assert captured == [{"subject_id": "s", "tenant_id": "t", "scopes": ["pii"]}]
+
+
+def test_exchange_for_session_token_falls_back_when_unreachable() -> None:
+    main = _load_main()
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(503, json={"error": {
+            "code": "MAI-503", "message": "exchange offline",
+            "type": "service_unavailable",
+        }})
 
     result = main.simulate_bridge_authentication(
         {"claim_ttl_seconds": 60}, {"tenant_id": "t", "subject_id": "s"},
     )
     with _mk_client(handler) as client:
         token = main.exchange_for_session_token(client, result.claim)
-    assert token.startswith("bf6-pending:")
+    assert token.startswith("local-fallback:")
     assert result.claim.claim_id in token
 
 
@@ -185,10 +242,23 @@ def test_run_dry_run_skips_inference(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
 ) -> None:
     main = _load_main()
-    chat_calls: list[str] = []
+    paths_hit: list[str] = []
 
     def handler(req: httpx.Request) -> httpx.Response:
-        chat_calls.append(req.url.path)
+        paths_hit.append(req.url.path)
+        if req.url.path == "/v1/trust/bundle_status":
+            return httpx.Response(200, json={
+                "bundle_version": "local-dev",
+                "connectivity": "connected",
+                "is_emergency_only": False,
+            })
+        if req.url.path == "/v1/auth/exchange_token":
+            return httpx.Response(200, json={
+                "token": "tok", "token_type": "Bearer",
+                "subject_id": "alice@example.com", "tenant_id": "im-demo",
+                "scopes": [], "issued_at_secs": 1, "expires_at_secs": 2,
+                "mode": "local-dev",
+            })
         return httpx.Response(500, json={"error": {
             "code": "MAI-X", "message": "should not be called",
             "type": "internal_error",
@@ -201,9 +271,9 @@ def test_run_dry_run_skips_inference(
     out = capsys.readouterr().out
     assert rc == 0
     # No chat completion should have been sent in dry-run.
-    assert "/v1/chat/completions" not in chat_calls
+    assert "/v1/chat/completions" not in paths_hit
     parsed = json.loads(out)
-    assert parsed["bundle_state"] == "stub"
+    assert parsed["bundle_state"] == "live"
     assert parsed["route_decision"] == "local_only"
     assert parsed["service_identity"] == "openbao-trust-bridge"
 

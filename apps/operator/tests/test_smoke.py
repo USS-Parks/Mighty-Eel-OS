@@ -132,20 +132,46 @@ def test_panel_airgap_marks_unverified_as_not_ok() -> None:
     assert "non_compliant" in p.summary
 
 
-# --- Panel: trust (BF-6 stub) --------------------------------------
+# --- Panel: trust (BF-6 live) --------------------------------------
 
-def test_panel_trust_handles_bf6_stub() -> None:
+def test_panel_trust_renders_bf6_live_status() -> None:
     main = _load_main()
 
-    def handler(_: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, json={})  # never called
+    def handler(req: httpx.Request) -> httpx.Response:
+        assert req.url.path == "/v1/trust/status"
+        return httpx.Response(200, json={
+            "mode": "connected",
+            "bundle_version": "bundle-2026-05-22",
+            "last_refresh_secs": 1_700_000_000,
+            "age_secs": 30,
+            "claim_count": 4,
+            "airgap": {"verified": True, "non_compliant": []},
+            "offline_backlog": 0,
+        })
 
     with _mk(handler) as client:
         p = main.panel_trust(client)
-    # Stub raises TrustNotProvisionedError -> Panel(ok=False, summary="not-provisioned")
+    assert p.ok is True
+    assert "mode=connected" in p.summary
+    assert "bundle-2026-05-22" in p.summary
+    assert p.detail["mode"] == "connected"
+    assert p.detail["claim_count"] == 4
+    assert p.detail["offline_backlog"] == 0
+
+
+def test_panel_trust_handles_server_unreachable() -> None:
+    main = _load_main()
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(503, json={"error": {
+            "code": "MAI-503", "message": "trust offline",
+            "type": "service_unavailable",
+        }})
+
+    with _mk(handler) as client:
+        p = main.panel_trust(client)
     assert p.ok is False
-    assert p.summary == "not-provisioned"
-    assert "BF-6" in (p.error or "")
+    assert p.summary == "ERROR"
 
 
 # --- Panel: audit ---------------------------------------------------

@@ -1592,3 +1592,56 @@ All 6 files rewritten from scratch against verified APIs. v2 files verified: zer
 - No new issues opened. BF-6 SDK-side trust wiring remains the only open deferral and is unchanged.
 
 **Next Session Notes:** Next mainline target per the canonical plan is **Session 43 (Compliance Report Generator)** over the S42 `AuditLog`. Roster Session 31 (Part 2 family-app scaffolds) is genuinely optional under plan §739's letter — every plan-spec scaffold ships and runs.
+---
+
+### 2026-05-22: BF-7 — Acquisition Narrative + Demo Suite + S30 Scaffold Repair
+
+**Status:** Complete. BF-7 is the last item on the Trust Manifold backfill lane (Appendix A §A.11); it patches the Trust Manifold story into the Session 45 acquisition package and the Session 46 demo suite.
+
+**Scope:**
+- Three new docs under `mai/docs/`:
+  - `ACQUISITION-PACKAGE.md` (264 lines) — five-point defensible buyer thesis with code/test/commit citations per defensible point.
+  - `BUYER-INTEGRATION-GUIDE.md` (272 lines) — what crosses the trust boundary vs what does not; Lamprey claim schema; four deployment postures; seven-step integration sequence; SDK touchpoints; eight-item boundary-review checklist.
+  - `DEMO-SUITE.md` (241 lines) — Trust Manifold 8-step headline scenario mapped to landed code and tests; six supporting scenarios (HIPAA, ITAR/EAR, OCAP, multi-domain conflict, dashboard walkthrough, operator) and the combined 12-step acquisition demo; 9-item reproducibility checklist.
+- Three updated docs:
+  - `docs/INDEX.md` — added the three new entries to the governance documents table; bumped "Last Updated".
+  - `apps/openbao-trust-demo/README.md` — re-narrated for the BF-6-live posture; clarified that only step 1 (bridge bring-up) still simulates.
+  - This `SESSION-LOG.md` entry.
+- Two repaired S30 scaffolds (BF-6 had silently regressed them):
+  - `apps/openbao-trust-demo/main.py` — `exchange_for_session_token` was calling `client.auth.exchange_token(claim)`; BF-6 changed the signature to `(subject_id, *, tenant_id, scopes)`. Live HTTP body was unable to serialize a `TrustClaim` as `subject_id`. Repaired to extract claim fields. Removed obsolete `TrustNotProvisionedError` catches; replaced with `MaiError` server-unreachable fallbacks. `check_local_trust_bundle` updated for the new `TrustBundleStatus` shape (`bundle_version | None`, `last_refresh_secs`, `age_secs`, `connectivity`, `is_emergency_only`).
+  - `apps/operator/main.py` — `_do_trust` was reading `bundle_status()` against the old shape; rewrote to use `client.trust.status()` for the consolidated dashboard view (mode + bundle_version + claim_count + offline_backlog + airgap). Removed `TrustNotProvisionedError` import + the `not-provisioned` fall-through.
+- Test updates:
+  - `apps/openbao-trust-demo/tests/test_smoke.py` — split the two "BF-6 stub fallback" tests into "BF-6 live happy path" + "server-unreachable fallback"; updated `test_run_dry_run_skips_inference` to mock the live `/v1/trust/bundle_status` + `/v1/auth/exchange_token` responses.
+  - `apps/openbao-trust-demo/tests/test_integration.py` — `test_full_pipeline_runs_end_to_end` mock handler now serves all three live endpoints; rewrote `test_verified_bundle_promotes_state_to_live` → `test_degraded_bundle_marks_signature_unverified` for the new `is_emergency_only` field; `test_custom_prompt_overrides_config_default` mock extended with the two trust endpoints.
+  - `apps/operator/tests/test_smoke.py` — replaced `test_panel_trust_handles_bf6_stub` with `test_panel_trust_renders_bf6_live_status` + `test_panel_trust_handles_server_unreachable`.
+  - `apps/operator/tests/test_integration.py` — added `/v1/trust/status` to `_all_panels_handler`; flipped the trust-panel assertions to the live-mode shape.
+
+**Acceptance criteria (§A.11):**
+- [x] Trust Manifold appears in acquisition documentation (`ACQUISITION-PACKAGE.md` §"Point 2", `DEMO-SUITE.md` headline scenario).
+- [x] Buyer integration guide explains the OpenBao-backed trust boundary (`BUYER-INTEGRATION-GUIDE.md` §"The trust boundary — what crosses and what does not").
+- [x] Demo suite includes the Trust Manifold scenario (`DEMO-SUITE.md` headline scenario; 17 green tests in `apps/openbao-trust-demo/`).
+- [x] Trust scenario runs without exposing prompts or completions to the cloud trust layer (boundary contract review checklist in `BUYER-INTEGRATION-GUIDE.md`; signing payload in `mai-compliance::bundle::canonical_bytes` excludes content).
+- [x] Audit proof links identity, policy, route, inference event (§A.9 schema in `mai-compliance::audit::CorrelationFields`; expected linkage documented in `DEMO-SUITE.md`).
+
+**Verification:**
+- `pytest apps/openbao-trust-demo/tests/` — **17 passed** (was 15; new coverage: `_uses_bf6_live_endpoint`, `_falls_back_when_unreachable` × 2).
+- `pytest apps/operator/tests/` — **12 passed** (was 11; new coverage: `_renders_bf6_live_status` + `_handles_server_unreachable`).
+- `pytest` across all six scaffolds (per app) — **61 passed** total (was 58; +3 from the repaired trust + operator suites).
+- `ruff check apps/openbao-trust-demo apps/operator --select F,E` — all checks passed.
+- Integrity check on the three new docs — no NUL bytes; line counts match intent (264 / 272 / 241); tails terminate cleanly.
+
+**Backfill Lane Status:**
+- BF-7 closes the parallel Trust Manifold lane (BF-1..BF-7 all complete).
+- Mainline next: **Session 45 — Acquisition Documentation Package**. The BF-7 docs are the seed content S45 absorbs; S45 expands them with architecture overview, scheduler brief, API/SDK references, competitive analysis, IP position memo, and the buyer-integration packaging artifacts.
+- After S45 → Session 46 (compliance demo suite end-to-end) → Gate D (Acquisition-Ready Release).
+
+**Notes:**
+- The S30 scaffold regression in `openbao-trust-demo` and `operator` was real: 6 demo tests + 2 operator tests were failing before BF-7 started. The cause was the BF-6 SDK signature change for `exchange_token` and the new `TrustBundleStatus` schema. BF-7 was the right session to repair them because (a) §A.11's acceptance criterion is "trust scenario runs"; (b) the demo is the artifact `DEMO-SUITE.md` references; (c) `S44+BF-6`'s memory note explicitly flagged scaffold absorption work as outstanding.
+- Per project anti-truncation protocol: each new doc was staged to `$env:TEMP\opencode\`, line/byte-count-verified, tail-checked, copied to workspace, then re-verified at the destination. NUL-byte scan clean across all three.
+- One scaffold sentence in `apps/openbao-trust-demo/README.md` was updated to reflect that only step 1 (cloud OpenBao bridge bring-up) still simulates; steps 3 and 4 are BF-6-live.
+
+**Files Modified/Created:**
+- New: `docs/{ACQUISITION-PACKAGE,BUYER-INTEGRATION-GUIDE,DEMO-SUITE}.md`.
+- Modified: `docs/INDEX.md`; `apps/openbao-trust-demo/{main.py,README.md,tests/test_smoke.py,tests/test_integration.py}`; `apps/operator/{main.py,tests/test_smoke.py,tests/test_integration.py}`.
+
+**Next Session Notes:** Mainline cleared for Session 45. The BF-7 docs are the absorption seed — S45 must extend (not duplicate) them with the full architecture overview, scheduler proof brief, API/SDK reference, competitive analysis, and IP position memo per plan §1326.

@@ -72,6 +72,16 @@ def _all_panels_handler(req: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json={
             "total_entries": 0, "offset": 0, "limit": 10, "entries": [],
         })
+    if path == "/v1/trust/status":
+        return httpx.Response(200, json={
+            "mode": "connected",
+            "bundle_version": "bundle-2026-05-22",
+            "last_refresh_secs": 1_700_000_000,
+            "age_secs": 10,
+            "claim_count": 0,
+            "airgap": {"verified": True},
+            "offline_backlog": 0,
+        })
     return httpx.Response(404, json={"error": {
         "code": "MAI-N", "message": "?", "type": "internal_error",
     }})
@@ -96,17 +106,18 @@ def test_full_dashboard_json(
 
     rc = main.run(config_path=APP_ROOT / "config.toml", as_json=True)
     out = capsys.readouterr().out
-    assert rc == 0  # trust panel fails (stub) but trust is not "core"
+    assert rc == 0
     data = json.loads(out)
     panel_names = [p["name"] for p in data["panels"]]
     for required in ("models", "scheduler", "adapters", "power",
                      "airgap", "audit", "trust"):
         assert required in panel_names
 
-    # Trust panel reports its BF-6 stub state.
+    # Trust panel reports the BF-6 live consolidated mode.
     trust_panel = next(p for p in data["panels"] if p["name"] == "trust")
-    assert trust_panel["ok"] is False
-    assert trust_panel["summary"] == "not-provisioned"
+    assert trust_panel["ok"] is True
+    assert "mode=connected" in trust_panel["summary"]
+    assert trust_panel["detail"]["bundle_version"] == "bundle-2026-05-22"
 
 
 def test_unreachable_server_exits_one(
