@@ -334,10 +334,8 @@ impl ItarDetector {
         }
         hits.sort_by_key(|h| h.span.0);
 
-        let (classification, defaulted) = derive_classification(
-            highest_confidence,
-            self.config.default_to_itar_on_ambiguity,
-        );
+        let (classification, defaulted) =
+            derive_classification(highest_confidence, self.config.default_to_itar_on_ambiguity);
 
         ItarReport {
             classification,
@@ -394,7 +392,11 @@ fn baseline_patterns() -> Vec<(UsmlCategory, ItarConfidence, &'static str)> {
             Explicit,
             r"(?i)\b(?:machine\s+gun|automatic\s+rifle|combat\s+shotgun|sniper\s+rifle)\b",
         ),
-        (Firearms, Probable, r"(?i)\b(?:M4\s+carbine|AR-15\s+select-fire)\b"),
+        (
+            Firearms,
+            Probable,
+            r"(?i)\b(?:M4\s+carbine|AR-15\s+select-fire)\b",
+        ),
         // Cat II — Guns and Armament.
         (
             Armament,

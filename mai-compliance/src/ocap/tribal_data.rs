@@ -225,11 +225,9 @@ impl TribalDataDetector {
     ) -> Result<Self, TribalDataError> {
         let mut compiled = Vec::with_capacity(extras.len());
         for (kind, confidence, rule_id, pattern) in extras {
-            let regex = Regex::new(&pattern).map_err(|source| {
-                TribalDataError::InvalidPattern {
-                    rule_id: rule_id.clone(),
-                    source,
-                }
+            let regex = Regex::new(&pattern).map_err(|source| TribalDataError::InvalidPattern {
+                rule_id: rule_id.clone(),
+                source,
             })?;
             compiled.push(CompiledPattern {
                 kind,
@@ -297,8 +295,12 @@ fn hash_match(s: &str) -> String {
 /// `config/compliance/ocap.toml`, and tribal-government deployments
 /// are expected to review and approve the local extension before the
 /// detector is enabled in production.
-fn baseline_patterns() -> Vec<(TribalIdentifierKind, OcapConfidence, &'static str, &'static str)>
-{
+fn baseline_patterns() -> Vec<(
+    TribalIdentifierKind,
+    OcapConfidence,
+    &'static str,
+    &'static str,
+)> {
     use OcapConfidence::*;
     use TribalIdentifierKind::*;
     vec![
@@ -521,7 +523,10 @@ mod tests {
         // "tribal elder" is Probable; "as told by elder" is Explicit.
         let report = det.scan("A tribal elder reviewed the document.");
         assert!(
-            report.hits.iter().all(|h| h.confidence == OcapConfidence::Explicit),
+            report
+                .hits
+                .iter()
+                .all(|h| h.confidence == OcapConfidence::Explicit),
             "expected only explicit hits; got {:?}",
             report.hits,
         );
@@ -555,9 +560,8 @@ mod tests {
     #[test]
     fn hits_are_sorted_by_span_start() {
         let det = TribalDataDetector::baseline();
-        let report = det.scan(
-            "First, the Sundance, then a First Nations meeting, then Treaty 7 work.",
-        );
+        let report =
+            det.scan("First, the Sundance, then a First Nations meeting, then Treaty 7 work.");
         let starts: Vec<usize> = report.hits.iter().map(|h| h.span.0).collect();
         let mut sorted = starts.clone();
         sorted.sort_unstable();

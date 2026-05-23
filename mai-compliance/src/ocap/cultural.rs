@@ -178,12 +178,11 @@ impl CulturalFilter {
         let raw = baseline_patterns();
         let mut compiled = Vec::with_capacity(raw.len());
         for (signal, confidence, rule_id, pattern) in raw {
-            let regex = Regex::new(pattern).map_err(|source| {
-                CulturalFilterError::InvalidPattern {
+            let regex =
+                Regex::new(pattern).map_err(|source| CulturalFilterError::InvalidPattern {
                     rule_id: rule_id.to_string(),
                     source,
-                }
-            })?;
+                })?;
             compiled.push(CompiledPattern {
                 signal,
                 confidence,
@@ -199,8 +198,7 @@ impl CulturalFilter {
 
     /// Default filter with the baseline pattern catalog.
     pub fn baseline() -> Self {
-        Self::new(CulturalFilterConfig::default())
-            .expect("baseline cultural patterns must compile")
+        Self::new(CulturalFilterConfig::default()).expect("baseline cultural patterns must compile")
     }
 
     /// Scan text and produce a [`CulturalReport`].
@@ -256,7 +254,12 @@ fn hash_match(s: &str) -> String {
 /// of sensitive content rather than any specific community's
 /// vocabulary. Operators extend the catalog through
 /// `config/compliance/ocap.toml`.
-fn baseline_patterns() -> Vec<(CulturalSignal, CulturalConfidence, &'static str, &'static str)> {
+fn baseline_patterns() -> Vec<(
+    CulturalSignal,
+    CulturalConfidence,
+    &'static str,
+    &'static str,
+)> {
     use CulturalConfidence::*;
     use CulturalSignal::*;
     vec![
@@ -359,8 +362,7 @@ mod tests {
     #[test]
     fn detects_explicit_restricted_knowledge() {
         let f = CulturalFilter::baseline();
-        let report =
-            f.scan("These are women-only teachings, not for outside circulation.");
+        let report = f.scan("These are women-only teachings, not for outside circulation.");
         assert!(report.has_signal(CulturalSignal::SacredKnowledge));
         assert!(report.requires_explicit_review());
     }
@@ -376,8 +378,7 @@ mod tests {
     #[test]
     fn detects_funerary_content() {
         let f = CulturalFilter::baseline();
-        let report =
-            f.scan("Update the case file on ancestral remains repatriation.");
+        let report = f.scan("Update the case file on ancestral remains repatriation.");
         assert!(report.has_signal(CulturalSignal::Funerary));
         assert!(report.requires_explicit_review());
     }

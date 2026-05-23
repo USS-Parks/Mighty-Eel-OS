@@ -269,8 +269,7 @@ fn baseline_rules() -> Vec<CompiledRule> {
         },
         CompiledRule {
             rule_id: "treaty.medicine_creek".to_string(),
-            regex: Regex::new(r"(?i)\bMedicine\s+Creek\s+Treaty\b")
-                .expect("medicine-creek regex"),
+            regex: Regex::new(r"(?i)\bMedicine\s+Creek\s+Treaty\b").expect("medicine-creek regex"),
             canonicalise: |_| TreatyId::new("treaty_medicine_creek"),
         },
     ]
@@ -278,10 +277,7 @@ fn baseline_rules() -> Vec<CompiledRule> {
 
 fn canonicalise_numbered(matched: &str) -> Option<TreatyId> {
     // Take the trailing digits.
-    let digits: String = matched
-        .chars()
-        .filter(|c| c.is_ascii_digit())
-        .collect();
+    let digits: String = matched.chars().filter(|c| c.is_ascii_digit()).collect();
     if digits.is_empty() {
         return None;
     }

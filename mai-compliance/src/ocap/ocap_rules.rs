@@ -579,13 +579,7 @@ impl OcapEvaluator {
             "ocap.no_signal",
             "No tribal-data, treaty, or cultural-sensitivity signal detected.",
         ));
-        Ok(self.build_decision(
-            OcapOutcome::Allow,
-            None,
-            facts,
-            reasons,
-            trust,
-        ))
+        Ok(self.build_decision(OcapOutcome::Allow, None, facts, reasons, trust))
     }
 
     fn build_decision(
@@ -674,9 +668,7 @@ mod tests {
         }
     }
 
-    fn scan_all(
-        text: &str,
-    ) -> (TribalDataReport, TreatyReport, CulturalReport) {
+    fn scan_all(text: &str) -> (TribalDataReport, TreatyReport, CulturalReport) {
         (
             TribalDataDetector::baseline().scan(text),
             TreatyDetector::new(TreatyDetectorConfig::default()).scan(text),
@@ -750,10 +742,7 @@ mod tests {
             .evaluate(&t, &tr, &c, &gov, &trust_with_ocap_scope())
             .expect("evaluation");
         assert_eq!(d.outcome, OcapOutcome::DenyAccess);
-        assert_eq!(
-            d.matched_rule.as_deref(),
-            Some("ocap.control.unauthorised")
-        );
+        assert_eq!(d.matched_rule.as_deref(), Some("ocap.control.unauthorised"));
     }
 
     #[test]

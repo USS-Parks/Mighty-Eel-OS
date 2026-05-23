@@ -180,8 +180,7 @@ impl TechDataClassifier for HeuristicTechDataClassifier {
             }
         }
         hits.sort_by_key(|h| h.span.0);
-        let looks_like_tech_data =
-            highest.is_some_and(|c| c >= TechDataConfidence::Probable);
+        let looks_like_tech_data = highest.is_some_and(|c| c >= TechDataConfidence::Probable);
         TechDataAssessment {
             hits,
             highest_confidence: highest,
@@ -226,7 +225,6 @@ fn baseline_patterns() -> Vec<(TechDataSignal, TechDataConfidence, &'static str)
             Possible,
             r"(?i)\b(?:drawing|schematic|blueprint)\b",
         ),
-
         // ---- Specifications ----
         // MIL-STD / MIL-PRF / MIL-DTL / MIL-HDBK references.
         (
@@ -241,11 +239,7 @@ fn baseline_patterns() -> Vec<(TechDataSignal, TechDataConfidence, &'static str)
             r"\b(?:AS|SAE|NAS|ASTM|AMS|ANSI)\s?[-]?\s?[A-Z]?\d{2,5}[A-Z]?\b",
         ),
         // GD&T callouts: ASME Y14.5.
-        (
-            Specification,
-            Explicit,
-            r"\bASME\s+Y14(?:\.\d+)?\b",
-        ),
+        (Specification, Explicit, r"\bASME\s+Y14(?:\.\d+)?\b"),
         // Tolerance callouts: ±0.005 in, +/- 0.1 mm.
         (
             Specification,
@@ -264,7 +258,6 @@ fn baseline_patterns() -> Vec<(TechDataSignal, TechDataConfidence, &'static str)
             Possible,
             r"(?i)\b(?:engineering\s+specification|design\s+specification|materials?\s+of\s+construction)\b",
         ),
-
         // ---- Design methodology ----
         // Explicit: assembly drawing, manufacturing process plan.
         (
@@ -312,10 +305,9 @@ mod tests {
     #[test]
     fn test_drawing_number_explicit() {
         let a = cls().assess("See DWG 12345-A revision 02 for details.");
-        let hit = a
-            .hits
-            .iter()
-            .find(|h| h.signal == TechDataSignal::Drawing && h.confidence == TechDataConfidence::Explicit);
+        let hit = a.hits.iter().find(|h| {
+            h.signal == TechDataSignal::Drawing && h.confidence == TechDataConfidence::Explicit
+        });
         assert!(hit.is_some());
         assert!(a.looks_like_tech_data);
     }
@@ -323,10 +315,10 @@ mod tests {
     #[test]
     fn test_mil_std_explicit() {
         let a = cls().assess("Surface finish per MIL-STD-810H.");
-        let hit = a
-            .hits
-            .iter()
-            .find(|h| h.signal == TechDataSignal::Specification && h.confidence == TechDataConfidence::Explicit);
+        let hit = a.hits.iter().find(|h| {
+            h.signal == TechDataSignal::Specification
+                && h.confidence == TechDataConfidence::Explicit
+        });
         assert!(hit.is_some());
         assert!(a.looks_like_tech_data);
     }
@@ -334,29 +326,41 @@ mod tests {
     #[test]
     fn test_astm_standard_explicit() {
         let a = cls().assess("Conforms to ASTM A36 carbon steel grade.");
-        assert!(a.hits.iter().any(|h| h.signal == TechDataSignal::Specification));
+        assert!(
+            a.hits
+                .iter()
+                .any(|h| h.signal == TechDataSignal::Specification)
+        );
     }
 
     #[test]
     fn test_tolerance_callout_probable() {
         let a = cls().assess("Maintain dimension ±0.005 in over the bore.");
-        assert!(a.hits.iter().any(|h| h.signal == TechDataSignal::Specification));
+        assert!(
+            a.hits
+                .iter()
+                .any(|h| h.signal == TechDataSignal::Specification)
+        );
         assert!(a.looks_like_tech_data);
     }
 
     #[test]
     fn test_material_alloy_designation() {
         let a = cls().assess("Machined from 6061-T6 aluminum stock.");
-        assert!(a.hits.iter().any(|h| h.signal == TechDataSignal::Specification));
+        assert!(
+            a.hits
+                .iter()
+                .any(|h| h.signal == TechDataSignal::Specification)
+        );
     }
 
     #[test]
     fn test_manufacturing_process_plan_explicit_methodology() {
         let a = cls().assess("Refer to the manufacturing process plan section 4.2.");
-        let hit = a
-            .hits
-            .iter()
-            .find(|h| h.signal == TechDataSignal::DesignMethodology && h.confidence == TechDataConfidence::Explicit);
+        let hit = a.hits.iter().find(|h| {
+            h.signal == TechDataSignal::DesignMethodology
+                && h.confidence == TechDataConfidence::Explicit
+        });
         assert!(hit.is_some());
     }
 
@@ -404,7 +408,11 @@ mod tests {
     #[test]
     fn test_assembly_procedure_probable_methodology() {
         let a = cls().assess("Follow the assembly sequence outlined in section 3.");
-        assert!(a.hits.iter().any(|h| h.signal == TechDataSignal::DesignMethodology));
+        assert!(
+            a.hits
+                .iter()
+                .any(|h| h.signal == TechDataSignal::DesignMethodology)
+        );
         assert!(a.looks_like_tech_data);
     }
 

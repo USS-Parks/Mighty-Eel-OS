@@ -365,9 +365,7 @@ impl JurisdictionEvaluator {
             return JurisdictionDecision {
                 outcome: Outcome::RouteLocal,
                 classification,
-                reason: format!(
-                    "{base_reason} Appliance is in offline mode; routing local."
-                ),
+                reason: format!("{base_reason} Appliance is in offline mode; routing local."),
                 matched_rule: Some("trust.offline_mode".to_string()),
                 trust: snapshot,
             };
@@ -501,7 +499,10 @@ mod tests {
     use crate::itar::ItarDetector;
 
     fn reports(text: &str) -> (ItarReport, EarReport) {
-        (ItarDetector::baseline().scan(text), EarDetector::baseline().scan(text))
+        (
+            ItarDetector::baseline().scan(text),
+            EarDetector::baseline().scan(text),
+        )
     }
 
     fn actor_us() -> ActorContext {
@@ -583,7 +584,8 @@ mod tests {
     #[test]
     fn test_blocked_country_overrides_uncontrolled() {
         let mut cfg = JurisdictionConfig::default();
-        cfg.blocked_countries.insert(CountryCode::new("IR").unwrap());
+        cfg.blocked_countries
+            .insert(CountryCode::new("IR").unwrap());
         let eval = JurisdictionEvaluator::new(cfg);
         let actor = ActorContext {
             country: Some(CountryCode::new("IR").unwrap()),
@@ -593,7 +595,10 @@ mod tests {
         let (i, e) = reports("Tell me about rainfall.");
         let d = eval.evaluate(&i, &e, &actor, &trust_permissive());
         assert_eq!(d.outcome, Outcome::DenyExport);
-        assert_eq!(d.matched_rule.as_deref(), Some("jurisdiction.blocked_country"));
+        assert_eq!(
+            d.matched_rule.as_deref(),
+            Some("jurisdiction.blocked_country")
+        );
     }
 
     #[test]
@@ -777,7 +782,8 @@ mod tests {
     fn test_revoked_check_runs_before_country_block() {
         // Both revoked AND blocked country present — revoked wins.
         let mut cfg = JurisdictionConfig::default();
-        cfg.blocked_countries.insert(CountryCode::new("IR").unwrap());
+        cfg.blocked_countries
+            .insert(CountryCode::new("IR").unwrap());
         let eval = JurisdictionEvaluator::new(cfg);
         let actor = ActorContext {
             country: Some(CountryCode::new("IR").unwrap()),
