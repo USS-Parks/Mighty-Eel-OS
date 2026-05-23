@@ -14,12 +14,12 @@ from typing import TYPE_CHECKING, Any
 
 import httpx
 
-from mai._namespaces import _TRUST_STUB_MESSAGE, TrustNotProvisionedError
 from mai.config import MaiClientConfig
 from mai.errors import MaiError, from_response, from_transport
 from mai.types import (
     AirgapStatusResponse,
     AuditLogResponse,
+    AuditQueryResponse,
     BenchmarkResult,
     ChatCompletionChunk,
     ChatCompletionRequest,
@@ -27,9 +27,13 @@ from mai.types import (
     ChatMessage,
     CompletionRequest,
     CompletionResponse,
+    ComplianceReport,
+    ComplianceReportList,
+    ComplianceStatus,
     EmbeddingRequest,
     EmbeddingResponse,
     ErrorResponse,
+    ExchangeTokenResponse,
     FunctionCallRequest,
     FunctionCallResponse,
     HardwareHealthResponse,
@@ -47,11 +51,6 @@ from mai.types import (
     PowerTransitionRequest,
     PowerTransitionResponse,
     ProfileObject,
-    AuditQueryResponse,
-    ComplianceReport,
-    ComplianceReportList,
-    ComplianceStatus,
-    ExchangeTokenResponse,
     RevocationStatusResponse,
     SchedulerAnomaliesResponse,
     SchedulerMetricsResponse,
@@ -59,7 +58,6 @@ from mai.types import (
     StructuredResponse,
     SystemHealthResponse,
     TrustBundleStatus,
-    TrustClaim,
     TrustClaimsResponse,
     TrustStatusResponse,
     UpdateCheckResponse,
@@ -408,14 +406,21 @@ class AsyncCompliance:
         from_unix_nanos: int,
         to_unix_nanos: int,
         tenant: str | None = None,
-        format: str = "json",
+        report_format: str = "json",
         policy_version: str = "local-dev",
+        **kwargs: Any,
     ) -> ComplianceReport:
+        if "format" in kwargs:
+            report_format = kwargs.pop("format")
+        if kwargs:
+            unexpected = ", ".join(sorted(kwargs))
+            msg = f"Unexpected generate_report keyword(s): {unexpected}"
+            raise TypeError(msg)
         body: dict[str, Any] = {
             "report_type": report_type,
             "from_unix_nanos": from_unix_nanos,
             "to_unix_nanos": to_unix_nanos,
-            "format": format,
+            "format": report_format,
             "policy_version": policy_version,
         }
         if tenant is not None:

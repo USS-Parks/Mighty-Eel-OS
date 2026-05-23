@@ -42,7 +42,6 @@ from mai.types import (
     SchedulerMetricsResponse,
     SystemHealthResponse,
     TrustBundleStatus,
-    TrustClaim,
     TrustClaimsResponse,
     TrustStatusResponse,
     UpdateCheckResponse,
@@ -512,15 +511,22 @@ class Compliance:
         from_unix_nanos: int,
         to_unix_nanos: int,
         tenant: str | None = None,
-        format: str = "json",
+        report_format: str = "json",
         policy_version: str = "local-dev",
+        **kwargs: Any,
     ) -> ComplianceReport:
         """POST /v1/compliance/reports/generate — synchronous generation."""
+        if "format" in kwargs:
+            report_format = kwargs.pop("format")
+        if kwargs:
+            unexpected = ", ".join(sorted(kwargs))
+            msg = f"Unexpected generate_report keyword(s): {unexpected}"
+            raise TypeError(msg)
         body: dict[str, Any] = {
             "report_type": report_type,
             "from_unix_nanos": from_unix_nanos,
             "to_unix_nanos": to_unix_nanos,
-            "format": format,
+            "format": report_format,
             "policy_version": policy_version,
         }
         if tenant is not None:

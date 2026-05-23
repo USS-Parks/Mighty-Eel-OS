@@ -753,7 +753,7 @@ class RevocationStatusResponse(BaseModel):
 class ExchangeTokenResponse(BaseModel):
     """``POST /v1/auth/exchange_token`` envelope."""
     token: str
-    token_type: str = "Bearer"
+    token_type: str = "Bearer"  # noqa: S105 - auth scheme label, not a credential.
     subject_id: str
     tenant_id: str
     scopes: list[str] = Field(default_factory=list)
