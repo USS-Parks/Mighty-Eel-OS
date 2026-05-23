@@ -5,27 +5,22 @@
 //! §6 (Workstream 4) check list. One report → one ID per violation →
 //! one remediation hint per violation.
 //!
-//! Scope (SHIP-02):
+//! Scope (SHIP-02 + SHIP-07 convergence):
 //! - Define [`ProductionReadinessReport`], [`ProductionCheck`],
 //!   [`CheckSeverity`], [`CheckStatus`].
 //! - Implement the config-only checks: anything decidable from the
 //!   profile struct alone.
 //! - Register the runtime-only checks (vault open, audit append round
-//!   trip, trust bundle verify, etc.) with `CheckStatus::Deferred` and
-//!   a note about which later SHIP session closes them. This keeps
-//!   the report shape stable across the hardening lane — adding a
-//!   runtime check later flips its status from Deferred to Pass / Fail
-//!   without renumbering anything.
+//!   trip, trust bundle verify, etc.) with `CheckStatus::Deferred`.
+//!   SHIP-07 convergence adds [`RuntimeChecks`] and
+//!   [`ProductionReadinessReport::evaluate_with_runtime`] so each
+//!   deferred ID flips from Deferred to Pass / Fail when the server
+//!   bootstrap supplies an introspection result.
 //!
-//! Out of scope (SHIP-02):
-//! - Filesystem existence checks (the guard does not stat paths).
-//!   Path-exists / writable / chain-verifies / bundle-loads lands in
-//!   SHIP-03 (vault), SHIP-04 (API audit WAL), SHIP-05 (compliance
-//!   audit sealer), SHIP-06 (trust).
-//! - Wiring into `MaiServer::run` startup. The guard is callable from
-//!   tests and the SHIP-02 CLI subcommand today; the production
-//!   startup hook lands in SHIP-07 alongside the validator binary.
-//! - HTTP endpoint `GET /v1/system/production-readiness` — also SHIP-07.
+//! Out of scope (still):
+//! - HTTP endpoint `GET /v1/system/production-readiness`. The
+//!   standalone `mai-ship-validate` binary and the admin endpoint land
+//!   alongside the packaging workstream.
 //!
 //! Check ID convention:
 //! - `PROD-{AREA}-NNN` where AREA is CONFIG / PATHS / VAULT / AUDIT /
@@ -148,6 +143,51 @@ impl ProductionReadinessReport {
         self.checks.iter().find(|c| c.id.as_str() == id)
     }
 
+    /// Evaluate every registered check against `profile`, then upgrade
+    /// each deferred runtime check using `runtime`. When a runtime
+    /// field is `Some`, the corresponding `PROD-*-100/101` check flips
+    /// from Deferred to Pass or Fail and its message is replaced with
+    /// the supplied detail. Fields left `None` stay Deferred so the
+    /// report still names the gap.
+    ///
+    /// The SHIP-07 convergence wires this into `MaiServer::run()` so
+    /// production startup fails closed on any flipped Critical Fail.
+    pub fn evaluate_with_runtime(profile: &ShipProfile, runtime: &RuntimeChecks) -> Self {
+        let mut report = Self::evaluate(profile);
+        report.apply_runtime(runtime);
+        report
+    }
+
+    /// Mutate an existing report in place by applying `runtime`. Used
+    /// by [`Self::evaluate_with_runtime`] and the SHIP-07 readiness
+    /// endpoint where the config-only pass already ran.
+    pub fn apply_runtime(&mut self, runtime: &RuntimeChecks) {
+        let mut apply = |id: &str, outcome: Option<&RuntimeOutcome>| {
+            let Some(outcome) = outcome else { return };
+            for check in &mut self.checks {
+                if check.id.as_str() != id {
+                    continue;
+                }
+                if check.status != CheckStatus::Deferred {
+                    return;
+                }
+                check.status = if outcome.passed {
+                    CheckStatus::Pass
+                } else {
+                    CheckStatus::Fail
+                };
+                check.message = outcome.detail.clone();
+                return;
+            }
+        };
+        apply("PROD-VAULT-100", runtime.vault_opened.as_ref());
+        apply("PROD-AUDIT-100", runtime.api_audit_wal_ready.as_ref());
+        apply("PROD-AUDIT-101", runtime.compliance_sealer_real.as_ref());
+        apply("PROD-TRUST-100", runtime.trust_bundle_verified.as_ref());
+        apply("PROD-AUTH-100", runtime.auth_keys_nonempty.as_ref());
+        apply("PROD-POLICY-001", runtime.policy_modules_loaded.as_ref());
+    }
+
     /// Render the report in a human-readable form suitable for the
     /// `mai-api validate` CLI default output.
     pub fn render_human(&self) -> String {
@@ -213,6 +253,64 @@ pub struct ReadinessCounts {
     pub fail: usize,
     pub deferred: usize,
     pub skipped: usize,
+}
+
+// ----- Runtime introspection (SHIP-07 convergence) -----------------
+
+/// Runtime introspection results gathered during `MaiServer::run()`
+/// startup, after the SHIP-03/04/05/06 builders have run. Each field
+/// is `None` when the check was not performed; `Some` flips the
+/// corresponding deferred ID to Pass or Fail in the readiness report.
+///
+/// One field per `PROD-*-100/101` deferred check. The mapping is
+/// stable so operators can wire alerts against the IDs without
+/// tracking which SHIP session closed each gap.
+#[derive(Debug, Default, Clone)]
+pub struct RuntimeChecks {
+    /// `PROD-VAULT-100` — vault built without error and the configured
+    /// `vault.root` is reachable.
+    pub vault_opened: Option<RuntimeOutcome>,
+    /// `PROD-AUDIT-100` — [`crate::audit_wal::WalAuditWriter::open`]
+    /// returned and the chain replay verified.
+    pub api_audit_wal_ready: Option<RuntimeOutcome>,
+    /// `PROD-AUDIT-101` — compliance audit log was built with an AEAD
+    /// sealer rather than `NullSealer`.
+    pub compliance_sealer_real: Option<RuntimeOutcome>,
+    /// `PROD-TRUST-100` — trust components built and (in production)
+    /// [`crate::trust_builder::verify_boot_bundle`] succeeded.
+    pub trust_bundle_verified: Option<RuntimeOutcome>,
+    /// `PROD-AUTH-100` — auth key store contains at least one entry.
+    pub auth_keys_nonempty: Option<RuntimeOutcome>,
+    /// `PROD-POLICY-001` — compliance policy modules loaded and the
+    /// composer template built successfully.
+    pub policy_modules_loaded: Option<RuntimeOutcome>,
+}
+
+/// Outcome of a single runtime check. `passed=true` lifts the matching
+/// deferred ID to Pass; `passed=false` lifts it to Fail. The `detail`
+/// string replaces the deferred message so operators see the runtime
+/// reality rather than the registration-time placeholder.
+#[derive(Debug, Clone)]
+pub struct RuntimeOutcome {
+    pub passed: bool,
+    pub detail: String,
+}
+
+impl RuntimeOutcome {
+    /// Convenience constructor for a passing runtime outcome.
+    pub fn pass(detail: impl Into<String>) -> Self {
+        Self {
+            passed: true,
+            detail: detail.into(),
+        }
+    }
+    /// Convenience constructor for a failing runtime outcome.
+    pub fn fail(detail: impl Into<String>) -> Self {
+        Self {
+            passed: false,
+            detail: detail.into(),
+        }
+    }
 }
 
 // ----- Internal: check registration plumbing ------------------------
@@ -1086,5 +1184,124 @@ alerts_enabled = true
         assert!(text.contains("FAIL"));
         assert!(text.contains("PROD-CONFIG-002"));
         assert!(text.contains("Remediation:"));
+    }
+
+    // ----- SHIP-07 convergence: runtime checks -------------------------
+
+    fn all_passing_runtime() -> RuntimeChecks {
+        RuntimeChecks {
+            vault_opened: Some(RuntimeOutcome::pass("ZfsVault opened at /tmp/vault")),
+            api_audit_wal_ready: Some(RuntimeOutcome::pass("WAL opened (0 entries)")),
+            compliance_sealer_real: Some(RuntimeOutcome::pass("AeadSealer wired")),
+            trust_bundle_verified: Some(RuntimeOutcome::pass("bundle v1 verified")),
+            auth_keys_nonempty: Some(RuntimeOutcome::pass("1 key loaded")),
+            policy_modules_loaded: Some(RuntimeOutcome::pass("Standard template loaded")),
+        }
+    }
+
+    #[test]
+    fn runtime_flips_deferred_to_pass() {
+        let profile = parse_ship_profile(baseline_toml()).expect("baseline parses");
+        let runtime = all_passing_runtime();
+        let report = ProductionReadinessReport::evaluate_with_runtime(&profile, &runtime);
+        for id in [
+            "PROD-VAULT-100",
+            "PROD-AUDIT-100",
+            "PROD-AUDIT-101",
+            "PROD-TRUST-100",
+            "PROD-AUTH-100",
+            "PROD-POLICY-001",
+        ] {
+            let c = report.find(id).expect("check present");
+            assert_eq!(
+                c.status,
+                CheckStatus::Pass,
+                "{id} should flip Deferred -> Pass, got {:?} ({})",
+                c.status,
+                c.message
+            );
+        }
+        assert!(report.is_ship_ready());
+        // After flipping every runtime ID, no deferred remain.
+        assert_eq!(report.counts().deferred, 0);
+    }
+
+    #[test]
+    fn runtime_flip_to_fail_blocks_ship_ready() {
+        let profile = parse_ship_profile(baseline_toml()).expect("baseline parses");
+        let runtime = RuntimeChecks {
+            vault_opened: Some(RuntimeOutcome::fail("vault root not writable: EACCES")),
+            ..all_passing_runtime()
+        };
+        let report = ProductionReadinessReport::evaluate_with_runtime(&profile, &runtime);
+        let c = report.find("PROD-VAULT-100").expect("check present");
+        assert_eq!(c.status, CheckStatus::Fail);
+        assert!(c.message.contains("EACCES"));
+        assert!(!report.is_ship_ready());
+    }
+
+    #[test]
+    fn runtime_partial_results_keep_others_deferred() {
+        let profile = parse_ship_profile(baseline_toml()).expect("baseline parses");
+        let runtime = RuntimeChecks {
+            vault_opened: Some(RuntimeOutcome::pass("vault ok")),
+            ..RuntimeChecks::default()
+        };
+        let report = ProductionReadinessReport::evaluate_with_runtime(&profile, &runtime);
+        assert_eq!(
+            report.find("PROD-VAULT-100").unwrap().status,
+            CheckStatus::Pass
+        );
+        for id in [
+            "PROD-AUDIT-100",
+            "PROD-AUDIT-101",
+            "PROD-TRUST-100",
+            "PROD-AUTH-100",
+            "PROD-POLICY-001",
+        ] {
+            assert_eq!(
+                report.find(id).unwrap().status,
+                CheckStatus::Deferred,
+                "{id} should stay Deferred when runtime field is None"
+            );
+        }
+    }
+
+    #[test]
+    fn runtime_does_not_override_config_only_pass() {
+        // PROD-VAULT-001 is a config-only check (already Pass under
+        // baseline). A runtime field for an unrelated ID must not
+        // touch it.
+        let profile = parse_ship_profile(baseline_toml()).expect("baseline parses");
+        let runtime = all_passing_runtime();
+        let report = ProductionReadinessReport::evaluate_with_runtime(&profile, &runtime);
+        assert_eq!(
+            report.find("PROD-VAULT-001").unwrap().status,
+            CheckStatus::Pass
+        );
+    }
+
+    #[test]
+    fn runtime_skipped_under_local_dev_stays_skipped() {
+        // Under local-dev every check is Skipped. Runtime introspection
+        // must never resurrect a Skipped check into Pass/Fail.
+        let mut profile = parse_ship_profile(baseline_toml()).expect("baseline parses");
+        profile.profile.mode = ProfileMode::LocalDev;
+        let runtime = all_passing_runtime();
+        let report = ProductionReadinessReport::evaluate_with_runtime(&profile, &runtime);
+        for id in [
+            "PROD-VAULT-100",
+            "PROD-AUDIT-100",
+            "PROD-AUDIT-101",
+            "PROD-TRUST-100",
+            "PROD-AUTH-100",
+            "PROD-POLICY-001",
+        ] {
+            assert_eq!(
+                report.find(id).unwrap().status,
+                CheckStatus::Skipped,
+                "{id} must stay Skipped under local-dev"
+            );
+        }
     }
 }

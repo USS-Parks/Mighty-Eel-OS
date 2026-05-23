@@ -19,7 +19,7 @@ use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use tokio::net::TcpListener;
 use tokio::signal;
@@ -27,12 +27,20 @@ use tokio::sync::{Mutex, RwLock};
 use tracing::{error, info, warn};
 
 use crate::air_gap::{AirGapChecker, DevSwitchReader};
-use crate::audit::MemoryAuditWriter;
+use crate::audit::{AuditWriter, MemoryAuditWriter};
+use crate::audit_wal::{WalAuditConfig, WalAuditWriter};
 use crate::auth::{self, AuthState};
 use crate::config::{ProductTier, ServerConfig, load_or_default};
 use crate::grpc::server::{GrpcServerConfig, build_grpc_server};
+use crate::production_guard::{ProductionReadinessReport, RuntimeChecks, RuntimeOutcome};
 use crate::routes::build_router;
+use crate::sealer_builder::build_sealer;
+use crate::ship_profile::{ProfileMode, ShipProfile, load_ship_profile};
 use crate::state::AppState;
+use crate::trust_builder::{TrustComponents, build_trust_components, verify_boot_bundle};
+use crate::vault_builder::build_vault;
+
+use mai_compliance::audit::AuditLog as ComplianceAuditLog;
 
 use mai_adapters::config::FrameworkConfig;
 use mai_adapters::manager::AdapterManager;
@@ -89,6 +97,13 @@ pub struct MaiServer {
     config: ServerConfig,
     config_path: Option<std::path::PathBuf>,
     adapter_config_path: Option<PathBuf>,
+    /// SHIP-07: optional ship-profile TOML path. When set (programmatically
+    /// or via the `MAI_SHIP_PROFILE` env var) the server bootstrap uses the
+    /// SHIP-03/04/05/06 builders for vault / audit / sealer / trust and
+    /// runs the production guard before binding sockets. When unset the
+    /// legacy `StubVault` + `MemoryAuditWriter` defaults remain in effect
+    /// for tests and local-dev bring-up.
+    ship_profile_path: Option<PathBuf>,
 }
 
 /// Errors that can occur during server startup.
@@ -117,6 +132,7 @@ impl MaiServer {
             config,
             config_path: Some(path.to_path_buf()),
             adapter_config_path: None,
+            ship_profile_path: None,
         }
     }
 
@@ -126,6 +142,7 @@ impl MaiServer {
             config,
             config_path: None,
             adapter_config_path: None,
+            ship_profile_path: None,
         }
     }
 
@@ -136,6 +153,7 @@ impl MaiServer {
             config,
             config_path: None,
             adapter_config_path: None,
+            ship_profile_path: None,
         }
     }
 
@@ -143,6 +161,15 @@ impl MaiServer {
     #[must_use]
     pub fn with_adapter_config(mut self, path: PathBuf) -> Self {
         self.adapter_config_path = Some(path);
+        self
+    }
+
+    /// Attach a ship-profile TOML so SHIP-03/04/05/06 builders are used
+    /// during bootstrap. Equivalent to setting `MAI_SHIP_PROFILE` in the
+    /// environment; an explicit setter is honoured first.
+    #[must_use]
+    pub fn with_ship_profile(mut self, path: PathBuf) -> Self {
+        self.ship_profile_path = Some(path);
         self
     }
 
@@ -195,13 +222,27 @@ impl MaiServer {
 
         // -- Step 3: Initialize mai-core components--
 
+        // SHIP-07: resolve optional ship profile (programmatic field first,
+        // then MAI_SHIP_PROFILE env var). When present, the SHIP-03..06
+        // builders drive vault / audit / sealer / trust; otherwise the
+        // legacy StubVault + MemoryAuditWriter defaults are kept for
+        // tests and local-dev bring-up.
+        let ship_profile = self.resolve_ship_profile()?;
+
         // Load scheduler, topology, KV, and multi-factor scoring config
         // before publishing the scheduler behind the trait object.
         let scheduler: Arc<dyn mai_scheduler::Scheduler> = Arc::new(build_configured_scheduler());
 
-        // until Session 12 provides the real vault.
-        let vault = StubVault;
-        let registry = ModelRegistry::new(Box::new(vault));
+        // Vault: builder-driven when a ship profile is loaded, StubVault
+        // otherwise so the no-profile bring-up path is unchanged.
+        let vault_box: Box<dyn VaultInterface> = if let Some(profile) = ship_profile.as_ref() {
+            build_vault(profile).map_err(|e| {
+                ServerError::Init(format!("vault builder rejected ship profile: {e}"))
+            })?
+        } else {
+            Box::new(StubVault)
+        };
+        let registry = ModelRegistry::new(vault_box);
         let registry = Arc::new(RwLock::new(registry));
 
         let health = HealthMonitor::new(HealthConfig::default());
@@ -221,7 +262,20 @@ impl MaiServer {
         let hotswap = HotSwapManager::new(legacy_scheduler, registry.clone(), health.clone());
         let hotswap = Arc::new(RwLock::new(hotswap));
 
-        let audit_writer = Arc::new(MemoryAuditWriter::new());
+        // API audit writer: persistent WAL when a ship profile is loaded,
+        // in-memory writer otherwise (test/dev fallback).
+        let audit_writer: Arc<dyn AuditWriter> = if let Some(profile) = ship_profile.as_ref() {
+            let wal_config = WalAuditConfig::for_dir(&profile.audit.wal_dir);
+            let writer = WalAuditWriter::open(wal_config).await.map_err(|e| {
+                ServerError::Init(format!(
+                    "WAL audit writer failed to open at {}: {e}",
+                    profile.audit.wal_dir.display()
+                ))
+            })?;
+            Arc::new(writer)
+        } else {
+            Arc::new(MemoryAuditWriter::new())
+        };
         let config = Arc::new(RwLock::new(self.config.clone()));
 
         // -- Step 3b: Load API key authentication (Session 14c) --
@@ -309,6 +363,7 @@ impl MaiServer {
 
         // -- Step 4: Build shared AppState--
         let metrics_collector = Arc::new(MetricsCollector::new(MetricsConfig::default()));
+        let auth_key_count = auth.key_store.read().await.len();
         let state = AppState::new(
             scheduler,
             registry,
@@ -321,6 +376,38 @@ impl MaiServer {
             adapter_manager.clone(),
             metrics_collector,
         );
+
+        // SHIP-07: when a ship profile is loaded, swap in the
+        // sealer-backed compliance audit log and the real trust
+        // verifier so the demo defaults never reach handlers.
+        let (state, runtime_checks) = match ship_profile.as_ref() {
+            Some(profile) => apply_ship_profile(state, profile, auth_key_count)?,
+            None => (state, RuntimeChecks::default()),
+        };
+
+        // SHIP-07: production guard fails closed before any socket
+        // binds. Runtime-introspection results upgrade the deferred
+        // `PROD-*-100/101` IDs from Deferred to Pass / Fail.
+        if let Some(profile) = ship_profile.as_ref() {
+            let report = ProductionReadinessReport::evaluate_with_runtime(profile, &runtime_checks);
+            if !report.is_ship_ready() {
+                error!(
+                    profile = %profile.profile.name,
+                    "production readiness check failed; refusing to bind sockets"
+                );
+                return Err(ServerError::Init(format!(
+                    "production guard failed:\n{}",
+                    report.render_human()
+                )));
+            }
+            info!(
+                profile = %profile.profile.name,
+                mode = ?profile.profile.mode,
+                pass = report.counts().pass,
+                deferred = report.counts().deferred,
+                "production readiness check passed",
+            );
+        }
 
         info!("All components initialized, building servers");
 
@@ -394,6 +481,129 @@ impl MaiServer {
 
         Ok(())
     }
+}
+
+impl MaiServer {
+    /// Resolve the ship profile if any: programmatic field first, then
+    /// the `MAI_SHIP_PROFILE` environment variable. Returns `Ok(None)`
+    /// when neither is set so the legacy bring-up path stays in force.
+    fn resolve_ship_profile(&self) -> Result<Option<ShipProfile>, ServerError> {
+        let path: Option<PathBuf> = self
+            .ship_profile_path
+            .clone()
+            .or_else(|| std::env::var_os("MAI_SHIP_PROFILE").map(PathBuf::from));
+        let Some(path) = path else {
+            return Ok(None);
+        };
+        info!(path = %path.display(), "Loading ship profile");
+        let profile = load_ship_profile(&path).map_err(|e| {
+            ServerError::Config(format!("ship profile {} did not load: {e}", path.display()))
+        })?;
+        info!(
+            profile = %profile.profile.name,
+            mode = ?profile.profile.mode,
+            "ship profile loaded; production builders active"
+        );
+        Ok(Some(profile))
+    }
+}
+
+/// Build the sealer-backed compliance audit log and trust components,
+/// install them onto `state`, and collect the runtime-introspection
+/// results used by the production guard.
+///
+/// Returns the wired-up state plus the [`RuntimeChecks`] populated for
+/// the configured profile. Failures bubble up as [`ServerError::Init`]
+/// so production startup fails closed.
+fn apply_ship_profile(
+    state: AppState,
+    profile: &ShipProfile,
+    auth_key_count: usize,
+) -> Result<(AppState, RuntimeChecks), ServerError> {
+    let is_production = matches!(profile.profile.mode, ProfileMode::Production);
+
+    // Sealer + compliance audit log.
+    let sealer = build_sealer(profile)
+        .map_err(|e| ServerError::Init(format!("sealer builder rejected ship profile: {e}")))?;
+    let compliance_audit = ComplianceAuditLog::builder().sealer(sealer).build();
+
+    // Trust components: bundle verifier + token-exchange mode.
+    let TrustComponents {
+        bundle_verifier,
+        exchange_mode,
+        anchor_ids,
+    } = build_trust_components(profile)
+        .map_err(|e| ServerError::Init(format!("trust builder rejected ship profile: {e}")))?;
+    info!(
+        anchors = anchor_ids.len(),
+        exchange_mode = exchange_mode.label(),
+        "trust components built"
+    );
+
+    // Boot bundle verification: required in production, skipped for
+    // local-dev where bundles are typically not provisioned during
+    // bring-up.
+    let trust_outcome = if is_production && profile.trust.require_bundle_on_boot {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+        match verify_boot_bundle(profile, bundle_verifier.as_ref(), now) {
+            Ok(version) => RuntimeOutcome::pass(format!(
+                "bundle v{version} verified against {} anchors",
+                anchor_ids.len()
+            )),
+            Err(e) => RuntimeOutcome::fail(format!("boot bundle verify: {e}")),
+        }
+    } else {
+        RuntimeOutcome::pass(format!(
+            "bundle verification not required ({:?})",
+            profile.profile.mode
+        ))
+    };
+
+    // PROD-AUDIT-101: compliance sealer is real (build_sealer rejects
+    // null sealer in production; reaching this point means it is real
+    // for any production profile).
+    let sealer_outcome = RuntimeOutcome::pass(if is_production {
+        "AEAD sealer wired from sealer.key".to_string()
+    } else {
+        "ephemeral AEAD sealer (local-dev)".to_string()
+    });
+
+    let vault_outcome = RuntimeOutcome::pass(format!(
+        "{:?} vault opened at {}",
+        profile.vault.backend,
+        profile.vault.root.display()
+    ));
+
+    let wal_outcome =
+        RuntimeOutcome::pass(format!("WAL opened at {}", profile.audit.wal_dir.display()));
+
+    let auth_outcome = if auth_key_count >= 1 {
+        RuntimeOutcome::pass(format!("{auth_key_count} key(s) loaded"))
+    } else {
+        RuntimeOutcome::fail("auth key store is empty".to_string())
+    };
+
+    // PolicyManager construction is infallible at this point — the
+    // standard template loaded inside AppState::new succeeded.
+    let policy_outcome = RuntimeOutcome::pass("standard policy modules loaded".to_string());
+
+    let state = state
+        .with_compliance_audit(compliance_audit)
+        .with_bundle_verifier(bundle_verifier);
+
+    let runtime = RuntimeChecks {
+        vault_opened: Some(vault_outcome),
+        api_audit_wal_ready: Some(wal_outcome),
+        compliance_sealer_real: Some(sealer_outcome),
+        trust_bundle_verified: Some(trust_outcome),
+        auth_keys_nonempty: Some(auth_outcome),
+        policy_modules_loaded: Some(policy_outcome),
+    };
+
+    Ok((state, runtime))
 }
 
 // -- Auth Loading (Session 14c) --

@@ -72,6 +72,7 @@ pub use config::ServerConfig;
 pub use errors::ApiError;
 pub use production_guard::{
     CheckSeverity, CheckStatus, ProductionCheck, ProductionReadinessReport, ReadinessCounts,
+    RuntimeChecks, RuntimeOutcome,
 };
 pub use sealer_builder::{SealerBuildError, build_sealer, sealer_key_path};
 pub use server::MaiServer;
