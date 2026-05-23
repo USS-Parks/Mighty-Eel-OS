@@ -51,6 +51,7 @@ pub mod jurisdiction;
 pub mod medical_entities;
 pub mod ocap;
 pub mod phi;
+pub mod policy;
 pub mod tech_data;
 pub mod trust;
 pub mod trust_cache;
@@ -80,6 +81,7 @@ pub use ocap::{
     TribalDataDetectorConfig, TribalDataReport, TribalHit, TribalIdentifierKind,
 };
 pub use phi::{PhiConfidence, PhiDetector, PhiDetectorConfig, PhiHit, PhiIdentifier, PhiReport};
+pub use policy::{ClassificationResult, PolicyBundle, PolicyBundleError, RequestMetadata};
 pub use tech_data::{
     HeuristicTechDataClassifier, TechDataAssessment, TechDataClassifier, TechDataConfidence,
     TechDataError, TechDataHit, TechDataSignal,
