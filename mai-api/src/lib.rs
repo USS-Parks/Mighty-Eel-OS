@@ -47,6 +47,9 @@ pub mod audit_wal;
 // SHIP-05: Sealer builder (selects AeadSealer / NullSealer for compliance audit WAL)
 pub mod sealer_builder;
 
+// SHIP-06: Trust builder (selects bundle verifier, loads ML-DSA anchors, picks token-exchange mode)
+pub mod trust_builder;
+
 // Session 11b: REST API Endpoints
 pub mod handlers;
 pub mod routes;
@@ -74,4 +77,8 @@ pub use sealer_builder::{SealerBuildError, build_sealer, sealer_key_path};
 pub use server::MaiServer;
 pub use server::ServerError;
 pub use ship_profile::{ShipProfile, ShipProfileError, load_ship_profile, parse_ship_profile};
+pub use trust_builder::{
+    TrustBuildError, TrustComponents, TrustExchangeMode, boot_bundle_path, build_trust_components,
+    verify_boot_bundle,
+};
 pub use vault_builder::{VaultBuildError, build_vault};

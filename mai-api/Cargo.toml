@@ -65,6 +65,10 @@ mockall = { workspace = true }
 reqwest = { version = "0.12", features = ["json"] }
 # SHIP-03: tempdir-backed vault root for vault_builder integration tests.
 tempfile = "3"
+# SHIP-06: ML-DSA-87 key generation + signing inside trust_production.rs so
+# the test bundle is verifiable by the same MlDsaBundleVerifier path the
+# production builder constructs. Version pinned to match mai-compliance.
+ml-dsa = "0.0.4"
 
 [lints]
 workspace = true

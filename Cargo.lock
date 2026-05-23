@@ -1605,6 +1605,7 @@ dependencies = [
  "mai-hil",
  "mai-scheduler",
  "mai-vault",
+ "ml-dsa",
  "mockall",
  "notify",
  "pin-project-lite",
