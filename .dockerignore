@@ -1,0 +1,57 @@
+# Docker build context exclusions
+# Keep the build context as small as possible — every file under mai/
+# is sent to the Docker daemon unless excluded here.
+
+# Rust build artifacts
+target/
+
+# Python caches and venvs
+__pycache__/
+*.py[cod]
+*.egg-info/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.venv/
+venv/
+
+# Node (MCP integrity server) — not shipped in the runtime image
+.integrity/mcp-server/node_modules/
+
+# Git metadata
+.git/
+.gitignore
+.gitattributes
+.githooks/
+
+# IDE and editor noise
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS metadata
+.DS_Store
+Thumbs.db
+
+# Local env (developer secrets must never enter the image)
+.env
+
+# Logs
+*.log
+
+# Documentation and test evidence are not needed in the runtime image
+docs/
+test-evidence/
+tests/burn-in/results/
+tests/benchmarks/results/
+results/
+
+# Everything Markdown except the project README and the LOCK-FILE-POLICY
+# (the policy doc is useful for image inspectors)
+*.md
+!README.md
+!docs/LOCK-FILE-POLICY.md
+
+# Sandbox glitch artefacts (see mai/.gitignore)
+.integrity/scripts/c *
