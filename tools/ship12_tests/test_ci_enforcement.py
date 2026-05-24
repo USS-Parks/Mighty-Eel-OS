@@ -8,7 +8,6 @@ SHIP-16 cleanup. These tests freeze that intent.
 
 from __future__ import annotations
 
-import sys
 import tomllib
 from pathlib import Path
 
@@ -27,10 +26,7 @@ def ci_yaml() -> dict:
 
 @pytest.fixture(scope="module")
 def pyproject() -> dict:
-    if sys.version_info < (3, 11):  # pragma: no cover
-        import tomli as _toml
-    else:
-        _toml = tomllib
+    _toml = tomllib
     return _toml.loads(PYPROJECT.read_text(encoding="utf-8"))
 
 

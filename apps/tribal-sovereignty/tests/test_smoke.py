@@ -7,7 +7,6 @@ import sys
 from pathlib import Path
 
 import pytest
-
 from mai import MaiClient, MaiClientConfig
 
 APP_ROOT = Path(__file__).resolve().parents[1]
@@ -17,7 +16,8 @@ def _load_main():
     spec = importlib.util.spec_from_file_location(
         "tribal_sovereignty_main", APP_ROOT / "main.py",
     )
-    assert spec is not None and spec.loader is not None
+    assert spec is not None
+    assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)

@@ -45,7 +45,70 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"**/tests/**/*.py" = ["S101"]
+# Test code: assert is the whole point; subprocess + hardcoded tokens
+# + composite asserts are routine. These suppressions parallel the
+# bandit [tool.bandit] block; see those comments for the rationale on
+# each rule ID.
+"**/tests/**/*.py" = [
+    "S101",   # assert — pytest convention
+    "S105",   # hardcoded password — test fixtures, header names
+    "S603",   # subprocess without shell — invoking known binaries
+    "S607",   # partial path — uses PATH lookup intentionally
+    "S311",   # random not for security — non-crypto test IDs
+    "PLW1510",  # subprocess.run without check — diagnostic, want raw rc
+    "ANN202", # missing return type on private helper
+    "ARG001", # unused fixture argument (pytest pattern)
+    "ARG002", # unused method argument (pytest fixtures override)
+    "PT018",  # composite assert — fine in tests
+    "PT017",  # assertion in except — fine for narrow diagnostics
+    "PT011",  # pytest.raises too broad — fine when exception type is
+              # the only contract under test
+    "N814",   # CamelCase imported as constant — test alias pattern
+              # (`from collections.abc import Callable as _C`)
+]
+
+# Tools: scanner / packaging / burn-in scripts shell out to known
+# binaries, contain long literal strings (rule descriptions, JSON
+# snapshots, regex patterns) that exceed 100 cols by design, and
+# carry their own non-pytest test trees that legitimately call
+# subprocess / random.
+"tools/**/*.py" = [
+    "E501",   # long literal strings + rule descriptions
+    "S603", "S607", "S311", "S105", "S104", "PLW1510",
+    "ANN202", "ARG001", "ARG002", "PLW2901",
+    "B007", "B905", "C416", "F841", "PERF102",
+    "PLR0912", "PLR0915", "PLW3301", "PT006", "PT011", "PT017", "PT018",
+    "RET504", "RUF007", "RUF034", "SIM102", "SIM110", "UP036",
+]
+
+# Top-level tests/ that aren't pytest test files (benchmarks, sdk
+# integration scaffolds). Same rationale as tools/, narrower set.
+"tests/**/*.py" = [
+    "S603", "S607", "PLW1510",
+    "ANN202", "ARG001", "ARG002",
+    "PLR0912", "PLR0915", "PT017", "PT018",
+]
+
+# Application directories use hyphenated names (apps/rag-reference,
+# apps/openbao-trust-demo, compliance-dashboard, mai-sdk-python). Each
+# app is a standalone unit, not imported as a Python module, so ruff's
+# N999 ("invalid module name") is wrong about all of them.
+"apps/*/__init__.py" = ["N999", "E501"]
+"apps/*/tests/__init__.py" = ["N999"]
+"compliance-dashboard/__init__.py" = ["N999"]
+"compliance-dashboard/tests/__init__.py" = ["N999"]
+"mai-sdk-python/__init__.py" = ["N999"]
+"mai-sdk-python/tests/__init__.py" = ["N999"]
+
+# compliance-dashboard/util.py declares header-name constants
+# (`AUTH_TOKEN_HEADER = "X-IM-Auth-Token"`, env-var names) that ruff
+# misreads as hardcoded passwords. Real secret detection runs through
+# gitleaks + detect-secrets.
+"compliance-dashboard/util.py" = ["S105"]
+
+# Top-level scripts/ contain operator-facing shell glue with long
+# heredoc-style literals.
+"scripts/**/*.py" = ["E501"]
 
 [tool.mypy]
 python_version = "3.12"
@@ -96,8 +159,42 @@ disable_error_code = [
     "arg-type",
 ]
 
+[tool.bandit]
+# J-10b: scope bandit to actionable signal. The skipped IDs are each
+# either policy choices (stdlib-only urllib, asserts-as-invariants) or
+# inherent to a tool tree that must shell out (subprocess in tools/).
+# Real findings (B608 HTML/SQL false-positive, B104 negative-assertion
+# test) carry explicit `# nosec` annotations at the call site.
+#
+# - B101 (assert_used): asserts are used pervasively for invariants
+#   and tests; bandit cannot tell test from prod. Real prod secrets
+#   are caught by gitleaks/detect-secrets.
+# - B105 (hardcoded_password_string): pattern flags header names like
+#   "X-IM-Auth-Token" and test fixture tokens. Real secrets are
+#   covered by gitleaks/detect-secrets, not bandit.
+# - B310 (urllib_urlopen): stdlib-only HTTP is the air-gap policy
+#   per ARCHITECTURE.md; pulling `requests` is a regression.
+# - B311 (random_not_for_security): used for non-crypto IDs in tests
+#   and tools. Crypto code uses `secrets` / OS rng explicitly.
+# - B404 (import_subprocess): tooling pre-flag for B603/B607; not a
+#   finding on its own.
+# - B603 (subprocess_without_shell): tools/ shells out to known
+#   binaries (cargo, python, pytest, etc.) with full argv arrays.
+# - B607 (start_process_with_partial_path): same as B603; PATH-based
+#   resolution is intentional in tooling scripts.
+exclude_dirs = ["target", "results", ".git", ".integrity/mcp-server/node_modules"]
+skips = ["B101", "B105", "B310", "B311", "B404", "B603", "B607"]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+# J-10b: `tests` is a package name shared across mai-sdk-python/tests/,
+# apps/*/tests/, compliance-dashboard/tests/, tests/integrity/, and
+# tests/e2e/. Under the classic prepend-import-mode pytest hits a
+# ModuleNotFoundError on the second `tests.test_<x>` it tries to import.
+# `importlib` mode resolves each test file by absolute path and never
+# constructs a synthetic top-level `tests` package, so the collision
+# disappears and `pytest -q --ignore=target` collects the whole tree.
+addopts = "--import-mode=importlib"
 markers = [
     "integration: requires real MAI instance",
     "e2e: spawns the real mai-api binary as a subprocess (J-10)",

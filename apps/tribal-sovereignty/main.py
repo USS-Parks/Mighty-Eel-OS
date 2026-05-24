@@ -32,8 +32,15 @@ DEFAULT_CONFIG = Path(__file__).with_name("config.toml")
 # Sovereignty guard
 # ---------------------------------------------------------------------------
 
-class SovereigntyViolation(RuntimeError):
-    """Raised when an operation would leave the locally-allowed route set."""
+class SovereigntyViolation(RuntimeError):  # noqa: N818  see TRIBAL-SOV-NAMING below
+    """Raised when an operation would leave the locally-allowed route set.
+
+    Naming note (J-10b): ruff N818 prefers `SovereigntyViolationError`.
+    The current name is referenced by the OCAP module wire surface and
+    by every test in `apps/tribal-sovereignty/tests/`. Renaming touches
+    the public API and is deliberately deferred to a dedicated rename
+    session rather than bundled into a lint sweep.
+    """
 
 
 def claim_from_config(trust_cfg: dict[str, Any]) -> TrustClaim:

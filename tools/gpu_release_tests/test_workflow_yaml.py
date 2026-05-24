@@ -10,7 +10,6 @@ Validates structural invariants the workflow contract relies on:
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
 import pytest
@@ -91,7 +90,8 @@ def test_triggers_cover_tags_dispatch_schedule(workflow_yaml: dict) -> None:
     assert "schedule" in triggers
     # Tag-triggered release path is the headline use case.
     push = triggers["push"]
-    assert "tags" in push and any(t.startswith("v") for t in push["tags"])
+    assert "tags" in push
+    assert any(t.startswith("v") for t in push["tags"])
 
 
 def test_workflow_runs_threshold_gate(workflow_text: str) -> None:

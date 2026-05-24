@@ -43,7 +43,7 @@ Secrets should not be committed to source.
 
 - `compliance-dashboard/util.py:21 ENV_API_TOKEN = "MAI_DASHBOARD_API_TOKEN"`
 - `compliance-dashboard/util.py:22 ENV_ADMIN_TOKEN = "MAI_DASHBOARD_ADMIN_TOKEN"`
-- `tests/sdk_integration.py:72 api_key="im-this-key-does-not-exist-at-all",`
+- `tests/sdk_integration.py:71 api_key="im-this-key-does-not-exist-at-all",`
 
 ### SEC-009 Math.random() in security-sensitive context (HIGH)
 
@@ -52,7 +52,7 @@ Origin: `john-finding`
 
 Use cryptographically secure random generation.
 
-- `tools/local_gitdoctor_tests/test_local_gitdoctor_scan.py:28 return Math.random().toString(36);`
+- `tools/local_gitdoctor_tests/test_local_gitdoctor_scan.py:27 return Math.random().toString(36);`
 
 ### SEC-016 State-changing GET routes (MEDIUM)
 
@@ -361,18 +361,18 @@ Origin: `review-integrity`
 
 Assertions should validate outcomes rather than merely confirming execution.
 
-- `apps/compliance-routed/tests/test_integration.py:22 assert spec is not None and spec.loader is not None`
-- `apps/compliance-routed/tests/test_smoke.py:22 assert spec is not None and spec.loader is not None`
-- `apps/local-secure-inference/tests/test_integration.py:23 assert spec is not None and spec.loader is not None`
-- `apps/local-secure-inference/tests/test_smoke.py:25 assert spec is not None and spec.loader is not None`
-- `apps/openbao-trust-demo/tests/test_integration.py:24 assert spec is not None and spec.loader is not None`
-- `apps/openbao-trust-demo/tests/test_smoke.py:24 assert spec is not None and spec.loader is not None`
-- `apps/operator/tests/test_integration.py:23 assert spec is not None and spec.loader is not None`
-- `apps/operator/tests/test_smoke.py:23 assert spec is not None and spec.loader is not None`
-- `apps/rag-reference/tests/test_integration.py:23 assert spec is not None and spec.loader is not None`
-- `apps/rag-reference/tests/test_smoke.py:24 assert spec is not None and spec.loader is not None`
-- `apps/tribal-sovereignty/tests/test_integration.py:23 assert spec is not None and spec.loader is not None`
-- `apps/tribal-sovereignty/tests/test_smoke.py:20 assert spec is not None and spec.loader is not None`
+- `apps/compliance-routed/tests/test_integration.py:21 assert spec is not None`
+- `apps/compliance-routed/tests/test_smoke.py:19 assert spec is not None`
+- `apps/local-secure-inference/tests/test_integration.py:22 assert spec is not None`
+- `apps/local-secure-inference/tests/test_smoke.py:24 assert spec is not None`
+- `apps/openbao-trust-demo/tests/test_integration.py:23 assert spec is not None`
+- `apps/openbao-trust-demo/tests/test_smoke.py:23 assert spec is not None`
+- `apps/operator/tests/test_integration.py:22 assert spec is not None`
+- `apps/operator/tests/test_smoke.py:22 assert spec is not None`
+- `apps/rag-reference/tests/test_integration.py:22 assert spec is not None`
+- `apps/rag-reference/tests/test_smoke.py:23 assert spec is not None`
+- `apps/tribal-sovereignty/tests/test_integration.py:22 assert spec is not None`
+- `apps/tribal-sovereignty/tests/test_smoke.py:19 assert spec is not None`
 
 ### REV-007 Duplicated boilerplate blocks (LOW)
 

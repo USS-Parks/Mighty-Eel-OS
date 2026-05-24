@@ -15,8 +15,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SH = REPO_ROOT / "scripts" / "build-package.sh"
 PS = REPO_ROOT / "scripts" / "build-package.ps1"
@@ -102,5 +100,6 @@ def test_sh_refuses_to_proceed_on_validator_failure() -> None:
     # The validator block must exit 2 on failure - this is the documented
     # contract for downstream CI to differentiate validator failure from
     # other build errors.
-    assert "die " in body and "production guard rejected" in body
+    assert "die " in body
+    assert "production guard rejected" in body
     assert " 2" in body

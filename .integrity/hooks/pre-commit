@@ -55,9 +55,15 @@ for FILE in $STAGED_FILES; do
         fi
     fi
 
-    # CHECK 3: Bracket balance for code files
+    # CHECK 3: Bracket balance for code files. JSON is EXCLUDED here
+    # (J-10b): the grep -o heuristic false-positived on large scan-
+    # output JSON files whose nested-object braces, when fed through
+    # bash pipes, did not match the char-level count visible in the
+    # working tree. CHECK 4 below replaces that with a real
+    # json.load() parse for JSON files, which is what actually proves
+    # the structural integrity of those files.
     case "$FILE" in
-        *.rs|*.py|*.js|*.ts|*.json)
+        *.rs|*.py|*.js|*.ts)
             OPEN=$(printf '%s' "$STAGED_CONTENT" | grep -o '{' | wc -l || true)
             CLOSE=$(printf '%s' "$STAGED_CONTENT" | grep -o '}' | wc -l || true)
             DELTA=$((OPEN - CLOSE))
@@ -69,12 +75,24 @@ for FILE in $STAGED_FILES; do
             ;;
     esac
 
-    # CHECK 4: Python syntax check
+    # CHECK 4: Python syntax check + JSON parse check.
     case "$FILE" in
         *.py)
             if command -v python3 &>/dev/null; then
                 if ! printf '%s' "$STAGED_CONTENT" | python3 -c "import sys, ast; ast.parse(sys.stdin.read())" 2>/dev/null; then
                     echo -e "${RED}BLOCKED${NC} [syntax-error] $FILE"
+                    ERRORS=$((ERRORS + 1))
+                fi
+            fi
+            ;;
+        *.json)
+            # J-10b: structural integrity for JSON is "does it parse",
+            # not "do the brace counts match" (string contents in JSON
+            # can legitimately throw off naive char counts). Skip when
+            # python is unavailable rather than false-positive.
+            if command -v python3 &>/dev/null; then
+                if ! printf '%s' "$STAGED_CONTENT" | python3 -c "import json, sys; json.load(sys.stdin)" 2>/dev/null; then
+                    echo -e "${RED}BLOCKED${NC} [malformed-json] $FILE"
                     ERRORS=$((ERRORS + 1))
                 fi
             fi

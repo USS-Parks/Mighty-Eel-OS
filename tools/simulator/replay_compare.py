@@ -23,16 +23,16 @@ from typing import Any
 # Allow running as a script from tools/simulator/ without packaging it.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from engine import SimEngine, SimulationEvent  # noqa: E402
-from gpu import GpuModel  # noqa: E402
-from kv_policy import (  # noqa: E402
+from engine import SimEngine, SimulationEvent
+from gpu import GpuModel
+from kv_policy import (
     BatchAwareKvManager,
     HeuristicScoredKvManager,
     LruKvManager,
     SizeBasedKvManager,
 )
-from metrics import MetricsCollector  # noqa: E402
-from trace_generator import TraceGenerator  # noqa: E402
+from metrics import MetricsCollector
+from trace_generator import TraceGenerator
 
 KV_POLICIES = {
     "lru": LruKvManager,
@@ -72,7 +72,7 @@ def run_trace_replay(
 
     trace_gen = TraceGenerator(trace_path, time_scale=time_scale)
     if sim_time is None:
-        offsets = trace_gen._offsets  # noqa: SLF001 - reading internal for sizing
+        offsets = trace_gen._offsets
         sim_time = max(offsets) + 1.0 if offsets else 1.0
 
     metrics = MetricsCollector()

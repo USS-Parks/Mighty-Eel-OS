@@ -105,10 +105,10 @@ def template_label(report_type: str) -> str:
 __all__ = [
     "FORMAT_CHOICES",
     "FORMAT_KEYS",
-    "GenerateForm",
-    "ReportSummary",
     "TEMPLATE_CHOICES",
     "TEMPLATE_KEYS",
+    "GenerateForm",
+    "ReportSummary",
     "summarise",
     "template_label",
 ]

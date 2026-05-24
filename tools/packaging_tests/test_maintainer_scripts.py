@@ -123,7 +123,8 @@ def test_postremove_warns_about_purge_in_default_branch() -> None:
 
 def test_mai_ship_validate_wrapper_delegates_to_mai_api() -> None:
     body = _read("mai-ship-validate.sh")
-    assert "exec" in body and "validate" in body
+    assert "exec" in body
+    assert "validate" in body
     assert "MAI_API_BIN" in body
 
 

@@ -113,12 +113,12 @@ def flatten_rows(rows: list[AuditRow]) -> list[AuditDisplayRow]:
 
 
 __all__ = [
-    "AuditDisplayRow",
-    "AuditFilter",
     "DEFAULT_PAGE_SIZE",
     "KNOWN_DECISIONS",
     "KNOWN_MODULES",
     "MAX_PAGE_SIZE",
+    "AuditDisplayRow",
+    "AuditFilter",
     "clamp_limit",
     "flatten_row",
     "flatten_rows",

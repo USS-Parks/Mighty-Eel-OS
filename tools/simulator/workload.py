@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 import random
 from typing import Protocol
 
@@ -33,7 +34,7 @@ class ChatWorkload:
             if progress >= self.session_length_mean + self.session_length_std:
                 del self._active_sessions[session_id]
                 return None
-        remaining = max(1, int(self.session_length_mean - progress))
+        max(1, int(self.session_length_mean - progress))
         self._active_sessions[session_id] = progress + 1
         prompt_tokens = max(10, int(rng.gauss(self.prompt_tokens_mean, self.prompt_tokens_std)))
         max_tokens = max(10, int(rng.gauss(self.max_tokens_mean, self.max_tokens_std)))

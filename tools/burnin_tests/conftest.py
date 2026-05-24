@@ -25,21 +25,21 @@ posix_only = pytest.mark.skipif(
 )
 
 
-@pytest.fixture()
+@pytest.fixture
 def repo_root() -> Path:
     return REPO_ROOT
 
 
-@pytest.fixture()
+@pytest.fixture
 def bash_driver() -> Path:
     return BASH_DRIVER
 
 
-@pytest.fixture()
+@pytest.fixture
 def ps1_driver() -> Path:
     return PS1_DRIVER
 
 
-@pytest.fixture()
+@pytest.fixture
 def signer() -> Path:
     return SIGNER

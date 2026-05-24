@@ -20,8 +20,6 @@ import sys
 from pathlib import Path
 from textwrap import dedent
 
-import pytest
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BENCH_COMPARE = REPO_ROOT / "tests" / "benchmarks" / "bench_compare.py"
 RESULTS_DIR = REPO_ROOT / "tests" / "benchmarks" / "results"
@@ -170,7 +168,7 @@ def test_gate_regression_pct_override(tmp_path: Path) -> None:
 
 
 def test_gate_config_error_on_missing_thresholds(tmp_path: Path) -> None:
-    runs = [{"results": [_result("alpha", 100), _result("beta", 100)]}]
+    [{"results": [_result("alpha", 100), _result("beta", 100)]}]
     argv = [
         sys.executable,
         str(BENCH_COMPARE),

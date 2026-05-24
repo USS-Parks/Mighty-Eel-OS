@@ -5,7 +5,6 @@ import json
 import sys
 from pathlib import Path
 
-
 MODULE_PATH = Path(__file__).resolve().parents[1] / "local_gitdoctor_scan.py"
 SPEC = importlib.util.spec_from_file_location("local_gitdoctor_scan", MODULE_PATH)
 assert SPEC is not None

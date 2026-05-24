@@ -57,7 +57,7 @@ def render_markdown(comparison: dict) -> str:
     keys = [key for key, _ in REPORT_COLUMNS]
     lines.append("| " + " | ".join(headers) + " |")
     lines.append("|" + "|".join(["---"] * len(headers)) + "|")
-    for _policy_name, report in policies.items():
+    for report in policies.values():
         row = [_fmt(report.get(key, "")) for key in keys]
         lines.append("| " + " | ".join(row) + " |")
     lines.append("")

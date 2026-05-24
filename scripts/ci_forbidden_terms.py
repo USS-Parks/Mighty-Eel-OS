@@ -25,7 +25,6 @@ import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_CONFIG = REPO_ROOT / "config" / "forbidden-terms.toml"
 

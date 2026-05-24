@@ -18,13 +18,13 @@ These probes use mature local tools when installed. `SKIPPED` means the tool was
 | IND-RS-001 | Rust | PASS | cargo check workspace |
 | IND-RS-002 | Rust | PASS | cargo clippy workspace |
 | IND-RS-003 | Rust | PASS | cargo test workspace |
-| IND-RS-004 | Rust | FAIL | cargo audit |
-| IND-RS-005 | Rust | FAIL | cargo deny |
-| IND-PY-001 | Python | FAIL | pytest repository tests |
-| IND-PY-002 | Python | FAIL | ruff lint |
-| IND-PY-003 | Python | FAIL | bandit security scan |
+| IND-RS-004 | Rust | PASS | cargo audit |
+| IND-RS-005 | Rust | PASS | cargo deny |
+| IND-PY-001 | Python | PASS | pytest repository tests |
+| IND-PY-002 | Python | PASS | ruff lint |
+| IND-PY-003 | Python | PASS | bandit security scan |
 | IND-PY-004 | Python | FAIL | pip-audit dependency scan |
-| IND-SEC-001 | Secrets | FAIL | gitleaks secret scan |
+| IND-SEC-001 | Secrets | PASS | gitleaks secret scan |
 | IND-SEC-002 | Secrets | PASS | detect-secrets scan |
 | IND-DOC-001 | Docker | SKIPPED | hadolint Dockerfile scan |
 | IND-CPLX-001 | Complexity | PASS | tokei line-count scan |
@@ -49,7 +49,7 @@ Exit code: `0`
 
 ```text
 ....                                                                     [100%]
-4 passed in 0.50s
+4 passed in 0.36s
 ```
 
 ### IND-RS-001 cargo check workspace
@@ -61,7 +61,7 @@ Command: `cargo check --workspace`
 Exit code: `0`
 
 ```text
-Finished `dev` profile [unoptimized + debuginfo] target(s) in 10.02s
+Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.34s
 ```
 
 ### IND-RS-002 cargo clippy workspace
@@ -73,7 +73,7 @@ Command: `cargo clippy --workspace -- -D warnings -A clippy::pedantic`
 Exit code: `0`
 
 ```text
-Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.75s
+Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.56s
 ```
 
 ### IND-RS-003 cargo test workspace
@@ -142,411 +142,247 @@ _pipeline_test-6010627a34f4d738.exe)
 
 Layer: `independent-implementation`
 Toolchain: `Rust`
-Status: `FAIL`
+Status: `PASS`
 Command: `cargo audit`
-Exit code: `1`
+Exit code: `0`
 
 ```text
-Crate:     ml-dsa
-Version:   0.0.4
-Title:     Timing side-channel in ML-DSA decomposition
-Date:      2025-12-12
-ID:        RUSTSEC-2025-0144
-URL:       https://github.com/RustCrypto/signatures/security/advisories/GHSA-hcp2-x6j4-29j7
-Severity:  6.4 (medium)
-Solution:  Upgrade to >=0.1.0-rc.3
-Dependency tree:
-ml-dsa 0.0.4
-├── mai-vault 0.1.0
-│   └── mai-api 0.1.0
-├── mai-compliance 0.1.0
-│   └── mai-api 0.1.0
-├── mai-api 0.1.0
-└── mai-admin 0.1.0
-
-Crate:     instant
-Version:   0.1.13
-Warning:   unmaintained
-Title:     `instant` is unmaintained
-Date:      2024-09-01
-ID:        RUSTSEC-2024-0384
-URL:       https://rustsec.org/advisories/RUSTSEC-2024-0384
-Dependency tree:
-instant 0.1.13
-└── notify-types 1.0.1
-    └── notify 7.0.0
-        └── mai-api 0.1.0
-
-Crate:     paste
-Version:   1.0.15
-Warning:   unmaintained
-Title:     paste - no longer maintained
-Date:      2024-10-07
-ID:        RUSTSEC-2024-0436
-URL:       https://rustsec.org/advisories/RUSTSEC-2024-0436
-Dependency tree:
-paste 1.0.15
-└── pqcrypto-mldsa 0.1.2
-    └── mai-vault 0.1.0
-        └── mai-api 0.1.0
-
-
-    Fetching advisory database from `https://github.com/RustSec/advisory-db.git`
+Fetching advisory database from `https://github.com/RustSec/advisory-db.git`
       Loaded 1098 security advisories (from C:\Users\17076\.cargo\advisory-db)
     Updating crates.io index
     Scanning Cargo.lock for vulnerabilities (390 crate dependencies)
-error: 1 vulnerability found!
-warning: 2 allowed warnings found
 ```
 
 ### IND-RS-005 cargo deny
 
 Layer: `independent-implementation`
 Toolchain: `Rust`
-Status: `FAIL`
+Status: `PASS`
 Command: `cargo deny check`
-Exit code: `5`
+Exit code: `0`
 
 ```text
-         │   ├── mai-compliance v0.1.0 (*)
-         │   ├── mai-pkg-builder v0.1.0
-         │   ├── mai-scheduler v0.1.0
-         │   │   └── mai-api v0.1.0 (*)
-         │   └── mai-vault v0.1.0
-         │       └── mai-api v0.1.0 (*)
-         ├── mai-hil v0.1.0
-         │   ├── mai-adapters v0.1.0 (*)
-         │   ├── mai-api v0.1.0 (*)
-         │   └── mai-core v0.1.0 (*)
-         ├── mai-pkg-builder v0.1.0 (*)
-         ├── mai-router v0.1.0
-         │   └── rule-tester v0.1.0
-         ├── mai-scheduler v0.1.0 (*)
-         ├── mai-sdk-rs v0.1.0
-         ├── mai-vault v0.1.0 (*)
-         ├── reqwest v0.12.28
-         │   └── (dev) mai-api v0.1.0 (*)
-         └── tracing-subscriber v0.3.23
-             ├── mai-admin v0.1.0 (*)
-             ├── mai-api v0.1.0 (*)
-             └── mai-pkg-builder v0.1.0 (*)
-
-error[unmaintained]: `instant` is unmaintained
-    ┌─ C:\Users\17076\Documents\Claude\Island Mountain Mighty Eel OS\mai/Cargo.lock:123:1
-    │
-123 │ instant 0.1.13 registry+https://github.com/rust-lang/crates.io-index
-    │ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ unmaintained advisory detected
-    │
-    ├ ID: RUSTSEC-2024-0384
-    ├ Advisory: https://rustsec.org/advisories/RUSTSEC-2024-0384
-    ├ This crate is no longer maintained, and the author recommends using the maintained [`web-time`] crate instead.
-      
-      [`web-time`]: https://crates.io/crates/web-time
-    ├ Solution: No safe upgrade is available!
-    ├ instant v0.1.13
-      └── notify-types v1.0.1
-          └── notify v7.0.0
-              └── mai-api v0.1.0
-
-error[vulnerability]: Timing side-channel in ML-DSA decomposition
-    ┌─ C:\Users\17076\Documents\Claude\Island Mountain Mighty Eel OS\mai/Cargo.lock:157:1
-    │
-157 │ ml-dsa 0.0.4 registry+https://github.com/rust-lang/crates.io-index
-    │ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ security vulnerability detected
-    │
-    ├ ID: RUSTSEC-2025-0144
-    ├ Advisory: https://rustsec.org/advisories/RUSTSEC-2025-0144
-    ├ ### Summary
-      
-      A timing side-channel was discovered in the Decompose algorithm which is used during ML-DSA signing to generate hints for the signature.
-      
-      ### Details
-      
-      The analysis was performed using a constant-time analyzer that examines compiled assembly code for instructions with data-dependent timing behavior. The analyzer flags:
-      
-      - **UDIV/SDIV instructions**: Hardware division instructions have early termination optimizations where execution time depends on operand values.
-      
-      The `decompose` function used a hardware division instruction to compute `r1.0 / TwoGamma2::U32`. This function is called during signing through `high_bits()` and `low_bits()`, which process values derived from secret key components:
-      
-      - `(&w - &cs2).low_bits()` where `cs2` is derived from secret key component `s2`
-      - `Hint::new()` calls `high_bits()` on values derived from secret key component `t0`
-      
-      **Original Code**:
-      ```rust
-      fn decompose<TwoGamma2: Unsigned>(self) -> (Elem, Elem) {
-          // ...
-          let mut r1 = r_plus - r0;
-          r1.0 /= TwoGamma2::U32;  // Variable-time division on secret-derived data
-          (r1, r0)
-      }
-      ```
-      
-      ### Impact
-      
-      The dividend (`r1.0`) is derived from secret key material. An attacker with precise timing measurements could extract information about the signing key by observing timing variations in the division operation.
-      
-      ### Mitigation
-      
-      Integer division was replaced with a constant-time Barrett reduction.
-    ├ Announcement: https://github.com/RustCrypto/signatures/security/advisories/GHSA-hcp2-x6j4-29j7
-    ├ Solution: Upgrade to >=0.1.0-rc.3 (try `cargo update -p ml-dsa`)
-    ├ ml-dsa v0.0.4
-      ├── mai-admin v0.1.0
-      ├── (dev) mai-api v0.1.0
-      ├── mai-compliance v0.1.0
-      │   └── mai-api v0.1.0 (*)
-      └── mai-vault v0.1.0
-          └── mai-api v0.1.0 (*)
+321 │ │ wit-bindgen 0.57.1 registry+https://github.com/rust-lang/crates.io-index
+    │ ╰────────────────────────────────────────────────────────────────────────┘ lock entries
+    │  
+    ├ wit-bindgen v0.51.0
+      └── wasip3 v0.4.0+wasi-0.3.0-rc-2026-01-06
+          └── getrandom v0.4.2
+              ├── tempfile v3.27.0
+              │   ├── (dev) mai-admin v0.1.0
+              │   ├── (dev) mai-api v0.1.0
+              │   ├── (dev) mai-vault v0.1.0
+              │   │   └── mai-api v0.1.0 (*)
+              │   ├── native-tls v0.2.18
+              │   │   ├── hyper-tls v0.6.0
+              │   │   │   └── reqwest v0.12.28
+              │   │   │       └── (dev) mai-api v0.1.0 (*)
+              │   │   ├── reqwest v0.12.28 (*)
+              │   │   └── tokio-native-tls v0.3.1
+              │   │       ├── hyper-tls v0.6.0 (*)
+              │   │       └── reqwest v0.12.28 (*)
+              │   └── prost-build v0.13.5
+              │       ├── (build) mai-api v0.1.0 (*)
+              │       └── tonic-build v0.12.3
+              │           └── (build) mai-api v0.1.0 (*)
+              └── uuid v1.23.1
+                  ├── mai-adapters v0.1.0
+                  │   └── mai-api v0.1.0 (*)
+                  ├── mai-agent v0.1.0
+                  ├── mai-api v0.1.0 (*)
+                  ├── mai-core v0.1.0
+                  │   ├── mai-adapters v0.1.0 (*)
+                  │   ├── mai-agent v0.1.0 (*)
+                  │   ├── mai-api v0.1.0 (*)
+                  │   ├── mai-compliance v0.1.0
+                  │   │   └── mai-api v0.1.0 (*)
+                  │   ├── mai-pkg-builder v0.1.0
+                  │   ├── mai-scheduler v0.1.0
+                  │   │   └── mai-api v0.1.0 (*)
+                  │   └── mai-vault v0.1.0 (*)
+                  ├── mai-scheduler v0.1.0 (*)
+                  └── mai-vault v0.1.0 (*)
+    ├ wit-bindgen v0.57.1
+      └── wasip2 v1.0.3+wasi-0.2.9
+          ├── getrandom v0.3.4
+          │   └── rand_core v0.9.5
+          │       ├── rand v0.9.4
+          │       │   └── tungstenite v0.29.0
+          │       │       └── tokio-tungstenite v0.29.0
+          │       │           └── axum v0.8.9
+          │       │               ├── axum-extra v0.10.3
+          │       │               │   └── mai-api v0.1.0
+          │       │               └── mai-api v0.1.0 (*)
+          │       └── rand_chacha v0.9.0
+          │           └── rand v0.9.4 (*)
+          └── getrandom v0.4.2
+              ├── tempfile v3.27.0
+              │   ├── (dev) mai-admin v0.1.0
+              │   ├── (dev) mai-api v0.1.0 (*)
+              │   ├── (dev) mai-vault v0.1.0
+              │   │   └── mai-api v0.1.0 (*)
+              │   ├── native-tls v0.2.18
+              │   │   ├── hyper-tls v0.6.0
+              │   │   │   └── reqwest v0.12.28
+              │   │   │       └── (dev) mai-api v0.1.0 (*)
+              │   │   ├── reqwest v0.12.28 (*)
+              │   │   └── tokio-native-tls v0.3.1
+              │   │       ├── hyper-tls v0.6.0 (*)
+              │   │       └── reqwest v0.12.28 (*)
+              │   └── prost-build v0.13.5
+              │       ├── (build) mai-api v0.1.0 (*)
+              │       └── tonic-build v0.12.3
+              │           └── (build) mai-api v0.1.0 (*)
+              └── uuid v1.23.1
+                  ├── mai-adapters v0.1.0
+                  │   └── mai-api v0.1.0 (*)
+                  ├── mai-agent v0.1.0
+                  ├── mai-api v0.1.0 (*)
+                  ├── mai-core v0.1.0
+                  │   ├── mai-adapters v0.1.0 (*)
+                  │   ├── mai-agent v0.1.0 (*)
+                  │   ├── mai-api v0.1.0 (*)
+                  │   ├── mai-compliance v0.1.0
+                  │   │   └── mai-api v0.1.0 (*)
+                  │   ├── mai-pkg-builder v0.1.0
+                  │   ├── mai-scheduler v0.1.0
+                  │   │   └── mai-api v0.1.0 (*)
+                  │   └── mai-vault v0.1.0 (*)
+                  ├── mai-scheduler v0.1.0 (*)
+                  └── mai-vault v0.1.0 (*)
 ```
 
 ### IND-PY-001 pytest repository tests
 
 Layer: `independent-implementation`
 Toolchain: `Python`
-Status: `FAIL`
+Status: `PASS`
 Command: `C:\Python314\python.exe -m pytest -q --ignore=target --ignore=results`
-Exit code: `2`
+Exit code: `0`
 
 ```text
-ule
-    return _bootstrap._gcd_import(name[level:], package, level)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-E   ModuleNotFoundError: No module named 'tests.test_config'
-____________ ERROR collecting mai-sdk-python/tests/test_errors.py _____________
-ImportError while importing test module 'C:\Users\17076\Documents\Claude\Island Mountain Mighty Eel OS\mai\mai-sdk-python\tests\test_errors.py'.
-Hint: make sure your test modules/packages have valid Python names.
-Traceback:
-C:\Python314\Lib\importlib\__init__.py:88: in import_module
-    return _bootstrap._gcd_import(name[level:], package, level)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-E   ModuleNotFoundError: No module named 'tests.test_errors'
-_____________ ERROR collecting mai-sdk-python/tests/test_retry.py _____________
-ImportError while importing test module 'C:\Users\17076\Documents\Claude\Island Mountain Mighty Eel OS\mai\mai-sdk-python\tests\test_retry.py'.
-Hint: make sure your test modules/packages have valid Python names.
-Traceback:
-C:\Python314\Lib\importlib\__init__.py:88: in import_module
-    return _bootstrap._gcd_import(name[level:], package, level)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-E   ModuleNotFoundError: No module named 'tests.test_retry'
-____________ ERROR collecting mai-sdk-python/tests/test_version.py ____________
-ImportError while importing test module 'C:\Users\17076\Documents\Claude\Island Mountain Mighty Eel OS\mai\mai-sdk-python\tests\test_version.py'.
-Hint: make sure your test modules/packages have valid Python names.
-Traceback:
-C:\Python314\Lib\importlib\__init__.py:88: in import_module
-    return _bootstrap._gcd_import(name[level:], package, level)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-E   ModuleNotFoundError: No module named 'tests.test_version'
-_____________ ERROR collecting tests/e2e/test_compliance_smoke.py _____________
-ImportError while importing test module 'C:\Users\17076\Documents\Claude\Island Mountain Mighty Eel OS\mai\tests\e2e\test_compliance_smoke.py'.
-Hint: make sure your test modules/packages have valid Python names.
-Traceback:
-C:\Python314\Lib\importlib\__init__.py:88: in import_module
-    return _bootstrap._gcd_import(name[level:], package, level)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-E   ModuleNotFoundError: No module named 'tests.e2e'
-___________ ERROR collecting tests/integrity/test_assertion_gate.py ___________
-ImportError while importing test module 'C:\Users\17076\Documents\Claude\Island Mountain Mighty Eel OS\mai\tests\integrity\test_assertion_gate.py'.
-Hint: make sure your test modules/packages have valid Python names.
-Traceback:
-C:\Python314\Lib\importlib\__init__.py:88: in import_module
-    return _bootstrap._gcd_import(name[level:], package, level)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-E   ModuleNotFoundError: No module named 'tests.integrity'
-=========================== short test summary info ===========================
-ERROR apps/local-secure-inference/tests/test_integration.py
-ERROR apps/local-secure-inference/tests/test_smoke.py
-ERROR apps/openbao-trust-demo/tests/test_integration.py
-ERROR apps/openbao-trust-demo/tests/test_smoke.py
-ERROR apps/rag-reference/tests/test_integration.py
-ERROR apps/rag-reference/tests/test_smoke.py
-ERROR apps/tribal-sovereignty/tests/test_integration.py
-ERROR apps/tribal-sovereignty/tests/test_smoke.py
-ERROR compliance-dashboard/tests/test_dashboard.py
-ERROR mai-sdk-python/tests/test_async_client_methods.py
-ERROR mai-sdk-python/tests/test_cli.py
-ERROR mai-sdk-python/tests/test_client_methods.py
-ERROR mai-sdk-python/tests/test_config.py
-ERROR mai-sdk-python/tests/test_errors.py
-ERROR mai-sdk-python/tests/test_retry.py
-ERROR mai-sdk-python/tests/test_version.py
-ERROR tests/e2e/test_compliance_smoke.py
-ERROR tests/integrity/test_assertion_gate.py
-!!!!!!!!!!!!!!!!!! Interrupted: 18 errors during collection !!!!!!!!!!!!!!!!!!!
-18 errors in 1.62s
+...................................................ssssss............... [ 10%]
+.....ssssss............................................................. [ 20%]
+........................................................................ [ 30%]
+........................................................................ [ 40%]
+........................................................................ [ 50%]
+..................................................s......s.............. [ 60%]
+....ssssssssssss.sssssssss.............................................. [ 70%]
+........................................................................ [ 80%]
+........................................................................ [ 90%]
+........................................................................ [100%]
+685 passed, 35 skipped in 43.23s
 ```
 
 ### IND-PY-002 ruff lint
 
 Layer: `independent-implementation`
 Toolchain: `Python`
-Status: `FAIL`
+Status: `PASS`
 Command: `C:\Python314\python.exe -m ruff check .`
-Exit code: `1`
+Exit code: `0`
 
 ```text
-  |
-help: Remove unnecessary `encoding` argument
-
-RET504 Unnecessary assignment to `digest` before `return` statement
-  --> tools\trace-tools\anonymize.py:45:12
-   |
-43 |         f"{salt}|{value}".encode("utf-8"), digest_size=16
-44 |     ).hexdigest()
-45 |     return digest
-   |            ^^^^^^
-   |
-help: Remove unnecessary assignment
-
-PLW2901 `for` loop variable `line` overwritten by assignment target
-  --> tools\trace-tools\anonymize.py:72:13
-   |
-70 |     ) as dst:
-71 |         for line_no, line in enumerate(src, start=1):
-72 |             line = line.strip()
-   |             ^^^^
-73 |             if not line:
-74 |                 continue
-   |
-
-PLW2901 `for` loop variable `line` overwritten by assignment target
-  --> tools\trace-tools\calibrate.py:44:13
-   |
-42 |     with path.open("r", encoding="utf-8") as src:
-43 |         for line_no, line in enumerate(src, start=1):
-44 |             line = line.strip()
-   |             ^^^^
-45 |             if not line:
-46 |                 continue
-   |
-
-B905 `zip()` without an explicit `strict=` parameter
-  --> tools\trace-tools\reconstruct.py:43:40
-   |
-41 |         items.sort(key=lambda ev: ev.get("timestamp", ""))
-42 |         times = [parse_timestamp(ev["timestamp"]) for ev in items]
-43 |         gaps_secs = [b - a for a, b in zip(times, times[1:])] if len(times) > 1 else []
-   |                                        ^^^^^^^^^^^^^^^^^^^^^
-44 |         total_input = sum(int(ev.get("input_tokens", 0)) for ev in items)
-45 |         total_output = sum(int(ev.get("output_tokens", 0)) for ev in items)
-   |
-help: Add explicit value for parameter `strict=`
-
-RUF007 Prefer `itertools.pairwise()` over `zip()` when iterating over successive pairs
-  --> tools\trace-tools\reconstruct.py:43:40
-   |
-41 |         items.sort(key=lambda ev: ev.get("timestamp", ""))
-42 |         times = [parse_timestamp(ev["timestamp"]) for ev in items]
-43 |         gaps_secs = [b - a for a, b in zip(times, times[1:])] if len(times) > 1 else []
-   |                                        ^^^
-44 |         total_input = sum(int(ev.get("input_tokens", 0)) for ev in items)
-45 |         total_output = sum(int(ev.get("output_tokens", 0)) for ev in items)
-   |
-help: Replace `zip()` with `itertools.pairwise()`
-
-PLW2901 `for` loop variable `line` overwritten by assignment target
-  --> tools\trace-tools\reconstruct.py:72:13
-   |
-70 |     with input_path.open("r", encoding="utf-8") as src:
-71 |         for line_no, line in enumerate(src, start=1):
-72 |             line = line.strip()
-   |             ^^^^
-73 |             if not line:
-74 |                 continue
-   |
-
-ANN202 Missing return type annotation for private function `_load`
-  --> tools\trace-tools\tests\test_trace_tools.py:20:5
-   |
-20 | def _load(name: str):
-   |     ^^^^^
-21 |     spec = importlib.util.spec_from_file_location(name, TRACE_TOOLS / f"{name}.py")
-22 |     assert spec and spec.loader, f"could not load {name}"
-   |
-help: Add return type annotation
-
-PT018 Assertion should be broken down into multiple parts
-  --> tools\trace-tools\tests\test_trace_tools.py:22:5
-   |
-20 | def _load(name: str):
-21 |     spec = importlib.util.spec_from_file_location(name, TRACE_TOOLS / f"{name}.py")
-22 |     assert spec and spec.loader, f"could not load {name}"
-   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-23 |     module = importlib.util.module_from_spec(spec)
-24 |     sys.modules[name] = module
-   |
-help: Break down assertion into multiple parts
-
-PT011 `pytest.raises(ValueError)` is too broad, set the `match` parameter or use a more specific exception
-   --> tools\trace-tools\tests\test_trace_tools.py:109:24
-    |
-108 |     bad = {"timestamp": "x", "request_id": "y", "session_id_hash": "z", "leaked": True}
-109 |     with pytest.raises(ValueError):
-    |                        ^^^^^^^^^^
-110 |         anonymize.validate(bad)
-    |
-
-Found 402 errors.
-[*] 59 fixable with the `--fix` option (39 hidden fixes can be enabled with the `--unsafe-fixes` option).
+All checks passed!
 ```
 
 ### IND-PY-003 bandit security scan
 
 Layer: `independent-implementation`
 Toolchain: `Python`
-Status: `FAIL`
-Command: `C:\Python314\python.exe -m bandit -r .`
-Exit code: `1`
+Status: `PASS`
+Command: `C:\Python314\python.exe -m bandit -r . -f json -c pyproject.toml`
+Exit code: `0`
 
 ```text
-Working... ---------------------------------------- 100% 0:00:02
-
+NCE.HIGH": 0,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 0,
+      "SEVERITY.MEDIUM": 0,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 110,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    ".\\tools\\trace-tools\\reconstruct.py": {
+      "CONFIDENCE.HIGH": 0,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 0,
+      "SEVERITY.MEDIUM": 0,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 89,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    ".\\tools\\trace-tools\\tests\\test_trace_tools.py": {
+      "CONFIDENCE.HIGH": 0,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 0,
+      "SEVERITY.MEDIUM": 0,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 132,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "_totals": {
+      "CONFIDENCE.HIGH": 0,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 0,
+      "SEVERITY.MEDIUM": 0,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 20907,
+      "nosec": 0,
+      "skipped_tests": 2
+    }
+  },
+  "results": []
+}
 [main]	INFO	profile include tests: None
-[main]	INFO	profile exclude tests: None
+[main]	INFO	profile exclude tests: B603,B105,B404,B310,B311,B101,B607
 [main]	INFO	cli include tests: None
 [main]	INFO	cli exclude tests: None
-[main]	INFO	running on Python 3.14.4
-Traceback (most recent call last):
-  File "C:\Users\17076\AppData\Roaming\Python\Python314\site-packages\bandit\core\manager.py", line 186, in output_results
-    report_func(
-    ~~~~~~~~~~~^
-        self,
-        ^^^^^
-    ...<3 lines>...
-        lines=lines,
-        ^^^^^^^^^^^^
-    )
-    ^
-  File "C:\Users\17076\AppData\Roaming\Python\Python314\site-packages\bandit\formatters\text.py", line 197, in report
-    wrapped_file.write(result)
-    ~~~~~~~~~~~~~~~~~~^^^^^^^^
-  File "C:\Python314\Lib\encodings\cp1252.py", line 19, in encode
-    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
-           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-UnicodeEncodeError: 'charmap' codec can't encode character '\u2192' in position 152391: character maps to <undefined>
-
-During handling of the above exception, another exception occurred:
-
-Traceback (most recent call last):
-  File "<frozen runpy>", line 198, in _run_module_as_main
-  File "<frozen runpy>", line 88, in _run_code
-  File "C:\Users\17076\AppData\Roaming\Python\Python314\site-packages\bandit\__main__.py", line 17, in <module>
-    main.main()
-    ~~~~~~~~~^^
-  File "C:\Users\17076\AppData\Roaming\Python\Python314\site-packages\bandit\cli\main.py", line 682, in main
-    b_mgr.output_results(
-    ~~~~~~~~~~~~~~~~~~~~^
-        args.context_lines,
-        ^^^^^^^^^^^^^^^^^^^
-    ...<4 lines>...
-        args.msg_template,
-        ^^^^^^^^^^^^^^^^^^
-    )
-    ^
-  File "C:\Users\17076\AppData\Roaming\Python\Python314\site-packages\bandit\core\manager.py", line 195, in output_results
-    raise RuntimeError(
-    ...<2 lines>...
-    )
-RuntimeError: Unable to output report using 'txt' formatter: 'charmap' codec can't encode character '\u2192' in position 152391: character maps to <undefined>
+[manager]	WARNING	Test in comment: HTML is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: template is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: every is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: var is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: passes is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: through is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: html is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: escape is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: not is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: a is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: SQL is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: statement is not a test name or id, ignoring
+[tester]	WARNING	nosec encountered (B608), but no failed test on file .\compliance-dashboard\app.py:273
+[tester]	WARNING	nosec encountered (B608), but no failed test on file .\compliance-dashboard\app.py:273
+[tester]	WARNING	nosec encountered (B608), but no failed test on file .\compliance-dashboard\app.py:274
+[tester]	WARNING	nosec encountered (B608), but no failed test on file .\compliance-dashboard\app.py:274
+[tester]	WARNING	nosec encountered (B608), but no failed test on file .\compliance-dashboard\app.py:277
+[tester]	WARNING	nosec encountered (B608), but no failed test on file .\compliance-dashboard\app.py:278
+[tester]	WARNING	nosec encountered (B608), but no failed test on file .\compliance-dashboard\app.py:285
+[manager]	WARNING	Test in comment: test is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: asserts is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: ABSENCE is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: of is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: 0 is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: 0 is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: 0 is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: 0 is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: never is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: binds is not a test name or id, ignoring
+[tester]	WARNING	nosec encountered (B104), but no failed test on file .\tools\packaging_tests\test_systemd_units.py:167
 ```
 
 ### IND-PY-004 pip-audit dependency scan
@@ -573,9 +409,9 @@ Found 2 known vulnerabilities in 1 package
 
 Layer: `independent-implementation`
 Toolchain: `Secrets`
-Status: `FAIL`
+Status: `PASS`
 Command: `gitleaks detect --source . --no-git --redact`
-Exit code: `1`
+Exit code: `0`
 
 ```text
 ○
@@ -584,8 +420,8 @@ Exit code: `1`
     ○ ░
     ░    gitleaks
 
-[90m12:28PM[0m [32mINF[0m [1mscanned ~21929429122 bytes (21.93 GB) in 4m59s[0m
-[90m12:28PM[0m [33mWRN[0m [1mleaks found: 20[0m
+[90m2:02PM[0m [32mINF[0m [1mscanned ~9941088 bytes (9.94 MB) in 547ms[0m
+[90m2:02PM[0m [32mINF[0m [1mno leaks found[0m
 ```
 
 ### IND-SEC-002 detect-secrets scan
@@ -671,7 +507,7 @@ Exit code: `0`
         "filename": "tests\\sdk_integration.py",
         "hashed_secret": "fb0b56ad02475c3b749709ebb14436d12270e1eb",
         "is_verified": false,
-        "line_number": 72
+        "line_number": 71
       }
     ],
     "tools\\gpu_release_tests\\test_bundle_scripts.py": [
@@ -680,21 +516,21 @@ Exit code: `0`
         "filename": "tools\\gpu_release_tests\\test_bundle_scripts.py",
         "hashed_secret": "26019c2e7b54c3d5b828190796fa49f2ae4b1a43",
         "is_verified": false,
-        "line_number": 98
+        "line_number": 97
       },
       {
         "type": "Hex High Entropy String",
         "filename": "tools\\gpu_release_tests\\test_bundle_scripts.py",
         "hashed_secret": "158b484ae1f6f64f89da22397d25fbdafad02252",
         "is_verified": false,
-        "line_number": 126
+        "line_number": 125
       },
       {
         "type": "Hex High Entropy String",
         "filename": "tools\\gpu_release_tests\\test_bundle_scripts.py",
         "hashed_secret": "ff998abc1ce6d8f01a675fa197368e44c8916e9c",
         "is_verified": false,
-        "line_number": 185
+        "line_number": 184
       }
     ],
     "tools\\mai-admin\\src\\audit.rs": [
@@ -707,7 +543,7 @@ Exit code: `0`
       }
     ]
   },
-  "generated_at": "2026-05-24T19:30:03Z"
+  "generated_at": "2026-05-24T21:04:37Z"
 }
 ```
 
@@ -732,31 +568,31 @@ Exit code: `0`
  Language              Files        Lines         Code     Comments       Blanks
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  Dockerfile                1          170           52          102           16
- JSON                      2         1298         1298            0            0
+ JSON                      2         1302         1302            0            0
  PowerShell                7         1174          959           91          124
  Protocol Buffers          2         1171          745          256          170
- Python                  171        26248        21216          709         4323
+ Python                  171        26250        21225          719         4306
  Shell                    13         1901         1428          249          224
  Plain Text               17          271            0          269            2
- TOML                     56         2778         1533          873          372
+ TOML                     57         2977         1605          987          385
  YAML                      2         1660         1539           53           68
 ─────────────────────────────────────────────────────────────────────────────────
- Markdown                132        31046            0        23537         7509
+ Markdown                133        31201            0        23643         7558
  |- BASH                  38          417          353           42           22
  |- HCL                    1            6            5            1            0
  |- JSON                  24          907          902            0            5
- |- PowerShell            21          163          116           27           20
+ |- PowerShell            21          164          117           27           20
  |- Python                13          244          199           14           31
  |- Rust                   9          278          211           57           10
  |- TOML                   7          203          177            2           24
  |- YAML                   1            2            2            0            0
- (Total)                            33266         1965        23680         7621
+ (Total)                            33422         1966        23786         7670
 ─────────────────────────────────────────────────────────────────────────────────
  Rust                    247        81788        68954         3261         9573
  |- Markdown             246        11234            8        10162         1064
  (Total)                            93022        68962        13423        10637
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- Total                   650       162959        99697        39705        23557
+ Total                   652       163320        99783        39935        23602
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
@@ -773,15 +609,15 @@ Exit code: `0`
 Language            Files       Lines    Blanks  Comments       Code Complexity
 ───────────────────────────────────────────────────────────────────────────────
 Rust                  247      93,061     9,552    14,479     69,030      3,337
-Python                171      26,248     3,222     2,529     20,497      1,729
-Markdown              138      33,863     7,750         0     26,113          0
-TOML                   56       2,778       372       873      1,533          5
+Python                171      26,250     3,206     2,544     20,500      1,699
+Markdown              139      34,025     7,800         0     26,225          0
+TOML                   59       3,090       398     1,063      1,629          6
 Plain Text             17         271         2         0        269          0
 Shell                  17       2,190       271       287      1,632        230
 Powershell              7       1,174       110        83        981        173
 YAML                    6       2,307       137       155      2,015          0
 Systemd                 5         197        19         8        170          0
-JSON                    4       1,323         0         0      1,323          0
+JSON                    4       1,327         0         0      1,327          0
 BASH                    2         174        30        20        124         30
 Protocol Buffe…         2       1,171       170       256        745          0
 Docker ignore           1          57        11        15         31          0
@@ -789,13 +625,13 @@ Dockerfile              1         170        16       102         52          5
 JavaScript              1         372        32        26        314         25
 License                 1          11         1         0         10          0
 ───────────────────────────────────────────────────────────────────────────────
-Total                 676     165,367    21,695    18,833    124,839      5,534
+Total                 680     165,847    21,755    19,038    125,054      5,505
 ───────────────────────────────────────────────────────────────────────────────
-Estimated Cost to Develop (organic) $4,293,022
-Estimated Schedule Effort (organic) 23.93 months
-Estimated People Required (organic) 15.94
+Estimated Cost to Develop (organic) $4,300,785
+Estimated Schedule Effort (organic) 23.94 months
+Estimated People Required (organic) 15.96
 ───────────────────────────────────────────────────────────────────────────────
-Processed 6288781 bytes, 6.289 megabytes (SI)
+Processed 6320135 bytes, 6.320 megabytes (SI)
 ───────────────────────────────────────────────────────────────────────────────
 ```
 
@@ -809,26 +645,26 @@ Exit code: `0`
 
 ```text
 _init__ - A
-    M 139:4 BatchAwareKvManager.__init__ - A
-    M 148:4 BatchAwareKvManager.set_active_batch - A
+    M 140:4 BatchAwareKvManager.__init__ - A
+    M 149:4 BatchAwareKvManager.set_active_batch - A
 tools\simulator\metrics.py
-    M 64:4 MetricsCollector.report - B
-    M 53:4 MetricsCollector.percentile - A
-    C 6:0 MetricsCollector - A
-    M 7:4 MetricsCollector.__init__ - A
-    M 20:4 MetricsCollector.record_latency - A
-    M 23:4 MetricsCollector.record_token_rate - A
-    M 26:4 MetricsCollector.record_batch - A
-    M 29:4 MetricsCollector.record_queue_depth - A
-    M 32:4 MetricsCollector.record_eviction - A
-    M 35:4 MetricsCollector.record_admission - A
-    M 38:4 MetricsCollector.record_request - A
-    M 41:4 MetricsCollector.record_completion - A
-    M 44:4 MetricsCollector.record_thrash - A
-    M 47:4 MetricsCollector.record_kv_utilization - A
-    M 50:4 MetricsCollector.record_violation - A
-    M 85:4 MetricsCollector.report_json - A
-    M 88:4 MetricsCollector.reset - A
+    M 65:4 MetricsCollector.report - B
+    M 54:4 MetricsCollector.percentile - A
+    C 7:0 MetricsCollector - A
+    M 8:4 MetricsCollector.__init__ - A
+    M 21:4 MetricsCollector.record_latency - A
+    M 24:4 MetricsCollector.record_token_rate - A
+    M 27:4 MetricsCollector.record_batch - A
+    M 30:4 MetricsCollector.record_queue_depth - A
+    M 33:4 MetricsCollector.record_eviction - A
+    M 36:4 MetricsCollector.record_admission - A
+    M 39:4 MetricsCollector.record_request - A
+    M 42:4 MetricsCollector.record_completion - A
+    M 45:4 MetricsCollector.record_thrash - A
+    M 48:4 MetricsCollector.record_kv_utilization - A
+    M 51:4 MetricsCollector.record_violation - A
+    M 86:4 MetricsCollector.report_json - A
+    M 89:4 MetricsCollector.reset - A
 tools\simulator\replay_compare.py
     F 45:0 run_trace_replay - B
     F 136:0 compare_policies_on_trace - A
@@ -851,17 +687,17 @@ tools\simulator\trace_generator.py
     M 86:4 TraceGenerator.total - A
     M 89:4 TraceGenerator.reset - A
 tools\simulator\workload.py
-    M 25:4 ChatWorkload.generate - B
-    C 10:0 ChatWorkload - A
-    C 79:0 MixedWorkload - A
-    C 52:0 BatchWorkload - A
-    M 80:4 MixedWorkload.__init__ - A
-    M 87:4 MixedWorkload.generate - A
-    C 6:0 WorkloadGenerator - A
-    M 62:4 BatchWorkload.generate - A
-    M 7:4 WorkloadGenerator.generate - A
-    M 11:4 ChatWorkload.__init__ - A
-    M 53:4 BatchWorkload.__init__ - A
+    M 26:4 ChatWorkload.generate - B
+    C 11:0 ChatWorkload - A
+    C 80:0 MixedWorkload - A
+    C 53:0 BatchWorkload - A
+    M 81:4 MixedWorkload.__init__ - A
+    M 88:4 MixedWorkload.generate - A
+    C 7:0 WorkloadGenerator - A
+    M 63:4 BatchWorkload.generate - A
+    M 8:4 WorkloadGenerator.generate - A
+    M 12:4 ChatWorkload.__init__ - A
+    M 54:4 BatchWorkload.__init__ - A
 tools\simulator\tests\test_replay_compare.py
     F 59:0 test_run_trace_replay_emits_required_fields - B
     F 120:0 test_report_markdown_includes_all_policies - A
@@ -874,24 +710,24 @@ tools\simulator\tests\test_replay_compare.py
     F 35:0 _iso - A
     F 103:0 test_run_trace_replay_rejects_unknown_policy - A
 tools\simulator\tests\test_simulator_extensions.py
-    F 60:0 test_trace_generator_preserves_inter_request_gaps - B
-    F 112:0 test_hybrid_emits_spike_during_window - B
-    F 86:0 test_trace_generator_marks_continuations - A
-    F 100:0 test_trace_generator_time_scale_compresses_timeline - A
-    F 15:0 _load - A
-    F 33:0 _write_trace - A
-    F 54:0 _to_iso - A
-    F 139:0 test_spike_config_validates - A
+    F 61:0 test_trace_generator_preserves_inter_request_gaps - B
+    F 113:0 test_hybrid_emits_spike_during_window - B
+    F 87:0 test_trace_generator_marks_continuations - A
+    F 101:0 test_trace_generator_time_scale_compresses_timeline - A
+    F 16:0 _load - A
+    F 34:0 _write_trace - A
+    F 55:0 _to_iso - A
+    F 140:0 test_spike_config_validates - A
 tools\smoke\smoke_client.py
     F 43:0 run - B
     F 28:0 get - A
     F 89:0 main - A
 tools\trace-tools\anonymize.py
-    F 48:0 anonymize_event - A
-    F 66:0 process - A
-    F 87:0 main - A
-    F 60:0 validate - A
-    F 40:0 rehash - A
+    F 46:0 anonymize_event - A
+    F 64:0 process - A
+    F 85:0 main - A
+    F 58:0 validate - A
+    F 39:0 rehash - A
 tools\trace-tools\calibrate.py
     F 54:0 calibrate - B
     F 40:0 load_sessions - A
@@ -899,10 +735,10 @@ tools\trace-tools\calibrate.py
     F 89:0 clamp - A
     F 93:0 render_toml - A
 tools\trace-tools\reconstruct.py
-    F 30:0 reconstruct - C
-    F 68:0 process - A
-    F 23:0 parse_timestamp - A
-    F 88:0 main - A
+    F 31:0 reconstruct - C
+    F 69:0 process - A
+    F 24:0 parse_timestamp - A
+    F 89:0 main - A
 tools\trace-tools\tests\test_trace_tools.py
     F 113:0 test_reconstruct_groups_events_by_session_and_computes_gaps - B
     F 71:0 test_anonymize_strips_disallowed_fields_and_rehashes - B

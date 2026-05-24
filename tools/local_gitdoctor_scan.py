@@ -20,10 +20,9 @@ import json
 import re
 import subprocess
 import sys
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Iterable
-
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -41,6 +40,7 @@ IGNORED_DIRS = {
     "results",
     "target",
     "test-evidence",
+    "local_gitdoctor_tests",
 }
 
 IGNORED_FILES = {

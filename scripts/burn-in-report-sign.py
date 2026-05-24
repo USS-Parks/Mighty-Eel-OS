@@ -288,7 +288,7 @@ def main(argv: list[str] | None = None) -> int:
         return args.func(args)
     except SystemExit:
         raise
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         print(f"burn-in-sign: internal error: {exc}", file=sys.stderr)
         return 4
 

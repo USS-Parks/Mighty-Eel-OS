@@ -19,7 +19,8 @@ from .conftest import REPO_ROOT, SIGNER
 # Import the signer as a module so we can unit-test its canonicalisation
 # without spawning a subprocess per call.
 spec = importlib.util.spec_from_file_location("burn_in_signer", SIGNER)
-assert spec is not None and spec.loader is not None
+assert spec is not None
+assert spec.loader is not None
 signer_mod = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(signer_mod)
 
@@ -92,7 +93,8 @@ def test_canonical_body_preserves_array_order() -> None:
     body = signer_mod.canonical_body(report).decode("utf-8")
     z_pos = body.find('"z-last"')
     a_pos = body.find('"a-first"')
-    assert z_pos > 0 and a_pos > 0
+    assert z_pos > 0
+    assert a_pos > 0
     assert z_pos < a_pos, "canonical body must preserve phase insertion order"
 
 

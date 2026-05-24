@@ -16,7 +16,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import os
 import secrets
 import sys
 from pathlib import Path
@@ -39,10 +38,9 @@ ALLOWED_FIELDS = frozenset(
 
 def rehash(value: str, salt: str) -> str:
     """Re-hash a session id hash with a fresh salt. Returns 32 hex chars."""
-    digest = hashlib.blake2b(
-        f"{salt}|{value}".encode("utf-8"), digest_size=16
+    return hashlib.blake2b(
+        f"{salt}|{value}".encode(), digest_size=16
     ).hexdigest()
-    return digest
 
 
 def anonymize_event(event: dict, salt: str) -> dict:

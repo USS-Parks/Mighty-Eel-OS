@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 import json
 import statistics
 
@@ -73,7 +74,7 @@ class MetricsCollector:
             "latency_ms_p95": round(self.percentile(self.latencies, 95), 2),
             "latency_ms_p99": round(self.percentile(self.latencies, 99), 2),
             "avg_batch_size": round(statistics.mean(self.batch_sizes), 2) if self.batch_sizes else 0.0,
-            "batch_utilization_pct": round(statistics.mean(self.batch_sizes) / max(max(self.batch_sizes or [1]), 1) * 100, 1) if self.batch_sizes else 0.0,
+            "batch_utilization_pct": round(statistics.mean(self.batch_sizes) / max(*(self.batch_sizes or [1]), 1) * 100, 1) if self.batch_sizes else 0.0,
             "evictions": self.eviction_count,
             "admissions": self.admission_count,
             "thrash_events": self.thrash_count,

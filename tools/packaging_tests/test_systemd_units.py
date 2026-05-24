@@ -164,4 +164,4 @@ def test_dashboard_depends_on_api() -> None:
 def test_no_unit_listens_on_wildcard() -> None:
     for unit in SERVICE_UNITS:
         text = (UNIT_DIR / unit).read_text(encoding="utf-8")
-        assert "0.0.0.0" not in text, f"{unit} binds 0.0.0.0; production must stay loopback"
+        assert "0.0.0.0" not in text, f"{unit} binds 0.0.0.0; production must stay loopback"  # nosec B104 — test asserts ABSENCE of 0.0.0.0, never binds

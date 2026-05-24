@@ -8,7 +8,6 @@ roots.
 
 from __future__ import annotations
 
-import sys
 import tomllib
 from pathlib import Path
 
@@ -26,10 +25,7 @@ REQUIRED_TERMS = {
 
 
 def _load() -> dict:
-    if sys.version_info < (3, 11):
-        import tomli as _toml  # pragma: no cover
-    else:
-        _toml = tomllib
+    _toml = tomllib
     return _toml.loads(CONFIG.read_text(encoding="utf-8"))
 
 
@@ -44,8 +40,10 @@ def test_config_parses() -> None:
 def test_scan_section_present() -> None:
     cfg = _load()
     scan = cfg.get("scan", {})
-    assert isinstance(scan.get("roots"), list) and scan["roots"]
-    assert isinstance(scan.get("extensions"), list) and scan["extensions"]
+    assert isinstance(scan.get("roots"), list)
+    assert scan["roots"]
+    assert isinstance(scan.get("extensions"), list)
+    assert scan["extensions"]
 
 
 def test_scan_roots_exist() -> None:
@@ -124,7 +122,7 @@ def test_term_allowlists_cover_current_tree_uses() -> None:
     cfg = _load()
     for t in cfg["term"]:
         name = t["name"]
-        allowed = {p for p in t["allowed_paths"]}
+        allowed = set(t["allowed_paths"])
         for root in cfg["scan"]["roots"]:
             for path in (REPO_ROOT / root).rglob("*"):
                 if not path.is_file():

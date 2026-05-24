@@ -49,10 +49,7 @@ class MultiGpuModel:
 
     def allocate_vram(self, kv_bytes: float, num_gpus: int = 1) -> bool:
         needed_per_gpu = kv_bytes / num_gpus
-        for g in self.gpus[:num_gpus]:
-            if not g.allocate_vram(needed_per_gpu):
-                return False
-        return True
+        return all(g.allocate_vram(needed_per_gpu) for g in self.gpus[:num_gpus])
 
     def free_vram(self, kv_bytes: float, num_gpus: int = 1) -> None:
         per_gpu = kv_bytes / num_gpus

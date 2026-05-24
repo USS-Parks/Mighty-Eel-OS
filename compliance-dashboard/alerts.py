@@ -118,10 +118,10 @@ async def stream_alerts(
 
 
 __all__ = [
-    "Alert",
     "SEVERITY_CRITICAL",
     "SEVERITY_INFO",
     "SEVERITY_WARNING",
+    "Alert",
     "alert_from_event",
     "headline_for",
     "severity_for",

@@ -89,7 +89,7 @@ class TraceGenerator:
     def reset(self) -> None:
         self._cursor = 0
 
-    def generate(self, sim_time: float, rng: random.Random) -> dict | None:  # noqa: ARG002
+    def generate(self, sim_time: float, rng: random.Random) -> dict | None:
         """Return the next event whose offset has been reached, or None."""
         if self._cursor >= len(self._events):
             return None

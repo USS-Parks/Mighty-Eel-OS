@@ -6,6 +6,7 @@ import importlib.util
 import json
 import random
 import sys
+from datetime import UTC
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -52,9 +53,9 @@ def _write_trace(path: Path, offsets: list[float]) -> None:
 
 
 def _to_iso(epoch_secs: float) -> str:
-    from datetime import datetime, timezone
+    from datetime import datetime
 
-    return datetime.fromtimestamp(epoch_secs, tz=timezone.utc).isoformat()
+    return datetime.fromtimestamp(epoch_secs, tz=UTC).isoformat()
 
 
 def test_trace_generator_preserves_inter_request_gaps(tmp_path: Path) -> None:

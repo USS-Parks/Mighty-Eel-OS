@@ -204,10 +204,14 @@ def test_both_drivers_have_policy_no_payload_guarantee() -> None:
 def test_both_drivers_use_admin_binary_for_backup_and_restore() -> None:
     sh = BASH_DRIVER.read_text(encoding="utf-8")
     ps = PS1_DRIVER.read_text(encoding="utf-8")
-    assert "backup create" in sh and "backup verify" in sh
-    assert "restore plan" in sh and "restore apply" in sh
-    assert '"backup", "create"' in ps and '"backup", "verify"' in ps
-    assert '"restore", "plan"' in ps and '"restore", "apply"' in ps
+    assert "backup create" in sh
+    assert "backup verify" in sh
+    assert "restore plan" in sh
+    assert "restore apply" in sh
+    assert '"backup", "create"' in ps
+    assert '"backup", "verify"' in ps
+    assert '"restore", "plan"' in ps
+    assert '"restore", "apply"' in ps
 
 
 def test_both_drivers_call_ship_validate() -> None:

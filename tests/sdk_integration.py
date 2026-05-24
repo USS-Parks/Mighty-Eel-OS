@@ -25,7 +25,6 @@ import os
 import time
 
 import pytest
-
 from mai.client import AsyncMaiClient, MaiClient, MaiClientConfig
 from mai.types import ChatMessage, MaiError
 
@@ -264,7 +263,7 @@ class TestRateLimiting:
         try:
             # Send requests until we hit the limit.
             # Default is 60/min, so 65 requests should trigger it.
-            for i in range(70):
+            for _i in range(70):
                 try:
                     c.health()  # health is exempt from auth but...
                     # Use an authed endpoint instead

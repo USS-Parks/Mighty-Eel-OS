@@ -81,7 +81,7 @@ def test_at_least_one_workflow_invokes_a_shell_script() -> None:
 
 
 @pytest.mark.parametrize(
-    "workflow,script",
+    ("workflow", "script"),
     _directly_invoked_scripts(),
     ids=lambda v: v.replace("/", "_") if isinstance(v, str) else str(v),
 )

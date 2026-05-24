@@ -12,6 +12,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import itertools
 import json
 import statistics
 import sys
@@ -40,7 +41,7 @@ def reconstruct(events: list[dict]) -> list[dict]:
     for session_id, items in by_session.items():
         items.sort(key=lambda ev: ev.get("timestamp", ""))
         times = [parse_timestamp(ev["timestamp"]) for ev in items]
-        gaps_secs = [b - a for a, b in zip(times, times[1:])] if len(times) > 1 else []
+        gaps_secs = [b - a for a, b in itertools.pairwise(times)] if len(times) > 1 else []
         total_input = sum(int(ev.get("input_tokens", 0)) for ev in items)
         total_output = sum(int(ev.get("output_tokens", 0)) for ev in items)
         first_seen = items[0].get("timestamp")

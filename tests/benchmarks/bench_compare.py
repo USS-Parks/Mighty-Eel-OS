@@ -21,10 +21,9 @@ Session 10 deliverable.
 """
 
 import json
-import os
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 RESULTS_DIR = Path(__file__).parent / "results"
@@ -70,7 +69,7 @@ def store_results(lines: list[str]) -> None:
         print("No benchmark results found in input.")
         sys.exit(1)
 
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     run = {
         "timestamp": timestamp,
         "git_commit": _get_git_commit(),
@@ -344,14 +343,13 @@ def gate(argv: list[str]) -> int:
             "passed_regression": True,
         }
 
-        if max_us > 0 or not allow_zero_target:
-            if max_us > 0 and per_iter > max_us:
-                record["passed_threshold"] = False
-                violations.append({
-                    "name": name,
-                    "per_iter_us": per_iter,
-                    "max_us": max_us,
-                })
+        if (max_us > 0 or not allow_zero_target) and max_us > 0 and per_iter > max_us:
+            record["passed_threshold"] = False
+            violations.append({
+                "name": name,
+                "per_iter_us": per_iter,
+                "max_us": max_us,
+            })
 
         prev = previous_map.get(name)
         if prev is not None:

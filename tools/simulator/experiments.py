@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 import json
 import random
 import sys
@@ -7,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from engine import SimEngine, SimulationEvent
-from gpu import GpuModel, MultiGpuModel
+from gpu import GpuModel
 from kv_policy import (
     BatchAwareKvManager,
     HeuristicScoredKvManager,
@@ -15,7 +16,7 @@ from kv_policy import (
     SizeBasedKvManager,
 )
 from metrics import MetricsCollector
-from workload import ChatWorkload, BatchWorkload, MixedWorkload
+from workload import MixedWorkload
 
 
 def run_experiment(

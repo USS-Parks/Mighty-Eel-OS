@@ -16,7 +16,6 @@ import subprocess
 import sys
 import tarfile
 from pathlib import Path
-from textwrap import dedent
 
 import pytest
 
@@ -305,4 +304,5 @@ def test_both_scripts_use_same_schema_version() -> None:
     sh_text = SH_SCRIPT.read_text(encoding="utf-8")
     ps1_text = PS1_SCRIPT.read_text(encoding="utf-8")
     assert '"schema_version": 1' in sh_text
-    assert "schema_version" in ps1_text and "= 1" in ps1_text
+    assert "schema_version" in ps1_text
+    assert "= 1" in ps1_text

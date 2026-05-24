@@ -152,7 +152,7 @@ def running_server() -> Iterator[int]:
         # _find_binary() (only target/release/ or target/debug/), and
         # `server_toml` is the file we just wrote inside `tmp`. No
         # caller-supplied input reaches this call.
-        proc = subprocess.Popen(  # noqa: S603
+        proc = subprocess.Popen(
             [str(binary), str(server_toml)],
             cwd=str(tmp),
             env=env,

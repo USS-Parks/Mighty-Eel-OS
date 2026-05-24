@@ -18,7 +18,6 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCAN_PATH = Path(__file__).resolve().with_name("local_gitdoctor_scan.py")
 
@@ -218,7 +217,17 @@ def build_probes(root: Path) -> list[ProbeDef]:
             [
                 ProbeDef("IND-PY-001", "independent-implementation", "Python", "pytest repository tests", [sys.executable, "-m", "pytest", "-q", "--ignore=target", "--ignore=results"], availability_module="pytest", timeout_seconds=900),
                 ProbeDef("IND-PY-002", "independent-implementation", "Python", "ruff lint", [sys.executable, "-m", "ruff", "check", "."], availability_module="ruff", timeout_seconds=300),
-                ProbeDef("IND-PY-003", "independent-implementation", "Python", "bandit security scan", [sys.executable, "-m", "bandit", "-r", "."], availability_module="bandit", timeout_seconds=300),
+                # J-10b: bandit's default `txt` formatter writes `→` etc. via
+                # the host stdout codec; on Windows that is cp1252 by default
+                # and the formatter crashes mid-report with UnicodeEncodeError.
+                # `-f json` routes through json.dumps and avoids the codec
+                # path entirely. `-c pyproject.toml` activates the
+                # `[tool.bandit]` policy block (skipped rule IDs +
+                # exclude_dirs); bandit does not auto-discover pyproject.toml
+                # without an explicit `-c`. The probe still FAILs on real
+                # findings; it just no longer FAILs on the formatter, on
+                # asserts-in-tests, or on stdlib-only urllib usage.
+                ProbeDef("IND-PY-003", "independent-implementation", "Python", "bandit security scan", [sys.executable, "-m", "bandit", "-r", ".", "-f", "json", "-c", "pyproject.toml"], availability_module="bandit", timeout_seconds=300),
                 ProbeDef("IND-PY-004", "independent-implementation", "Python", "pip-audit dependency scan", [sys.executable, "-m", "pip_audit"], availability_module="pip_audit", timeout_seconds=300),
             ]
         )

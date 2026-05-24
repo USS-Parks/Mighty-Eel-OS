@@ -10,7 +10,6 @@ from pathlib import Path
 
 import httpx
 import pytest
-
 from mai import MaiClient, MaiClientConfig
 from mai.retry import RetryPolicy
 
@@ -21,7 +20,8 @@ def _load_main():
     spec = importlib.util.spec_from_file_location(
         "openbao_trust_demo_main_int", APP_ROOT / "main.py",
     )
-    assert spec is not None and spec.loader is not None
+    assert spec is not None
+    assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)

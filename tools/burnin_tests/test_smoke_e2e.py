@@ -11,8 +11,6 @@ import json
 import subprocess
 from pathlib import Path
 
-import pytest
-
 from .conftest import BASH_DRIVER, REPO_ROOT, posix_only
 
 
@@ -46,7 +44,8 @@ def test_smoke_report_schema(tmp_path: Path) -> None:
     assert report["ship_session"] == "SHIP-14"
     assert report["mode"] == "smoke"
     assert report["duration_seconds"] == 60
-    assert "host" in report and "hostname" in report["host"]
+    assert "host" in report
+    assert "hostname" in report["host"]
     totals = report["totals"]
     assert totals["phase_count"] == 10
     assert totals["pass"] + totals["fail"] + totals["skip"] == 10

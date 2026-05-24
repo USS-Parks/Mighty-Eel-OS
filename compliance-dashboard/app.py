@@ -269,7 +269,7 @@ def reports_page(
         for r in env.reports
     )
     body = (
-        f"<section class='section'><h2>Summary</h2>"
+        f"<section class='section'><h2>Summary</h2>"  # nosec B608 — HTML template, every var passes through html.escape; not a SQL statement
         f"<p>Total: {summary.total} | Complete: {summary.complete} "
         f"| Pending: {summary.pending} | Failed: {summary.failed}</p></section>"
         f"<section class='section'><h2>Generate report</h2>"
