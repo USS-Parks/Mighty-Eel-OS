@@ -10,6 +10,7 @@ Session 09 deliverable.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import time
 from collections.abc import AsyncIterator
@@ -18,7 +19,6 @@ from typing import Any
 from adapters.base import (
     AdapterBase,
     AdapterCapabilities,
-    AdapterError,
     BackendUnavailableError,
     Embedding,
     FinishReason,
@@ -212,10 +212,7 @@ class TgiAdapter(AdapterBase):
         emitted_any = False
         try:
             while True:
-                try:
-                    chunk = await asyncio.to_thread(_next_chunk)
-                except AdapterError:
-                    raise
+                chunk = await asyncio.to_thread(_next_chunk)
                 if chunk is _sentinel:
                     break
                 is_end = chunk.finish_reason is not None or chunk.generated_text is not None
@@ -234,10 +231,8 @@ class TgiAdapter(AdapterBase):
         finally:
             close = getattr(chunks_iter, "close", None)
             if callable(close):
-                try:
+                with contextlib.suppress(Exception):
                     close()
-                except Exception:
-                    pass
 
         # If TGI returned zero usable chunks but did not raise, still count
         # the request as served so health metrics stay accurate.

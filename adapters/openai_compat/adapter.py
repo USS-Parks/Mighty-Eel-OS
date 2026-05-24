@@ -165,7 +165,7 @@ class OpenAICompatAdapter(AdapterBase):
             raise ModelNotFoundError(model="")
         if self._config.prefer_endpoint == "completion":
             resp = cast(
-                OpenAICompatResponse,
+                "OpenAICompatResponse",
                 await asyncio.to_thread(
                     self._client.completion,
                     prompt=prompt,
@@ -181,7 +181,7 @@ class OpenAICompatAdapter(AdapterBase):
         else:
             messages = [{"role": "user", "content": prompt}]
             resp = cast(
-                OpenAICompatResponse,
+                "OpenAICompatResponse",
                 await asyncio.to_thread(
                     self._client.chat_completions,
                     messages=messages,
@@ -209,7 +209,7 @@ class OpenAICompatAdapter(AdapterBase):
             raise ModelNotFoundError(model="")
         messages = [{"role": "user", "content": prompt}]
         chunks = cast(
-            Iterator[OpenAICompatStreamChunk],
+            "Iterator[OpenAICompatStreamChunk]",
             await asyncio.to_thread(
                 self._client.chat_completions,
                 messages=messages,

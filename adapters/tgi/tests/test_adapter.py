@@ -279,10 +279,9 @@ class TestTgiAdapterGenerateStream:
         adapter._initialized = True
         adapter._client = MagicMock()
         adapter._client.generate = MagicMock(return_value=iter([
-            TgiStreamChunk(token_text="Hello"),
-            TgiStreamChunk(token_text=" world"),
-            TgiStreamChunk(token_text="!", finish_reason="length",
-                            generated_text="Hello world!"),
+            TgiStreamChunk("Hello"),
+            TgiStreamChunk(" world"),
+            TgiStreamChunk("!", finish_reason="length", generated_text="Hello world!"),
         ]))
         stream = await adapter.generate("hi", GenerationParams(), stream=True)
         tokens: list[Token] = []
@@ -298,8 +297,7 @@ class TestTgiAdapterGenerateStream:
         adapter._initialized = True
         adapter._client = MagicMock()
         adapter._client.generate = MagicMock(return_value=iter([
-            TgiStreamChunk(token_text="hi", finish_reason="eos_token",
-                            generated_text="hi"),
+            TgiStreamChunk("hi", finish_reason="eos_token", generated_text="hi"),
         ]))
         stream = await adapter.generate("hi", GenerationParams(), stream=True)
         tokens: list[Token] = []
@@ -313,7 +311,7 @@ class TestTgiAdapterGenerateStream:
         adapter._initialized = True
 
         def _raising_iter():
-            yield TgiStreamChunk(token_text="he")
+            yield TgiStreamChunk("he")
             raise ContextExceededError(max_context=4096)
 
         adapter._client = MagicMock()

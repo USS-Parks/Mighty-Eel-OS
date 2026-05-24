@@ -10,6 +10,7 @@ speaks the subset of the SGLang HTTP shape the adapter consumes.
 J-20 (DOUGHERTY lane). Satisfies the integration mock minimums in
 `docs/ADAPTER-TEST-HARNESS-LOCK.md` §"Integration Mock Test Minimums".
 """
+
 from __future__ import annotations
 
 import json
@@ -19,7 +20,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import Any
+from typing import Any, ClassVar
 
 import pytest
 
@@ -32,7 +33,6 @@ from adapters.base import (
     Token,
 )
 from adapters.sglang.adapter import SglangAdapter
-
 
 # ─── fake SGLang server ────────────────────────────────────────────────────
 
@@ -75,7 +75,7 @@ def _build_stream(recipe: FakeRecipe) -> bytes:
 
 class _Handler(BaseHTTPRequestHandler):
     recipe: FakeRecipe = FakeRecipe()
-    hit_count: dict[str, int] = {}
+    hit_count: ClassVar[dict[str, int]] = {}
 
     def log_message(self, *_args: Any) -> None:
         return

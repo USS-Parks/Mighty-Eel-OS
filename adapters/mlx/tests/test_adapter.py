@@ -11,6 +11,7 @@ These tests must pass on non-Apple CI. The strategy:
 The assertion floor is set per ADAPTER-TEST-HARNESS-LOCK.md §Unit Test
 Minimums; every required behavior has at least one meaningful assert.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -34,7 +35,6 @@ from adapters.base import (
 from adapters.mlx.adapter import MLXAdapter
 from adapters.mlx.client import MLXClient, MLXLoadError
 from adapters.mlx.config import MLXConfig
-
 
 # ─── Fake mlx_lm module factory ─────────────────────────────────────────────
 

@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import json
 import logging
-import socket
 import time
 import urllib.error
 import urllib.request
@@ -211,12 +210,7 @@ class OpenAICompatClient:
                         elapsed_ms=elapsed,
                     )
             except urllib.error.HTTPError as e:
-                body_text = ""
-                try:
-                    if e.fp is not None:
-                        body_text = e.fp.read().decode("utf-8", errors="replace")
-                except (OSError, AttributeError):
-                    body_text = ""
+                body_text = _read_http_error_body(e)
                 self._handle_http_error(e.code, body_text)
                 # _handle_http_error only returns on 5xx with no retry decision.
                 if e.code >= 500 and attempt < attempts - 1:
@@ -226,8 +220,6 @@ class OpenAICompatClient:
                 raise BackendUnavailableError(
                     f"HTTP {e.code} from {path}: {body_text[:200]}",
                 ) from e
-            except socket.timeout as e:
-                raise AdapterTimeoutError(timeout_ms=int(deadline * 1000)) from e
             except urllib.error.URLError as e:
                 reason = str(getattr(e, "reason", ""))
                 if "timed out" in reason.lower():
@@ -263,19 +255,10 @@ class OpenAICompatClient:
         try:
             resp = self._opener.open(req, timeout=self._stream_timeout)
         except urllib.error.HTTPError as e:
-            body_text = ""
-            try:
-                if e.fp is not None:
-                    body_text = e.fp.read().decode("utf-8", errors="replace")
-            except (OSError, AttributeError):
-                body_text = ""
+            body_text = _read_http_error_body(e)
             self._handle_http_error(e.code, body_text)
             raise BackendUnavailableError(
                 f"HTTP {e.code} on stream open: {body_text[:200]}",
-            ) from e
-        except socket.timeout as e:
-            raise AdapterTimeoutError(
-                timeout_ms=int(self._stream_timeout * 1000),
             ) from e
         except urllib.error.URLError as e:
             reason = str(getattr(e, "reason", ""))
@@ -295,32 +278,13 @@ class OpenAICompatClient:
                 payload = line_str[len("data:") :].strip()
                 if payload == "[DONE]":
                     break
-                try:
-                    event = json.loads(payload)
-                except json.JSONDecodeError:
-                    # Malformed frames are tolerated mid-stream so a
-                    # single bad keepalive line does not kill a long
-                    # generation. Persistent corruption surfaces as an
-                    # empty stream which the adapter treats as a short
-                    # finish, matching the contract for "stop on
-                    # backend end markers without hanging".
-                    continue
-                choices = event.get("choices") or []
-                if not choices:
-                    continue
-                choice = choices[0]
-                delta = choice.get("delta") or {}
-                content = delta.get("content") or ""
-                finish_reason = choice.get("finish_reason")
-                yield OpenAICompatStreamChunk(
-                    content=content,
-                    finish_reason=finish_reason,
-                    stop=finish_reason is not None,
-                )
+                chunk = _stream_chunk_from_payload(payload)
+                if chunk is not None:
+                    yield chunk
         finally:
             try:
                 resp.close()
-            except Exception:  # noqa: BLE001 - close must never raise out.
+            except Exception:
                 logger.debug("stream close raised; ignoring", exc_info=True)
 
     def _handle_http_error(self, status: int, body_text: str) -> None:
@@ -333,19 +297,7 @@ class OpenAICompatClient:
             raise RateLimitedError()
         if status in (408, 504):
             raise AdapterTimeoutError(timeout_ms=int(self._timeout * 1000))
-        detail = ""
-        try:
-            err_body = json.loads(body_text) if body_text else {}
-            if isinstance(err_body, dict):
-                err = err_body.get("error")
-                if isinstance(err, dict):
-                    detail = str(err.get("message") or err.get("type") or "")
-                elif isinstance(err, str):
-                    detail = err
-                if not detail:
-                    detail = str(err_body.get("message") or "")
-        except (json.JSONDecodeError, TypeError):
-            detail = body_text[:200]
+        detail = _error_detail(body_text)
         detail_l = detail.lower()
         if status == 404:
             # OpenAI-style "model_not_found" or generic missing route.
@@ -353,11 +305,9 @@ class OpenAICompatClient:
                 raise ModelNotFoundError(model=_extract_model(detail) or "unknown")
             raise BackendUnavailableError(f"HTTP 404: {detail[:200]}")
         if status == 400:
-            if "context" in detail_l and (
-                "exceed" in detail_l or "too long" in detail_l or "length" in detail_l
-            ):
+            if _is_context_error(detail_l):
                 raise ContextExceededError(max_context=0)
-            if "out of memory" in detail_l or "oom" in detail_l:
+            if _is_oom_error(detail_l):
                 raise OutOfMemoryError()
             raise ValidationError(detail or "invalid request")
         if status == 401 or status == 403:
@@ -365,11 +315,68 @@ class OpenAICompatClient:
         if status == 422:
             raise ValidationError(detail or "unprocessable entity")
         if status >= 500:
-            if "out of memory" in detail_l or "oom" in detail_l:
+            if _is_oom_error(detail_l):
                 raise OutOfMemoryError()
             # 5xx falls through to the caller for retry/raise decision.
             return
         raise BackendUnavailableError(f"unexpected HTTP {status}: {detail[:200]}")
+
+
+def _read_http_error_body(error: urllib.error.HTTPError) -> str:
+    try:
+        if error.fp is not None:
+            return error.fp.read().decode("utf-8", errors="replace")
+    except (OSError, AttributeError):
+        return ""
+    return ""
+
+
+def _stream_chunk_from_payload(payload: str) -> OpenAICompatStreamChunk | None:
+    try:
+        event = json.loads(payload)
+    except json.JSONDecodeError:
+        # Malformed frames are tolerated mid-stream so a single bad keepalive
+        # line does not kill a long generation. Persistent corruption surfaces
+        # as an empty stream, which the adapter maps to a terminal marker.
+        return None
+    choices = event.get("choices") or []
+    if not choices:
+        return None
+    choice = choices[0]
+    delta = choice.get("delta") or {}
+    content = delta.get("content") or ""
+    finish_reason = choice.get("finish_reason")
+    return OpenAICompatStreamChunk(
+        content=content,
+        finish_reason=finish_reason,
+        stop=finish_reason is not None,
+    )
+
+
+def _error_detail(body_text: str) -> str:
+    try:
+        err_body = json.loads(body_text) if body_text else {}
+    except (json.JSONDecodeError, TypeError):
+        return body_text[:200]
+    if not isinstance(err_body, dict):
+        return ""
+    err = err_body.get("error")
+    if isinstance(err, dict):
+        return str(err.get("message") or err.get("type") or "")
+    if isinstance(err, str):
+        return err
+    return str(err_body.get("message") or "")
+
+
+def _is_context_error(detail_l: str) -> bool:
+    return (
+        "context" in detail_l
+        and ("exceed" in detail_l or "too long" in detail_l or "length" in detail_l)
+    )
+
+
+def _is_oom_error(detail_l: str) -> bool:
+    return "out of memory" in detail_l or "oom" in detail_l
 
 
 def _extract_model(detail: str) -> str | None:

@@ -131,37 +131,8 @@ class TgiClient:
                         "TGI emitted malformed stream frame",
                     ) from None
 
-                # TGI may emit an error frame mid-stream as either
-                # {"error": "...", "error_type": "..."} or
-                # {"error": {...}}. Map to typed errors.
-                if isinstance(chunk_data, dict) and "error" in chunk_data and "token" not in chunk_data:
-                    error_obj = chunk_data.get("error")
-                    if isinstance(error_obj, dict):
-                        err_detail = str(error_obj.get("message", error_obj))
-                    else:
-                        err_detail = str(error_obj)
-                    err_type = str(chunk_data.get("error_type", "")).lower()
-                    low = err_detail.lower()
-                    if "memory" in low or "oom" in low:
-                        raise OutOfMemoryError()
-                    if err_type == "validation" and (
-                        "too long" in low or "context" in low or "max_input" in low
-                    ):
-                        raise ContextExceededError(max_context=0)
-                    if err_type == "validation":
-                        raise ValidationError(err_detail or "TGI validation error")
-                    raise BackendUnavailableError(err_detail or "TGI stream error")
-
-                token = chunk_data.get("token", {}) if isinstance(chunk_data, dict) else {}
-                details = chunk_data.get("details") if isinstance(chunk_data, dict) else None
-                yield TgiStreamChunk(
-                    token_text=token.get("text", "") if isinstance(token, dict) else "",
-                    token_id=token.get("id") if isinstance(token, dict) else None,
-                    finish_reason=details.get("finish_reason")
-                        if isinstance(details, dict) else None,
-                    generated_text=chunk_data.get("generated_text")
-                        if isinstance(chunk_data, dict) else None,
-                )
+                _raise_for_stream_error(chunk_data)
+                yield _stream_chunk_from_data(chunk_data)
         finally:
             resp.close()
 
@@ -195,11 +166,19 @@ class TgiClient:
 
         if low_type == "overloaded" or "overloaded" in low_detail:
             raise RateLimitedError()
-        if "memory" in low_detail or "oom" in low_detail or "cuda out of memory" in low_detail:
+        if (
+            "memory" in low_detail
+            or "oom" in low_detail
+            or "cuda out of memory" in low_detail
+        ):
             raise OutOfMemoryError()
         if (
             low_type == "validation"
-            and ("too long" in low_detail or "max_input" in low_detail or "context" in low_detail)
+            and (
+                "too long" in low_detail
+                or "max_input" in low_detail
+                or "context" in low_detail
+            )
         ):
             raise ContextExceededError(max_context=0)
         if low_type == "validation":
@@ -268,3 +247,42 @@ class TgiClient:
                 return resp.read().decode("utf-8", errors="replace")
         except (urllib.error.URLError, TimeoutError, urllib.error.HTTPError):
             return ""
+
+
+def _raise_for_stream_error(chunk_data: Any) -> None:
+    if (
+        not isinstance(chunk_data, dict)
+        or "error" not in chunk_data
+        or "token" in chunk_data
+    ):
+        return
+
+    error_obj = chunk_data.get("error")
+    if isinstance(error_obj, dict):
+        err_detail = str(error_obj.get("message", error_obj))
+    else:
+        err_detail = str(error_obj)
+    err_type = str(chunk_data.get("error_type", "")).lower()
+    low = err_detail.lower()
+    if "memory" in low or "oom" in low:
+        raise OutOfMemoryError()
+    if err_type == "validation" and (
+        "too long" in low or "context" in low or "max_input" in low
+    ):
+        raise ContextExceededError(max_context=0)
+    if err_type == "validation":
+        raise ValidationError(err_detail or "TGI validation error")
+    raise BackendUnavailableError(err_detail or "TGI stream error")
+
+
+def _stream_chunk_from_data(chunk_data: Any) -> TgiStreamChunk:
+    token = chunk_data.get("token", {}) if isinstance(chunk_data, dict) else {}
+    details = chunk_data.get("details") if isinstance(chunk_data, dict) else None
+    return TgiStreamChunk(
+        token_text=token.get("text", "") if isinstance(token, dict) else "",
+        token_id=token.get("id") if isinstance(token, dict) else None,
+        finish_reason=details.get("finish_reason") if isinstance(details, dict) else None,
+        generated_text=chunk_data.get("generated_text")
+        if isinstance(chunk_data, dict)
+        else None,
+    )

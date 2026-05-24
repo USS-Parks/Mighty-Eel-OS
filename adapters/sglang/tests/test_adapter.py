@@ -8,11 +8,12 @@ The backend boundary is mocked at the `SglangClient` level. Live
 backend coverage is in `test_integration_live.py`; real HTTP/SSE
 wire coverage is in `test_integration_mock.py`.
 """
+
 from __future__ import annotations
 
 from collections.abc import Iterator
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -32,7 +33,6 @@ from adapters.base import (
 from adapters.sglang.adapter import SglangAdapter
 from adapters.sglang.client import SglangClient, SglangResponse, SglangStreamChunk
 from adapters.sglang.config import SglangConfig
-
 
 # ─── helpers ────────────────────────────────────────────────────────────────
 

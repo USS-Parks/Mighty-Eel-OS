@@ -29,7 +29,6 @@ DOUGHERTY J-23.
 
 from __future__ import annotations
 
-import asyncio
 import contextlib
 import json
 import socket
@@ -39,7 +38,6 @@ from collections.abc import Iterator
 from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
-from unittest.mock import AsyncMock
 
 import pytest
 
@@ -59,12 +57,8 @@ from adapters.base import (
     ValidationError,
 )
 from adapters.openai_compat.adapter import OpenAICompatAdapter
-from adapters.openai_compat.client import (
-    OpenAICompatClient,
-    OpenAICompatStreamChunk,
-)
+from adapters.openai_compat.client import OpenAICompatClient
 from adapters.openai_compat.config import OpenAICompatConfig
-
 
 # ─── Fake server harness ──────────────────────────────────────────────
 
@@ -169,7 +163,7 @@ class _FakeHandler(BaseHTTPRequestHandler):
             return True
         return self.headers.get("Authorization", "").startswith("Bearer ")
 
-    def do_GET(self) -> None:  # noqa: N802 - stdlib override.
+    def do_GET(self) -> None:
         self._maybe_delay()
         if not self._auth_ok():
             self.send_error(401)
@@ -180,7 +174,7 @@ class _FakeHandler(BaseHTTPRequestHandler):
             return
         self.send_error(404)
 
-    def do_POST(self) -> None:  # noqa: N802 - stdlib override.
+    def do_POST(self) -> None:
         length = int(self.headers.get("Content-Length", "0"))
         raw = self.rfile.read(length) if length else b""
         try:
@@ -669,13 +663,17 @@ class TestErrorMapping:
         class _FakeResp:
             status = 200
             length = -1
-            def read(self) -> bytes:  # noqa: D401 - mimic urllib response.
+            def read(self) -> bytes:
                 return b"not json"
             def __enter__(self) -> _FakeResp:
                 return self
             def __exit__(self, *_args: Any) -> None:
                 return None
-        client._opener = type("O", (), {"open": lambda self, req, timeout: _FakeResp()})()
+        class _FakeOpener:
+            def open(self, _req: Any, timeout: Any) -> _FakeResp:
+                return _FakeResp()
+
+        client._opener = _FakeOpener()  # type: ignore[assignment]
         with pytest.raises(ValidationError):
             client._request("GET", "/v1/models")
 
