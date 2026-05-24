@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import time
 import urllib.error
 import urllib.request
@@ -44,6 +45,9 @@ from adapters.base import (
 )
 
 logger = logging.getLogger("mai.adapters.triton.client")
+
+# Word-boundary OOM detector. Avoids matching e.g. ``boom`` or ``room``.
+_OOM_PATTERN = re.compile(r"(?:\boom\b|out[ _]of[ _]memory)", re.IGNORECASE)
 
 
 @dataclass
@@ -243,11 +247,7 @@ def _map_http_error(
         or "exceed" in lower
     ):
         raise ContextExceededError(max_context=0)
-    if (
-        "out of memory" in lower
-        or "oom" in lower
-        or ("cuda" in lower and "memory" in lower)
-    ):
+    if _OOM_PATTERN.search(detail) or ("cuda" in lower and "memory" in lower):
         raise OutOfMemoryError()
     if status == 502 or "broken pipe" in lower or "reset by peer" in lower:
         raise BackendCrashedError(detail=detail or f"HTTP {status}")
