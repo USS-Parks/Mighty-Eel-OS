@@ -1,0 +1,111 @@
+#!C:/Python314/python.exe
+"""Local GitDoctor pre-push regression gate.
+
+Install with:
+    git config core.hooksPath .integrity/hooks
+
+This gate is intentionally baseline-based while the Dougherty/J-series
+remediation lane is still open. It blocks pushes that make the mapped Local
+GitDoctor score worse or prevent the scanner from running.
+"""
+
+from __future__ import annotations
+
+import json
+import subprocess
+import sys
+import tempfile
+from collections import Counter
+from pathlib import Path
+
+MIN_SCORE = 59
+MAX_FAILED = 24
+MAX_HIGH = 8
+MAX_CRITICAL = 0
+
+
+def block(message: str) -> None:
+    print(f"BLOCKED [local-gitdoctor] {message}")
+
+
+def git_root() -> Path | None:
+    completed = subprocess.run(
+        ["git", "rev-parse", "--show-toplevel"],
+        capture_output=True,
+        text=True,
+    )
+    if completed.returncode != 0:
+        return None
+    return Path(completed.stdout.strip()).resolve()
+
+
+def main() -> int:
+    print("=== Local GitDoctor Pre-Push Gate ===")
+
+    root = git_root()
+    if root is None:
+        block("unable to locate repository root")
+        return 1
+
+    scanner = root / "tools" / "local_gitdoctor_scan.py"
+    if not scanner.is_file():
+        block("missing tools/local_gitdoctor_scan.py")
+        return 1
+
+    with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as handle:
+        report_path = Path(handle.name)
+
+    try:
+        completed = subprocess.run(
+            [
+                sys.executable,
+                str(scanner),
+                "--root",
+                str(root),
+                "--format",
+                "json",
+                "--output",
+                str(report_path),
+            ],
+            cwd=root,
+        )
+        if completed.returncode != 0:
+            block("scanner execution failed")
+            return 1
+
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+        severity_counts = Counter(item["severity"] for item in report.get("findings", []))
+        score = int(report.get("overall_score", 0))
+        failed = int(report.get("failed", 0))
+        high = int(severity_counts.get("HIGH", 0))
+        critical = int(severity_counts.get("CRITICAL", 0))
+
+        print(f"score={score} failed={failed} high={high} critical={critical}")
+
+        errors: list[str] = []
+        if score < MIN_SCORE:
+            errors.append(f"mapped score {score} is below baseline {MIN_SCORE}")
+        if failed > MAX_FAILED:
+            errors.append(f"failed checks {failed} exceed baseline {MAX_FAILED}")
+        if high > MAX_HIGH:
+            errors.append(f"HIGH findings {high} exceed baseline {MAX_HIGH}")
+        if critical > MAX_CRITICAL:
+            errors.append(f"CRITICAL findings {critical} exceed baseline {MAX_CRITICAL}")
+
+        if errors:
+            for error in errors:
+                block(error)
+            print("Refresh evidence with tools/local_gitdoctor_scan.py after fixing the regression.")
+            return 1
+
+        print("Local GitDoctor baseline preserved.")
+        return 0
+    finally:
+        try:
+            report_path.unlink()
+        except FileNotFoundError:
+            pass
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
