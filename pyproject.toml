@@ -100,4 +100,5 @@ disable_error_code = [
 asyncio_mode = "auto"
 markers = [
     "integration: requires real MAI instance",
+    "e2e: spawns the real mai-api binary as a subprocess (J-10)",
 ]
