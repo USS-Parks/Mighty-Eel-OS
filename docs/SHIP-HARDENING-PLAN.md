@@ -1247,6 +1247,31 @@ and was executed first.
 - Add restore drill tests.
 - Validate after restore.
 
+**Status (2026-05-23): done.** `tools/mai-admin/src/restore.rs`
+(`plan_restore` / `apply_restore`, two-phase: plan is read-only and
+verifies signature + per-component sha3 + WAL chain on the backup
+side; apply refuses populated targets without `--force`, recomputes
+sha3 *after* each write, replays the WAL chain in the restored tree,
+drops `source-manifest.json` + `restore-report.json` witnesses).
+`mai-admin restore plan` / `mai-admin restore apply` CLI with §13
+exit codes. New `RestoreError` enum (`ManifestMissing`,
+`TargetNotEmpty`, `UnsignedManifest`, `SignatureFailed`,
+`SourceDigestMismatch`, `TargetDigestMismatch`, `SourceMissing`,
+`AuditChainBroken`, `AuditChainLastMismatch`, and IO/serde
+passthroughs). Integration suite at
+`tools/mai-admin/tests/restore_e2e.rs` (20 tests) covers the §9.5
+DR drills end-to-end: WAL tamper, missing trust bundle, missing
+model registry, signed-manifest tamper — every drill asserts the
+target stays empty after a failed plan. Round-trip drills
+(`restored_tree_passes_audit_chain_replay`,
+`restored_tree_re_backs_up_to_byte_identical_state`) prove the
+restored tree is byte-faithful and re-verifies clean. Gates:
+`cargo test -p mai-admin` 64 pass (29 lib + 15 backup_e2e + 20
+restore_e2e); `cargo clippy -p mai-admin --tests --bins
+-- -D warnings -A clippy::pedantic` clean;
+`cargo fmt -p mai-admin -- --check` clean. Landed in
+commit `0fe5f59` on `origin/main`.
+
 ### Session SHIP-11: Observability
 
 - Add metrics endpoint/export shape.

@@ -237,8 +237,9 @@ Every item must pass before MAI ships on hardware:
 - [x] Full workspace test suite passes (S46 + SHIP-07-convergence; 1196+ Rust lib + ~108 mai-api integration + Python suites).
 - [x] Ship-profile production guard fails closed at startup before any socket binds (SHIP-07-convergence; `ProductionReadinessReport::evaluate_with_runtime` inside `MaiServer::run`).
 - [x] Demo-safe defaults (`StubVault`, `MemoryAuditWriter`, `NullSealer`, `AcceptAllBundleVerifier`) unreachable in production startup when `MAI_SHIP_PROFILE` is set (SHIP-07-convergence).
-- [ ] `mai-ship-validate` standalone binary + `GET /v1/system/production-readiness` admin endpoint (SHIP-07-endpoint-and-cli).
-- [ ] Persistent state recovery drill (SHIP-09 + SHIP-10).
+- [x] `mai-ship-validate` standalone binary + `GET /v1/system/production-readiness` admin endpoint (SHIP-07-endpoint-and-cli, commit `7b746c0`).
+- [x] Backup + restore tooling (SHIP-09 `mai-admin backup create/verify` commit `7b746c0`; SHIP-10 `mai-admin restore plan/apply` + DR drills commit `0fe5f59`).
+- [ ] Persistent state recovery drill on representative Scout / Ranger hardware (carried to SHIP-14 72-hour burn-in).
 - [ ] 72-hour burn-in passes on representative Scout hardware.
 - [ ] 72-hour burn-in passes on representative Ranger hardware.
 - [ ] Air-gap verification passes 72-hour endurance.

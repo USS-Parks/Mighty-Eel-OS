@@ -933,3 +933,144 @@ Recovered `mai-api/tests/audit_wal.rs` (7 acceptance tests covering survives-res
 **File:** `docs/COGENT-DEPLOYMENT-ROADMAP.md` (730 lines)
 
 Frames the packaging, tester-bundle, and release-candidate cadence (RC-01 tester bundle → RC2 hardened release candidate → installer/appliance) so the ship hardening lane lands inside a coherent release narrative rather than ad-hoc binary handoffs. RC1 is for trusted technical testers and acquirer reviewers; RC2 is for serious deployment rehearsal with production posture and persistent state; the installer phase follows SHIP-08 packaging.
+
+---
+
+## SHIP-10 Complete: Restore Tooling and DR Drills (2026-05-23)
+
+**Plan reference:** `docs/SHIP-HARDENING-PLAN.md` §Session SHIP-10.
+**Commit:** `0fe5f59` on `origin/main`.
+
+### Goal
+
+Provide operator-grade `restore plan` / `restore apply` for the
+backups SHIP-09 ships, and prove the recovery path catches every
+class of corrupt backup before any file lands in the target.
+
+### Deliverables
+
+- **New module** `mai/tools/mai-admin/src/restore.rs` (~740 lines):
+  - `plan_restore(backup_dir, target_dir, verifying_key, require_signed) -> RestorePlan`
+    is read-only. Loads `manifest.json`, verifies the ML-DSA-87
+    signature (when a 2592-byte pubkey is supplied; warns when
+    signed-but-no-key), recomputes per-component sha3 (file via
+    `manifest::sha3_file`, tree via `manifest::sha3_tree`), and on
+    WAL components (`api_audit_wal` / `compliance_audit_wal`)
+    replays the chain through `audit::verify_chain` and cross-checks
+    the observed last hash against `ManifestComponent.last_entry_hash`.
+    All source-side verification runs **before** the obstacle scan
+    so a corrupt backup cannot ever touch the target.
+  - `apply_restore(&plan, force) -> RestoreReport` refuses populated
+    targets without `--force` (`RestoreError::TargetNotEmpty`). With
+    `force=true` it removes the existing file before copy (so shorter
+    overwrites don't leak stale tail bytes) or `remove_dir_all`s the
+    tree (so stray files inside the previous occupant don't survive).
+    After every write recomputes sha3 against the manifest expected
+    value and errors with `RestoreError::TargetDigestMismatch` on any
+    mismatch. WAL components additionally re-replay the chain in the
+    restored tree and assert last-entry-hash agreement. On success
+    drops `<target>/source-manifest.json` (byte-identical copy of the
+    backup manifest, witness for post-restore verifies) and
+    `<target>/restore-report.json` (the serialized `RestoreReport`).
+  - New public types: `RestoreAction`, `ActionKind { File, Tree }`,
+    `RestoreObstacle`, `RestorePlan`, `RestoreReport`,
+    `RestoreSignatureRecord`, `RestoredComponent`.
+  - New `RestoreError` enum (12 variants): `Io`, `Serde`, `Manifest`,
+    `Backup`, `ManifestMissing`, `TargetNotEmpty`, `UnsignedManifest`,
+    `SignatureFailed`, `SourceDigestMismatch`, `TargetDigestMismatch`,
+    `SourceMissing`, `AuditChainBroken`, `AuditChainLastMismatch`.
+
+- **CLI** `mai/tools/mai-admin/src/main.rs`:
+  - `mai-admin restore plan --backup-dir <DIR> --target <DIR>
+    [--verifying-key <PATH>] [--require-signed] [--json]`.
+  - `mai-admin restore apply --backup-dir <DIR> --target <DIR>
+    [--verifying-key <PATH>] [--require-signed] [--force] [--json]`.
+  - Replaces the SHIP-09 stub. §13 exit codes: 0 ok / 1 plan-or-apply
+    failed / 2 inputs unreadable / 3 manifest or state missing /
+    4 internal serializer error.
+  - Human reports walk plan actions + obstacles + warnings; JSON
+    reports are `PlanJson` (with `PlanActionJson` /
+    `PlanObstacleJson`) and `RestoreReport` (Serialize + Deserialize
+    for round-trip tests).
+
+- **Library re-exports** in `mai/tools/mai-admin/src/lib.rs`:
+  `apply_restore`, `plan_restore`, `RestorePlan`, `RestoreReport`,
+  `RestoreError`, `RestoreSignatureRecord`, `RestoredComponent`,
+  `RestoreAction`, `RestoreObstacle`, `ActionKind`.
+
+- **Integration tests** `mai/tools/mai-admin/tests/restore_e2e.rs`
+  (~591 lines, 20 tests). Fixture is byte-identical to
+  `backup_e2e.rs::fixture` — restore is the inverse of backup so the
+  two suites share a state contract. Coverage:
+  - Plan happy paths: empty-target, signed-backup-verifies,
+    require-signed-rejects-unsigned, warns-when-signed-but-no-key,
+    rejects-wrong-pk, detects-obstacles, kind-matches-disk-shape.
+  - Apply happy paths: unsigned-round-trip, signed-records-anchor.
+  - **DR drills (per SHIP-HARDENING-PLAN §9.5):**
+    `restored_tree_passes_audit_chain_replay`,
+    `restored_tree_re_backs_up_to_byte_identical_state`,
+    `drill_audit_wal_tamper_after_backup_blocks_restore`
+    (proves §9.5 "restore after audit WAL tamper attempt"),
+    `drill_missing_trust_bundle_component_blocks_restore`
+    (§9.5 "restore after missing trust bundle"),
+    `drill_missing_model_registry_component_blocks_restore`
+    (§9.5 "restore after model registry metadata loss"),
+    `drill_signed_manifest_tamper_blocks_restore`.
+    Every drill asserts the target stays empty after the failed plan.
+  - Force vs no-force: refuses-populated-without-force,
+    overwrites-with-force.
+  - Report serialization: round-trips-through-json,
+    source-manifest-byte-identical, missing-manifest-errors.
+
+- **Unit tests** added in `restore.rs` (7 tests): `rel_string_normalises_separators`,
+  `plan_missing_manifest_errors`,
+  `plan_with_empty_manifest_and_empty_target_has_no_obstacles`,
+  `plan_require_signed_rejects_unsigned`,
+  `apply_refuses_when_obstacles_and_force_false`,
+  `apply_with_force_overwrites`,
+  `plan_detects_source_digest_mismatch`.
+
+### Verification
+
+- `cargo test -p mai-admin`: 64/64 pass (29 lib including 7 new
+  restore unit tests + 15 backup_e2e + 20 restore_e2e).
+- `cargo clippy -p mai-admin --tests --bins -- -D warnings -A clippy::pedantic`: clean.
+- `cargo fmt -p mai-admin -- --check`: clean.
+- Workspace discipline: stayed inside `tools/mai-admin/`. No
+  `mai-api` dependency added (same vendoring discipline SHIP-09
+  established for `BackupSourceProfile` / `AuditEntry` /
+  `verify_chain`). Disjoint from the concurrent SHIP-12 work in
+  `.github/workflows/`, `config/`, `scripts/`.
+- Pre-commit integrity hook: 4 files / 0 blocked / 0 warnings.
+
+### Acceptance criteria (plan §1.4 + §9)
+
+- [x] Backup artifact can restore a fresh node (`apply_unsigned_into_empty_target_round_trips`).
+- [x] Restore verifies manifest signature, file checksums, audit chains, and trust bundle metadata (signature checked in plan, sha3 + chain replay on both backup and target sides, trust bundle reads through the trust_bundle_cache component).
+- [x] Restore refuses to overwrite live state unless `--force` (`RestoreError::TargetNotEmpty`).
+- [x] Restore produces a restore report (`<target>/restore-report.json`).
+- [ ] Run `mai-ship-validate` after restore as a composite operator step (carried — the standalone validator binary lives in mai-api; SHIP-15 documents the runbook that chains `restore apply` and `mai-ship-validate --state-dir`).
+- [x] DR drills exist for: restore to empty node, restore after audit WAL tamper attempt, restore after missing trust bundle, restore after model registry metadata loss, restore after signed-manifest tamper.
+- [ ] Restore drill on real packaged installation — carried to SHIP-14 72-hour burn-in (restore-during-load + post-restore validate).
+
+### Carried forward
+
+- SHIP-12 CI: nightly job that exercises `backup create` →
+  `restore plan/apply` → re-`backup verify` over a representative
+  fixture.
+- SHIP-14: 72-hour burn-in restore-during-load drill on Scout /
+  Ranger hardware.
+- SHIP-15: operator restore runbook documenting the recovery flow
+  end-to-end including the `mai-ship-validate --state-dir` step.
+
+### Process notes
+
+- Parallel SHIP-12 session was running concurrently. Scope was
+  kept strictly inside `tools/mai-admin/`; SHIP-12's
+  `.github/workflows/ship-validation.yml`, `config/forbidden-terms.toml`,
+  and `scripts/ci_forbidden_terms.py` were left untracked and
+  untouched in this commit.
+- `restore.rs` was staged via `$env:TEMP\opencode\` per
+  `mai/.claude/CLAUDE.md` anti-truncation rules, verified with
+  `wc -l` + `tail -5` before copy, then read-back-verified after
+  copy. All subsequent edits used the Edit tool (atomic patches).

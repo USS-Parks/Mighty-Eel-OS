@@ -492,24 +492,52 @@ The original session description had two distinct deliverables; in execution the
 
 ---
 
-## Session SHIP-10: Backup And Restore
+## Session SHIP-10: Backup And Restore (done 2026-05-23, commit `0fe5f59`)
 
 **Goal:** Prove a node can lose state and recover safely.
 
-**Work:**
+**Delivered:**
 
-- Implement or finalize backup command.
-- Include vault, audit WAL, compliance WAL, trust cache, model registry,
-  reports, and auth config.
-- Implement restore procedure.
-- Run restore onto a fresh node directory.
-- Verify audit chain and trust bundle after restore.
+- `tools/mai-admin/src/restore.rs` (740 lines) implements `plan_restore`
+  / `apply_restore` as a two-phase pipeline:
+  - **Plan** is read-only: loads `manifest.json`, verifies ML-DSA-87
+    signature (when a 2592-byte pubkey is supplied), recomputes every
+    component sha3 against the backup-side files, replays the audit
+    chain on WAL components and cross-checks against
+    `ManifestComponent.last_entry_hash`. All source-side verification
+    runs *before* the obstacle scan so a corrupt backup cannot ever
+    touch the target.
+  - **Apply** refuses populated targets without `--force` per §9.5,
+    recomputes per-component sha3 after every write (catches in-flight
+    corruption that bypassed the source check), replays the WAL chain
+    in the restored tree, and drops `source-manifest.json` +
+    `restore-report.json` as audit witnesses at the target root.
+- `mai-admin restore plan --backup-dir <DIR> --target <DIR>
+  [--verifying-key <PATH>] [--require-signed] [--json]` and
+  `mai-admin restore apply [--force] …` CLI subcommands; §13 exit
+  codes (0 ok / 1 verification failed / 2 inputs unreadable / 3
+  manifest missing / 4 internal serializer error).
+- Integration suite `tools/mai-admin/tests/restore_e2e.rs` (20 tests)
+  including the §9.5 DR drills end-to-end: WAL tamper, missing trust
+  bundle, missing model registry, signed-manifest tamper. Each drill
+  asserts the target stays empty after a failed plan. Two round-trip
+  drills prove the restored tree is byte-faithful and re-verifies
+  clean.
 
 **Acceptance:**
 
-- Backup artifact can restore a fresh node.
-- Restored node passes production validation.
-- Restore drill is documented.
+- [x] Backup artifact can restore a fresh node (`apply_unsigned_into_empty_target_round_trips`).
+- [x] Restored node passes audit-chain replay (`restored_tree_passes_audit_chain_replay`).
+- [x] Restored tree re-backs-up to byte-identical state (`restored_tree_re_backs_up_to_byte_identical_state`).
+- [x] Tampered backups never reach the target (4 DR drill tests).
+- [ ] Restored node passes `mai-ship-validate --state-dir <target>` end-to-end — operator-driven step that exercises the SHIP-07-endpoint-and-cli binary against a restored tree; documented in the SHIP-15 operator runbook lane.
+
+**Carried forward:**
+
+- 72-hour burn-in restore-during-load drill → SHIP-14.
+- Operator restore runbook → SHIP-15.
+- CI nightly that exercises `backup create` → `restore plan/apply`
+  → re-`backup verify` → SHIP-12.
 
 ---
 
