@@ -239,10 +239,18 @@ class OllamaClient:
         return resp.body
 
     def health(self) -> bool:
-        """Check if Ollama server is responding (GET /)."""
+        """Check if Ollama server is responding.
+
+        Probes `/api/tags` (always JSON) rather than `/` (plain text
+        `Ollama is running`) — _request unconditionally json.loads the
+        body, so probing `/` against a real server raises
+        JSONDecodeError, which this method catches and returns False
+        for, making live `health()` always-fail. Discovered during
+        DOUGHERTY J-06.
+        """
         try:
             resp = self._request(
-                "GET", "/",
+                "GET", "/api/tags",
                 timeout_ms=self._config.health_check_timeout_ms,
             )
             return resp.status_code == 200
