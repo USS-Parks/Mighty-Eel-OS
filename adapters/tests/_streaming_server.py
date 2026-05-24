@@ -102,7 +102,7 @@ class _Handler(BaseHTTPRequestHandler):
     # always have a real recipe; this annotation keeps mypy happy.
     recipe: StreamRecipe = StreamRecipe()
 
-    def log_message(self, *_args: Any) -> None:  # type: ignore[override]
+    def log_message(self, *_args: Any) -> None:
         # Silence the per-request log lines that BaseHTTPRequestHandler
         # otherwise dumps to stderr during the test run.
         return
