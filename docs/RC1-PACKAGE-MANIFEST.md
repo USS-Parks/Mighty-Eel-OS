@@ -101,9 +101,21 @@ verbatim — the only differences are exclusions listed in §4.
 - `docs/` — full docs tree, including:
   - `RC1-FREEZE-NOTES.md` (RC-01 output)
   - `RC1-PACKAGE-MANIFEST.md` (this document)
-  - `RC1-TEST-EVIDENCE.md` (after RC-05)
-  - `runbooks/` (14 numbered runbooks from SHIP-15)
-  - `acquisition/` (Gate D evidence package, S45)
+  - `RC1-BUILD-NOTES.md` (RC-03 output)
+  - `README-FIRST.md` (RC-04 output — also mirrored at the bundle
+    top level by the RC-08 assembler)
+  - `RC1-TEST-EVIDENCE.md` (RC-05 output)
+  - `RC1-FRESH-MACHINE-NOTES.md` (RC-06 output)
+  - `TESTER-INSTRUCTIONS.md` (RC-07 output)
+  - `RC1-BUNDLE-NOTES.md` (RC-08 output)
+  - `RC1-TESTER-FEEDBACK.md` (RC-09 audit trail; populated as
+    feedback arrives)
+  - `RC1-SELF-REVIEW-TRACK-C.md` (RC-09 self-review memo, 626 lines)
+  - `RC1-CHANGES.md` (RC-10 changelog; tracks RC1.1-docs revisions)
+  - `runbooks/` (14 numbered runbooks from SHIP-15, plus the
+    `README.md` audience note added in RC1.1-docs)
+  - `acquisition/` (Gate D evidence package, S45; demos rewritten
+    in RC1.1-docs to use curl against the live HTTP surface)
   - Top-level briefs (SCHEDULER, LAMPREY, AIR-GAP, API-REFERENCE,
     SDK-REFERENCE, plus all operator and ship docs)
 

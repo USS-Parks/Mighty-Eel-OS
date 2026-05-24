@@ -177,18 +177,24 @@ freeze. Output is a findings memo, not a pass/fail.
 1. Run Track A and Track B first. The findings memo assumes the
    tests are green on your host.
 2. Read the architecture overview:
-   `source/docs/acquisition/ARCHITECTURE.md` and the three layer
-   docs under `source/docs/acquisition/` (router, policy, audit).
-3. Read the six demo narratives:
+   `source/docs/acquisition/ARCHITECTURE.md`. The router, policy,
+   and audit layers are described inline in its §"System diagram"
+   (the three boxes inside the Lamprey block) and in its
+   §"Source-of-truth navigation" table — there are no separate
+   layer files. For more depth on each layer, follow the
+   cross-references at the bottom of that doc into
+   `LAMPREY-BRIEF.md`, `TRUST-MANIFOLD.md`, and
+   `AUDIT-CORRELATION.md`.
+3. Read the four demo narratives:
    `source/docs/acquisition/demos/{healthcare,defense,tribal,multi-domain}.md`,
    and the two demo files embedded in code:
    `source/mai-compliance/tests/compliance_demos.rs` and
    `compliance_perf.rs`.
 4. Read at least the following runbooks under
    `source/docs/runbooks/`:
-   `04-verify-audit-chain.md`, `05-generate-compliance-report.md`,
-   `09-trust-bundle-expired.md`, `10-audit-wal-tamper.md`,
-   `11-air-gap-violation.md`.
+   `05-verify-audit-chain.md`, `06-generate-compliance-report.md`,
+   `11-trust-bundle-expired.md`, `12-audit-wal-tamper.md`,
+   `13-air-gap-violation.md`.
 5. Read `source/docs/RC1-FREEZE-NOTES.md` §"Intentionally
    Excluded" so you know what we already know is missing.
 6. **Produce a findings memo.** Suggested structure:

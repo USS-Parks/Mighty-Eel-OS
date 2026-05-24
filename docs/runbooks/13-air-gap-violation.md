@@ -1,5 +1,15 @@
 # Runbook 13 — Air-Gap Violation
 
+> **Status against RC1 freeze (`dceaabc`):** Describes the
+> production operator surface. The `mai-admin audit tail`
+> command cited below is **stubbed** at this freeze (see
+> `tools/mai-admin/src/main.rs:1-7`). The corresponding HTTP
+> paths on a running daemon are `GET /v1/system/connectivity`
+> for the live view and
+> `GET /v1/compliance/audit?...` for stored events. The
+> `mai-ship-validate` binary (shipped in `bin/`) does implement
+> `PROD-NET-100` and can be invoked stand-alone.
+
 ## When to use
 
 - `/v1/system/connectivity` reports any non-loopback connection

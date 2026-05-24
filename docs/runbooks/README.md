@@ -1,5 +1,21 @@
 # MAI Operator Runbooks
 
+> **Audience note (RC1.1-docs, 2026-05-24):** These runbooks
+> describe the **Linux systemd production deployment** of a MAI
+> appliance in `ship` profile. The RC1 tester bundle ships
+> **Windows MSVC binaries only**, because the RC1 audience is
+> laptop testers (see `README-FIRST.md` §3), not appliance
+> operators. Linux appliance binaries arrive in RC2. Until then,
+> treat these runbooks as **design documentation** rather than as
+> procedures executable on your tester machine — they describe
+> what the on-call operator does, not what you do on Windows.
+>
+> Individual runbooks may also carry a "Status against RC1 freeze"
+> band noting which `mai-admin` subcommands they reference are
+> stubbed or undeclared at the freeze; in those cases the HTTP
+> equivalents on a running daemon are the operative surface for
+> RC1 testers.
+
 Concise, single-purpose procedures for operating a MAI appliance
 in `ship` profile. Every runbook follows the same shape:
 

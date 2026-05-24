@@ -3,9 +3,11 @@
 **Project:** Island Mountain MAI + Lamprey
 **Demo target:** Acquirer technical reviewer can run this end to end
 in under ten minutes with green output.
-**Status:** Session 45 demo script
+**Status:** Session 45 demo script — RC1.1-docs revision (2026-05-24)
 **Companion scaffold:** `apps/compliance-routed/`
 **Companion brief:** [`../../LAMPREY-BRIEF.md`](../../LAMPREY-BRIEF.md)
+**Backed by automated test:** `test_hipaa_workflow` in
+`source/mai-compliance/tests/compliance_demos.rs`
 
 This demo shows PHI detection forcing a local-only route on a chat
 request that contains protected health information. The expected
@@ -20,36 +22,70 @@ For the higher-level demo catalogue, see
 
 ## Pre-flight
 
-- Repo checked out at the post-S45 commit.
-- `mai-api` server can be started (no live OpenBao required —
-  `local-dev` deployment profile works).
-- `MAI_API_KEY` environment variable set to a valid local-dev key.
-- Python 3.11+ with `mai-sdk-python` installed (`pip install -e
-  mai-sdk-python/`).
+- RC1 bundle unpacked. Commands below assume your CWD is the
+  bundle root (`MAI-Lamprey-RC1/`).
+- For the binary path (RC1 v2): `bin/mai-api.exe` is present. No
+  toolchain required.
+- For the source path: rustc 1.85+ available.
+- `curl` available (Windows 10+ ships it; on PowerShell you can
+  also use `Invoke-WebRequest`).
 
-Deployment profile: `mai/deployment/local-dev/profile.toml` with
-`compliance.template = "Healthcare"`.
+This demo exercises the live HTTP surface. The compliance engine
+itself — PHI detection, BAA enforcement, composer fold, audit
+chain, certified report — is independently verified by the
+`test_hipaa_workflow` test, which runs as part of
+`cargo test -p mai-compliance --test compliance_demos` (covered
+in `TESTER-INSTRUCTIONS.md` §4.B).
 
 ---
 
-## Setup script
+## Setup
 
-```powershell
-# 1. Start mai-api with the Healthcare template
-cd "$env:USERPROFILE\Documents\Claude\Island Mountain Mighty Eel OS\mai"
-$env:MAI_DEPLOYMENT_PROFILE = "deployment/local-dev"
-$env:MAI_COMPLIANCE_TEMPLATE = "Healthcare"
-cargo run --release --bin mai-api
+**1. Start the daemon** (RC1 v2 binary path):
 
-# 2. In a second terminal, set the API key for the SDK
-$env:MAI_API_BASE = "http://127.0.0.1:8080"
-$env:MAI_API_KEY  = "im-<your-local-dev-key>"
-
-# 3. Confirm the Healthcare template is active
-mai compliance status
+```
+.\bin\mai-api.exe
 ```
 
-Expected `mai compliance status` output:
+Or source path: `cd source && cargo run --release --bin mai-api`.
+
+**2. Capture the first-boot admin key** from the boxed stdout
+banner (one line that starts with `im-` followed by 64 hex
+characters). Export it into your second shell:
+
+```powershell
+$env:MAI_API_KEY = "im-<paste-the-64-hex-key-here>"
+```
+
+```bash
+export MAI_API_KEY="im-<paste-the-64-hex-key-here>"
+```
+
+**3. Activate the Healthcare policy template** so the HIPAA
+module fires on this demo's traffic:
+
+```powershell
+curl.exe -X POST http://127.0.0.1:8420/v1/compliance/policies/template `
+  -H "X-IM-Auth-Token: $env:MAI_API_KEY" `
+  -H "Content-Type: application/json" `
+  -d '{"template":"Healthcare"}'
+```
+
+```bash
+curl -X POST http://127.0.0.1:8420/v1/compliance/policies/template \
+  -H "X-IM-Auth-Token: $MAI_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"template":"Healthcare"}'
+```
+
+**4. Confirm the template is active:**
+
+```
+curl http://127.0.0.1:8420/v1/compliance/status \
+  -H "X-IM-Auth-Token: $MAI_API_KEY"
+```
+
+Expected JSON shape:
 
 ```json
 {
@@ -65,15 +101,26 @@ Expected `mai compliance status` output:
 }
 ```
 
+Exact field set may evolve; the load-bearing field for this demo
+is `modules.hipaa.enabled = true`.
+
 ---
 
 ## Trigger
 
-Send a chat request whose content contains a PHI marker. The
-scaffold ships a fixture; for an interactive run:
+Send a chat request whose content contains a PHI marker:
 
-```powershell
-mai chat "Patient John Doe (MRN 123456) presented with chest pain on 2026-05-22. Recommend imaging?" --model lamprey/medical-local
+```
+curl -X POST http://127.0.0.1:8420/v1/chat/completions \
+  -H "X-IM-Auth-Token: $MAI_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "lamprey/medical-local",
+    "messages": [
+      {"role": "user",
+       "content": "Patient John Doe (MRN 123456) presented with chest pain on 2026-05-22. Recommend imaging?"}
+    ]
+  }'
 ```
 
 The fixture markers in `apps/compliance-routed/tests/fixtures/`
@@ -87,8 +134,10 @@ exercise:
 
 ## Expected output
 
-The chat response itself runs locally and returns model output. The
-*decision metadata* is what proves the demo:
+The chat response itself runs locally and returns model output (if
+an adapter is wired) or a `no adapters configured` envelope if not.
+The *decision metadata* is what proves the demo, and it is recorded
+to the audit log whether or not an adapter ran. The decision shape:
 
 ```json
 {
@@ -113,48 +162,51 @@ The chat response itself runs locally and returns model output. The
 ```
 
 The decision is `local_only_allowed`, the routing is `local_only`,
-and the chat completion runs on a locally-loaded model. No prompt
-content crossed the cloud trust boundary.
+and no prompt content crossed the cloud trust boundary.
 
 ---
 
-## Verification steps
+## Verification
 
 1. **Query the audit log for the recorded decision.**
 
-   ```powershell
-   mai compliance audit --tenant local-dev --module hipaa --limit 5
+   ```
+   curl "http://127.0.0.1:8420/v1/compliance/audit?tenant=local-dev&module=hipaa&limit=5" \
+     -H "X-IM-Auth-Token: $MAI_API_KEY"
    ```
 
    The newly-recorded entry appears with `decision = local_only_allowed`,
-   `module = hipaa`, and full `CorrelationFields` (credential_event_id,
-   lamprey_decision_id, mai_request_id).
+   `module = hipaa`, and full `CorrelationFields`
+   (`credential_event_id`, `lamprey_decision_id`, `mai_request_id`).
 
 2. **Verify the audit chain integrity.**
 
-   ```powershell
-   curl -H "X-IM-Auth-Token: $env:MAI_API_KEY" `
-        http://127.0.0.1:8080/v1/compliance/audit/integrity | ConvertFrom-Json
+   ```
+   curl http://127.0.0.1:8420/v1/compliance/audit/integrity \
+     -H "X-IM-Auth-Token: $MAI_API_KEY"
    ```
 
    Returns `{ "chain_status": "intact", "head_id": 42, "verified_count": 42 }`.
 
 3. **Generate a HIPAA compliance report.**
 
-   ```powershell
-   mai compliance report generate HIPAA --scope tenant=local-dev
+   ```
+   curl -X POST http://127.0.0.1:8420/v1/compliance/reports/generate \
+     -H "X-IM-Auth-Token: $MAI_API_KEY" \
+     -H "Content-Type: application/json" \
+     -d '{"report_type":"HipaaAuditTrail","tenant":"local-dev"}'
    ```
 
-   Returns a report ID. The report includes:
-
-   - The PHI decision from step 1.
-   - A `TrustSection` (§A.13) with trust mode and bundle version.
-   - A summary count of decisions per route.
+   Returns a report ID. The generated report includes the PHI
+   decision from step 1, a `TrustSection` (§A.13) with trust mode
+   and bundle version, and per-route summary counts.
 
 4. **Download the certified report.**
 
-   ```powershell
-   mai compliance report download <id> --format json --out hipaa-report.json
+   ```
+   curl "http://127.0.0.1:8420/v1/compliance/reports/<id>/download?format=json" \
+     -H "X-IM-Auth-Token: $MAI_API_KEY" \
+     -o hipaa-report.json
    ```
 
    The file's `signature_hex` field can be re-verified off-host
@@ -168,15 +220,20 @@ content crossed the cloud trust boundary.
 |---|---|
 | Decision is `local_only_allowed` | Y |
 | `hipaa.phi_detected` is in reasons | Y |
-| Inference returned a response (locally) | Y |
 | Audit entry created with HIPAA module + correlation IDs | Y |
 | Audit chain integrity is `intact` | Y |
 | HIPAA report generated with `TrustSection` | Y |
 | Report's signature verifies via `verify_certified_report` | Y |
 
-If any check fails, run `pytest apps/compliance-routed/tests/`
-first to confirm the local-dev scaffold is healthy; the scaffold
-exercises the same path under controlled fixtures.
+If any check fails, run the automated equivalent first:
+
+```
+cd source
+cargo test -p mai-compliance --test compliance_demos test_hipaa_workflow -- --nocapture
+```
+
+A green test there isolates the failure to the live HTTP path
+rather than the compliance engine itself.
 
 ---
 

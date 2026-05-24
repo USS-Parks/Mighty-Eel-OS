@@ -3,9 +3,11 @@
 **Project:** Island Mountain MAI + Lamprey
 **Demo target:** Acquirer technical reviewer can run this end to end
 in under ten minutes with green output.
-**Status:** Session 45 demo script
+**Status:** Session 45 demo script — RC1.1-docs revision (2026-05-24)
 **Companion scaffold:** `apps/compliance-routed/`
 **Companion brief:** [`../../LAMPREY-BRIEF.md`](../../LAMPREY-BRIEF.md)
+**Backed by automated test:** `test_itar_workflow` in
+`source/mai-compliance/tests/compliance_demos.rs`
 
 This demo shows controlled-technical-data detection blocking unsafe
 backends. The expected outcome is a `deny` decision (when no
@@ -22,35 +24,51 @@ specifics, see [`../../LAMPREY-BRIEF.md`](../../LAMPREY-BRIEF.md)
 
 ## Pre-flight
 
-- Repo checked out at the post-S45 commit.
-- `mai-api` server can be started.
-- `MAI_API_KEY` set to a valid local-dev key with `itar_ear` scope
-  attached to the local-dev claim.
-- At least one inference backend tagged with
-  `jurisdiction = "US"` and `air_gap_capable = true`.
-
-Deployment profile: `mai/deployment/airgap-demo/profile.toml` with
-`compliance.template = "Defense"`. This profile is the closest
-analogue to a real defence-contractor deployment.
+- RC1 bundle unpacked. CWD is `MAI-Lamprey-RC1/`.
+- `bin/mai-api.exe` present (RC1 v2) or rustc 1.85+ for source path.
+- `curl` available.
+- For the **allow path** (§"Expected output, allow path") at least
+  one inference backend must be tagged `jurisdiction = "US"` and
+  `air_gap_capable = true`. The RC1 freeze ships no adapters by
+  default, so the **deny path** is what you will see end to end on
+  the bundle; the allow path is documented for completeness and
+  exercised by the automated test on a synthetic backend.
 
 ---
 
-## Setup script
+## Setup
 
-```powershell
-cd "$env:USERPROFILE\Documents\Claude\Island Mountain Mighty Eel OS\mai"
-$env:MAI_DEPLOYMENT_PROFILE = "deployment/airgap-demo"
-$env:MAI_COMPLIANCE_TEMPLATE = "Defense"
-cargo run --release --bin mai-api
+**1. Start the daemon:**
 
-# Second terminal
-$env:MAI_API_BASE = "http://127.0.0.1:8080"
-$env:MAI_API_KEY  = "im-<airgap-demo-key>"
-
-mai compliance status
+```
+.\bin\mai-api.exe
 ```
 
-Expected status:
+**2. Capture the first-boot admin key** from the boxed stdout
+banner and export it:
+
+```
+export MAI_API_KEY="im-<paste-the-64-hex-key>"          # POSIX
+$env:MAI_API_KEY = "im-<paste-the-64-hex-key>"          # PowerShell
+```
+
+**3. Activate the Defense policy template:**
+
+```
+curl -X POST http://127.0.0.1:8420/v1/compliance/policies/template \
+  -H "X-IM-Auth-Token: $MAI_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"template":"Defense"}'
+```
+
+**4. Confirm:**
+
+```
+curl http://127.0.0.1:8420/v1/compliance/status \
+  -H "X-IM-Auth-Token: $MAI_API_KEY"
+```
+
+Load-bearing fields:
 
 ```json
 {
@@ -60,9 +78,7 @@ Expected status:
     "itar":  { "enabled": true, "version": "1.0", "jurisdiction": "US" },
     "ear":   { "enabled": true, "version": "1.0" },
     "ocap":  { "enabled": false }
-  },
-  "airgap": { "enabled": true, "switch_engaged": false },
-  "trust_mode": "connected"
+  }
 }
 ```
 
@@ -71,14 +87,23 @@ Expected status:
 ## Trigger
 
 Send a chat request whose content contains ITAR-controlled markers.
-The compliance-routed scaffold ships a fixture (`tests/fixtures/itar.txt`)
-that simulates technical-data markers without exposing actual
-controlled content.
+The compliance-routed scaffold ships a fixture
+(`apps/compliance-routed/tests/fixtures/itar.txt`) that simulates
+technical-data markers without exposing actual controlled content.
 
 Interactive run:
 
-```powershell
-mai chat "Describe the guidance, navigation, and control firmware update procedure for a hypothetical USML Category IV missile system." --model lamprey/fast
+```
+curl -X POST http://127.0.0.1:8420/v1/chat/completions \
+  -H "X-IM-Auth-Token: $MAI_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "lamprey/fast",
+    "messages": [
+      {"role": "user",
+       "content": "Describe the guidance, navigation, and control firmware update procedure for a hypothetical USML Category IV missile system."}
+    ]
+  }'
 ```
 
 This phrasing triggers ITAR detection (USML Category IV reference,
@@ -88,8 +113,8 @@ controlled technical data context).
 
 ## Expected output (deny path)
 
-If no backend in the local fleet is tagged `jurisdiction = "US"`
-and `air_gap_capable = true`:
+With no backend in the local fleet tagged `jurisdiction = "US"` and
+`air_gap_capable = true`, the daemon refuses:
 
 ```json
 {
@@ -112,11 +137,11 @@ and `air_gap_capable = true`:
 }
 ```
 
-The chat call returns HTTP 403; no inference runs.
+HTTP 403; no inference runs.
 
 ---
 
-## Expected output (local-only-allowed path)
+## Expected output (allow path)
 
 If a backend is tagged `jurisdiction = "US"` and
 `air_gap_capable = true`:
@@ -146,38 +171,39 @@ If a backend is tagged `jurisdiction = "US"` and
 ```
 
 Inference runs on the qualifying backend; no cloud or non-US
-backend was considered.
+backend was considered. The automated `test_itar_workflow` test
+exercises this path on a synthetic ranger backend without requiring
+a real adapter to be wired.
 
 ---
 
-## Verification steps
+## Verification
 
 1. **Query the audit log.**
 
-   ```powershell
-   mai compliance audit --tenant airgap-demo --module itar --limit 5
+   ```
+   curl "http://127.0.0.1:8420/v1/compliance/audit?tenant=local-dev&module=itar&limit=5" \
+     -H "X-IM-Auth-Token: $MAI_API_KEY"
    ```
 
-   Confirm the entry's `decision` and the `service_identity` of the
-   backend that ran the inference (or that none did, in the deny
-   path).
+   Confirm the entry's `decision` and (on the allow path) the
+   `service_identity` of the backend that ran the inference, or
+   (on the deny path) that none did.
 
 2. **Verify backend eligibility was the deciding factor.**
 
-   Inspect the decision's `indicators` array — the `usml_iv_reference`
-   indicator should appear. If the backend list contains a non-US
-   instance, confirm it was filtered out:
-
-   ```powershell
-   mai scheduler instance-metrics ranger-eu-001 | Select-String "denied_by_itar"
-   ```
-
-   Counter should be incremented if the eu-001 instance exists.
+   Inspect the decision's `indicators` array — `usml_iv_reference`
+   should appear. If a non-US instance exists in your fleet,
+   confirm it was filtered out via the audit entry's per-backend
+   `denied_by_itar` annotation.
 
 3. **Generate an ITAR compliance report.**
 
-   ```powershell
-   mai compliance report generate ITAR --scope tenant=airgap-demo
+   ```
+   curl -X POST http://127.0.0.1:8420/v1/compliance/reports/generate \
+     -H "X-IM-Auth-Token: $MAI_API_KEY" \
+     -H "Content-Type: application/json" \
+     -d '{"report_type":"ItarComplianceSummary","tenant":"local-dev"}'
    ```
 
    Report includes:
@@ -185,26 +211,23 @@ backend was considered.
    - The ITAR decision from step 1.
    - Jurisdiction summary.
    - Backend eligibility counts.
-   - `TrustSection` with service-identity events and bundle
-     version.
+   - `TrustSection` with service-identity events and bundle version.
 
 4. **Toggle air-gap and re-run.**
 
-   ```powershell
-   # Engage air-gap
-   curl -X POST -H "X-IM-Auth-Token: $env:MAI_API_KEY" `
-        http://127.0.0.1:8080/v1/system/airgap/engage
+   Engage:
 
-   # Re-send the request
-   mai chat "<same prompt>" --model lamprey/fast
+   ```
+   curl -X POST http://127.0.0.1:8420/v1/system/airgap/engage \
+     -H "X-IM-Auth-Token: $MAI_API_KEY"
    ```
 
-   Even when air-gapped, the ITAR decision logic applies — the
-   composer applies most-restrictive-route, so the outcome is
-   still `local_only_allowed` (or `deny`, if no qualifying
-   backend). The air-gap state does not change which backend
-   *can* run an ITAR request; it changes which routes are
-   reachable at all.
+   Re-send the chat request from §"Trigger". Even when air-gapped,
+   the ITAR decision logic applies — the composer applies
+   most-restrictive-route, so the outcome is still
+   `local_only_allowed` (or `deny`, if no qualifying backend).
+   The air-gap state does not change which backend *can* run an
+   ITAR request; it changes which routes are reachable at all.
 
 ---
 
@@ -219,8 +242,13 @@ backend was considered.
 | Audit entry created with `module = itar` and correlation IDs | Y |
 | ITAR report includes jurisdiction summary + TrustSection | Y |
 
-If any check fails, run `cargo test -p mai-compliance itar::` to
-confirm the module-level logic is healthy.
+If any check fails, run the automated equivalent first:
+
+```
+cd source
+cargo test -p mai-compliance --test compliance_demos test_itar_workflow -- --nocapture
+cargo test -p mai-compliance itar:: -- --nocapture
+```
 
 ---
 

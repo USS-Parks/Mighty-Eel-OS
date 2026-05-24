@@ -1,5 +1,13 @@
 # Runbook 11 — Trust Bundle Expired
 
+> **Status against RC1 freeze (`dceaabc`):** Describes the
+> production operator surface. The `mai-admin policy inspect`
+> command cited below is **not declared** in the RC1 `mai-admin`
+> CLI; bundle inspection at the freeze is via the
+> `GET /v1/trust/status` HTTP endpoint or by reading the cached
+> bundle file directly. `mai-ship-validate` (shipped binary) does
+> implement `PROD-TRUST-100` and can be invoked stand-alone.
+
 ## When to use
 
 - `/v1/system/trust/status` reports `bundle_verified = false`

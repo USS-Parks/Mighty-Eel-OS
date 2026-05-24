@@ -1,5 +1,14 @@
 # Runbook 12 — Audit WAL Tamper Detected
 
+> **Status against RC1 freeze (`dceaabc`):** Describes the
+> production operator surface. The `mai-admin audit verify`
+> command cited below is **stubbed** at this freeze (see
+> `tools/mai-admin/src/main.rs:1-7`). The corresponding HTTP path
+> on a running daemon is `GET /v1/compliance/audit/integrity`;
+> the chain-break detection contract this runbook depends on is
+> directly exercised by the `test_audit_tamper` test in
+> `mai-compliance/tests/compliance_demos.rs`.
+
 ## When to use
 
 This runbook handles the **detection** event, not the

@@ -1,5 +1,17 @@
 # Runbook 06 — Generate a Compliance Report
 
+> **Status against RC1 freeze (`dceaabc`):** Describes the
+> production operator surface. The `mai-admin compliance report`
+> and `mai-admin compliance verify` commands cited below are
+> **not declared** in the RC1 `mai-admin` CLI (`Command` enum at
+> `tools/mai-admin/src/main.rs:36-50` ships only `backup`,
+> `restore`, plus stubbed `audit`, `trust`, `vault`). The
+> corresponding HTTP paths on a running daemon are
+> `POST /v1/compliance/reports/generate` and
+> `GET /v1/compliance/reports/{id}/download` (per
+> `mai-api/src/routes.rs:255-263`); re-verification at rest uses
+> `verify_certified_report` from `mai-compliance::reports`.
+
 ## When to use
 
 - Quarterly compliance attestation.

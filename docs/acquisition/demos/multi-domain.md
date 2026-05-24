@@ -4,17 +4,19 @@
 **Demo target:** Acquirer technical reviewer can run this end to end
 in under fifteen minutes and observe the composer's conflict-
 resolution behaviour explicitly.
-**Status:** Session 45 demo script
+**Status:** Session 45 demo script — RC1.1-docs revision (2026-05-24)
 **Companion scaffold:** `apps/compliance-routed/`
 **Companion brief:** [`../../LAMPREY-BRIEF.md`](../../LAMPREY-BRIEF.md)
+**Backed by automated test:** `test_multi_domain` in
+`source/mai-compliance/tests/compliance_demos.rs`
 
 This demo shows what happens when a single request triggers more
-than one regulatory module. It exercises the composer's three
-fold rules — deny-wins, most-restrictive-route, flag accumulation —
-and the OCAP > ITAR > HIPAA precedence chain. The expected outcome
-is a single `AggregateDecision` carrying contributions from every
-module that fired, with an audit entry that an investigator can
-walk to see exactly how the routing decision was reached.
+than one regulatory module. It exercises the composer's three fold
+rules — deny-wins, most-restrictive-route, flag accumulation — and
+the OCAP > ITAR > HIPAA precedence chain. The expected outcome is a
+single `AggregateDecision` carrying contributions from every module
+that fired, with an audit entry that an investigator can walk to see
+exactly how the routing decision was reached.
 
 For the higher-level demo catalogue, see
 [`../../DEMO-SUITE.md`](../../DEMO-SUITE.md).
@@ -23,47 +25,46 @@ For the higher-level demo catalogue, see
 
 ## Pre-flight
 
-- Repo checked out at the post-S45 commit.
-- `mai-api` server running.
-- `MAI_API_KEY` set to a key with both `hipaa` and `ocap` scopes
-  attached.
-
-Deployment profile: `mai/deployment/local-mai-node/profile.toml`
-with a *custom* template that enables both HIPAA and OCAP:
-
-```toml
-[compliance]
-template = "Custom"
-modules  = ["hipaa", "ocap"]
-```
-
-The shipped `TribalGovernment` template enables both, so:
-
-```powershell
-$env:MAI_COMPLIANCE_TEMPLATE = "TribalGovernment"
-```
-
-is the simplest way to set up. The relevant property is that *both*
-modules return non-trivial decisions on the same request.
+- RC1 bundle unpacked. CWD is `MAI-Lamprey-RC1/`.
+- `bin/mai-api.exe` present (RC1 v2) or rustc 1.85+ for source path.
+- `curl` available.
 
 ---
 
-## Setup script
+## Setup
 
-```powershell
-cd "$env:USERPROFILE\Documents\Claude\Island Mountain Mighty Eel OS\mai"
-$env:MAI_DEPLOYMENT_PROFILE = "deployment/local-mai-node"
-$env:MAI_COMPLIANCE_TEMPLATE = "TribalGovernment"
-cargo run --release --bin mai-api
+**1. Start the daemon:**
 
-# Second terminal
-$env:MAI_API_BASE = "http://127.0.0.1:8080"
-$env:MAI_API_KEY  = "im-<local-mai-node-key>"
-
-mai compliance status
+```
+.\bin\mai-api.exe
 ```
 
-Expected: `hipaa` and `ocap` modules both enabled. ITAR / EAR off.
+**2. Capture and export the first-boot admin key:**
+
+```
+export MAI_API_KEY="im-<paste-the-64-hex-key>"          # POSIX
+$env:MAI_API_KEY = "im-<paste-the-64-hex-key>"          # PowerShell
+```
+
+**3. Activate the TribalGovernment template** (enables both HIPAA
+and OCAP — the simplest way to put both modules in play):
+
+```
+curl -X POST http://127.0.0.1:8420/v1/compliance/policies/template \
+  -H "X-IM-Auth-Token: $MAI_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"template":"TribalGovernment"}'
+```
+
+**4. Confirm both modules are enabled:**
+
+```
+curl http://127.0.0.1:8420/v1/compliance/status \
+  -H "X-IM-Auth-Token: $MAI_API_KEY"
+```
+
+Expected: `hipaa` and `ocap` modules both `enabled = true`,
+ITAR / EAR off.
 
 ---
 
@@ -71,10 +72,25 @@ Expected: `hipaa` and `ocap` modules both enabled. ITAR / EAR off.
 
 A request that contains PHI *and* carries OCAP-governed metadata:
 
-```powershell
-mai chat "Patient John Crow (MRN 87654) presented at the tribal clinic with chest pain on 2026-05-22. Recommend imaging?" `
-  --model lamprey/medical-local `
-  --metadata '{"ocap":{"tribal_source":"nation-x","possession":"tribal_authority","data_class":"community_health","consent":{"cultural":true,"treaty":false}}}'
+```
+curl -X POST http://127.0.0.1:8420/v1/chat/completions \
+  -H "X-IM-Auth-Token: $MAI_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "lamprey/medical-local",
+    "messages": [
+      {"role": "user",
+       "content": "Patient John Crow (MRN 87654) presented at the tribal clinic with chest pain on 2026-05-22. Recommend imaging?"}
+    ],
+    "metadata": {
+      "ocap": {
+        "tribal_source": "nation-x",
+        "possession": "tribal_authority",
+        "data_class": "community_health",
+        "consent": {"cultural": true, "treaty": false}
+      }
+    }
+  }'
 ```
 
 This triggers:
@@ -135,12 +151,8 @@ documents the composer's reasoning step by step.
 ## Sub-scenario A — Deny-wins
 
 To exercise deny-wins, remove cultural consent so OCAP refuses
-while HIPAA still allows local-only:
-
-```powershell
-mai chat "<same prompt>" `
-  --metadata '{"ocap":{...,"consent":{"cultural":false}}}'
-```
+while HIPAA still allows local-only. Same `curl` as §"Trigger" with
+the metadata's `consent.cultural` flipped to `false`.
 
 Expected:
 
@@ -170,7 +182,7 @@ the composer; HIPAA's `local_only` was *not* able to override.
 ## Sub-scenario B — Most-restrictive-route
 
 To exercise the route fold, configure a custom template where HIPAA
-returns `cloud_allowed` (in a contrived test setup) and OCAP returns
+returns `cloud_allowed` (a contrived test setup) and OCAP returns
 `local_only`. The composer downgrades to `local_only`:
 
 ```json
@@ -191,28 +203,35 @@ returns `cloud_allowed` (in a contrived test setup) and OCAP returns
 }
 ```
 
-This sub-scenario is exercised primarily via
-`cargo test -p mai-compliance policy::composer::most_restrictive_route`
-rather than the SDK, because crafting a real-world HIPAA
-`cloud_allowed` is contrived.
+This sub-scenario is exercised primarily via:
+
+```
+cd source
+cargo test -p mai-compliance policy::composer::most_restrictive_route
+```
+
+rather than via the HTTP surface, because crafting a real-world
+HIPAA `cloud_allowed` is contrived.
 
 ---
 
-## Verification steps
+## Verification
 
 1. **Query the audit log.**
 
-   ```powershell
-   mai compliance audit --tenant local-mai-node --limit 5
+   ```
+   curl "http://127.0.0.1:8420/v1/compliance/audit?tenant=local-dev&limit=5" \
+     -H "X-IM-Auth-Token: $MAI_API_KEY"
    ```
 
-   The composite entry includes both modules under
-   `modules[]`, the full precedence chain under
-   `precedence_applied`, and the composer's explanation array.
+   The composite entry includes both modules under `modules[]`, the
+   full precedence chain under `precedence_applied`, and the
+   composer's explanation array.
 
 2. **Walk the composer test suite.**
 
-   ```powershell
+   ```
+   cd source
    cargo test -p mai-compliance policy::composer -- --nocapture
    ```
 
@@ -227,8 +246,11 @@ rather than the SDK, because crafting a real-world HIPAA
 
 3. **Re-render the audit entry as a report.**
 
-   ```powershell
-   mai compliance report generate SystemActivity --scope request_id=<id>
+   ```
+   curl -X POST http://127.0.0.1:8420/v1/compliance/reports/generate \
+     -H "X-IM-Auth-Token: $MAI_API_KEY" \
+     -H "Content-Type: application/json" \
+     -d '{"report_type":"SystemActivity"}'
    ```
 
    The activity report shows the multi-module decision in one row
@@ -236,9 +258,19 @@ rather than the SDK, because crafting a real-world HIPAA
 
 4. **Walk the dashboard Alerts page.**
 
-   Open `http://127.0.0.1:8081/alerts` (default dashboard port).
-   The multi-domain decision appears in the live SSE stream with
-   both `ocap` and `hipaa` module tags.
+   The compliance dashboard is a separate FastAPI app under
+   `source/compliance-dashboard/`. To run it (requires Python 3.12+
+   and the SDK on PYTHONPATH per `README-FIRST.md` §3):
+
+   ```
+   cd source/compliance-dashboard
+   uvicorn app:app --port 8081
+   ```
+
+   Then open `http://127.0.0.1:8081/alerts`. The multi-domain
+   decision appears in the live SSE stream with both `ocap` and
+   `hipaa` module tags. (Dashboard is not started by `mai-api.exe`;
+   it is an optional companion process.)
 
 ---
 
@@ -253,10 +285,15 @@ rather than the SDK, because crafting a real-world HIPAA
 | Most-restrictive-route sub-scenario downgrades route | Y |
 | All composer tests green | Y |
 | Audit entry carries module versions for every contributor | Y |
-| Dashboard live stream surfaces the multi-module event | Y |
+| Dashboard live stream surfaces the multi-module event | Y (if dashboard is running) |
 
-If any check fails, run `cargo test -p mai-compliance --lib` to
-confirm the composer logic is healthy.
+If any check fails, run the automated equivalent first:
+
+```
+cd source
+cargo test -p mai-compliance --test compliance_demos test_multi_domain -- --nocapture
+cargo test -p mai-compliance --lib
+```
 
 ---
 

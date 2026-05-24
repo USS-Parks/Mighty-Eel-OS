@@ -1,5 +1,15 @@
 # Runbook 05 — Verify Audit Chain
 
+> **Status against RC1 freeze (`dceaabc`):** Describes the
+> production operator surface. The `mai-admin audit verify`
+> command cited below is **stubbed** at this freeze (see header
+> comment in `tools/mai-admin/src/main.rs:1-7`). RC1 ships
+> `mai-admin backup {create,verify}` and `mai-admin restore
+> {plan,apply}`; the `audit` top-level variant exits with a
+> "pending session" message. The corresponding HTTP path on a
+> running daemon is `GET /v1/compliance/audit/integrity` (per
+> `mai-api/src/routes.rs:243`).
+
 ## When to use
 
 - Scheduled integrity check (recommended weekly).

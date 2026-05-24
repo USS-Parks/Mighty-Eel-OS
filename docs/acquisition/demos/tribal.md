@@ -3,9 +3,11 @@
 **Project:** Island Mountain MAI + Lamprey
 **Demo target:** Acquirer technical reviewer can run this end to end
 in under fifteen minutes with green output.
-**Status:** Session 45 demo script
+**Status:** Session 45 demo script — RC1.1-docs revision (2026-05-24)
 **Companion scaffold:** `apps/tribal-sovereignty/`
 **Companion brief:** [`../../LAMPREY-BRIEF.md`](../../LAMPREY-BRIEF.md)
+**Backed by automated test:** `test_ocap_workflow` in
+`source/mai-compliance/tests/compliance_demos.rs`
 
 This demo shows the OCAP nine-stage decision pipeline evaluating a
 request that carries tribal-data metadata. The expected outcome is
@@ -22,34 +24,50 @@ specifics, see [`../../LAMPREY-BRIEF.md`](../../LAMPREY-BRIEF.md)
 
 ## Pre-flight
 
-- Repo checked out at the post-S45 commit.
-- `mai-api` server can be started.
-- `MAI_API_KEY` set to a local-dev key with `ocap` scope attached
-  to the local-dev claim.
+- RC1 bundle unpacked. CWD is `MAI-Lamprey-RC1/`.
+- `bin/mai-api.exe` present (RC1 v2) or rustc 1.85+ for source path.
+- `curl` available.
 - A tribal-governance role (`elder` or `cultural_steward`) attached
-  for the consent-required paths.
-
-Deployment profile: `mai/deployment/local-mai-node/profile.toml`
-with `compliance.template = "TribalGovernment"`.
+  to the admin key for the consent-required paths. The RC1 freeze
+  ships the admin key with all scopes; in production this is
+  attenuated by the Trust Bridge.
 
 ---
 
-## Setup script
+## Setup
 
-```powershell
-cd "$env:USERPROFILE\Documents\Claude\Island Mountain Mighty Eel OS\mai"
-$env:MAI_DEPLOYMENT_PROFILE = "deployment/local-mai-node"
-$env:MAI_COMPLIANCE_TEMPLATE = "TribalGovernment"
-cargo run --release --bin mai-api
+**1. Start the daemon:**
 
-# Second terminal
-$env:MAI_API_BASE = "http://127.0.0.1:8080"
-$env:MAI_API_KEY  = "im-<local-mai-node-key>"
-
-mai compliance status
+```
+.\bin\mai-api.exe
 ```
 
-Expected status:
+**2. Capture and export the first-boot admin key:**
+
+```
+export MAI_API_KEY="im-<paste-the-64-hex-key>"          # POSIX
+$env:MAI_API_KEY = "im-<paste-the-64-hex-key>"          # PowerShell
+```
+
+**3. Activate the TribalGovernment policy template** (enables both
+OCAP and HIPAA — tribal health is the most common cross-domain
+deployment):
+
+```
+curl -X POST http://127.0.0.1:8420/v1/compliance/policies/template \
+  -H "X-IM-Auth-Token: $MAI_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"template":"TribalGovernment"}'
+```
+
+**4. Confirm:**
+
+```
+curl http://127.0.0.1:8420/v1/compliance/status \
+  -H "X-IM-Auth-Token: $MAI_API_KEY"
+```
+
+Load-bearing fields:
 
 ```json
 {
@@ -59,8 +77,7 @@ Expected status:
     "hipaa": { "enabled": true, "version": "1.4" },
     "itar":  { "enabled": false },
     "ear":   { "enabled": false }
-  },
-  "trust_mode": "connected"
+  }
 }
 ```
 
@@ -69,14 +86,30 @@ Expected status:
 ## Trigger
 
 The tribal-sovereignty scaffold ships fixtures for three sovereignty
-scenarios. Interactive runs:
+scenarios. Each is a single chat request whose metadata carries OCAP
+context.
 
 ### Scenario 3a — Authorised consent path
 
-```powershell
-mai chat "Summarise the storage protocol for our community health survey data." `
-  --model lamprey/fast `
-  --metadata '{"ocap":{"tribal_source":"nation-x","possession":"tribal_authority","data_class":"community_health","consent":{"cultural":true,"treaty":false}}}'
+```
+curl -X POST http://127.0.0.1:8420/v1/chat/completions \
+  -H "X-IM-Auth-Token: $MAI_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "lamprey/fast",
+    "messages": [
+      {"role": "user",
+       "content": "Summarise the storage protocol for our community health survey data."}
+    ],
+    "metadata": {
+      "ocap": {
+        "tribal_source": "nation-x",
+        "possession": "tribal_authority",
+        "data_class": "community_health",
+        "consent": {"cultural": true, "treaty": false}
+      }
+    }
+  }'
 ```
 
 Expected: `local_only_allowed` with reasons
@@ -85,15 +118,29 @@ Expected: `local_only_allowed` with reasons
 
 ### Scenario 3b — Missing cultural consent
 
-Same prompt with `consent.cultural = false`. Expected:
+Same prompt with `consent.cultural` set to `false`. Expected:
 `OcapError::CulturalConsentMissing`, HTTP 403, no inference.
 
 ### Scenario 3c — Sacred data with non-elder role
 
-```powershell
-mai chat "<prompt referencing sacred ceremonial data>" `
-  --model lamprey/fast `
-  --metadata '{"ocap":{"tribal_source":"nation-x","possession":"tribal_authority","data_class":"sacred","consent":{"cultural":true}}}'
+```
+curl -X POST http://127.0.0.1:8420/v1/chat/completions \
+  -H "X-IM-Auth-Token: $MAI_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "lamprey/fast",
+    "messages": [
+      {"role": "user", "content": "<prompt referencing sacred ceremonial data>"}
+    ],
+    "metadata": {
+      "ocap": {
+        "tribal_source": "nation-x",
+        "possession": "tribal_authority",
+        "data_class": "sacred",
+        "consent": {"cultural": true}
+      }
+    }
+  }'
 ```
 
 Expected: if the subject lacks the `sacred_role` permission,
@@ -101,7 +148,7 @@ Expected: if the subject lacks the `sacred_role` permission,
 
 ---
 
-## Expected output (authorised consent path, scenario 3a)
+## Expected output (scenario 3a)
 
 ```json
 {
@@ -133,18 +180,18 @@ Expected: if the subject lacks the `sacred_role` permission,
 }
 ```
 
-Notice all nine pipeline stages are recorded — sovereignty review
-boards can see exactly which gates were passed and which were
-skipped.
+All nine pipeline stages are recorded — sovereignty review boards
+can see exactly which gates were passed and which were skipped.
 
 ---
 
-## Verification steps
+## Verification
 
 1. **Query the audit log for the OCAP decision.**
 
-   ```powershell
-   mai compliance audit --tenant local-mai-node --module ocap --limit 5
+   ```
+   curl "http://127.0.0.1:8420/v1/compliance/audit?tenant=local-dev&module=ocap&limit=5" \
+     -H "X-IM-Auth-Token: $MAI_API_KEY"
    ```
 
    The entry includes the full nine-stage trace plus the
@@ -152,27 +199,28 @@ skipped.
 
 2. **Re-run with missing consent (scenario 3b) and confirm refusal.**
 
-   ```powershell
-   mai chat "<same prompt>" --metadata '{"ocap":{...,"consent":{"cultural":false}}}'
-   ```
-
-   Returns HTTP 403 with `MAI-A201`, reason
-   `ocap.cultural_consent_missing`. Audit entry records the
+   The request returns HTTP 403 with `MAI-A201`, reason
+   `ocap.cultural_consent_missing`. The audit entry records the
    refusal at stage 8.
 
-3. **Run the scaffold test suite end-to-end.**
+3. **Run the scaffold test suite end-to-end** (covers all three
+   scenarios under controlled fixtures):
 
-   ```powershell
-   PYTHONPATH=mai-sdk-python/src python -m pytest apps/tribal-sovereignty/tests/ -v
+   ```
+   PYTHONPATH=source/mai-sdk-python/src python -m pytest apps/tribal-sovereignty/tests/ -v
    ```
 
    Should report 9 green tests including
-   `test_sovereignty_violation_when_authority_mismatch`.
+   `test_sovereignty_violation_when_authority_mismatch`. Note the
+   `PYTHONPATH` is mandatory — see `README-FIRST.md` §3.
 
 4. **Generate an OCAP compliance report.**
 
-   ```powershell
-   mai compliance report generate OCAP --scope tenant=local-mai-node
+   ```
+   curl -X POST http://127.0.0.1:8420/v1/compliance/reports/generate \
+     -H "X-IM-Auth-Token: $MAI_API_KEY" \
+     -H "Content-Type: application/json" \
+     -d '{"report_type":"OcapGovernance","tenant":"local-dev"}'
    ```
 
    The report includes:
@@ -197,8 +245,13 @@ skipped.
 | OCAP report renders with per-stage counts + TrustSection | Y |
 | The decision *never* defaults to allow on missing scope | Y |
 
-If any check fails, run `cargo test -p mai-compliance ocap::` to
-confirm the module-level pipeline is healthy.
+If any check fails, run the automated equivalent first:
+
+```
+cd source
+cargo test -p mai-compliance --test compliance_demos test_ocap_workflow -- --nocapture
+cargo test -p mai-compliance ocap:: -- --nocapture
+```
 
 ---
 
@@ -206,8 +259,8 @@ confirm the module-level pipeline is healthy.
 
 - OCAP is a real pipeline, not a keyword filter. Every stage has a
   typed error and a reason code.
-- Fail-closed semantics: missing scope refuses; this is verifiable
-  by reading `OcapEvaluator::evaluate` and the
+- Fail-closed semantics: missing scope refuses; verifiable by
+  reading `OcapEvaluator::evaluate` and the
   `OcapError::ScopeMissing` variant.
 - Tribal data sovereignty rules are evaluated at inference time,
   before placement, and recorded for sovereignty audit.

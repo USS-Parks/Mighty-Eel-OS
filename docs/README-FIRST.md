@@ -155,8 +155,12 @@ builds on other platforms are in the same order of magnitude.
 ### 5.C What success looks like
 
 Whichever path you took, the daemon emits a JSON-formatted info log
-stream on stderr and a single banner block on stdout. The banner is
-the **first-boot admin key**:
+stream and a single boxed banner block — **both on stdout** at the
+RC1 freeze. If you want the logs separable from the banner, pipe
+stdout through `grep -v '^==='` (POSIX) or `Select-String -Pattern
+'^===' -NotMatch` (PowerShell) to drop the box. A future RC will
+route logs to stderr; until then, do not configure log routing
+expecting that split. The banner is the **first-boot admin key**:
 
 ```
 ========================================
@@ -172,7 +176,7 @@ the **first-boot admin key**:
 The log stream ends with a line like:
 
 ```
-MAI server ready - REST on 127.0.0.1:8420, gRPC on 127.0.0.1:8421
+MAI server ready — REST on 127.0.0.1:8420, gRPC on 127.0.0.1:8421
 ```
 
 Boot to ready takes about **60 ms** on a modern laptop. If it takes
