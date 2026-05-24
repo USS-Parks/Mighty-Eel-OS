@@ -185,6 +185,10 @@ impl ProductionReadinessReport {
         apply("PROD-AUDIT-101", runtime.compliance_sealer_real.as_ref());
         apply("PROD-TRUST-100", runtime.trust_bundle_verified.as_ref());
         apply("PROD-AUTH-100", runtime.auth_keys_nonempty.as_ref());
+        apply(
+            "PROD-AUTH-101",
+            runtime.auth_internal_bypass_consistent.as_ref(),
+        );
         apply("PROD-POLICY-001", runtime.policy_modules_loaded.as_ref());
     }
 
@@ -281,6 +285,13 @@ pub struct RuntimeChecks {
     pub trust_bundle_verified: Option<RuntimeOutcome>,
     /// `PROD-AUTH-100` — auth key store contains at least one entry.
     pub auth_keys_nonempty: Option<RuntimeOutcome>,
+    /// `PROD-AUTH-101` — runtime auth store's
+    /// `allow_internal_profile_header` flag matches the profile field
+    /// the static `PROD-AUTH-002` check verified. SHIP-17 (closes
+    /// KNOWN-ISSUES Issue 13): catches the case where the loader
+    /// silently enables the X-IM-Internal-Profile bypass even though
+    /// the profile declared it disabled.
+    pub auth_internal_bypass_consistent: Option<RuntimeOutcome>,
     /// `PROD-POLICY-001` — compliance policy modules loaded and the
     /// composer template built successfully.
     pub policy_modules_loaded: Option<RuntimeOutcome>,
@@ -798,6 +809,13 @@ fn register_auth_checks(ctx: &mut CheckContext) {
         "auth keys file is loadable and contains at least one entry",
         "populate auth.auth_keys_path with at least one rotated key",
     );
+    ctx.deferred(
+        "PROD-AUTH-101",
+        CheckSeverity::Critical,
+        "SHIP-17",
+        "runtime auth store's allow_internal_profile_header matches the profile field",
+        "ensure the auth bootstrap honors auth.auth_keys_path; never let the first-boot fallback enable the X-IM-Internal-Profile bypass under a production profile",
+    );
 }
 
 fn register_dashboard_checks(ctx: &mut CheckContext) {
@@ -1002,6 +1020,7 @@ alerts_enabled = true
         "PROD-AUTH-002",
         "PROD-AUTH-003",
         "PROD-AUTH-100",
+        "PROD-AUTH-101",
         "PROD-DASH-001",
         "PROD-NET-001",
         "PROD-NET-002",
@@ -1195,6 +1214,9 @@ alerts_enabled = true
             compliance_sealer_real: Some(RuntimeOutcome::pass("AeadSealer wired")),
             trust_bundle_verified: Some(RuntimeOutcome::pass("bundle v1 verified")),
             auth_keys_nonempty: Some(RuntimeOutcome::pass("1 key loaded")),
+            auth_internal_bypass_consistent: Some(RuntimeOutcome::pass(
+                "runtime bypass = false, profile field = false: consistent",
+            )),
             policy_modules_loaded: Some(RuntimeOutcome::pass("Standard template loaded")),
         }
     }
@@ -1210,6 +1232,7 @@ alerts_enabled = true
             "PROD-AUDIT-101",
             "PROD-TRUST-100",
             "PROD-AUTH-100",
+            "PROD-AUTH-101",
             "PROD-POLICY-001",
         ] {
             let c = report.find(id).expect("check present");
@@ -1257,6 +1280,7 @@ alerts_enabled = true
             "PROD-AUDIT-101",
             "PROD-TRUST-100",
             "PROD-AUTH-100",
+            "PROD-AUTH-101",
             "PROD-POLICY-001",
         ] {
             assert_eq!(
@@ -1295,6 +1319,7 @@ alerts_enabled = true
             "PROD-AUDIT-101",
             "PROD-TRUST-100",
             "PROD-AUTH-100",
+            "PROD-AUTH-101",
             "PROD-POLICY-001",
         ] {
             assert_eq!(

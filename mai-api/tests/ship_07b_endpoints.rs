@@ -181,6 +181,9 @@ fn all_pass_runtime() -> RuntimeChecks {
         compliance_sealer_real: Some(RuntimeOutcome::pass("AEAD sealer (test)")),
         trust_bundle_verified: Some(RuntimeOutcome::pass("bundle v-test verified")),
         auth_keys_nonempty: Some(RuntimeOutcome::pass("1 key loaded (test)")),
+        auth_internal_bypass_consistent: Some(RuntimeOutcome::pass(
+            "runtime bypass matches profile field (test)",
+        )),
         policy_modules_loaded: Some(RuntimeOutcome::pass("standard template (test)")),
     }
 }

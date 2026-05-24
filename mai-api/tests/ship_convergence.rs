@@ -204,6 +204,9 @@ alerts_enabled = true
             "bundle v2026-05-23 verified against 3 anchors",
         )),
         auth_keys_nonempty: Some(RuntimeOutcome::pass("4 key(s) loaded")),
+        auth_internal_bypass_consistent: Some(RuntimeOutcome::pass(
+            "runtime bypass = false, profile field = false: consistent",
+        )),
         policy_modules_loaded: Some(RuntimeOutcome::pass("Standard template loaded")),
     };
 

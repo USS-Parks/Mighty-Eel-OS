@@ -278,8 +278,8 @@ impl MaiServer {
         };
         let config = Arc::new(RwLock::new(self.config.clone()));
 
-        // -- Step 3b: Load API key authentication (Session 14c) --
-        let auth = load_auth_state();
+        // -- Step 3b: Load API key authentication (Session 14c; SHIP-17) --
+        let auth = load_auth_state(ship_profile.as_ref())?;
 
         // -- Step 3c: Load adapter config and start AdapterManager --
         let adapter_boot = load_adapter_boot_config(self.adapter_config_path.as_deref());
@@ -363,7 +363,10 @@ impl MaiServer {
 
         // -- Step 4: Build shared AppState--
         let metrics_collector = Arc::new(MetricsCollector::new(MetricsConfig::default()));
-        let auth_key_count = auth.key_store.read().await.len();
+        let (auth_key_count, auth_bypass_runtime) = {
+            let store = auth.key_store.read().await;
+            (store.len(), store.allow_internal_profile_header)
+        };
         let state = AppState::new(
             scheduler,
             registry,
@@ -381,7 +384,9 @@ impl MaiServer {
         // sealer-backed compliance audit log and the real trust
         // verifier so the demo defaults never reach handlers.
         let (state, runtime_checks) = match ship_profile.as_ref() {
-            Some(profile) => apply_ship_profile(state, profile, auth_key_count)?,
+            Some(profile) => {
+                apply_ship_profile(state, profile, auth_key_count, auth_bypass_runtime)?
+            }
             None => (state, RuntimeChecks::default()),
         };
 
@@ -519,6 +524,7 @@ fn apply_ship_profile(
     state: AppState,
     profile: &ShipProfile,
     auth_key_count: usize,
+    auth_bypass_runtime: bool,
 ) -> Result<(AppState, RuntimeChecks), ServerError> {
     let is_production = matches!(profile.profile.mode, ProfileMode::Production);
 
@@ -586,6 +592,24 @@ fn apply_ship_profile(
         RuntimeOutcome::fail("auth key store is empty".to_string())
     };
 
+    // SHIP-17 / PROD-AUTH-101: the runtime store's
+    // `allow_internal_profile_header` flag must match the profile
+    // field the static guard checked. Any divergence means the
+    // X-IM-Internal-Profile bypass is live despite a profile that
+    // declared it disabled (or vice versa); this is the gap
+    // KNOWN-ISSUES Issue 13 was filed for.
+    let profile_bypass = profile.auth.allow_internal_profile_header;
+    let auth_bypass_outcome = if auth_bypass_runtime == profile_bypass {
+        RuntimeOutcome::pass(format!(
+            "runtime bypass = {auth_bypass_runtime}, profile field = {profile_bypass}: consistent"
+        ))
+    } else {
+        RuntimeOutcome::fail(format!(
+            "runtime bypass = {auth_bypass_runtime} but profile field = {profile_bypass}: \
+             X-IM-Internal-Profile bypass diverges from profile contract"
+        ))
+    };
+
     // PolicyManager construction is infallible at this point — the
     // standard template loaded inside AppState::new succeeded.
     let policy_outcome = RuntimeOutcome::pass("standard policy modules loaded".to_string());
@@ -596,6 +620,7 @@ fn apply_ship_profile(
         compliance_sealer_real: Some(sealer_outcome),
         trust_bundle_verified: Some(trust_outcome),
         auth_keys_nonempty: Some(auth_outcome),
+        auth_internal_bypass_consistent: Some(auth_bypass_outcome),
         policy_modules_loaded: Some(policy_outcome),
     };
 
@@ -617,15 +642,32 @@ fn apply_ship_profile(
 
 // -- Auth Loading (Session 14c) --
 
-/// Load authentication state from config or generate first-boot key.
+/// Load authentication state from config or generate a first-boot key.
 ///
-/// Precedence:
-/// 1. If config/auth_keys.toml exists, load keys from it.
-/// 2. If no config file, generate a first-boot admin key, print it to
-///    stdout (ONE TIME), and start in local-trust mode so the admin can
-///    configure persistent keys.
-fn load_auth_state() -> AuthState {
-    let auth_path = Path::new(AUTH_KEYS_CONFIG_PATH);
+/// Path resolution (SHIP-17, closes KNOWN-ISSUES Issue 13):
+/// 1. If `profile` is `Some`, read `profile.auth.auth_keys_path`.
+/// 2. Otherwise, fall back to `AUTH_KEYS_CONFIG_PATH` (legacy no-profile
+///    bring-up path, used by tests and dev runs without a ship profile).
+///
+/// Production failure semantics:
+/// - Under `ProfileMode::Production`, a missing or unloadable keys file
+///   is fatal: this function returns `ServerError::Init` and the
+///   server refuses to bind. The first-boot path is forbidden in
+///   production — the operator must provision the file before start.
+/// - Under non-production modes, a missing keys file falls through to
+///   the first-boot path. The runtime store's
+///   `allow_internal_profile_header` flag inherits the profile field
+///   (default `false`) so it can never silently diverge from the
+///   value the production guard checked. With no profile at all, the
+///   legacy dev default of `true` is preserved.
+fn load_auth_state(profile: Option<&ShipProfile>) -> Result<AuthState, ServerError> {
+    let is_production = profile
+        .map(|p| matches!(p.profile.mode, ProfileMode::Production))
+        .unwrap_or(false);
+    let auth_keys_pathbuf: PathBuf = profile
+        .map(|p| p.auth.auth_keys_path.clone())
+        .unwrap_or_else(|| PathBuf::from(AUTH_KEYS_CONFIG_PATH));
+    let auth_path = auth_keys_pathbuf.as_path();
 
     if auth_path.exists() {
         match auth::load_api_keys_from_toml(auth_path) {
@@ -635,20 +677,34 @@ fn load_auth_state() -> AuthState {
                     path = %auth_path.display(),
                     "API key authentication loaded from config"
                 );
-                return AuthState::with_key_store(store);
+                return Ok(AuthState::with_key_store(store));
             }
             Err(e) => {
+                if is_production {
+                    return Err(ServerError::Init(format!(
+                        "auth keys file at {} failed to load under production profile: {e}; \
+                         first-boot fallback is forbidden in production",
+                        auth_path.display()
+                    )));
+                }
                 warn!(
                     error = %e,
+                    path = %auth_path.display(),
                     "Failed to load auth config, falling back to first-boot mode"
                 );
             }
         }
+    } else if is_production {
+        return Err(ServerError::Init(format!(
+            "auth keys file missing at {} under production profile; \
+             provision the file before start (first-boot fallback is forbidden in production)",
+            auth_path.display()
+        )));
     }
 
     // First-boot: generate an admin key and print it.
-    // The admin copies this key into config/auth_keys.toml (hashed)
-    // for persistent authentication.
+    // The admin copies this key into the configured auth_keys.toml
+    // (hashed) for persistent authentication.
     let admin_key = auth::generate_api_key();
     let admin_hash = auth::hash_api_key(&admin_key);
 
@@ -662,7 +718,7 @@ fn load_auth_state() -> AuthState {
     println!("  Hash: {admin_hash}");
     println!();
     println!("  Save the KEY somewhere safe. Add the HASH");
-    println!("  to config/auth_keys.toml to persist it:");
+    println!("  to {} to persist it:", auth_path.display());
     println!();
     println!("  [[keys]]");
     println!("  hash = \"{admin_hash}\"");
@@ -673,17 +729,23 @@ fn load_auth_state() -> AuthState {
 
     info!("First-boot admin key generated (printed to stdout, NOT logged)");
 
-    // Start with the generated key loaded + local-trust fallback
-    // so the admin can configure via API immediately.
+    // SHIP-17: the runtime store's `allow_internal_profile_header`
+    // flag must match the profile field the production guard checks
+    // (`PROD-AUTH-002`). When a profile is present we mirror its
+    // value; with no profile we keep the legacy dev default of `true`
+    // for the no-profile bring-up path.
+    let bypass = profile
+        .map(|p| p.auth.allow_internal_profile_header)
+        .unwrap_or(true);
     let mut store = auth::ApiKeyStore::new();
-    store.allow_internal_profile_header = true;
+    store.allow_internal_profile_header = bypass;
     store.add_key_hashed(
         admin_hash,
         "admin".to_string(),
         crate::types::ProfileRole::Admin,
         Some("First-Boot Admin".to_string()),
     );
-    AuthState::with_key_store(store)
+    Ok(AuthState::with_key_store(store))
 }
 
 /// Wait for a shutdown signal: SIGTERM, SIGINT (Unix), or ctrl-c.
@@ -1254,10 +1316,13 @@ refresh_interval_ms = 250
 
     #[test]
     fn test_load_auth_state_no_config() {
-        // When no config file exists, load_auth_state should generate
-        // a first-boot key and return a working AuthState.
-        let auth = load_auth_state();
-        // The store should have at least the generated admin key
+        // Legacy no-profile bring-up path: when no ship profile is
+        // supplied and the default AUTH_KEYS_CONFIG_PATH does not
+        // exist, load_auth_state generates a first-boot key and
+        // returns a working AuthState with the dev bypass on. SHIP-17
+        // preserves this behavior for the no-profile case so existing
+        // dev/test runs are unaffected.
+        let auth = load_auth_state(None).expect("no-profile first-boot must not fail");
         let rt = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
@@ -1266,6 +1331,133 @@ refresh_interval_ms = 250
             let store = auth.key_store.read().await;
             assert_eq!(store.len(), 1);
             assert!(store.allow_internal_profile_header);
+        });
+    }
+
+    // ---- SHIP-17 / KNOWN-ISSUES Issue 13 regression coverage ----
+
+    /// Baseline production TOML with an `auth_keys_path` that points at
+    /// a definitely-non-existent location. Built so SHIP-01 parsing
+    /// accepts it (allow_internal_profile_header = false, non-empty
+    /// path) and the guard's static checks pass; only the runtime
+    /// load step should fail.
+    fn ship17_baseline_toml(auth_keys_path: &str) -> String {
+        format!(
+            r#"
+[profile]
+name = "ship17-test"
+mode = "production"
+allow_demo_defaults = false
+fail_closed = true
+
+[paths]
+state_dir = "/var/lib/mai"
+config_dir = "/etc/mai"
+log_dir = "/var/log/mai"
+run_dir = "/run/mai"
+backup_dir = "/var/backups/mai"
+
+[vault]
+backend = "zfs"
+root = "/var/lib/mai/vault"
+require_sealed_master_key = true
+require_pqc = true
+allow_stub = false
+
+[audit]
+api_writer = "wal"
+compliance_writer = "wal"
+wal_dir = "/var/lib/mai/audit"
+require_hash_chain = true
+require_pqc_checkpoints = true
+require_encryption_at_rest = true
+allow_memory_writer = false
+allow_null_sealer = false
+
+[trust]
+anchors_dir = "/etc/mai/trust-anchors"
+bundle_cache_dir = "/var/lib/mai/trust"
+verifier = "ml-dsa"
+allow_accept_all_verifier = false
+allow_local_dev_exchange = false
+require_trust_anchor = true
+require_bundle_on_boot = true
+
+[auth]
+auth_keys_path = "{auth_keys_path}"
+allow_internal_profile_header = false
+require_nonempty_key_store = true
+
+[dashboard]
+enabled = true
+allow_default_admin_token = false
+
+[network]
+bind_address = "127.0.0.1"
+tls_mode = "reverse-proxy-required"
+require_forwarded_proto_header = false
+
+[observability]
+log_format = "json"
+log_rotation = true
+metrics_exporter = "prometheus"
+alerts_enabled = true
+"#
+        )
+    }
+
+    #[test]
+    fn load_auth_state_production_missing_file_fails_closed() {
+        // SHIP-17 contract: under ProfileMode::Production, a missing
+        // auth_keys_path is fatal. The first-boot fallback (which
+        // would silently enable the X-IM-Internal-Profile bypass)
+        // must not run.
+        let toml = ship17_baseline_toml("/nonexistent/ship17/missing-auth-keys-prod.toml");
+        let profile = crate::ship_profile::parse_ship_profile(&toml)
+            .expect("ship17 baseline production toml parses");
+        match load_auth_state(Some(&profile)) {
+            Ok(_) => panic!(
+                "production + missing auth_keys file must fail closed, but load_auth_state returned Ok"
+            ),
+            Err(ServerError::Init(msg)) => {
+                assert!(
+                    msg.contains("missing"),
+                    "expected 'missing' in error, got: {msg}"
+                );
+                assert!(
+                    msg.contains("first-boot fallback is forbidden in production"),
+                    "expected fallback-forbidden message, got: {msg}"
+                );
+            }
+            Err(other) => panic!("expected ServerError::Init, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn load_auth_state_non_production_first_boot_mirrors_profile_field() {
+        // SHIP-17 contract: under non-production mode, a missing
+        // auth_keys_path falls through to first-boot, but the runtime
+        // store's allow_internal_profile_header inherits the profile
+        // field so the two can never diverge (which would defeat
+        // PROD-AUTH-002's static check).
+        let toml = ship17_baseline_toml("/nonexistent/ship17/missing-auth-keys-dev.toml")
+            .replace("mode = \"production\"", "mode = \"local-dev\"");
+        let profile = crate::ship_profile::parse_ship_profile(&toml)
+            .expect("ship17 baseline local-dev toml parses");
+        // The parsed baseline has allow_internal_profile_header = false.
+        let auth =
+            load_auth_state(Some(&profile)).expect("non-production first-boot must not fail");
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        rt.block_on(async {
+            let store = auth.key_store.read().await;
+            assert_eq!(store.len(), 1, "first-boot must seed one admin key");
+            assert!(
+                !store.allow_internal_profile_header,
+                "runtime bypass must mirror profile field (false), not silently flip to true"
+            );
         });
     }
 }

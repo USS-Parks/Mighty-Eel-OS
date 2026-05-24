@@ -251,25 +251,63 @@ async fn evaluate_runtime(profile: &ShipProfile) -> RuntimeChecks {
         Err(e) => RuntimeOutcome::fail(format!("trust builder rejected profile: {e}")),
     };
 
-    let auth_keys_nonempty = if profile.auth.auth_keys_path.exists() {
+    let (auth_keys_nonempty, auth_internal_bypass_consistent) = if profile
+        .auth
+        .auth_keys_path
+        .exists()
+    {
         match load_api_keys_from_toml(&profile.auth.auth_keys_path) {
             Ok(store) if !store.is_empty() => {
-                RuntimeOutcome::pass(format!("{} key(s) loaded", store.len()))
+                let nonempty = RuntimeOutcome::pass(format!("{} key(s) loaded", store.len()));
+                // SHIP-17 / PROD-AUTH-101: the loaded store's
+                // allow_internal_profile_header must match the
+                // profile field that the static guard inspects.
+                let profile_bypass = profile.auth.allow_internal_profile_header;
+                let store_bypass = store.allow_internal_profile_header;
+                let consistent = if store_bypass == profile_bypass {
+                    RuntimeOutcome::pass(format!(
+                        "runtime bypass = {store_bypass}, profile field = {profile_bypass}: consistent"
+                    ))
+                } else {
+                    RuntimeOutcome::fail(format!(
+                        "runtime bypass = {store_bypass} but profile field = {profile_bypass}: \
+                             X-IM-Internal-Profile bypass diverges from profile contract"
+                    ))
+                };
+                (nonempty, consistent)
             }
-            Ok(_) => RuntimeOutcome::fail(format!(
-                "auth keys file {} parsed but contains zero keys",
-                profile.auth.auth_keys_path.display()
-            )),
-            Err(e) => RuntimeOutcome::fail(format!(
-                "auth keys file {} could not be loaded: {e}",
-                profile.auth.auth_keys_path.display()
-            )),
+            Ok(_) => (
+                RuntimeOutcome::fail(format!(
+                    "auth keys file {} parsed but contains zero keys",
+                    profile.auth.auth_keys_path.display()
+                )),
+                RuntimeOutcome::fail(format!(
+                    "auth keys file {} parsed but contains zero keys; bypass consistency could not be evaluated",
+                    profile.auth.auth_keys_path.display()
+                )),
+            ),
+            Err(e) => (
+                RuntimeOutcome::fail(format!(
+                    "auth keys file {} could not be loaded: {e}",
+                    profile.auth.auth_keys_path.display()
+                )),
+                RuntimeOutcome::fail(format!(
+                    "auth keys file {} could not be loaded: {e}; bypass consistency could not be evaluated",
+                    profile.auth.auth_keys_path.display()
+                )),
+            ),
         }
     } else {
-        RuntimeOutcome::fail(format!(
-            "auth keys file {} does not exist",
-            profile.auth.auth_keys_path.display()
-        ))
+        (
+            RuntimeOutcome::fail(format!(
+                "auth keys file {} does not exist",
+                profile.auth.auth_keys_path.display()
+            )),
+            RuntimeOutcome::fail(format!(
+                "auth keys file {} does not exist; bypass consistency could not be evaluated",
+                profile.auth.auth_keys_path.display()
+            )),
+        )
     };
 
     // Policy template loads infallibly via PolicyManager::from_template.
@@ -283,6 +321,7 @@ async fn evaluate_runtime(profile: &ShipProfile) -> RuntimeChecks {
         compliance_sealer_real: Some(compliance_sealer_real),
         trust_bundle_verified: Some(trust_bundle_verified),
         auth_keys_nonempty: Some(auth_keys_nonempty),
+        auth_internal_bypass_consistent: Some(auth_internal_bypass_consistent),
         policy_modules_loaded: Some(policy_modules_loaded),
     }
 }
