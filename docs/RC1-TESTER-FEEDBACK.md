@@ -98,13 +98,14 @@ finding-by-finding patch matrix.
 | Field | Value |
 |---|---|
 | Track planned for first tester | **C** (security/compliance review) — selected 2026-05-23 |
-| Transfer mechanism | Handled by user out-of-band; both archive variants ready |
-| Testers invited | **0** |
-| Testers responded | **0** |
+| Transfer mechanism | User sent the repo to the tester out-of-band overnight |
+| Testers invited | **1** (John Dougherty, johndou.com, Colorado) |
+| Testers responded | **1** (John, 2026-05-24, email + GitDoctor scan) |
 | Self-reviews completed | **1** (Claude self-review 2026-05-24, see §6.1 — does NOT count toward acceptance) |
-| Findings filed (self-review) | **12** (5 High / 4 Medium / 3 Low — see §7) |
-| Blockers open from self-review | **5** (H-1 through H-5, all docs bucket, all fix-in-RC10) |
-| RC-09 acceptance met | **NO** — waiting on first outside tester; self-review does not substitute |
+| Findings filed (self-review) | **12** (5 H / 4 M / 3 L — see §7); 9 of 12 already resolved in RC-10 RC1.1-docs (commits `b0fcdee` + `a6fa65e`) |
+| Findings filed (outside tester) | **20+** from John's email + GitDoctor scan; full triage matrix in [`dougherty/JOHN-REMEDIATION-PLAN.md`](dougherty/JOHN-REMEDIATION-PLAN.md) §2; summarised in §7 below with `J-` IDs |
+| Active remediation lane | **DOUGHERTY (J-01..J-26)** — 26 sessions across 10 workstreams; plan + roster at [`dougherty/`](dougherty/) |
+| **RC-09 acceptance met** | **YES** — John is the outside tester; feedback captured below; blockers known and routed to the DOUGHERTY lane |
 
 This field block is the source of truth. Update it whenever a
 tester is invited, responds, or files a finding.
@@ -113,7 +114,7 @@ tester is invited, responds, or files a finding.
 
 | # | Tester | Role / why invited | Track | Bundle variant | Invited (date) | Responded (date) | Status |
 |---|---|---|---|---|---|---|---|
-| _none yet_ | | | | | | | |
+| 1 | John Dougherty (johndou.com, CO) | Independent technical tester sourced by Basho; ran GitDoctor (gitdoctor.io) AI scan against the GitHub mirror `USS-Parks/im-mighty-eel-mai` + a manual read | Hybrid — closest to Track B/C but tool-driven (GitDoctor) rather than the README-FIRST + cargo-test walk | RC1.1-docs (sent from the repo, not the assembled archive) | 2026-05-23 (overnight) | 2026-05-24 (email + 15 scan screenshots) | **triaged** — see §6.2 and the DOUGHERTY plan |
 
 Add one row per invitation. Status values: `invited` → `running` →
 `reported` → `triaged`. If a tester declines or never responds,
@@ -280,12 +281,81 @@ triage matrix structurally.
 `L-3`. Full file:line references in
 `RC1-SELF-REVIEW-TRACK-C.md` §3-§5.
 
-### 6.2 _Tester 1_ (placeholder)
+### 6.2 Tester 1 — John Dougherty (johndou.com, Colorado)
 
-_To be populated when the first outside tester replies. Each
-subsection should include the tester's environment block from the
-issue form, each finding numbered, and the raw reply (or a link to
-it) for audit._
+**Type:** Outside tester. **Satisfies RC-09 acceptance criterion
+"at least one person besides the original builder has tried RC1."**
+**Method:** GitDoctor (gitdoctor.io) AI code-scan service ran a
+static analysis against `USS-Parks/im-mighty-eel-mai` (`origin/main`,
+which at the scan moment was in sync with local `5be7d2b`), plus a
+manual read by John. 50 checks run, 41 pass, 9 fail, 0 critical, 3
+security findings, 10 tips.
+**Date sent:** 2026-05-23 overnight.
+**Date replied:** 2026-05-24.
+**Bundle variant tested:** repo at `5be7d2b` (the RC-09 self-review
+commit); not the assembled archive at `dceaabc`+RC1.1-docs. Note:
+the RC1.1-docs patches in commits `b0fcdee` + `a6fa65e` landed
+after John's scan; some of his findings (specifically the doc gaps
+the self-review caught) are therefore already addressed in the
+current bundle.
+
+**GitDoctor score block:**
+
+| Category | Score | Severity |
+|---|---|---|
+| Overall | 52/100 | Needs Work |
+| Vibe Score | 35/100 | Likely Vibe-Coded (negative) |
+| Production Score | 41/100 | Needs Work |
+| Code Quality | 40/100 | — |
+| Error Handling | 60/100 | — |
+| Security | 75/100 | — |
+| Testing | 25/100 | — |
+| Documentation | 85/100 | — |
+| Architecture | 70/100 | — |
+| Scalability | 45/100 | — |
+| DevOps Readiness | 65/100 | — |
+
+**Raw email (excerpted, preserved verbatim from Basho's relay):**
+
+> Basho, I'm going to tell you what needs to happen. These aren't
+> suggestions. The project needs significant improvements before
+> production. There are signs of AI-generated or vibe-coded patterns
+> throughout the code on this project that indicate improper review.
+> Extensive use of TODO placeholders and incomplete implementations
+> throughout. […many specific findings, see plan §2 for the full
+> enumeration…] These are just the things that popped up during
+> testing this morning. — John
+
+The full email is preserved in
+[`dougherty/JOHN-REMEDIATION-PLAN.md`](dougherty/JOHN-REMEDIATION-PLAN.md)
+§1.1 plus per-finding rows in §2. The 15 GitDoctor scan
+screenshots are stored at
+[`test-evidence/dougherty-scan-2026-05-24/`](../test-evidence/dougherty-scan-2026-05-24/).
+
+**Triage authority:** Basho authored a full
+[`JOHN-REMEDIATION-PLAN.md`](dougherty/JOHN-REMEDIATION-PLAN.md)
+(296 lines, 10 workstreams, 26 sessions J-01..J-26) and a per-session
+[`JOHN-REMEDIATION-ROSTER.md`](dougherty/JOHN-REMEDIATION-ROSTER.md)
+(1 249 lines). The plan walks every line of John's email AND every
+GitDoctor flag with a per-row verdict against the actual filesystem
+(TRUE / FALSE / MIXED). Items judged false positive are kept in
+scope as **documented refutations** rather than silently dropped —
+this is W8 (Refutation Evidence Pack) in the plan.
+
+**Spot-checks performed during the close-out** to ground-truth the
+plan's triage:
+
+| Plan claim | Spot-check command | Result |
+|---|---|---|
+| `mai-sdk-rs/src/lib.rs` has 17 `todo!()` sites at lines 768-887 | `grep -cn 'todo!' mai-sdk-rs/src/lib.rs` | 17 ✓; line numbers match 768-887 |
+| `Math.random` in `.integrity/mcp-server/server.js` | `grep -n "Math\.random"` | line 244 (plan said 233 — drift, finding is real) ✓ |
+| `.gitignore` missing `node_modules` | `grep -E node_modules .gitignore` | absent ✓ |
+| No Python lock file | `ls requirements*.txt uv.lock poetry.lock` | none ✓ |
+
+Plan triage is grounded. Findings entered into §7 below.
+
+**Summary lines for §3 counters:** 1 invited, 1 responded, RC-09
+acceptance MET, blockers routed to the DOUGHERTY lane.
 
 ## 7. Triage Matrix
 
@@ -306,6 +376,26 @@ roadmap's four buckets and assign disposition.
 | L-1 | self-review §6.1 | C | Low | docs | README-FIRST.md:175 "MAI server ready - REST …" uses hyphen; runtime emits em-dash. Cosmetic | dismiss-or-low-fix |
 | L-2 | self-review §6.1 | C | Low | docs | ARCHITECTURE.md:318 references `mai/compliance-dashboard/` and `mai/deployment/...` — inside the bundle the path is bare (no `mai/` prefix) | dismiss |
 | L-3 | self-review §6.1 | C | Low | code | Health endpoint reports `"gpus":[]` while topology log reports `gpus=1` (probably intentional layer divergence; presents as inconsistent) | needs-investigation |
+| --- | --- | --- | --- | --- | **John Dougherty (§6.2) — summary; canonical per-row triage in [dougherty/JOHN-REMEDIATION-PLAN.md §2](dougherty/JOHN-REMEDIATION-PLAN.md)** | --- |
+| J-1 | John §6.2 | GitDoctor + manual | High | docs+code | "TODOs and incomplete implementations throughout" (QUA-004 + Placeholder HIGH) — MIXED: TRUE for `mai-sdk-rs/src/lib.rs` (17 todo! at 768-887) and `.integrity/mcp-server/server.js`; FALSE for `adapters/*/adapter.py` (Ollama 316 LOC, llama.cpp 273, etc. — zero `NotImplementedError`, zero trailing `pass`) | fix-in-DOUGHERTY (W10 for SDK, W6 for mcp; refute adapter claim in W8) |
+| J-2 | John §6.2 | GitDoctor | High | code | SEC-009 — `Math.random` in security-sensitive context (`.integrity/mcp-server/server.js:244` — drift from plan's "233" but real) | fix-in-DOUGHERTY (W1 / J-01, mechanical Edit) |
+| J-3 | John §6.2 | manual | refute | n/a | "Stdlib-only restriction needs to be improved" — stdlib-only is intentional air-gap design for the inference + compliance core; pulling third-party crates is a regression | refute-in-W8 (carve-out for `mai-sdk-rs` which is consumed outside the air-gap boundary — that gets `reqwest`/`eventsource-client` in J-16/J-17) |
+| J-4 | John §6.2 | GitDoctor + manual | refute | n/a | "Start with Ollama adapter and implement all methods fully" — Ollama adapter is already the Session 08 deliverable, full body, full test coverage | refute-in-W8 (cite session-08 evidence + `wc -l` + assertion counts) |
+| J-5 | John §6.2 | GitDoctor | High | packaging | PRJ-004 — missing lock files (Python + Node) — `Cargo.lock` exists; no `requirements-lock.txt` / `uv.lock` / `poetry.lock`; no `package-lock.json` in `.integrity/mcp-server/` | fix-in-DOUGHERTY (W2 / J-03) |
+| J-6 | John §6.2 | GitDoctor + manual | Medium | packaging | "Add Docker configuration with multi-stage builds" (CFG-007 LOW + Tip HIGH) — no Dockerfile in tree | fix-in-DOUGHERTY (W2 / J-04, CPU-only, multi-stage) |
+| J-7 | John §6.2 | GitDoctor | Medium | packaging | PRJ-002 — `.gitignore` missing `node_modules/` (true; `.env` / `dist/` / `build/` already present) | fix-in-DOUGHERTY (W2 / J-02, one-line Edit) |
+| J-8 | John §6.2 | GitDoctor + manual | Medium | tests | TST-001/004/005/006 — "tests are minimal stubs with mocked responses" — MIXED: Ollama has 38 assertions (real); llamacpp 14, exllamav2 13 (thin); compliance demos are real (verified in self-review §1.1: 6/6 pass) | fix-in-DOUGHERTY (W3 live-backend + W5 assertion fill) |
+| J-9 | John §6.2 | manual | Medium | code | "HTTP connection pooling on adapter clients" — likely real; needs measurement | fix-in-DOUGHERTY (W3 / J-05 audit, fold into each backend's J-session) |
+| J-10 | John §6.2 | manual | Medium | code | "Async context managers for adapter lifecycle" — real; adapters expose `initialize`/`shutdown` not `__aenter__`/`__aexit__` | fix-in-DOUGHERTY (W7 / J-12) |
+| J-11 | John §6.2 | manual | Medium | code | "Health check aggregator for production monitoring" — per-adapter health exists; no aggregator at `/health/system` | fix-in-DOUGHERTY (W7 / J-13) |
+| J-12 | John §6.2 | manual | refute | n/a | "Simple web dashboard for monitoring adapter status" — conflicts with CLAUDE.md "compliance dashboard is sole UI exception" air-gap rule | refute-in-W8 + propose CLI alternative |
+| J-13 | John §6.2 | GitDoctor | Low | code | PERF-004 — JSON.stringify in loop (server.js:317) | fix-in-DOUGHERTY (W6 / J-11, alongside MCP refactor) |
+| J-14 | John §6.2 | GitDoctor | Medium | code | QUA-001 — "god files >300 lines" — TRUE for `server.js` (371), `adapters/vllm/adapter.py` (332); Ollama 316 is acceptable for a full backend adapter | fix-in-DOUGHERTY (W6 splits server.js; vllm flagged for review in J-18) |
+| J-15 | John §6.2 | GitDoctor | Low | code | QUA-009 — "4+ levels of nesting" at `server.js:69` | fix-in-DOUGHERTY (W6 / J-11, extract helpers + early returns) |
+| J-16 | John §6.2 | GitDoctor + manual | Medium | tests | TST-005 — "no integration or e2e tests" — Partial: Rust workspace has 1539 tests + 6 compliance demos; Python adapter layer lacks live-backend integration | fix-in-DOUGHERTY (W3 live-backend matrix + W5 e2e smoke) |
+| J-17 | John §6.2 | manual | refute | n/a | "Flat project structure" — FALSE; `mai/` already organises into `mai-{api,compliance,scheduler,core,…}/` crates plus `adapters/{ollama,llamacpp,…}/`, `docs/`, `tests/`, `.integrity/`. GitDoctor's PRJ-005 actually PASSED in the scan; John mis-paraphrased | refute-in-W8 with tree-output evidence |
+| J-18 | John §6.2 | manual | High | code | "Error mapping designed but not consistently applied" (Error Handling 60/100) | fix-in-DOUGHERTY (W4 / J-08 — produces ERROR-PATH-AUDIT.md) |
+| J-1b | direct review (Basho 2026-05-24) | manual | High | code | `mai-sdk-rs/src/lib.rs` 17 `todo!()` HTTP-client stubs (previously SHIP-17 KNOWN-ISSUES.md Issue 15, "no in-tree consumer, not lane-blocking" — true at the time but John-visible to any reviewer) | fix-in-DOUGHERTY (W10 / J-16 + J-17) |
 
 **Bucket definitions** (per roadmap RC-09):
 
@@ -337,29 +427,48 @@ whose severity is `Blocker` or `High`.
 
 | Blocker | Origin (§7 ID) | Owner | Target resolution |
 |---|---|---|---|
-| Acquisition demos non-runnable as written (H-2 + H-3 + H-4) | H-2, H-3, H-4 | RC-10 | Rewrite each demo's setup script to use `curl` against `:8420` from `cd source` |
-| Operator runbooks reference unimplemented CLI surfaces (H-1) | H-1 | RC-10 | Header band on runbooks 05/06/11/12/13 stating which `mai-admin` subcommands are stubbed at the freeze |
-| Track C reading list points at wrong runbooks (H-5) | H-5 | RC-10 | Five-character edits in TESTER-INSTRUCTIONS.md §4.C step 4 |
+| Acquisition demos non-runnable as written (H-2 + H-3 + H-4) | H-2, H-3, H-4 | RC-10 | **RESOLVED** in commits `b0fcdee` (RC1.1-docs) + `a6fa65e` (re-assembly) — demos now use curl against `:8420` from `cd source` |
+| Operator runbooks reference unimplemented CLI surfaces (H-1) | H-1 | RC-10 | **RESOLVED** in commit `b0fcdee` — header bands on runbooks 05/06/11/12/13 cite stubbed `mai-admin` subcommands and their HTTP equivalents |
+| Track C reading list points at wrong runbooks (H-5) | H-5 | RC-10 | **RESOLVED** in commit `b0fcdee` — TESTER-INSTRUCTIONS.md §4.C step 4 numbers fixed |
+| `Math.random` in security context (SEC-009 HIGH) | J-2 | DOUGHERTY W1 / J-01 | XS — single Edit at `.integrity/mcp-server/server.js:244` → `crypto.randomUUID()`; mechanical |
+| Missing dependency lock files (PRJ-004 HIGH) | J-5 | DOUGHERTY W2 / J-03 | S — add `requirements-lock.txt` (or `uv.lock`) for Python + `package-lock.json` for mcp-server |
+| mai-sdk-rs HTTP client 17 `todo!()` stubs | J-1, J-1b | DOUGHERTY W10 / J-16+J-17 | M-L — implement HTTP client + SSE/resume protocol; bumps `reqwest`/`eventsource-client` deps (acceptable outside air-gap boundary) |
+| Adapter test thinness (TST-001/004/005/006) | J-8 | DOUGHERTY W3 + W5 | M — live-backend integration tests for Ollama/llama.cpp/vLLM/TGI/SGLang/ExLlamaV2/TensorRT-LLM + assertion fill for thin tests |
+| Error path inconsistency (60/100) | J-18 | DOUGHERTY W4 / J-08 | M — produce ERROR-PATH-AUDIT.md walking every mai-api handler → adapter → backend path |
+| No Docker config | J-6 | DOUGHERTY W2 / J-04 | M — CPU-only multi-stage Dockerfile + .dockerignore + .env.example |
 
-**Note:** All five blockers came from the Claude self-review (§6.1)
-and so are not RC-09 acceptance-grade evidence. They are predictive
-of what an outside reviewer would file. An outside reviewer may file
-additional, distinct blockers — until they have, the list above is
-the working set.
+**Note:** The first three rows (self-review H-1/H-2/H-3/H-4/H-5)
+were resolved by the RC-10 RC1.1-docs pass (commits `b0fcdee` +
+`a6fa65e`) **before** John's review landed. The remaining rows are
+the DOUGHERTY-lane blockers John identified that go into RC1.2
+(post-J-lane). See [`dougherty/JOHN-REMEDIATION-PLAN.md`](dougherty/JOHN-REMEDIATION-PLAN.md)
+§5 for per-workstream acceptance criteria and §6 for the lane's
+Definition of Done.
 
 The roadmap's RC-09 acceptance includes "blockers are known
-before wider sharing." This table is the answer to that.
+before wider sharing." Both the self-review and John's outside
+review have now contributed blocker lists. This table is the
+answer to that.
 
 ## 9. Acceptance vs RC-09 Criteria
 
 | Criterion | Status |
 |---|---|
-| At least one person besides the original builder has tried RC1 | **NO** — §3 (self-review at §6.1 does not satisfy this) |
-| Feedback is captured in `RC1-TESTER-FEEDBACK.md` | **PARTIAL** — self-review intake at §6.1 + 12 findings triaged in §7; outside-tester intake at §6.2 still empty |
-| Blockers are known before wider sharing | **PARTIAL** — §8 lists 5 self-review blockers; outside reviewer may add more |
+| At least one person besides the original builder has tried RC1 | **YES** — John Dougherty (§6.2), GitDoctor scan + manual read, 2026-05-24 |
+| Feedback is captured in `RC1-TESTER-FEEDBACK.md` | **YES** — §6.1 self-review intake (12 findings, 9 already resolved) + §6.2 outside-tester intake (full email + scan score block + 15 screenshots in `test-evidence/dougherty-scan-2026-05-24/`); §7 triage matrix carries both with per-row verdicts (TRUE / FALSE / MIXED per the plan) |
+| Blockers are known before wider sharing | **YES** — §8 lists self-review blockers (3 resolved in commits `b0fcdee` + `a6fa65e`) + the DOUGHERTY-lane blockers from John's review (routed to J-01..J-26) |
 
-RC-09 is open. The self-review pre-flighted the triage matrix and
-filed five doc-bucket blockers that RC-10 must address regardless
-of what an outside reviewer reports. RC-09 closes when at least one
-**outside** reviewer has tried RC1 and their findings have a final
-disposition in §7.
+**RC-09 is CLOSED.** John's review satisfies the outside-tester
+criterion; his findings are triaged in §7, blockers are enumerated
+in §8 and routed to the DOUGHERTY remediation lane in
+[`dougherty/JOHN-REMEDIATION-PLAN.md`](dougherty/JOHN-REMEDIATION-PLAN.md).
+Per the plan's §1.2 sequence diagram:
+
+```
+RC-08 (bundle) → RC-09 (tester verdict: John) → [DOUGHERTY LANE: J-01..J-26] → RC-10 (re-bundle) → RC-11 (re-ship)
+```
+
+The "RC-10" in the new sequence is the post-DOUGHERTY re-bundle
+(distinct from the earlier RC-10 RC1.1-docs self-review fix pass
+that already shipped in `b0fcdee` / `a6fa65e`). RC-11 is the
+re-ship to John for verification.
