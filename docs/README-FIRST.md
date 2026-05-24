@@ -71,6 +71,22 @@ No GPU drivers are required. If `nvidia-smi` is absent the daemon
 logs a single warning and falls back to a flat topology; that is
 expected on a tester laptop.
 
+**Python path note.** If you run any `pytest` invocation — the SDK,
+the dashboard, or the application scaffolds (including the OpenBao
+trust-demo) — set `PYTHONPATH` to the bundled SDK source root first.
+Without it, pytest fails during collection with
+`ModuleNotFoundError: No module named 'mai'`.
+
+```
+# POSIX shell, from MAI-Lamprey-RC1/:
+export PYTHONPATH="$PWD/source/mai-sdk-python/src"
+# PowerShell, from MAI-Lamprey-RC1\:
+$env:PYTHONPATH = "$PWD\source\mai-sdk-python\src"
+```
+
+The cargo paths (§5.B, §6) do **not** need `PYTHONPATH`; it only
+matters for `pytest`.
+
 ## 4. Layout
 
 After you unpack the bundle:
@@ -112,6 +128,12 @@ Get-FileHash bin\mai-api.exe -Algorithm SHA256
 mkdir mai-test-run; cd mai-test-run
 ..\bin\mai-api.exe
 ```
+
+**Hash case note.** `Get-FileHash` prints SHA-256 in upper-case hex;
+`bin/SHA256SUMS` lists the same hashes in lower-case (Unix
+convention). The two are equivalent — hex compares are
+case-insensitive. The `Expect:` line above is upper-case so the
+PowerShell output reads as an exact match.
 
 ### 5.B Source path (RC1 v1 or v2)
 
@@ -225,12 +247,16 @@ test test_trust_manifold_disconnected_and_expired ... ok
 test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured
 ```
 
-Each test exercises a different acquisition scenario. The narratives
-are in `source/docs/acquisition/demos/{healthcare,defense,tribal,multi-domain}.md`.
-The test_audit_tamper case proves the hash-chain catches a mutated
-audit row; the trust-manifold test proves the air-gap path refuses
-to make a routing decision when the trust bundle is expired or the
-revocation status is unknown.
+Each test exercises a different acquisition scenario:
+
+| Test | What it proves | Narrative |
+|---|---|---|
+| `test_hipaa_workflow` | PHI request → BAA deny → local route → HIPAA report | `source/docs/acquisition/demos/healthcare.md` |
+| `test_itar_workflow` | ITAR-controlled tech data + non-US actor → DenyExport → ITAR report | `source/docs/acquisition/demos/defense.md` |
+| `test_ocap_workflow` | Tribal data + Council role → RouteLocal → OCAP report | `source/docs/acquisition/demos/tribal.md` |
+| `test_multi_domain` | HIPAA + ITAR + OCAP composed in one request; OCAP > ITAR > HIPAA precedence | `source/docs/acquisition/demos/multi-domain.md` |
+| `test_audit_tamper` | Hash-chain `verify_chain` detects a mutated audit row and escalates Critical | embedded in the test |
+| `test_trust_manifold_disconnected_and_expired` | **Trust Manifold dry-run** — air-gap path refuses to route when the trust bundle is expired or the revocation status is unknown | plan §A.14 |
 
 **Performance baselines (optional, takes ~30 seconds extra).**
 

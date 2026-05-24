@@ -1,0 +1,36 @@
+[2m2026-05-24T04:41:31.313859Z[0m [32m INFO[0m [2mmai_api[0m[2m:[0m Island Mountain MAI API Server [3mversion[0m[2m=[0m"0.1.0"
+[2m2026-05-24T04:41:31.314434Z[0m [32m INFO[0m [2mmai_api[0m[2m:[0m No config file specified, using Scout tier defaults
+[2m2026-05-24T04:41:31.314511Z[0m [32m INFO[0m [2mmai_api::server[0m[2m:[0m MAI server starting [3mtier[0m[2m=[0mScout [3mrest_port[0m[2m=[0m8420 [3mgrpc_port[0m[2m=[0m8421 [3mbind[0m[2m=[0m127.0.0.1
+[2m2026-05-24T04:41:31.314581Z[0m [32m INFO[0m [2mmai_api::server[0m[2m:[0m Running air-gap startup verification
+[2m2026-05-24T04:41:31.314636Z[0m [32m INFO[0m [2mmai_api::server[0m[2m:[0m Air-gap verification passed
+[2m2026-05-24T04:41:31.314876Z[0m [32m INFO[0m [2mmai_api::server[0m[2m:[0m No scheduler config file found, using defaults
+[2m2026-05-24T04:41:31.323516Z[0m [32m INFO[0m [2mmai_api::server[0m[2m:[0m No topology config file found, using defaults
+[2m2026-05-24T04:41:31.385840Z[0m [33m WARN[0m [2mmai_scheduler::topology[0m[2m:[0m nvidia-smi unavailable, using flat topology
+[2m2026-05-24T04:41:31.385953Z[0m [32m INFO[0m [2mmai_api::server[0m[2m:[0m GPU topology loaded [3mgpus[0m[2m=[0m1 [3mnvlink_cliques[0m[2m=[0m0
+[2m2026-05-24T04:41:31.386065Z[0m [32m INFO[0m [2mmai_api::server[0m[2m:[0m No KV config file found, using defaults
+[2m2026-05-24T04:41:31.386192Z[0m [33m WARN[0m [2mmai_api::server[0m[2m:[0m No scoring config found; scheduler will use least-loaded scoring
+========================================
+  MAI FIRST-BOOT: Admin API Key
+========================================
+  Key:  im-5ba336433546cdd059e179b5d8047296bede8973555b08662d1d4bf7df83bba2
+  Hash: ee63756a9771e30b88d885814a166a6fcd8699a8c3876adece878fa6f9a2d905
+
+  Save the KEY somewhere safe. Add the HASH
+  to config/auth_keys.toml to persist it:
+
+  [[keys]]
+  hash = "ee63756a9771e30b88d885814a166a6fcd8699a8c3876adece878fa6f9a2d905"
+  profile_id = "admin"
+  role = "admin"
+  display_name = "System Admin"
+========================================
+[2m2026-05-24T04:41:31.386625Z[0m [32m INFO[0m [2mmai_api::server[0m[2m:[0m First-boot admin key generated (printed to stdout, NOT logged)
+[2m2026-05-24T04:41:31.386684Z[0m [32m INFO[0m [2mmai_api::server[0m[2m:[0m No adapter config file found, starting without adapters
+[2m2026-05-24T04:41:31.386757Z[0m [33m WARN[0m [2mmai_adapters::config[0m[2m:[0m Adapters directory not found [3mdir[0m[2m=[0madapters
+[2m2026-05-24T04:41:31.386780Z[0m [32m INFO[0m [2mmai_api::server[0m[2m:[0m Adapters discovered [3mcount[0m[2m=[0m0
+[2m2026-05-24T04:41:31.386920Z[0m [32m INFO[0m [2mmai_api::server[0m[2m:[0m All components initialized, building servers
+[2m2026-05-24T04:41:31.390321Z[0m [32m INFO[0m [2mmai_api::server[0m[2m:[0m REST server listening [3maddr[0m[2m=[0m127.0.0.1:8420
+[2m2026-05-24T04:41:31.390360Z[0m [32m INFO[0m [2mmai_api::grpc::server[0m[2m:[0m building gRPC server [3maddr[0m[2m=[0m127.0.0.1:8421 [3mreflection[0m[2m=[0mtrue [3mmax_message_size[0m[2m=[0m16777216
+[2m2026-05-24T04:41:31.391058Z[0m [32m INFO[0m [2mmai_api::grpc::server[0m[2m:[0m gRPC server configured with all services [3maddr[0m[2m=[0m127.0.0.1:8421
+[2m2026-05-24T04:41:31.391078Z[0m [32m INFO[0m [2mmai_api::server[0m[2m:[0m gRPC server listening [3maddr[0m[2m=[0m127.0.0.1:8421
+[2m2026-05-24T04:41:31.391086Z[0m [32m INFO[0m [2mmai_api::server[0m[2m:[0m MAI server ready — REST on 127.0.0.1:8420, gRPC on 127.0.0.1:8421

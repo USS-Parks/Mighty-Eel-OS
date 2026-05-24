@@ -1,0 +1,12 @@
+============================= test session starts =============================
+platform win32 -- Python 3.14.4, pytest-9.0.3, pluggy-1.6.0
+rootdir: C:\Users\17076\Documents\Claude\Island-Mountain-RC1-rehearsal\MAI-Lamprey-RC1\source
+configfile: pyproject.toml
+plugins: anyio-4.13.0, asyncio-1.3.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 17 items
+
+apps\openbao-trust-demo\tests\test_integration.py .....                  [ 29%]
+apps\openbao-trust-demo\tests\test_smoke.py ............                 [100%]
+
+============================= 17 passed in 3.36s ==============================
