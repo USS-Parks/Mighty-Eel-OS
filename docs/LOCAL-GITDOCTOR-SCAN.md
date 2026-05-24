@@ -57,24 +57,15 @@ python tools/local_gitdoctor_scan.py --root . --fail-on high
 
 ## Repository Hook Enforcement
 
-The repo hook lives at `.integrity/hooks/pre-push`. It is Python-native for
-the Windows workflow and runs the mapped Local GitDoctor scanner before `git
-push`. It blocks regressions against the current J-series remediation baseline:
-
-- mapped score must stay at or above 59
-- failed mapped checks must stay at or below 24
-- HIGH findings must stay at or below 8
-- CRITICAL findings must stay at 0
+Local GitDoctor scans are manual evidence tools, not repository hooks. The
+commit protocol only installs the integrity pre-commit guard from
+`.integrity/hooks`.
 
 Install the repo hooks from `mai/` with:
 
 ```powershell
 git config core.hooksPath .integrity/hooks
 ```
-
-This is intentionally a baseline gate while remediation is still in
-progress. It prevents new backsliding without pretending the current
-known findings are already closed.
 
 ## Three Evidence Layers
 

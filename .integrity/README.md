@@ -27,7 +27,6 @@ Independent verification prevents confirmation bias from the writing agent.
 | Script | Purpose |
 |--------|---------|
 | `hooks/pre-commit` | Blocks commits with null bytes, truncation, syntax errors |
-| `hooks/pre-push` | Blocks pushes when the mapped Local GitDoctor baseline regresses |
 | `scripts/verify-tree.sh` | Scan modified files for corruption before staging |
 | `scripts/safe-write.sh` | Atomic two-stage write with verification |
 | `scripts/post-write-verify.sh` | Verify single file after write operation |
@@ -50,8 +49,6 @@ git config core.hooksPath .integrity/hooks
 
 # The hook directory includes:
 # - pre-commit: file corruption, syntax, and formatting guard
-# - pre-push: Local GitDoctor mapped-baseline regression gate
-#   This hook is Python-native on Windows.
 
 # Install MCP server dependencies (if using Node tools)
 cd .integrity/mcp-server && npm install

@@ -673,7 +673,7 @@ class TestErrorMapping:
             def open(self, _req: Any, timeout: Any) -> _FakeResp:
                 return _FakeResp()
 
-        client._opener = _FakeOpener()  # type: ignore[assignment]
+        client._opener = _FakeOpener()
         with pytest.raises(ValidationError):
             client._request("GET", "/v1/models")
 

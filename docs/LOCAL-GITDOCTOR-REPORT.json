@@ -1,9 +1,9 @@
 {
   "category_scores": {
     "Code Quality": {
-      "failed": 7,
-      "passed": 3,
-      "score": 30,
+      "failed": 8,
+      "passed": 2,
+      "score": 20,
       "total": 10
     },
     "Configuration": {
@@ -13,9 +13,9 @@
       "total": 7
     },
     "Performance": {
-      "failed": 3,
-      "passed": 3,
-      "score": 50,
+      "failed": 4,
+      "passed": 2,
+      "score": 33,
       "total": 6
     },
     "Project Hygiene": {
@@ -43,7 +43,7 @@
       "total": 6
     }
   },
-  "failed": 24,
+  "failed": 26,
   "findings": [
     {
       "category": "Security",
@@ -102,14 +102,14 @@
       "check_id": "PERF-002",
       "description": "Sync Node file I/O blocks the event loop.",
       "evidence": [
-        ".integrity/mcp-server/server.js:20 import { readFileSync, writeFileSync, mkdirSync, copyFileSync, existsSync, statSync } from \"fs\";",
-        ".integrity/mcp-server/server.js:111 const content = readFileSync(filePath);",
-        ".integrity/mcp-server/server.js:120 const content = readFileSync(filePath, \"utf-8\");",
-        ".integrity/mcp-server/server.js:138 const content = readFileSync(filePath, \"utf-8\");",
-        ".integrity/mcp-server/server.js:154 const currentContent = readFileSync(filePath, \"utf-8\");",
-        ".integrity/mcp-server/server.js:177 if (!existsSync(filePath)) {",
-        ".integrity/mcp-server/server.js:202 const content = readFileSync(filePath, \"utf-8\");",
-        ".integrity/mcp-server/server.js:217 const stat = statSync(filePath);"
+        ".integrity/mcp-server/handlers.js:10 readFileSync,",
+        ".integrity/mcp-server/handlers.js:11 writeFileSync,",
+        ".integrity/mcp-server/handlers.js:14 statSync,",
+        ".integrity/mcp-server/handlers.js:43 writeFileSync(tmpPath, content, \"utf-8\");",
+        ".integrity/mcp-server/handlers.js:63 const targetStat = statSync(args.path);",
+        ".integrity/mcp-server/handlers.js:64 const tmpStat = statSync(tmpPath);",
+        ".integrity/mcp-server/validators.js:10 import { readFileSync, existsSync, statSync } from \"node:fs\";",
+        ".integrity/mcp-server/validators.js:14 const content = readFileSync(filePath);"
       ],
       "evidence_layer": "mapped-check",
       "origin": "john-finding",
@@ -140,14 +140,14 @@
       "check_id": "PERF-004",
       "description": "Repeated JSON serialization in loops adds CPU overhead.",
       "evidence": [
-        "adapters/exllamav2/client.py:116 chunk_data = json.loads(payload)",
+        "adapters/exllamav2/client.py:118 chunk_data = json.loads(payload)",
         "adapters/llamacpp/client.py:121 chunk_data = json.loads(payload)",
         "adapters/ollama/client.py:147 chunk_data = json.loads(line_str)",
+        "adapters/openai_compat/client.py:202 parsed = json.loads(raw)",
         "adapters/runner.py:130 request = json.loads(line_str)",
         "adapters/sglang/client.py:120 chunk_data = json.loads(payload)",
-        "adapters/tensorrt/client.py:117 chunk_data = json.loads(payload)",
-        "adapters/tgi/client.py:115 chunk_data = json.loads(payload)",
-        "adapters/vllm/client.py:126 chunk_data = json.loads(payload)"
+        "adapters/tensorrt/client.py:368 data = json.loads(payload)",
+        "adapters/tgi/client.py:125 chunk_data = json.loads(payload)"
       ],
       "evidence_layer": "mapped-check",
       "origin": "john-finding",
@@ -155,22 +155,41 @@
       "title": "JSON.parse/stringify inside loops"
     },
     {
+      "category": "Performance",
+      "check_id": "PERF-005",
+      "description": "Independent awaits may be faster with gather/join_all/Promise.all.",
+      "evidence": [
+        "adapters/onnxruntime/tests/test_adapter.py:200 3 sequential await lines",
+        "adapters/onnxruntime/tests/test_integration_live.py:210 3 sequential await lines",
+        "adapters/sglang/tests/test_adapter.py:462 3 sequential await lines",
+        "adapters/sglang/tests/test_adapter.py:538 3 sequential await lines",
+        "adapters/sglang/tests/test_integration_mock.py:324 3 sequential await lines",
+        "adapters/tensorrt/tests/test_adapter.py:227 3 sequential await lines",
+        "adapters/tgi/tests/test_adapter.py:460 3 sequential await lines",
+        "adapters/tgi/tests/test_adapter.py:483 3 sequential await lines"
+      ],
+      "evidence_layer": "mapped-check",
+      "origin": "john-finding",
+      "severity": "LOW",
+      "title": "Sequential awaits that could be parallel"
+    },
+    {
       "category": "Code Quality",
       "check_id": "QUA-001",
       "description": "Large files may need focused modules.",
       "evidence": [
-        ".integrity/mcp-server/server.js 372 lines",
         "adapters/base.py 448 lines",
-        "adapters/exllamav2/tests/test_adapter.py 373 lines",
+        "adapters/exllamav2/tests/test_adapter.py 580 lines",
+        "adapters/exllamav2/tests/test_integration_live.py 333 lines",
         "adapters/llamacpp/tests/test_adapter.py 368 lines",
+        "adapters/mlx/tests/test_adapter.py 426 lines",
         "adapters/ollama/adapter.py 316 lines",
         "adapters/ollama/client.py 301 lines",
-        "adapters/runner.py 385 lines",
-        "adapters/tests/test_ipc_protocol.py 358 lines",
-        "adapters/vllm/adapter.py 332 lines",
-        "apps/openbao-trust-demo/main.py 369 lines",
-        "compliance-dashboard/app.py 456 lines",
-        "compliance-dashboard/tests/test_dashboard.py 447 lines"
+        "adapters/onnxruntime/adapter.py 366 lines",
+        "adapters/onnxruntime/client.py 373 lines",
+        "adapters/onnxruntime/tests/test_adapter.py 762 lines",
+        "adapters/openai_compat/adapter.py 465 lines",
+        "adapters/openai_compat/client.py 394 lines"
       ],
       "evidence_layer": "mapped-check",
       "origin": "john-finding",
@@ -179,17 +198,30 @@
     },
     {
       "category": "Code Quality",
+      "check_id": "QUA-002",
+      "description": "5+ parameters are hard to call correctly.",
+      "evidence": [
+        "adapters/mlx/tests/test_adapter.py:66 def fake_generate(_m, _t, *, prompt, max_tokens, temp, top_p):",
+        "adapters/mlx/tests/test_adapter.py:69 def fake_stream_generate(_m, _t, *, prompt, max_tokens, temp, top_p) -> Iterator[str]:"
+      ],
+      "evidence_layer": "mapped-check",
+      "origin": "john-finding",
+      "severity": "LOW",
+      "title": "Functions with too many parameters"
+    },
+    {
+      "category": "Code Quality",
       "check_id": "QUA-003",
       "description": "Empty bodies and placeholder panics create false confidence.",
       "evidence": [
-        ".integrity/mcp-server/server.js:10 * - pre_stage_check: Full verification pass before git add",
-        ".integrity/mcp-server/server.js:35 description: \"Check a single file for corruption: null bytes, truncation vs HEAD, bracket balance, syntax validity. Returns structured pass/fail report.\",",
-        ".integrity/mcp-server/server.js:112 return content.includes(0) ? { pass: false, detail: \"Null bytes detected\" } : { pass: true };",
-        ".integrity/mcp-server/server.js:114 return { pass: false, detail: `Read error: ${e.message}` };",
-        ".integrity/mcp-server/server.js:125 return { pass: false, detail: `Brace imbalance: { ${open} } ${close} delta ${open - close}` };",
-        ".integrity/mcp-server/server.js:128 return { pass: true, warning: `Minor brace mismatch: delta ${open - close}` };",
-        ".integrity/mcp-server/server.js:130 return { pass: true };",
-        ".integrity/mcp-server/server.js:132 return { pass: false, detail: `Read error: ${e.message}` };"
+        ".integrity/mcp-server/handlers.js:33 const failed = results.filter((r) => !r.pass);",
+        ".integrity/mcp-server/handlers.js:46 if (!tmpCheck.pass) {",
+        ".integrity/mcp-server/handlers.js:66 if (!targetCheck.pass || targetStat.size !== tmpStat.size) {",
+        ".integrity/mcp-server/handlers.js:97 const allPassed = results.every((r) => r.checks.every((c) => c.pass));",
+        ".integrity/mcp-server/handlers.js:104 return text({ status: result.pass ? \"PASS\" : \"FAIL\", ...result, file: args.path });",
+        ".integrity/mcp-server/server.js:11 * - pre_stage_check: Full verification pass before git add",
+        ".integrity/mcp-server/server.js:31 \"Check a single file for corruption: null bytes, truncation vs HEAD, bracket balance, syntax validity. Returns structured pass/fail report.\",",
+        ".integrity/mcp-server/validators.js:5 * Each `check*` helper returns `{ pass: boolean, detail?, warning?, ... }`."
       ],
       "evidence_layer": "mapped-check",
       "origin": "john-finding",
@@ -203,16 +235,16 @@
       "evidence": [
         "docs/ADAPTER-COMPLETION-MATRIX.md:66 | **BUG** | `test_adapter.py:99` asserts `embed()` returns `[0.1, 0.2, 0.3]` but `embed()` returns an `Embedding` dataclass \u2014 should assert on `.vector` or `.in",
         "docs/ADAPTER-COMPLETION-MATRIX.md:115 | **BUG** | `test_adapter.py:84\u201385` asserts `healthy=True` but the adapter returns degraded status when the engine is not ready \u2014 the test contradicts the adapt",
+        "docs/adapter-evidence/J-21-exllamav2.md:42 | No TODO/stub language in adapter | confirmed \u2014 `embed` raises `UnsupportedOperationError` (intentional unsupported per \u00a7Embedding Contract) |",
+        "docs/adapter-evidence/J-22-tensorrt.md:230 - no TODO/stub language remains; the only unsupported method",
+        "docs/adapter-evidence/J-23-openai_compat.md:260 - No `TODO`, `FIXME`, `pass`, or silent-`None` placeholders remain",
+        "docs/adapter-evidence/J-25-mlx.md:68 | Completion definition (no TODO/stub language) | PASS | `grep -nE 'TODO|FIXME|XXX|stub' adapters/mlx` returns no hits. |",
+        "docs/adapter-evidence/J-26-triton.md:202 - No TODO/stub language remains in adapter or client.",
+        "docs/ADAPTER-SHARED-CONTRACT.md:225 - no TODO/stub language remains in the adapter implementation unless it is a",
         "docs/dougherty/JOHN-REMEDIATION-PLAN.md:54 | 1 | email + QUA-004 | \"Extensive TODO placeholders and incomplete implementations throughout\" | QUA-004 + Code Smell `Placeholder Implementation` HIGH | Mixed",
         "docs/dougherty/JOHN-REMEDIATION-ROSTER.md:1156 - Adapter stubs: `wc -l` of adapters/*/adapter.py + `grep -c NotImplementedError` = 0 for each. **Important nuance:** John's \"extensive TODO placeholders\" claim",
         "docs/JOHN-REMEDIATION-PLAN.md:54 | 1 | email + QUA-004 | \"Extensive TODO placeholders and incomplete implementations throughout\" | QUA-004 + Code Smell `Placeholder Implementation` HIGH | Mixed",
-        "docs/JOHN-REMEDIATION-ROSTER.md:1219 - Adapter stubs: `wc -l` of adapters/*/adapter.py + `grep -c NotImplementedError` = 0 for each. **Important nuance:** John's \"extensive TODO placeholders\" claim",
-        "docs/KNOWN-ISSUES.md:126 | `TODO` | 3 files (`mai-adapters/src/manager.rs:586`, `mai-core/src/models/usb.rs:161`, `mai-scheduler/src/default.rs:394/399/402`) | Three carry session-pinne",
-        "docs/KNOWN-ISSUES.md:127 | `FIXME`, `unimplemented!` | 0 in src | clean. |",
-        "docs/RC1-TESTER-FEEDBACK.md:324 > Extensive use of TODO placeholders and incomplete implementations",
-        "docs/SHIP-HARDENING-PLAN.md:1458 TODO",
-        "docs/SHIP-HARDENING-PLAN.md:1459 FIXME",
-        "mai-adapters/src/manager.rs:586 // TODO: Track in-flight request count per adapter."
+        "docs/JOHN-REMEDIATION-ROSTER.md:1219 - Adapter stubs: `wc -l` of adapters/*/adapter.py + `grep -c NotImplementedError` = 0 for each. **Important nuance:** John's \"extensive TODO placeholders\" claim"
       ],
       "evidence_layer": "mapped-check",
       "origin": "john-finding",
@@ -255,14 +287,14 @@
       "check_id": "QUA-009",
       "description": "4+ indentation levels make code harder to read.",
       "evidence": [
-        ".integrity/mcp-server/server.js:70 ~4 indentation levels",
         "adapters/base.py:222 ~4 indentation levels",
         "adapters/exllamav2/adapter.py:70 ~4 indentation levels",
-        "adapters/exllamav2/client.py:72 ~4 indentation levels",
+        "adapters/exllamav2/client.py:74 ~4 indentation levels",
+        "adapters/exllamav2/tests/test_adapter.py:554 ~4 indentation levels",
+        "adapters/exllamav2/tests/test_integration_live.py:65 ~4 indentation levels",
         "adapters/llamacpp/adapter.py:71 ~4 indentation levels",
         "adapters/llamacpp/client.py:75 ~4 indentation levels",
-        "adapters/llamacpp/tests/test_integration_live.py:205 ~4 indentation levels",
-        "adapters/ollama/adapter.py:89 ~4 indentation levels"
+        "adapters/llamacpp/tests/test_integration_live.py:205 ~4 indentation levels"
       ],
       "evidence_layer": "mapped-check",
       "origin": "john-finding",
@@ -291,10 +323,10 @@
         ".env.example:61 # LLAMACPP_HOST=http://127.0.0.1:8081",
         ".github/workflows/ci.yml:126 #       run: curl -s http://localhost:11434/api/tags || (echo \"Ollama not available\" && exit 1)",
         ".github/workflows/gpu-release.yml:122 if ! curl -fsS http://localhost:11434/api/tags >/dev/null 2>&1; then",
-        "adapters/llamacpp/tests/test_integration_live.py:13 export LLAMACPP_HOST=http://127.0.0.1:8081",
-        "adapters/llamacpp/tests/test_integration_live.py:88 \"set LLAMACPP_HOST=http://127.0.0.1:8081 to enable live tests.\",",
-        "adapters/ollama/tests/test_adapter.py:52 assert config.base_url == \"http://127.0.0.1:11434\"",
-        "adapters/ollama/tests/test_integration_live.py:9 export OLLAMA_HOST=http://127.0.0.1:11434"
+        "adapters/exllamav2/tests/test_adapter.py:522 base_url=\"http://127.0.0.1:5000\",",
+        "adapters/exllamav2/tests/test_integration_live.py:13 export EXLLAMAV2_HOST=http://127.0.0.1:5000",
+        "adapters/exllamav2/tests/test_integration_live.py:81 `http://127.0.0.1:5000`). When unset the",
+        "adapters/exllamav2/tests/test_integration_live.py:112 \"set EXLLAMAV2_HOST=http://127.0.0.1:5000 against a running \""
       ],
       "evidence_layer": "mapped-check",
       "origin": "john-finding",
@@ -320,7 +352,13 @@
       "check_id": "TST-004",
       "description": "Tests should assert outcomes.",
       "evidence": [
+        "adapters/openai_compat/tests/conftest.py no assertion signal",
+        "adapters/sglang/tests/conftest.py no assertion signal",
+        "adapters/tensorrt/tests/conftest.py no assertion signal",
         "adapters/tests/_streaming_server.py no assertion signal",
+        "adapters/tgi/tests/_tgi_test_server.py no assertion signal",
+        "adapters/tgi/tests/conftest.py no assertion signal",
+        "adapters/triton/tests/conftest.py no assertion signal",
         "tests/benchmarks/bench_compare.py no assertion signal"
       ],
       "evidence_layer": "mapped-check",
@@ -333,12 +371,13 @@
       "check_id": "TST-006",
       "description": "Excessive mocks may test mocks rather than behavior.",
       "evidence": [
-        "adapters/exllamav2/tests/test_adapter.py 27 mock signals",
+        "adapters/exllamav2/tests/test_adapter.py 49 mock signals",
         "adapters/llamacpp/tests/test_adapter.py 27 mock signals",
         "adapters/ollama/tests/test_adapter.py 31 mock signals",
-        "adapters/sglang/tests/test_adapter.py 10 mock signals",
-        "adapters/tensorrt/tests/test_adapter.py 9 mock signals",
-        "adapters/vllm/tests/test_adapter.py 11 mock signals"
+        "adapters/onnxruntime/tests/test_adapter.py 31 mock signals",
+        "adapters/tensorrt/tests/test_adapter.py 8 mock signals",
+        "adapters/tgi/tests/test_adapter.py 49 mock signals",
+        "adapters/vllm/tests/test_adapter.py 67 mock signals"
       ],
       "evidence_layer": "mapped-check",
       "origin": "john-finding",
@@ -388,15 +427,15 @@
         "compliance-dashboard/tests/test_dashboard.py contains completion/security claims and placeholder language",
         "docs/acquisition/ARCHITECTURE.md contains completion/security claims and placeholder language",
         "docs/ADAPTER-COMPLETION-MATRIX.md contains completion/security claims and placeholder language",
+        "docs/adapter-evidence/J-21-exllamav2.md contains completion/security claims and placeholder language",
+        "docs/adapter-evidence/J-22-tensorrt.md contains completion/security claims and placeholder language",
+        "docs/adapter-evidence/J-23-openai_compat.md contains completion/security claims and placeholder language",
+        "docs/ADAPTER-SHARED-CONTRACT.md contains completion/security claims and placeholder language",
         "docs/COGENT-DEPLOYMENT-ROADMAP.md contains completion/security claims and placeholder language",
         "docs/dougherty/JOHN-REMEDIATION-PLAN.md contains completion/security claims and placeholder language",
         "docs/dougherty/JOHN-REMEDIATION-ROSTER.md contains completion/security claims and placeholder language",
         "docs/HANDOFF.md contains completion/security claims and placeholder language",
-        "docs/HUMAN-TOUCH-AUDIT.md contains completion/security claims and placeholder language",
-        "docs/INDEX.md contains completion/security claims and placeholder language",
-        "docs/JOHN-REMEDIATION-PLAN.md contains completion/security claims and placeholder language",
-        "docs/JOHN-REMEDIATION-ROSTER.md contains completion/security claims and placeholder language",
-        "docs/KNOWN-ISSUES.md contains completion/security claims and placeholder language"
+        "docs/HUMAN-TOUCH-AUDIT.md contains completion/security claims and placeholder language"
       ],
       "evidence_layer": "mapped-check",
       "origin": "review-integrity",
@@ -431,6 +470,7 @@
       "check_id": "REV-006",
       "description": "Assertions should validate outcomes rather than merely confirming execution.",
       "evidence": [
+        "adapters/tensorrt/tests/test_adapter.py:461 assert Embedding is not None  # type guard the import stays load-bearing",
         "apps/compliance-routed/tests/test_integration.py:21 assert spec is not None",
         "apps/compliance-routed/tests/test_smoke.py:19 assert spec is not None",
         "apps/local-secure-inference/tests/test_integration.py:22 assert spec is not None",
@@ -441,8 +481,7 @@
         "apps/operator/tests/test_smoke.py:22 assert spec is not None",
         "apps/rag-reference/tests/test_integration.py:22 assert spec is not None",
         "apps/rag-reference/tests/test_smoke.py:23 assert spec is not None",
-        "apps/tribal-sovereignty/tests/test_integration.py:22 assert spec is not None",
-        "apps/tribal-sovereignty/tests/test_smoke.py:19 assert spec is not None"
+        "apps/tribal-sovereignty/tests/test_integration.py:22 assert spec is not None"
       ],
       "evidence_layer": "mapped-check",
       "origin": "review-integrity",
@@ -454,14 +493,14 @@
       "check_id": "REV-007",
       "description": "Repeated blocks across modules suggest copy-forward implementation that deserves review.",
       "evidence": [
+        "adapters/exllamav2/tests/test_adapter.py:159 duplicates 6-line block in adapters/exllamav2/tests/test_integration_live.py:257",
         "adapters/exllamav2/adapter.py:9 duplicates 6-line block in adapters/llamacpp/adapter.py:10",
         "adapters/exllamav2/adapter.py:10 duplicates 6-line block in adapters/llamacpp/adapter.py:11",
         "adapters/exllamav2/adapter.py:11 duplicates 6-line block in adapters/llamacpp/adapter.py:12",
         "adapters/exllamav2/adapter.py:82 duplicates 6-line block in adapters/llamacpp/adapter.py:81",
         "adapters/exllamav2/adapter.py:92 duplicates 6-line block in adapters/llamacpp/adapter.py:91",
         "adapters/exllamav2/adapter.py:93 duplicates 6-line block in adapters/llamacpp/adapter.py:92",
-        "adapters/exllamav2/adapter.py:163 duplicates 6-line block in adapters/llamacpp/adapter.py:98",
-        "adapters/exllamav2/adapter.py:164 duplicates 6-line block in adapters/llamacpp/adapter.py:99"
+        "adapters/exllamav2/adapter.py:163 duplicates 6-line block in adapters/llamacpp/adapter.py:98"
       ],
       "evidence_layer": "mapped-check",
       "origin": "review-integrity",
@@ -481,8 +520,8 @@
       "title": "Missing dependency lock file"
     }
   ],
-  "overall_score": 59,
-  "passed": 34,
+  "overall_score": 55,
+  "passed": 32,
   "root": "C:\\Users\\17076\\Documents\\Claude\\Island Mountain Mighty Eel OS\\mai",
   "total_checks": 58
 }
