@@ -18,10 +18,15 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from adapters.base import (
+    AdapterTimeoutError,
     BackendUnavailableError,
+    ContextExceededError,
     FinishReason,
     GenerationParams,
     HealthStatusKind,
+    ModelNotFoundError,
+    OutOfMemoryError,
+    RateLimitedError,
     UnsupportedOperationError,
 )
 from adapters.exllamav2.adapter import ExLlamaV2Adapter
@@ -249,6 +254,65 @@ class TestExLlamaV2Adapter:
         assert results[1].tokens_generated == 1
         assert adapter._requests_served == before + 2
 
+    # ─── Error-mapping contract (ADAPTER-SHARED-CONTRACT §Error Mapping) ───
+
+    @pytest.mark.asyncio
+    async def test_generate_timeout_propagates(self, adapter):
+        adapter._initialized = True
+        adapter._client = AsyncMock()
+        adapter._client.chat_completions = AsyncMock(
+            side_effect=AdapterTimeoutError(timeout_ms=30000),
+        )
+        with pytest.raises(AdapterTimeoutError):
+            await adapter.generate("Q", GenerationParams())
+
+    @pytest.mark.asyncio
+    async def test_generate_model_not_found_propagates(self, adapter):
+        adapter._initialized = True
+        adapter._client = AsyncMock()
+        adapter._client.chat_completions = AsyncMock(
+            side_effect=ModelNotFoundError(model="ghost-model"),
+        )
+        with pytest.raises(ModelNotFoundError):
+            await adapter.generate("Q", GenerationParams())
+
+    @pytest.mark.asyncio
+    async def test_generate_oom_propagates(self, adapter):
+        adapter._initialized = True
+        adapter._client = AsyncMock()
+        adapter._client.chat_completions = AsyncMock(side_effect=OutOfMemoryError())
+        with pytest.raises(OutOfMemoryError):
+            await adapter.generate("Q", GenerationParams())
+
+    @pytest.mark.asyncio
+    async def test_generate_rate_limited_propagates(self, adapter):
+        adapter._initialized = True
+        adapter._client = AsyncMock()
+        adapter._client.chat_completions = AsyncMock(side_effect=RateLimitedError())
+        with pytest.raises(RateLimitedError):
+            await adapter.generate("Q", GenerationParams())
+
+    @pytest.mark.asyncio
+    async def test_generate_context_exceeded_propagates(self, adapter):
+        adapter._initialized = True
+        adapter._client = AsyncMock()
+        adapter._client.chat_completions = AsyncMock(
+            side_effect=ContextExceededError(max_context=8192),
+        )
+        with pytest.raises(ContextExceededError):
+            await adapter.generate("Q", GenerationParams())
+
+    @pytest.mark.asyncio
+    async def test_generate_malformed_body_falls_back_to_empty(self, adapter):
+        """Missing `choices` key returns an empty GenerationResult, not KeyError."""
+        adapter._initialized = True
+        adapter._client = AsyncMock()
+        adapter._client.chat_completions = AsyncMock(return_value={"unexpected": "shape"})
+        result = await adapter.generate("Q", GenerationParams())
+        assert result.text == ""
+        assert result.tokens_generated == 0
+        assert result.finish_reason == FinishReason.STOP
+
 
 class TestExLlamaV2Streaming:
     """Real-HTTP streaming tests against an actual SSE server.
@@ -371,3 +435,146 @@ class TestExLlamaV2Streaming:
             assert adapter._requests_served == before
             _ = [t async for t in gen]
         assert adapter._requests_served == before + 1
+
+
+class TestExLlamaV2Lifecycle:
+    """Construction, post-shutdown, and config-driven capability behavior.
+
+    Closes the ADAPTER-SHARED-CONTRACT §Lifecycle and §Capability Truthfulness
+    items that J-09's assertion fill did not yet cover, and the J-05
+    error-mapping completeness gap (rate-limit, context-exceeded).
+    """
+
+    def test_construction_does_not_open_client(self):
+        """__init__ stores config only — no client, no network."""
+        a = ExLlamaV2Adapter({"host": "127.0.0.1", "port": 5000})
+        assert a._client is None
+        assert a._initialized is False
+        assert a._loaded_models == []
+
+    @pytest.mark.asyncio
+    async def test_generate_batch_empty_returns_empty(self):
+        a = ExLlamaV2Adapter()
+        a._initialized = True
+        a._client = AsyncMock()
+        results = await a.generate_batch([], GenerationParams())
+        assert results == []
+        assert a._requests_served == 0
+
+    @pytest.mark.asyncio
+    async def test_generate_after_shutdown_raises(self):
+        a = ExLlamaV2Adapter()
+        a._initialized = True
+        a._client = AsyncMock()
+        await a.shutdown()
+        with pytest.raises(BackendUnavailableError):
+            await a.generate("Q", GenerationParams())
+
+    @pytest.mark.asyncio
+    async def test_generate_batch_after_shutdown_raises(self):
+        a = ExLlamaV2Adapter()
+        a._initialized = True
+        a._client = AsyncMock()
+        await a.shutdown()
+        with pytest.raises(BackendUnavailableError):
+            await a.generate_batch(["Q"], GenerationParams())
+
+    @pytest.mark.asyncio
+    async def test_health_check_after_shutdown_is_unavailable(self):
+        a = ExLlamaV2Adapter()
+        a._initialized = True
+        a._client = AsyncMock()
+        await a.shutdown()
+        status = await a.health_check()
+        assert status.kind == HealthStatusKind.UNAVAILABLE
+        assert bool(status.healthy) is False
+
+    @pytest.mark.asyncio
+    async def test_capabilities_reflect_max_seq_len_from_config(self):
+        """capabilities() reports the configured context window after initialize,
+        not a hardcoded constant — required by §Capability Truthfulness."""
+        big = ExLlamaV2Adapter()
+        big._client = AsyncMock()
+        big._client.health = AsyncMock(return_value=True)
+        big._client.models = AsyncMock(return_value={"data": []})
+        await big.initialize({"max_seq_len": 16384})
+        assert big.capabilities().max_context_window == 16384
+
+        small = ExLlamaV2Adapter()
+        small._client = AsyncMock()
+        small._client.health = AsyncMock(return_value=True)
+        small._client.models = AsyncMock(return_value={"data": []})
+        await small.initialize({"max_seq_len": 4096})
+        assert small.capabilities().max_context_window == 4096
+
+
+class TestExLlamaV2ClientErrorMapping:
+    """Drive `_handle_http_error` directly — keeps the J-05 error-mapping
+    audit (rate-limit, context-exceeded) provable without a live backend.
+
+    The client raises the typed MAI error on the matching HTTP status +
+    body combo, and falls through for codes it cannot classify.
+    """
+
+    @pytest.fixture
+    def client(self):
+        return ExLlamaV2Client(
+            base_url="http://127.0.0.1:5000",
+            timeout_ms=2000,
+            stream_timeout_ms=5000,
+        )
+
+    def test_429_maps_to_rate_limited(self, client):
+        with pytest.raises(RateLimitedError):
+            client._handle_http_error(429, '{"detail": "throttled"}')
+
+    def test_408_maps_to_timeout(self, client):
+        with pytest.raises(AdapterTimeoutError):
+            client._handle_http_error(408, "")
+
+    def test_504_maps_to_timeout(self, client):
+        with pytest.raises(AdapterTimeoutError):
+            client._handle_http_error(504, "")
+
+    def test_404_maps_to_model_not_found(self, client):
+        with pytest.raises(ModelNotFoundError):
+            client._handle_http_error(404, '{"detail": "no such model"}')
+
+    def test_oom_message_maps_to_out_of_memory(self, client):
+        with pytest.raises(OutOfMemoryError):
+            client._handle_http_error(500, '{"detail": "CUDA out of memory"}')
+
+    def test_vram_message_maps_to_out_of_memory(self, client):
+        with pytest.raises(OutOfMemoryError):
+            client._handle_http_error(500, '{"detail": "vram exhausted"}')
+
+    def test_400_context_message_maps_to_context_exceeded(self, client):
+        with pytest.raises(ContextExceededError):
+            client._handle_http_error(
+                400, '{"detail": "prompt exceeds max_seq_len"}',
+            )
+
+    def test_422_context_message_maps_to_context_exceeded(self, client):
+        with pytest.raises(ContextExceededError):
+            client._handle_http_error(
+                422, '{"detail": "context too long"}',
+            )
+
+    def test_413_context_message_maps_to_context_exceeded(self, client):
+        with pytest.raises(ContextExceededError):
+            client._handle_http_error(413, '{"detail": "exceed limit"}')
+
+    def test_500_generic_maps_to_backend_unavailable(self, client):
+        with pytest.raises(BackendUnavailableError):
+            client._handle_http_error(500, '{"detail": "internal"}')
+
+    def test_400_non_context_falls_through(self, client):
+        # Unclassified 4xx: returns without raising so the caller can
+        # decide (currently maps to BackendUnavailableError at the
+        # caller). The test pins that "no typed match" is silent here.
+        client._handle_http_error(400, '{"detail": "bad request"}')
+
+    def test_malformed_json_body_does_not_crash(self, client):
+        # body that isn't JSON should be truncated, not crash the mapper
+        with pytest.raises(BackendUnavailableError):
+            client._handle_http_error(503, "not-json-at-all" * 50)

@@ -20,8 +20,10 @@ from typing import Any
 from adapters.base import (
     AdapterTimeoutError,
     BackendUnavailableError,
+    ContextExceededError,
     ModelNotFoundError,
     OutOfMemoryError,
+    RateLimitedError,
 )
 
 logger = logging.getLogger("mai.adapters.exllamav2.client")
@@ -133,14 +135,26 @@ class ExLlamaV2Client:
             raise ModelNotFoundError(model="unknown")
         if status in (408, 504):
             raise AdapterTimeoutError(timeout_ms=int(self._timeout * 1000))
+        if status == 429:
+            raise RateLimitedError()
         detail = ""
         try:
             err_body = json.loads(body_text)
             detail = err_body.get("detail", err_body.get("message", ""))
         except (json.JSONDecodeError, KeyError):
             detail = body_text[:200]
-        if "memory" in detail.lower() or "oom" in detail.lower() or "vram" in detail.lower():
+        detail_lc = detail.lower()
+        if "memory" in detail_lc or "oom" in detail_lc or "vram" in detail_lc:
             raise OutOfMemoryError()
+        # TabbyAPI / ExLlamaV2 surface context-length violations as 400 or 422
+        # with bodies that mention "context", "max_seq_len", or "too long".
+        if status in (400, 413, 422) and (
+            "context" in detail_lc
+            or "max_seq_len" in detail_lc
+            or "too long" in detail_lc
+            or "exceed" in detail_lc
+        ):
+            raise ContextExceededError(max_context=0)
         if status >= 500:
             raise BackendUnavailableError()
 
