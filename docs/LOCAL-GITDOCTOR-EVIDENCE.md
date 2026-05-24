@@ -25,7 +25,7 @@ These probes use mature local tools when installed. `SKIPPED` means the tool was
 | IND-PY-003 | Python | FAIL | bandit security scan |
 | IND-PY-004 | Python | FAIL | pip-audit dependency scan |
 | IND-SEC-001 | Secrets | FAIL | gitleaks secret scan |
-| IND-SEC-002 | Secrets | FAIL | detect-secrets scan |
+| IND-SEC-002 | Secrets | PASS | detect-secrets scan |
 | IND-DOC-001 | Docker | SKIPPED | hadolint Dockerfile scan |
 | IND-CPLX-001 | Complexity | PASS | tokei line-count scan |
 | IND-CPLX-002 | Complexity | PASS | scc complexity scan |
@@ -49,7 +49,7 @@ Exit code: `0`
 
 ```text
 ....                                                                     [100%]
-4 passed in 0.33s
+4 passed in 0.50s
 ```
 
 ### IND-RS-001 cargo check workspace
@@ -61,7 +61,7 @@ Command: `cargo check --workspace`
 Exit code: `0`
 
 ```text
-Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.78s
+Finished `dev` profile [unoptimized + debuginfo] target(s) in 10.02s
 ```
 
 ### IND-RS-002 cargo clippy workspace
@@ -73,7 +73,7 @@ Command: `cargo clippy --workspace -- -D warnings -A clippy::pedantic`
 Exit code: `0`
 
 ```text
-Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.49s
+Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.75s
 ```
 
 ### IND-RS-003 cargo test workspace
@@ -147,11 +147,56 @@ Command: `cargo audit`
 Exit code: `1`
 
 ```text
-Fetching advisory database from `https://github.com/RustSec/advisory-db.git`
-error: couldn't fetch advisory database: git operation failed: failed to prepare fetch
-Caused by:
-  -> An IO error occurred when talking to the server
-  -> error sending request for url (https://github.com/RustSec/advisory-db.git/info/refs?service=git-upload-pack)
+Crate:     ml-dsa
+Version:   0.0.4
+Title:     Timing side-channel in ML-DSA decomposition
+Date:      2025-12-12
+ID:        RUSTSEC-2025-0144
+URL:       https://github.com/RustCrypto/signatures/security/advisories/GHSA-hcp2-x6j4-29j7
+Severity:  6.4 (medium)
+Solution:  Upgrade to >=0.1.0-rc.3
+Dependency tree:
+ml-dsa 0.0.4
+├── mai-vault 0.1.0
+│   └── mai-api 0.1.0
+├── mai-compliance 0.1.0
+│   └── mai-api 0.1.0
+├── mai-api 0.1.0
+└── mai-admin 0.1.0
+
+Crate:     instant
+Version:   0.1.13
+Warning:   unmaintained
+Title:     `instant` is unmaintained
+Date:      2024-09-01
+ID:        RUSTSEC-2024-0384
+URL:       https://rustsec.org/advisories/RUSTSEC-2024-0384
+Dependency tree:
+instant 0.1.13
+└── notify-types 1.0.1
+    └── notify 7.0.0
+        └── mai-api 0.1.0
+
+Crate:     paste
+Version:   1.0.15
+Warning:   unmaintained
+Title:     paste - no longer maintained
+Date:      2024-10-07
+ID:        RUSTSEC-2024-0436
+URL:       https://rustsec.org/advisories/RUSTSEC-2024-0436
+Dependency tree:
+paste 1.0.15
+└── pqcrypto-mldsa 0.1.2
+    └── mai-vault 0.1.0
+        └── mai-api 0.1.0
+
+
+    Fetching advisory database from `https://github.com/RustSec/advisory-db.git`
+      Loaded 1098 security advisories (from C:\Users\17076\.cargo\advisory-db)
+    Updating crates.io index
+    Scanning Cargo.lock for vulnerabilities (390 crate dependencies)
+error: 1 vulnerability found!
+warning: 2 allowed warnings found
 ```
 
 ### IND-RS-005 cargo deny
@@ -263,24 +308,7 @@ Command: `C:\Python314\python.exe -m pytest -q --ignore=target --ignore=results`
 Exit code: `2`
 
 ```text
-aceback:
-C:\Python314\Lib\importlib\__init__.py:88: in import_module
-    return _bootstrap._gcd_import(name[level:], package, level)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-E   ModuleNotFoundError: No module named 'tests.test_cli'
-________ ERROR collecting mai-sdk-python/tests/test_client_methods.py _________
-ImportError while importing test module 'C:\Users\17076\Documents\Claude\Island Mountain Mighty Eel OS\mai\mai-sdk-python\tests\test_client_methods.py'.
-Hint: make sure your test modules/packages have valid Python names.
-Traceback:
-C:\Python314\Lib\importlib\__init__.py:88: in import_module
-    return _bootstrap._gcd_import(name[level:], package, level)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-E   ModuleNotFoundError: No module named 'tests.test_client_methods'
-____________ ERROR collecting mai-sdk-python/tests/test_config.py _____________
-ImportError while importing test module 'C:\Users\17076\Documents\Claude\Island Mountain Mighty Eel OS\mai\mai-sdk-python\tests\test_config.py'.
-Hint: make sure your test modules/packages have valid Python names.
-Traceback:
-C:\Python314\Lib\importlib\__init__.py:88: in import_module
+ule
     return _bootstrap._gcd_import(name[level:], package, level)
            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 E   ModuleNotFoundError: No module named 'tests.test_config'
@@ -308,6 +336,22 @@ C:\Python314\Lib\importlib\__init__.py:88: in import_module
     return _bootstrap._gcd_import(name[level:], package, level)
            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 E   ModuleNotFoundError: No module named 'tests.test_version'
+_____________ ERROR collecting tests/e2e/test_compliance_smoke.py _____________
+ImportError while importing test module 'C:\Users\17076\Documents\Claude\Island Mountain Mighty Eel OS\mai\tests\e2e\test_compliance_smoke.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+C:\Python314\Lib\importlib\__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   ModuleNotFoundError: No module named 'tests.e2e'
+___________ ERROR collecting tests/integrity/test_assertion_gate.py ___________
+ImportError while importing test module 'C:\Users\17076\Documents\Claude\Island Mountain Mighty Eel OS\mai\tests\integrity\test_assertion_gate.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+C:\Python314\Lib\importlib\__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   ModuleNotFoundError: No module named 'tests.integrity'
 =========================== short test summary info ===========================
 ERROR apps/local-secure-inference/tests/test_integration.py
 ERROR apps/local-secure-inference/tests/test_smoke.py
@@ -325,8 +369,10 @@ ERROR mai-sdk-python/tests/test_config.py
 ERROR mai-sdk-python/tests/test_errors.py
 ERROR mai-sdk-python/tests/test_retry.py
 ERROR mai-sdk-python/tests/test_version.py
-!!!!!!!!!!!!!!!!!! Interrupted: 16 errors during collection !!!!!!!!!!!!!!!!!!!
-16 errors in 1.22s
+ERROR tests/e2e/test_compliance_smoke.py
+ERROR tests/integrity/test_assertion_gate.py
+!!!!!!!!!!!!!!!!!! Interrupted: 18 errors during collection !!!!!!!!!!!!!!!!!!!
+18 errors in 1.62s
 ```
 
 ### IND-PY-002 ruff lint
@@ -452,7 +498,7 @@ Command: `C:\Python314\python.exe -m bandit -r .`
 Exit code: `1`
 
 ```text
-Working... ---------------------------------------- 100% 0:00:01
+Working... ---------------------------------------- 100% 0:00:02
 
 [main]	INFO	profile include tests: None
 [main]	INFO	profile exclude tests: None
@@ -512,52 +558,15 @@ Command: `C:\Python314\python.exe -m pip_audit`
 Exit code: `1`
 
 ```text
-Traceback (most recent call last):
-  File "C:\Python314\Lib\pathlib\__init__.py", line 1011, in mkdir
-    os.mkdir(self, mode)
-    ~~~~~~~~^^^^^^^^^^^^
-FileNotFoundError: [WinError 3] The system cannot find the path specified: 'C:\\Users\\17076\\AppData\\Local\\pip-audit\\Cache'
+Name Version ID            Fix Versions
+---- ------- ------------- ------------
+pip  26.0.1  CVE-2026-3219 26.1
+pip  26.0.1  CVE-2026-6357 26.1
+Name    Skip Reason
+------- ----------------------------------------------------------------------
+mai-sdk Dependency not found on PyPI and could not be audited: mai-sdk (0.2.0)
 
-During handling of the above exception, another exception occurred:
-
-Traceback (most recent call last):
-  File "<frozen runpy>", line 198, in _run_module_as_main
-  File "<frozen runpy>", line 88, in _run_code
-  File "C:\Users\17076\AppData\Roaming\Python\Python314\site-packages\pip_audit\__main__.py", line 8, in <module>
-    audit()
-    ~~~~~^^
-  File "C:\Users\17076\AppData\Roaming\Python\Python314\site-packages\pip_audit\_cli.py", line 452, in audit
-    service = PyPIService(cache_dir=args.cache_dir, timeout=args.timeout)
-  File "C:\Users\17076\AppData\Roaming\Python\Python314\site-packages\pip_audit\_service\pypi.py", line 48, in __init__
-    self.session = caching_session(cache_dir)
-                   ~~~~~~~~~~~~~~~^^^^^^^^^^^
-  File "C:\Users\17076\AppData\Roaming\Python\Python314\site-packages\pip_audit\_cache.py", line 177, in caching_session
-    cache=_SafeFileCache(_get_cache_dir(cache_dir, use_pip=use_pip)),
-                         ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\17076\AppData\Roaming\Python\Python314\site-packages\pip_audit\_cache.py", line 66, in _get_cache_dir
-    pip_audit_cache_dir = user_cache_path("pip-audit", appauthor=False, ensure_exists=True)
-  File "C:\Users\17076\AppData\Roaming\Python\Python314\site-packages\platformdirs\__init__.py", line 587, in user_cache_path
-    ).user_cache_path
-      ^^^^^^^^^^^^^^^
-  File "C:\Users\17076\AppData\Roaming\Python\Python314\site-packages\platformdirs\api.py", line 268, in user_cache_path
-    return Path(self.user_cache_dir)
-                ^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\17076\AppData\Roaming\Python\Python314\site-packages\platformdirs\windows.py", line 70, in user_cache_dir
-    return self._append_parts(path, opinion_value="Cache")
-           ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\17076\AppData\Roaming\Python\Python314\site-packages\platformdirs\windows.py", line 47, in _append_parts
-    self._optionally_create_directory(path)
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
-  File "C:\Users\17076\AppData\Roaming\Python\Python314\site-packages\platformdirs\api.py", line 115, in _optionally_create_directory
-    Path(path).mkdir(parents=True, exist_ok=True)
-    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Python314\Lib\pathlib\__init__.py", line 1015, in mkdir
-    self.parent.mkdir(parents=True, exist_ok=True)
-    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Python314\Lib\pathlib\__init__.py", line 1011, in mkdir
-    os.mkdir(self, mode)
-    ~~~~~~~~^^^^^^^^^^^^
-PermissionError: [WinError 5] Access is denied: 'C:\\Users\\17076\\AppData\\Local\\pip-audit'
+Found 2 known vulnerabilities in 1 package
 ```
 
 ### IND-SEC-001 gitleaks secret scan
@@ -569,98 +578,137 @@ Command: `gitleaks detect --source . --no-git --redact`
 Exit code: `1`
 
 ```text
-ipping directory[0m [36merror=[0m[31m[1m"permission denied"[0m[0m [36mpath=[0m".tmp\\pip-temp\\pip-build-tracker-7dz7qclx"
-[90m11:41AM[0m [33mWRN[0m [1mskipping directory[0m [36merror=[0m[31m[1m"permission denied"[0m[0m [36mpath=[0m".tmp\\pip-temp\\pip-build-tracker-_wi612zk"
-[90m11:41AM[0m [33mWRN[0m [1mskipping directory[0m [36merror=[0m[31m[1m"permission denied"[0m[0m [36mpath=[0m".tmp\\pip-temp\\pip-build-tracker-m6wvtt9n"
-[90m11:41AM[0m [33mWRN[0m [1mskipping directory[0m [36merror=[0m[31m[1m"permission denied"[0m[0m [36mpath=[0m".tmp\\pip-temp\\pip-download-e8bmr1d4"
-[90m11:41AM[0m [33mWRN[0m [1mskipping directory[0m [36merror=[0m[31m[1m"permission denied"[0m[0m [36mpath=[0m".tmp\\pip-temp\\pip-ephem-wheel-cache-2yhzscxa"
-[90m11:41AM[0m [33mWRN[0m [1mskipping directory[0m [36merror=[0m[31m[1m"permission denied"[0m[0m [36mpath=[0m".tmp\\pip-temp\\pip-ephem-wheel-cache-ry7mnmaf"
-[90m11:41AM[0m [33mWRN[0m [1mskipping directory[0m [36merror=[0m[31m[1m"permission denied"[0m[0m [36mpath=[0m".tmp\\pip-temp\\pip-install-ucd_uonf"
-[90m11:41AM[0m [33mWRN[0m [1mskipping directory[0m [36merror=[0m[31m[1m"permission denied"[0m[0m [36mpath=[0m".tmp\\pip-temp\\pip-install-ufr8h_4z"
-[90m11:41AM[0m [33mWRN[0m [1mskipping directory[0m [36merror=[0m[31m[1m"permission denied"[0m[0m [36mpath=[0m".tmp\\pip-temp\\pip-target-8gvxh5gv"
-[90m11:41AM[0m [33mWRN[0m [1mskipping directory[0m [36merror=[0m[31m[1m"permission denied"[0m[0m [36mpath=[0m".tmp\\pip-temp\\pip-target-dpfunxd7"
-[90m11:41AM[0m [33mWRN[0m [1mskipping directory[0m [36merror=[0m[31m[1m"permission denied"[0m[0m [36mpath=[0m".tmp\\pip-temp\\pip-unpack-0pp2z_0t"
-[90m11:41AM[0m [33mWRN[0m [1mskipping directory[0m [36merror=[0m[31m[1m"permission denied"[0m[0m [36mpath=[0m".tmp\\pip-temp\\pip-unpack-ge900ct0"
-[90m11:41AM[0m [33mWRN[0m [1mskipping directory[0m [36merror=[0m[31m[1m"permission denied"[0m[0m [36mpath=[0m".tmp\\pip-temp\\pip-unpack-qchl1vb4"
-[90m11:41AM[0m [33mWRN[0m [1mskipping directory[0m [36merror=[0m[31m[1m"permission denied"[0m[0m [36mpath=[0m".tmp\\pip-temp-2\\pip-build-tracker-ximcch1q"
-[90m11:41AM[0m [33mWRN[0m [1mskipping directory[0m [36merror=[0m[31m[1m"permission denied"[0m[0m [36mpath=[0m".tmp\\pip-temp-2\\pip-ephem-wheel-cache-xi14qljh"
-[90m11:41AM[0m [33mWRN[0m [1mskipping directory[0m [36merror=[0m[31m[1m"permission denied"[0m[0m [36mpath=[0m".tmp\\pip-temp-2\\pip-install-lrqjdqbm"
-[90m11:41AM[0m [33mWRN[0m [1mskipping directory[0m [36merror=[0m[31m[1m"permission denied"[0m[0m [36mpath=[0m".tmp\\pip-temp-2\\pip-target-i0rc2si2"
-[90m11:41AM[0m [33mWRN[0m [1mskipping directory[0m [36merror=[0m[31m[1m"permission denied"[0m[0m [36mpath=[0m".tmp\\pip-temp-2\\pip-unpack-let45qwl"
-[90m11:41AM[0m [33mWRN[0m [1mskipping directory[0m [36merror=[0m[31m[1m"permission denied"[0m[0m [36mpath=[0m".tmp\\pytest\\pytest-of-17076"
-[90m11:41AM[0m [33mWRN[0m [1mskipping directory[0m [36merror=[0m[31m[1m"permission denied"[0m[0m [36mpath=[0m".tmp\\pytest-basetemp"
-[90m11:41AM[0m [33mWRN[0m [1mskipping directory[0m [36merror=[0m[31m[1m"permission denied"[0m[0m [36mpath=[0m"results\\lamprey-validation-pressure\\tmp\\pytest"
-[90m11:41AM[0m [33mWRN[0m [1mskipping directory[0m [36merror=[0m[31m[1m"permission denied"[0m[0m [36mpath=[0m"results\\pytest-sdk-smoke\\run"
-[90m11:46AM[0m [33mWRN[0m [1mskipping directory[0m [36merror=[0m[31m[1m"permission denied"[0m[0m [36mpath=[0m"target\\pytest-sdk"
-[90m11:46AM[0m [33mWRN[0m [1mskipping directory[0m [36merror=[0m[31m[1m"permission denied"[0m[0m [36mpath=[0m"target\\pytest-sdk-tmp"
-[90m11:46AM[0m [32mINF[0m [1mscanned ~21929275320 bytes (21.93 GB) in 4m55s[0m
-[90m11:46AM[0m [33mWRN[0m [1mleaks found: 8[0m
+○
+    │╲
+    │ ○
+    ○ ░
+    ░    gitleaks
+
+[90m12:28PM[0m [32mINF[0m [1mscanned ~21929429122 bytes (21.93 GB) in 4m59s[0m
+[90m12:28PM[0m [33mWRN[0m [1mleaks found: 20[0m
 ```
 
 ### IND-SEC-002 detect-secrets scan
 
 Layer: `independent-implementation`
 Toolchain: `Secrets`
-Status: `FAIL`
+Status: `PASS`
 Command: `detect-secrets scan --all-files`
-Exit code: `1`
+Exit code: `0`
 
 ```text
-Traceback (most recent call last):
-  File "<frozen runpy>", line 198, in _run_module_as_main
-  File "<frozen runpy>", line 88, in _run_code
-  File "C:\Users\17076\.cargo\bin\detect-secrets.exe\__main__.py", line 5, in <module>
-    sys.exit(main())
-             ~~~~^^
-  File "C:\Users\17076\AppData\Roaming\Python\Python314\site-packages\detect_secrets\main.py", line 30, in main
-    handle_scan_action(args)
-    ~~~~~~~~~~~~~~~~~~^^^^^^
-  File "C:\Users\17076\AppData\Roaming\Python\Python314\site-packages\detect_secrets\main.py", line 70, in handle_scan_action
-    secrets = baseline.create(
-        *args.path,
-    ...<2 lines>...
-        num_processors=args.num_cores,
-    )
-  File "C:\Users\17076\AppData\Roaming\Python\Python314\site-packages\detect_secrets\core\baseline.py", line 34, in create
-    secrets.scan_files(
-    ~~~~~~~~~~~~~~~~~~^
-        *get_files_to_scan(*paths, should_scan_all_files=should_scan_all_files, root=root),
-        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-        **kwargs,
-        ^^^^^^^^^
-    )
-    ^
-  File "C:\Users\17076\AppData\Roaming\Python\Python314\site-packages\detect_secrets\core\secrets_collection.py", line 63, in scan_files
-    with mp.Pool(
-         ~~~~~~~^
-        processes=num_processors,
-        ^^^^^^^^^^^^^^^^^^^^^^^^^
-        initializer=configure_settings_from_baseline,
-        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-        initargs=(child_process_settings,),
-        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    ) as p:
-    ^
-  File "C:\Python314\Lib\multiprocessing\context.py", line 119, in Pool
-    return Pool(processes, initializer, initargs, maxtasksperchild,
-                context=self.get_context())
-  File "C:\Python314\Lib\multiprocessing\pool.py", line 191, in __init__
-    self._setup_queues()
-    ~~~~~~~~~~~~~~~~~~^^
-  File "C:\Python314\Lib\multiprocessing\pool.py", line 346, in _setup_queues
-    self._inqueue = self._ctx.SimpleQueue()
-                    ~~~~~~~~~~~~~~~~~~~~~^^
-  File "C:\Python314\Lib\multiprocessing\context.py", line 113, in SimpleQueue
-    return SimpleQueue(ctx=self.get_context())
-  File "C:\Python314\Lib\multiprocessing\queues.py", line 360, in __init__
-    self._reader, self._writer = connection.Pipe(duplex=False)
-                                 ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^
-  File "C:\Python314\Lib\multiprocessing\connection.py", line 614, in Pipe
-    h2 = _winapi.CreateFile(
-        address, access, 0, _winapi.NULL, _winapi.OPEN_EXISTING,
-        _winapi.FILE_FLAG_OVERLAPPED, _winapi.NULL
-        )
-PermissionError: [WinError 5] Access is denied
+06475255a18c4744d4a1fa9c23a4470841",
+        "is_verified": false,
+        "line_number": 62
+      }
+    ],
+    "scripts\\build-package.ps1": [
+      {
+        "type": "Base64 High Entropy String",
+        "filename": "scripts\\build-package.ps1",
+        "hashed_secret": "20a14ede53d8f5ab25cbbea16357ffdd887e101d",
+        "is_verified": false,
+        "line_number": 138
+      }
+    ],
+    "target\\CACHEDIR.TAG": [
+      {
+        "type": "Hex High Entropy String",
+        "filename": "target\\CACHEDIR.TAG",
+        "hashed_secret": "e8f8c345877b2411a59897798e422b15b0c16d76",
+        "is_verified": false,
+        "line_number": 1
+      }
+    ],
+    "target\\debug\\.fingerprint\\pqcrypto-internals-0fa37d9e1e6f58ef\\run-build-script-build-script-build.json": [
+      {
+        "type": "Base64 High Entropy String",
+        "filename": "target\\debug\\.fingerprint\\pqcrypto-internals-0fa37d9e1e6f58ef\\run-build-script-build-script-build.json",
+        "hashed_secret": "aa78dc17c565e61687d49ba560f1cc80a90bc872",
+        "is_verified": false,
+        "line_number": 1
+      }
+    ],
+    "target\\release\\.fingerprint\\getrandom-143fd6584b092c1f\\run-build-script-build-script-build.json": [
+      {
+        "type": "Base64 High Entropy String",
+        "filename": "target\\release\\.fingerprint\\getrandom-143fd6584b092c1f\\run-build-script-build-script-build.json",
+        "hashed_secret": "ca89dcdbaf768810854a9e840c0bdde540b0333d",
+        "is_verified": false,
+        "line_number": 1
+      }
+    ],
+    "target\\release\\.fingerprint\\parking_lot_core-d9f114c9f73c887e\\run-build-script-build-script-build.json": [
+      {
+        "type": "Base64 High Entropy String",
+        "filename": "target\\release\\.fingerprint\\parking_lot_core-d9f114c9f73c887e\\run-build-script-build-script-build.json",
+        "hashed_secret": "12e5eb241db7c070750e8e8fd9a980413abac9c0",
+        "is_verified": false,
+        "line_number": 1
+      }
+    ],
+    "target\\sdk-config-validation.toml": [
+      {
+        "type": "Secret Keyword",
+        "filename": "target\\sdk-config-validation.toml",
+        "hashed_secret": "3acfb2c2b433c0ea7ff107e33df91b18e52f960f",
+        "is_verified": false,
+        "line_number": 2
+      }
+    ],
+    "test-evidence\\rc-06\\bundle-first-boot-stdout.log": [
+      {
+        "type": "Hex High Entropy String",
+        "filename": "test-evidence\\rc-06\\bundle-first-boot-stdout.log",
+        "hashed_secret": "3b3320fddd54ca6fc2d81fd25e74f71e63f0d49f",
+        "is_verified": false,
+        "line_number": 22
+      }
+    ],
+    "tests\\sdk_integration.py": [
+      {
+        "type": "Secret Keyword",
+        "filename": "tests\\sdk_integration.py",
+        "hashed_secret": "fb0b56ad02475c3b749709ebb14436d12270e1eb",
+        "is_verified": false,
+        "line_number": 72
+      }
+    ],
+    "tools\\gpu_release_tests\\test_bundle_scripts.py": [
+      {
+        "type": "Hex High Entropy String",
+        "filename": "tools\\gpu_release_tests\\test_bundle_scripts.py",
+        "hashed_secret": "26019c2e7b54c3d5b828190796fa49f2ae4b1a43",
+        "is_verified": false,
+        "line_number": 98
+      },
+      {
+        "type": "Hex High Entropy String",
+        "filename": "tools\\gpu_release_tests\\test_bundle_scripts.py",
+        "hashed_secret": "158b484ae1f6f64f89da22397d25fbdafad02252",
+        "is_verified": false,
+        "line_number": 126
+      },
+      {
+        "type": "Hex High Entropy String",
+        "filename": "tools\\gpu_release_tests\\test_bundle_scripts.py",
+        "hashed_secret": "ff998abc1ce6d8f01a675fa197368e44c8916e9c",
+        "is_verified": false,
+        "line_number": 185
+      }
+    ],
+    "tools\\mai-admin\\src\\audit.rs": [
+      {
+        "type": "Hex High Entropy String",
+        "filename": "tools\\mai-admin\\src\\audit.rs",
+        "hashed_secret": "c0174d8dfe9687a8f29297449712d6ba12ed2bc3",
+        "is_verified": false,
+        "line_number": 19
+      }
+    ]
+  },
+  "generated_at": "2026-05-24T19:30:03Z"
+}
 ```
 
 ### IND-DOC-001 hadolint Dockerfile scan
@@ -687,28 +735,28 @@ Exit code: `0`
  JSON                      2         1298         1298            0            0
  PowerShell                7         1174          959           91          124
  Protocol Buffers          2         1171          745          256          170
- Python                  168        25881        20910          697         4274
+ Python                  171        26248        21216          709         4323
  Shell                    13         1901         1428          249          224
  Plain Text               17          271            0          269            2
- TOML                     56         2777         1532          873          372
+ TOML                     56         2778         1533          873          372
  YAML                      2         1660         1539           53           68
 ─────────────────────────────────────────────────────────────────────────────────
- Markdown                130        29456            0        22376         7080
+ Markdown                132        31046            0        23537         7509
  |- BASH                  38          417          353           42           22
  |- HCL                    1            6            5            1            0
- |- JSON                  23          899          894            0            5
+ |- JSON                  24          907          902            0            5
  |- PowerShell            21          163          116           27           20
- |- Python                12          232          189           13           30
+ |- Python                13          244          199           14           31
  |- Rust                   9          278          211           57           10
  |- TOML                   7          203          177            2           24
  |- YAML                   1            2            2            0            0
- (Total)                            31656         1947        22518         7191
+ (Total)                            33266         1965        23680         7621
 ─────────────────────────────────────────────────────────────────────────────────
  Rust                    247        81788        68954         3261         9573
  |- Markdown             246        11234            8        10162         1064
  (Total)                            93022        68962        13423        10637
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- Total                   645       160981        99372        38531        23078
+ Total                   650       162959        99697        39705        23557
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
@@ -725,9 +773,9 @@ Exit code: `0`
 Language            Files       Lines    Blanks  Comments       Code Complexity
 ───────────────────────────────────────────────────────────────────────────────
 Rust                  247      93,061     9,552    14,479     69,030      3,337
-Python                168      25,881     3,194     2,488     20,199      1,705
-Markdown              136      32,253     7,320         0     24,933          0
-TOML                   56       2,777       372       873      1,532          5
+Python                171      26,248     3,222     2,529     20,497      1,729
+Markdown              138      33,863     7,750         0     26,113          0
+TOML                   56       2,778       372       873      1,533          5
 Plain Text             17         271         2         0        269          0
 Shell                  17       2,190       271       287      1,632        230
 Powershell              7       1,174       110        83        981        173
@@ -741,13 +789,13 @@ Dockerfile              1         170        16       102         52          5
 JavaScript              1         372        32        26        314         25
 License                 1          11         1         0         10          0
 ───────────────────────────────────────────────────────────────────────────────
-Total                 671     163,389    21,237    18,792    123,360      5,510
+Total                 676     165,367    21,695    18,833    124,839      5,534
 ───────────────────────────────────────────────────────────────────────────────
-Estimated Cost to Develop (organic) $4,239,634
-Estimated Schedule Effort (organic) 23.81 months
-Estimated People Required (organic) 15.82
+Estimated Cost to Develop (organic) $4,293,022
+Estimated Schedule Effort (organic) 23.93 months
+Estimated People Required (organic) 15.94
 ───────────────────────────────────────────────────────────────────────────────
-Processed 6182036 bytes, 6.182 megabytes (SI)
+Processed 6288781 bytes, 6.289 megabytes (SI)
 ───────────────────────────────────────────────────────────────────────────────
 ```
 

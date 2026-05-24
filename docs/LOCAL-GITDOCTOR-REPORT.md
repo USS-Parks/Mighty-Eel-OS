@@ -165,14 +165,14 @@ TODO/FIXME/HACK/BUG markers indicate unfinished work.
 - `docs/ADAPTER-COMPLETION-MATRIX.md:115 | **BUG** | `test_adapter.py:84–85` asserts `healthy=True` but the adapter returns degraded status when the engine is not ready — the test contradicts the adapt`
 - `docs/dougherty/JOHN-REMEDIATION-PLAN.md:54 | 1 | email + QUA-004 | "Extensive TODO placeholders and incomplete implementations throughout" | QUA-004 + Code Smell `Placeholder Implementation` HIGH | Mixed`
 - `docs/dougherty/JOHN-REMEDIATION-ROSTER.md:1156 - Adapter stubs: `wc -l` of adapters/*/adapter.py + `grep -c NotImplementedError` = 0 for each. **Important nuance:** John's "extensive TODO placeholders" claim`
+- `docs/JOHN-REMEDIATION-PLAN.md:54 | 1 | email + QUA-004 | "Extensive TODO placeholders and incomplete implementations throughout" | QUA-004 + Code Smell `Placeholder Implementation` HIGH | Mixed`
+- `docs/JOHN-REMEDIATION-ROSTER.md:1219 - Adapter stubs: `wc -l` of adapters/*/adapter.py + `grep -c NotImplementedError` = 0 for each. **Important nuance:** John's "extensive TODO placeholders" claim`
 - `docs/KNOWN-ISSUES.md:126 | `TODO` | 3 files (`mai-adapters/src/manager.rs:586`, `mai-core/src/models/usb.rs:161`, `mai-scheduler/src/default.rs:394/399/402`) | Three carry session-pinne`
 - `docs/KNOWN-ISSUES.md:127 | `FIXME`, `unimplemented!` | 0 in src | clean. |`
 - `docs/RC1-TESTER-FEEDBACK.md:324 > Extensive use of TODO placeholders and incomplete implementations`
 - `docs/SHIP-HARDENING-PLAN.md:1458 TODO`
 - `docs/SHIP-HARDENING-PLAN.md:1459 FIXME`
 - `mai-adapters/src/manager.rs:586 // TODO: Track in-flight request count per adapter.`
-- `mai-core/src/models/usb.rs:161 // TODO: Use platform-specific APIs for accurate free space`
-- `mai-scheduler/src/default.rs:394 healthy_instances: total_instances, // TODO: health integration (Session 22)`
 
 ### QUA-005 Excessive console.log statements (LOW)
 
@@ -330,9 +330,9 @@ Completion/security claims need implementation evidence when placeholders remain
 - `docs/HANDOFF.md contains completion/security claims and placeholder language`
 - `docs/HUMAN-TOUCH-AUDIT.md contains completion/security claims and placeholder language`
 - `docs/INDEX.md contains completion/security claims and placeholder language`
+- `docs/JOHN-REMEDIATION-PLAN.md contains completion/security claims and placeholder language`
+- `docs/JOHN-REMEDIATION-ROSTER.md contains completion/security claims and placeholder language`
 - `docs/KNOWN-ISSUES.md contains completion/security claims and placeholder language`
-- `docs/LAMPREY-MAI-STACK-MEMO.md contains completion/security claims and placeholder language`
-- `docs/MAI-MASTER-ARCHITECTURE.md contains completion/security claims and placeholder language`
 
 ### REV-005 Silent broad error handling (HIGH)
 
@@ -361,7 +361,6 @@ Origin: `review-integrity`
 
 Assertions should validate outcomes rather than merely confirming execution.
 
-- `adapters/tests/test_base.py:10 assert True`
 - `apps/compliance-routed/tests/test_integration.py:22 assert spec is not None and spec.loader is not None`
 - `apps/compliance-routed/tests/test_smoke.py:22 assert spec is not None and spec.loader is not None`
 - `apps/local-secure-inference/tests/test_integration.py:23 assert spec is not None and spec.loader is not None`
@@ -373,6 +372,7 @@ Assertions should validate outcomes rather than merely confirming execution.
 - `apps/rag-reference/tests/test_integration.py:23 assert spec is not None and spec.loader is not None`
 - `apps/rag-reference/tests/test_smoke.py:24 assert spec is not None and spec.loader is not None`
 - `apps/tribal-sovereignty/tests/test_integration.py:23 assert spec is not None and spec.loader is not None`
+- `apps/tribal-sovereignty/tests/test_smoke.py:20 assert spec is not None and spec.loader is not None`
 
 ### REV-007 Duplicated boilerplate blocks (LOW)
 
