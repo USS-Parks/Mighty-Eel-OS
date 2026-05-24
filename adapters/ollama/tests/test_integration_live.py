@@ -32,10 +32,8 @@ from adapters.base import (
     HealthStatus,
     HealthStatusKind,
     Token,
-    UnsupportedOperationError,
 )
 from adapters.ollama.adapter import OllamaAdapter
-from adapters.ollama.config import OllamaConfig
 
 # Every test in this module is opt-in and skips cleanly when the
 # backend is unavailable.
@@ -73,7 +71,7 @@ async def _adapter_for(target: dict[str, Any]) -> OllamaAdapter:
 
 
 @pytest.fixture(autouse=True)
-def _require_live_ollama(ollama_available: dict[str, Any] | None) -> dict[str, Any]:
+def require_live_ollama(ollama_available: dict[str, Any] | None) -> dict[str, Any]:
     """Module-level skip helper. Every test in this file uses it."""
     if ollama_available is None:
         pytest.skip(
@@ -88,11 +86,11 @@ def _require_live_ollama(ollama_available: dict[str, Any] | None) -> dict[str, A
 
 @pytest.mark.asyncio
 async def test_initialize_against_real_server(
-    _require_live_ollama: dict[str, Any],
+    require_live_ollama: dict[str, Any],
 ) -> None:
     """Adapter initializes against a real Ollama server and reports the
     actual pulled-model list back through capabilities/discovery state."""
-    adapter = await _adapter_for(_require_live_ollama)
+    adapter = await _adapter_for(require_live_ollama)
     try:
         # Capabilities reflect the Ollama adapter contract (not specific to
         # the loaded model — these are adapter-level claims).
@@ -104,7 +102,7 @@ async def test_initialize_against_real_server(
 
         # The adapter discovered AT LEAST one model from /api/tags during
         # initialize() and stored it on the instance.
-        assert adapter._model in _require_live_ollama["models"]
+        assert adapter._model in require_live_ollama["models"]
         assert len(adapter._available_models) >= 1
     finally:
         await adapter.shutdown()
@@ -112,7 +110,7 @@ async def test_initialize_against_real_server(
 
 @pytest.mark.asyncio
 async def test_generate_deterministic(
-    _require_live_ollama: dict[str, Any],
+    require_live_ollama: dict[str, Any],
 ) -> None:
     """temperature=0 yields deterministic output for the same prompt.
 
@@ -120,7 +118,7 @@ async def test_generate_deterministic(
     that two back-to-back generates produce identical output AND that the
     text is non-empty AND that at least one token was streamed.
     """
-    adapter = await _adapter_for(_require_live_ollama)
+    adapter = await _adapter_for(require_live_ollama)
     try:
         params = GenerationParams(
             temperature=0.0,
@@ -162,12 +160,12 @@ async def test_generate_deterministic(
 
 @pytest.mark.asyncio
 async def test_stream_yields_tokens_incrementally(
-    _require_live_ollama: dict[str, Any],
+    require_live_ollama: dict[str, Any],
 ) -> None:
     """generate() is an async iterator — verify tokens arrive as a stream,
     each with a monotonically increasing index, and that the assembled
     text matches what we get when consumed in one shot."""
-    adapter = await _adapter_for(_require_live_ollama)
+    adapter = await _adapter_for(require_live_ollama)
     try:
         params = GenerationParams(
             temperature=0.0,
@@ -207,7 +205,7 @@ async def test_stream_yields_tokens_incrementally(
 
 @pytest.mark.asyncio
 async def test_embeddings_when_model_available(
-    _require_live_ollama: dict[str, Any],
+    require_live_ollama: dict[str, Any],
     ollama_embedding_model: str | None,
 ) -> None:
     """Compute embeddings against a real Ollama embedding model.
@@ -222,13 +220,13 @@ async def test_embeddings_when_model_available(
             "Run `ollama pull nomic-embed-text` to enable this test.",
         )
 
-    h, p = _host_to_parts(_require_live_ollama["host"])
+    h, p = _host_to_parts(require_live_ollama["host"])
     adapter = OllamaAdapter()
     await adapter.initialize(
         {
             "host": h,
             "port": p,
-            "default_model": _require_live_ollama["model"],
+            "default_model": require_live_ollama["model"],
             "embedding_model": ollama_embedding_model,
             "allow_pull": False,
         },
@@ -251,11 +249,11 @@ async def test_embeddings_when_model_available(
 
 @pytest.mark.asyncio
 async def test_health_against_real_server(
-    _require_live_ollama: dict[str, Any],
+    require_live_ollama: dict[str, Any],
 ) -> None:
     """health_check() against a running Ollama returns HEALTHY with
     sensible uptime and request counters."""
-    adapter = await _adapter_for(_require_live_ollama)
+    adapter = await _adapter_for(require_live_ollama)
     try:
         # One generate to bump the request counter.
         params = GenerationParams(temperature=0.0, max_tokens=5)
@@ -264,19 +262,21 @@ async def test_health_against_real_server(
 
         status: HealthStatus = await adapter.health_check()
         assert status.kind == HealthStatusKind.HEALTHY
-        assert status.uptime_ms is not None and status.uptime_ms >= 0
-        assert status.requests_served is not None and status.requests_served >= 1
+        assert status.uptime_ms is not None
+        assert status.uptime_ms >= 0
+        assert status.requests_served is not None
+        assert status.requests_served >= 1
     finally:
         await adapter.shutdown()
 
 
 @pytest.mark.asyncio
 async def test_shutdown_idempotent(
-    _require_live_ollama: dict[str, Any],
+    require_live_ollama: dict[str, Any],
 ) -> None:
     """Calling shutdown twice is a no-op the second time and leaves the
     adapter in a clean uninitialized state."""
-    adapter = await _adapter_for(_require_live_ollama)
+    adapter = await _adapter_for(require_live_ollama)
 
     await adapter.shutdown()
     # State after first shutdown.
