@@ -41,24 +41,57 @@ What this document does **not** capture:
 
 ## 2. Bundle Artefacts Available For Distribution
 
-Produced 2026-05-23 at the close of RC-08 packaging.
+Re-assembled 2026-05-24 after the RC-10 RC1.1-docs patch pass
+(commit `b0fcdee`). Binary freeze unchanged at `dceaabc`; binary
+hashes unchanged from RC-03; only the source/docs/ tree differs
+from the RC-08 assembly. **Use the hashes below when sending to a
+tester — the original RC-08 hashes are stale.**
 
-| Artefact | Size | SHA-256 |
+**Authoritative source for archive hashes:** the `SHA256SUMS` file
+at the release directory (`Island-Mountain-RC1-release/SHA256SUMS`,
+177 bytes). The hashes inline in the table below are a snapshot at
+the time of this commit; if the bundle is re-rolled,
+`SHA256SUMS` wins. (Embedding hashes inside the bundle hits a
+classic self-reference: each rebuild changes a file inside, which
+changes the archive hash, which would need a new commit, which
+would change the file again. The external SHA256SUMS is the
+fixed point.)
+
+| Artefact | Size | SHA-256 (snapshot) |
 |---|---|---|
-| `MAI-Lamprey-RC1/` (uncompressed folder, 667 file entries) | 19 MB | per `MAI-Lamprey-RC1/CHECKSUMS.txt` |
-| `MAI-Lamprey-RC1.tar.gz` | 5.7 MB | `22a0a4fe7adedccad309a5aaa06ca431015e2c8ae7518fd9eb004a99cfce60f2` |
-| `MAI-Lamprey-RC1.zip` | 6.0 MB | `9a2f95eed44a86782a9f43df734511b0f9b2f7e6f89d51cb04ff5e6a54462a4c` |
+| `MAI-Lamprey-RC1/` (uncompressed folder, 670 file entries) | 19 MB | per `MAI-Lamprey-RC1/CHECKSUMS.txt` (internal) |
+| `MAI-Lamprey-RC1.tar.gz` | 5.7 MB | `35ada78f66f57901c1c3a438709712cbf0e8f43f60e5b8383eb2343c4a66c76a` |
+| `MAI-Lamprey-RC1.zip` | 6.1 MB | `6200c1ccfcd25132e417c03f465eef474ccf35cbd9a8e063256f0089d3ccee84` |
+| `SHA256SUMS` | 177 B | (covers the two archives above) |
 
 Bundle and archives live at `C:/Users/17076/Documents/Claude/Island-Mountain-RC1-release/`
-on the build host. Both archives carry the same 668 file entries;
-the zip also includes 6 explicit empty-directory markers
-(`source/.github/`, `source/apps/`, `source/mai-sdk-python/src/`,
-`source/proto/`, `source/proto/mai/`, `test-evidence/`), which is
-the normal POSIX-tar vs PKZip metadata difference, not a content
+on the build host. Both archives carry the same 671 file entries
+(670 in CHECKSUMS.txt + CHECKSUMS.txt itself); the zip also
+includes a small number of explicit empty-directory markers, which
+is the normal POSIX-tar vs PKZip metadata difference, not a content
 difference.
 
 Pick **tar.gz** for Unix recipients, **zip** for Windows recipients
 who do not have a tar implementation.
+
+**Self-reference note for testers reading this inside the bundle:**
+If you opened this doc *inside* the archive you just downloaded,
+the snapshot hashes in the table above were the latest as of the
+commit that built your archive. The archive you actually downloaded
+may carry slightly different file hashes inside (this doc was the
+*last* thing updated before the archive was rolled). To verify
+your download integrity, compare your `sha256sum` against the
+external `SHA256SUMS` file your sender provided alongside the
+archive — that file is the contract.
+
+**Delta from the RC-08 assembly:** 3 new docs added to
+`source/docs/` (RC1-CHANGES.md, RC1-SELF-REVIEW-TRACK-C.md,
+RC1-TESTER-FEEDBACK.md) and 13 docs updated (README-FIRST.md
+mirrored at top level and inside source/docs/,
+TESTER-INSTRUCTIONS.md, RC1-PACKAGE-MANIFEST.md, the four
+acquisition demos, runbooks/README.md, and five individual
+runbooks). See `source/docs/RC1-CHANGES.md` for the per-file
+finding-by-finding patch matrix.
 
 ## 3. Current Status
 
@@ -106,8 +139,8 @@ compliance-governance stack, frozen at commit dceaabc. The
 I'll send you [MAI-Lamprey-RC1.zip / .tar.gz] (~6 MB). After
 download, verify SHA-256:
 
-  [22a0a4fe7adedccad309a5aaa06ca431015e2c8ae7518fd9eb004a99cfce60f2 for .tar.gz]
-  [9a2f95eed44a86782a9f43df734511b0f9b2f7e6f89d51cb04ff5e6a54462a4c for .zip]
+  [35ada78f66f57901c1c3a438709712cbf0e8f43f60e5b8383eb2343c4a66c76a for .tar.gz]
+  [6200c1ccfcd25132e417c03f465eef474ccf35cbd9a8e063256f0089d3ccee84 for .zip]
 
 Then unpack and open README-FIRST.md. Total reading is ~10 min;
 TESTER-INSTRUCTIONS.md tells you which sections of README-FIRST
@@ -165,8 +198,8 @@ HOW TO RECEIVE THE BUNDLE
 I'll send you [MAI-Lamprey-RC1.zip / MAI-Lamprey-RC1.tar.gz] via
 [mechanism]. After download, please verify the SHA-256:
 
-  .tar.gz: 22a0a4fe7adedccad309a5aaa06ca431015e2c8ae7518fd9eb004a99cfce60f2
-  .zip:    9a2f95eed44a86782a9f43df734511b0f9b2f7e6f89d51cb04ff5e6a54462a4c
+  .tar.gz: 35ada78f66f57901c1c3a438709712cbf0e8f43f60e5b8383eb2343c4a66c76a
+  .zip:    6200c1ccfcd25132e417c03f465eef474ccf35cbd9a8e063256f0089d3ccee84
 
 If the hash does not match, do not unpack — message me and I'll
 re-send.
