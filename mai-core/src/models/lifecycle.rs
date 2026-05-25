@@ -109,7 +109,11 @@ impl ModelLifecycleManager {
                     version: summary.version,
                     size_bytes: summary.size_bytes,
                     required_vram_bytes: summary.required_vram_bytes,
-                    backend: summary.capabilities.chat.then(|| "auto".to_string()),
+                    backend: if summary.capabilities.chat {
+                        Some("auto".to_string())
+                    } else {
+                        None
+                    },
                     loaded: matches!(
                         summary.status,
                         ModelStatus::Loaded | ModelStatus::Active { .. }

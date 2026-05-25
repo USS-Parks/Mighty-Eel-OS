@@ -90,7 +90,11 @@ async fn chat_stream_yields_events_in_order() {
         .unwrap();
     let mut texts: Vec<String> = Vec::new();
     while let Some(chunk) = handle.next_chunk().await.unwrap() {
-        let delta = chunk.choices[0].delta.content.clone().unwrap_or_default();
+        let delta = chunk.choices[0]
+            .delta
+            .content
+            .clone()
+            .expect("stream chunk must contain delta.content in this test");
         texts.push(delta);
     }
     assert_eq!(texts, vec!["Hel", "lo ", "world"]);

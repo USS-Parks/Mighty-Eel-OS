@@ -8,7 +8,7 @@ use tonic::{Request, Response, Status};
 use tracing::{debug, info};
 
 use super::proto;
-use super::{extract_grpc_profile, role_has_permission};
+use super::{extract_grpc_profile, model_summary_to_proto_detail, role_has_permission};
 use crate::state::AppState;
 
 use mai_core::registry::ModelFilter;
@@ -21,27 +21,6 @@ pub struct MaiRegistryService {
 impl MaiRegistryService {
     pub fn new(state: AppState) -> Self {
         Self { state }
-    }
-}
-
-/// Convert a ModelSummary to a proto ModelDetail.
-fn summary_to_proto(m: &mai_core::registry::ModelSummary) -> proto::ModelDetail {
-    proto::ModelDetail {
-        id: m.model_id.clone(),
-        object: "model".to_string(),
-        created: 0,
-        owned_by: "island-mountain".to_string(),
-        capabilities: Some(proto::ModelCapabilities {
-            chat: m.capabilities.chat,
-            completion: m.capabilities.completion,
-            embedding: m.capabilities.embedding,
-            vision: m.capabilities.vision,
-            structured_output: m.capabilities.structured_output,
-            max_context_tokens: m.capabilities.max_context_tokens,
-        }),
-        status: format!("{:?}", m.status),
-        size_bytes: m.size_bytes,
-        required_vram_bytes: m.required_vram_bytes,
     }
 }
 
@@ -98,8 +77,10 @@ impl proto::mai_registry_server::MaiRegistry for MaiRegistryService {
             .filter(|m| format!("{:?}", m.status).to_lowercase() == "loaded")
             .count();
 
-        let models: Vec<proto::ModelDetail> =
-            filtered.iter().map(|m| summary_to_proto(m)).collect();
+        let models: Vec<proto::ModelDetail> = filtered
+            .iter()
+            .map(|m| model_summary_to_proto_detail(m, 0))
+            .collect();
 
         #[allow(clippy::cast_possible_truncation)]
         let total_models = models.len() as u32;

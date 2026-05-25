@@ -60,5 +60,7 @@ This index is the “single page” entry point for the artifacts created during
 
 - Local scanner parity (GitDoctor-style):
   - `python tools/local_gitdoctor_scan.py --root . --format markdown --fail-on none`
+- Local scan snapshot (latest run in this lane):
+  - `docs/GITDOCTOR-75-LOCAL-SCAN-SNAPSHOT.md`
 - E2E visibility (skips if binary not built):
   - `python -m pytest -q tests/e2e -m e2e`

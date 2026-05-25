@@ -9,7 +9,7 @@ use tonic::{Request, Response, Status};
 use tracing::{debug, info};
 
 use super::proto;
-use super::{extract_grpc_profile, role_has_permission};
+use super::{extract_grpc_profile, model_summary_to_proto_detail, role_has_permission};
 use crate::state::AppState;
 
 /// MaiModels service implementation.
@@ -20,27 +20,6 @@ pub struct MaiModelsService {
 impl MaiModelsService {
     pub fn new(state: AppState) -> Self {
         Self { state }
-    }
-}
-
-/// Convert a mai-core ModelSummary to a proto ModelDetail.
-fn model_summary_to_proto(m: &mai_core::registry::ModelSummary) -> proto::ModelDetail {
-    proto::ModelDetail {
-        id: m.model_id.clone(),
-        object: "model".to_string(),
-        created: 0, // ModelSummary has no registered_at; filled when manifest available
-        owned_by: "island-mountain".to_string(),
-        capabilities: Some(proto::ModelCapabilities {
-            chat: m.capabilities.chat,
-            completion: m.capabilities.completion,
-            embedding: m.capabilities.embedding,
-            vision: m.capabilities.vision,
-            structured_output: m.capabilities.structured_output,
-            max_context_tokens: m.capabilities.max_context_tokens,
-        }),
-        status: format!("{:?}", m.status),
-        size_bytes: m.size_bytes,
-        required_vram_bytes: m.required_vram_bytes,
     }
 }
 
@@ -63,7 +42,10 @@ impl proto::mai_models_server::MaiModels for MaiModelsService {
         let registry = self.state.registry.read().await;
         let models = registry.list_models(None);
 
-        let data: Vec<proto::ModelDetail> = models.iter().map(model_summary_to_proto).collect();
+        let data: Vec<proto::ModelDetail> = models
+            .iter()
+            .map(|m| model_summary_to_proto_detail(m, 0))
+            .collect();
 
         Ok(Response::new(proto::ModelListResponse {
             object: "list".to_string(),

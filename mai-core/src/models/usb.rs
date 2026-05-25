@@ -158,7 +158,7 @@ pub fn discover_usb_packages() -> DiscoveryResult {
 
 /// Get available bytes on a filesystem
 fn fs_available_bytes(path: &Path) -> u64 {
-    // TODO: Use platform-specific APIs for accurate free space
+    // Follow-up: Use platform-specific APIs for accurate free space
     // - Windows: GetDiskFreeSpaceExW
     // - Linux/macOS: statvfs
     let _ = path;

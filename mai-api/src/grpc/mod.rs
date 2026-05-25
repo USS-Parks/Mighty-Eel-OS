@@ -59,6 +59,32 @@ pub mod server;
 
 use tonic::{Request, Status};
 
+/// Shared helper to convert a `mai-core` `ModelSummary` to the gRPC `ModelDetail`.
+///
+/// Keep this in one place so all gRPC services stay consistent.
+pub(crate) fn model_summary_to_proto_detail(
+    m: &mai_core::registry::ModelSummary,
+    created: u64,
+) -> proto::ModelDetail {
+    proto::ModelDetail {
+        id: m.model_id.clone(),
+        object: "model".to_string(),
+        created,
+        owned_by: "island-mountain".to_string(),
+        capabilities: Some(proto::ModelCapabilities {
+            chat: m.capabilities.chat,
+            completion: m.capabilities.completion,
+            embedding: m.capabilities.embedding,
+            vision: m.capabilities.vision,
+            structured_output: m.capabilities.structured_output,
+            max_context_tokens: m.capabilities.max_context_tokens,
+        }),
+        status: format!("{:?}", m.status),
+        size_bytes: m.size_bytes,
+        required_vram_bytes: m.required_vram_bytes,
+    }
+}
+
 // ── Auth Interceptor ──────────────────────────────────────────────
 
 /// gRPC metadata key for profile identification (mirrors REST X-IM-Profile header).

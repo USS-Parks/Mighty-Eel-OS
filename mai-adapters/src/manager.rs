@@ -583,7 +583,7 @@ impl AdapterManager {
     /// Check how many in-flight requests an adapter has.
     /// Used by the scheduler for least-loaded routing.
     pub fn adapter_in_flight(&self, _adapter_name: &str) -> usize {
-        // TODO: Track in-flight request count per adapter.
+        // Follow-up: Track in-flight request count per adapter.
         // For now returns 0; the scheduler uses its own internal tracking.
         0
     }

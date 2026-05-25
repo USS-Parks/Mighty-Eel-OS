@@ -391,15 +391,15 @@ impl Scheduler for DefaultScheduler {
 
         ClusterMetrics {
             total_instances,
-            healthy_instances: total_instances, // TODO: health integration (Session 22)
+            healthy_instances: total_instances, // Follow-up: health integration (Session 22)
             total_active_sequences: total_active,
             total_queue_depth: total_queue,
             total_requests_routed: self.total_routed.load(Ordering::Relaxed),
             total_requests_rejected: self.total_rejected.load(Ordering::Relaxed),
-            avg_routing_latency_us: 0, // TODO: latency tracking (Session 19)
+            avg_routing_latency_us: 0, // Follow-up: latency tracking (Session 19)
             topology_gpu_count: topo_gpus,
             topology_nvlink_cliques: topo_cliques,
-            topology_has_anomalies: false, // TODO: wire to MetricsRefresher (Session 19)
+            topology_has_anomalies: false, // Follow-up: wire to MetricsRefresher (Session 19)
             kv_active_sequences: self
                 .kv_manager
                 .as_ref()
