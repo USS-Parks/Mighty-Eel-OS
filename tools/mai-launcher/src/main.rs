@@ -21,7 +21,22 @@
 
 #![allow(unsafe_code)]
 
+#[cfg(windows)]
 mod splash;
+
+// Non-Windows hosts have no Win32 surface, so the splash module
+// degrades to a stub that returns an error. `main` already treats
+// splash failure as a recoverable warning ("splash skipped: …") and
+// continues into the terminal UI. This keeps `cargo check --workspace`
+// green on the Linux CI runner without changing the shipped `mai.exe`
+// behavior on Windows.
+#[cfg(not(windows))]
+mod splash {
+    use anyhow::{Result, anyhow};
+    pub fn show_splash(_duration_ms: u32) -> Result<()> {
+        Err(anyhow!("splash unavailable on non-Windows targets"))
+    }
+}
 
 use std::env;
 use std::io::{self, IsTerminal, Write};

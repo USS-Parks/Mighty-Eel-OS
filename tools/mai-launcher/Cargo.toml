@@ -18,9 +18,17 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow = "1"
+
+# Win32 splash dependencies are Windows-only: the `windows` crate's
+# `Win32_*` feature modules do not exist on other targets, so pulling
+# them in unconditionally breaks `cargo check --workspace` on the
+# Linux CI runner. The launcher ships as `mai.exe`; on non-Windows
+# hosts the splash module compiles as a stub that returns an error,
+# which `main.rs` already degrades to a text-only welcome.
+[target.'cfg(windows)'.dependencies]
 image = { version = "0.25", default-features = false, features = ["png"] }
 
-[dependencies.windows]
+[target.'cfg(windows)'.dependencies.windows]
 version = "0.58"
 features = [
     "Win32_Foundation",
