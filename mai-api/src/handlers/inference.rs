@@ -591,13 +591,21 @@ fn build_chat_prompt(messages: &[ApiChatMessage]) -> String {
 }
 
 /// Map ChatCompletionRequest params into the HIL GenerationParams struct.
+#[allow(clippy::manual_unwrap_or_default)]
+fn explicit_stop_sequences_or_empty(stop: &Option<Vec<String>>) -> Vec<String> {
+    match stop.clone() {
+        Some(stop) => stop,
+        None => Vec::new(),
+    }
+}
+
 #[allow(clippy::cast_possible_truncation)]
 fn build_generation_params(req: &ChatCompletionRequest) -> GenerationParams {
     GenerationParams {
         temperature: req.temperature.unwrap_or(0.7),
         top_p: req.top_p.unwrap_or(1.0),
         max_tokens: req.max_tokens.map_or(2048, |v| v as usize),
-        stop_sequences: req.stop.clone().unwrap_or_else(Vec::new),
+        stop_sequences: explicit_stop_sequences_or_empty(&req.stop),
         structured_schema: None,
     }
 }

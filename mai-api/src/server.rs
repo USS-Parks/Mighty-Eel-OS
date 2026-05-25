@@ -777,6 +777,14 @@ async fn shutdown_signal() {
 ///
 /// If no path is provided, returns defaults (no adapters configured).
 /// If the file cannot be read, logs a warning and returns defaults.
+#[allow(clippy::manual_unwrap_or_default)]
+fn explicit_vec_or_empty<T>(values: Option<Vec<T>>) -> Vec<T> {
+    match values {
+        Some(values) => values,
+        None => Vec::new(),
+    }
+}
+
 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 fn load_adapter_boot_config(path: Option<&Path>) -> AdapterBootConfig {
     let path = if let Some(p) = path {
@@ -835,28 +843,24 @@ fn load_adapter_boot_config(path: Option<&Path>) -> AdapterBootConfig {
                     .get("port")
                     .and_then(toml::Value::as_integer)
                     .unwrap_or(11434) as u16,
-                gpu_ids: at
-                    .get("gpu_ids")
-                    .and_then(|v| v.as_array())
-                    .map(|arr| {
+                gpu_ids: explicit_vec_or_empty(at.get("gpu_ids").and_then(|v| v.as_array()).map(
+                    |arr| {
                         arr.iter()
                             .filter_map(|v| v.as_integer().map(|i| i as u32))
                             .collect()
-                    })
-                    .unwrap_or_else(Vec::new),
+                    },
+                )),
                 max_concurrent: at
                     .get("max_concurrent")
                     .and_then(toml::Value::as_integer)
                     .unwrap_or(4) as usize,
-                models: at
-                    .get("models")
-                    .and_then(|v| v.as_array())
-                    .map(|arr| {
+                models: explicit_vec_or_empty(at.get("models").and_then(|v| v.as_array()).map(
+                    |arr| {
                         arr.iter()
                             .filter_map(|v| v.as_str().map(std::string::ToString::to_string))
                             .collect()
-                    })
-                    .unwrap_or_else(Vec::new),
+                    },
+                )),
             };
             adapter_configs.insert(name.clone(), entry);
         }
