@@ -16,6 +16,10 @@ repository.workspace = true
 name = "lamprey-mai"
 path = "src/main.rs"
 
+# build.rs (auto-detected in the package root) compiles lamprey-mai.rc
+# into the .exe so Explorer + taskbar show the Lamprey icon. The build
+# script no-ops on non-Windows hosts via cfg-gating.
+
 [dependencies]
 anyhow = "1"
 
@@ -37,6 +41,11 @@ features = [
     "Win32_System_LibraryLoader",
     "Win32_UI_WindowsAndMessaging",
 ]
+
+# Compiles the .rc file at build time. Windows-only build dep so the
+# Linux CI runner doesn't try to pull in rc.exe / windres.
+[target.'cfg(windows)'.build-dependencies]
+embed-resource = "2.5"
 
 # Override the workspace `unsafe_code = forbid` because the splash
 # module necessarily uses Win32 calls. Everything else inherits the

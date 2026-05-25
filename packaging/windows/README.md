@@ -32,18 +32,35 @@ ISCC.exe packaging\windows\lamprey-mai.iss
 The installer drops as
 `packaging/windows/Output/lamprey-mai-setup-<version>.exe`.
 
-## Splash assets
+## Visual assets
 
-The installer-time splash is a separate concern from the launcher-time
-splash. Both currently use canonical PNGs under `docs/assets/`:
+All canonical assets live under `docs/assets/`. Each surface picks
+the appropriate one:
 
-| Surface                         | Asset                                       |
-| ------------------------------- | ------------------------------------------- |
-| Inno Setup wizard splash        | `lamprey-mai-install-screen.png` (gold badge) |
-| `lamprey-mai.exe` startup splash | `lamprey-startup-image.png` (silhouette)     |
-| Terminal banner after splash    | `lamprey-banner.txt` (ASCII)                |
+| Surface                                  | Asset                                            |
+| ---------------------------------------- | ------------------------------------------------ |
+| Inno Setup wizard splash                 | `lamprey-mai-install-screen.png` (gold badge)    |
+| Inno Setup `lamprey-mai-setup.exe` icon  | `lamprey-mai.ico`                                |
+| `lamprey-mai.exe` Explorer/taskbar icon  | `lamprey-mai.ico` (embedded via `embed-resource`)|
+| Start Menu + Desktop shortcut icon       | `lamprey-mai.ico` (`IconFilename=`)              |
+| Add/Remove Programs uninstall entry icon | `lamprey-mai.exe` (resource pulled from the exe) |
+| `lamprey-mai.exe` startup splash         | `lamprey-startup-image.png` (silhouette)         |
+| Terminal banner after splash             | `lamprey-banner.txt` (ASCII)                     |
 
-The launcher's startup splash is baked into the exe via
-`include_bytes!` (see `tools/mai-launcher/src/splash.rs`); duplicating
-it into `{app}\assets\` at install time is for operator inspection,
-not runtime.
+Notes:
+
+- `lamprey-mai-icon.png` is the transparent-background source PNG
+  (corner-floodfill removed the black backdrop). The `.ico` is
+  generated from it via a one-shot Python script; not part of the
+  build.
+- The launcher's startup-splash PNG and the ASCII banner are baked
+  into the exe via `include_bytes!` (see
+  `tools/mai-launcher/src/splash.rs` and `src/main.rs`). Shipping
+  them under `{app}\assets\` at install time is for operator
+  inspection, not runtime use.
+- The Explorer/taskbar icon is compiled into the .exe at build time
+  via `tools/mai-launcher/build.rs` +
+  `tools/mai-launcher/lamprey-mai.rc`. Shipping the `.ico` to
+  `{app}\assets\` lets the shortcut entries pin their icon to that
+  file directly, decoupling shortcut appearance from the build
+  toolchain.

@@ -39,6 +39,10 @@ WizardStyle=modern
 ; badge that brackets the wizard.
 WizardImageFile=..\..\docs\assets\lamprey-mai-install-screen.png
 WizardSmallImageFile=..\..\docs\assets\lamprey-mai-install-screen.png
+; Setup .exe icon (what Explorer shows on lamprey-mai-setup-X.Y.Z.exe)
+; and the icon shown in Add/Remove Programs for the uninstall entry.
+SetupIconFile=..\..\docs\assets\lamprey-mai.ico
+UninstallDisplayIcon={app}\{#MyAppExeName}
 PrivilegesRequired=admin
 ArchitecturesInstallIn64BitMode=x64
 ArchitecturesAllowed=x64
@@ -58,11 +62,17 @@ Source: "bin\lamprey-mai-admin.exe"; DestDir: "{app}"; Flags: ignoreversion
 ; is optional — kept here for operator inspection.
 Source: "..\..\docs\assets\lamprey-startup-image.png";     DestDir: "{app}\assets"; Flags: ignoreversion
 Source: "..\..\docs\assets\lamprey-mai-install-screen.png"; DestDir: "{app}\assets"; Flags: ignoreversion
+Source: "..\..\docs\assets\lamprey-mai-icon.png";          DestDir: "{app}\assets"; Flags: ignoreversion
+Source: "..\..\docs\assets\lamprey-mai.ico";               DestDir: "{app}\assets"; Flags: ignoreversion
 Source: "..\..\docs\assets\lamprey-banner.txt";            DestDir: "{app}\assets"; Flags: ignoreversion
 
 [Icons]
-Name: "{group}\{#MyAppName}";        Filename: "{app}\{#MyAppExeName}"
-Name: "{autodesktop}\{#MyAppName}";  Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
+; IconFilename binds the shortcut's icon directly to the .ico we ship,
+; not the .exe's embedded resource. Both carry the same image, but
+; pinning the .ico file makes the icon appearance independent of the
+; build-tools chain that compiled the launcher binary.
+Name: "{group}\{#MyAppName}";        Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\assets\lamprey-mai.ico"
+Name: "{autodesktop}\{#MyAppName}";  Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\assets\lamprey-mai.ico"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "Launch Lamprey MAI"; Flags: nowait postinstall skipifsilent

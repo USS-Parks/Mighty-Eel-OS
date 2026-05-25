@@ -1,0 +1,7 @@
+// Windows resource script for lamprey-mai.exe.
+// Compiled into the binary by build.rs via the embed-resource crate.
+// Only effect on non-Windows targets: ignored (build.rs is gated).
+//
+// IDI_ICON1 (=1) is the conventional resource ID Explorer + the
+// taskbar pick up as the application icon.
+IDI_ICON1 ICON "../../docs/assets/lamprey-mai.ico"
