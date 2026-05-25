@@ -26,6 +26,14 @@ use mai_admin::{
     BackupOptions, BackupReport, VerifyOutcome, VerifyReport, create_backup, verify_backup,
 };
 
+// WELCOME-01: narrated demo runner + boot banner. Binary-only modules
+// (not exported from the lib crate) — they pull in mai-compliance + a
+// large terminal-rendering surface that operator tooling consumers
+// shouldn't transitively depend on.
+mod banner;
+mod banner_art;
+mod demo;
+
 #[derive(Parser, Debug)]
 #[command(name = "mai-admin", version, about = "MAI operator tooling")]
 struct Cli {
@@ -47,6 +55,29 @@ enum Command {
     Trust,
     /// Vault status report. Pending session.
     Vault,
+    /// Run narrated end-to-end compliance demos (WELCOME-01).
+    #[command(subcommand)]
+    Demo(DemoCmd),
+}
+
+#[derive(Subcommand, Debug)]
+enum DemoCmd {
+    /// Run every demo in sequence (HIPAA, ITAR, OCAP, Multi-Domain,
+    /// Audit-Tamper, Trust-Manifold). Prints the boot banner first.
+    All {
+        /// Skip the lamprey boot banner (useful for CI or piping).
+        #[arg(long, default_value_t = false)]
+        no_banner: bool,
+    },
+    /// Run a single named scenario. Names: `hipaa`, `itar`, `ocap`,
+    /// `multi`, `tamper`, `trust`.
+    Run {
+        /// Scenario name. See `--help` for the list.
+        scenario: String,
+        /// Skip the lamprey boot banner.
+        #[arg(long, default_value_t = false)]
+        no_banner: bool,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -194,6 +225,28 @@ fn main() -> ExitCode {
         Command::Vault => {
             eprintln!("`mai-admin vault status` lands in a later session. Pending.");
             ExitCode::from(2)
+        }
+        Command::Demo(DemoCmd::All { no_banner }) => run_demo(None, no_banner),
+        Command::Demo(DemoCmd::Run {
+            scenario,
+            no_banner,
+        }) => run_demo(Some(scenario.as_str()), no_banner),
+    }
+}
+
+fn run_demo(scenario: Option<&str>, no_banner: bool) -> ExitCode {
+    if !no_banner {
+        banner::print_boot_banner(env!("CARGO_PKG_VERSION"));
+    }
+    let result = match scenario {
+        Some(name) => demo::run_one(name),
+        None => demo::run_all(),
+    };
+    match result {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("demo failed: {e:#}");
+            ExitCode::from(1)
         }
     }
 }

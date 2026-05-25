@@ -26,6 +26,14 @@ hex = "0.4"
 ml-dsa = "0.0.4"
 rand = "0.8"
 
+# WELCOME-01: narrated `demo` subcommand drives the compliance engine
+# directly (PHI / ITAR / EAR / OCAP detectors, composer, audit log,
+# certified report manager). Same APIs the `mai-compliance` integration
+# tests use, called from a literate runner that prints what each step
+# does.
+mai-compliance = { path = "../../mai-compliance" }
+mai-core = { path = "../../mai-core" }
+
 # SHIP-09 vendors a minimal `BackupSourceProfile` + `AuditEntry` +
 # `verify_chain` rather than depend on `mai-api`. Reason: the parallel
 # SHIP-07-endpoint-and-cli session is mid-edit on `mai-api/src/errors.rs`,

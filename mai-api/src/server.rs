@@ -186,6 +186,23 @@ impl MaiServer {
     /// 7. Graceful drain (up to 5 seconds)
     #[allow(clippy::too_many_lines)]
     pub async fn run(self) -> Result<(), ServerError> {
+        // WELCOME-01: print the lamprey ASCII banner to stdout before
+        // any tracing logs, so the first thing a tester sees when they
+        // launch `mai-api.exe` directly is the project identity rather
+        // than bare structured logs. Suppress with `MAI_NO_BANNER=1`
+        // when the `mai.exe` launcher already printed it.
+        if std::env::var_os("MAI_NO_BANNER").is_none() {
+            const LAMPREY_BANNER: &str = include_str!("../../docs/assets/lamprey-banner.txt");
+            println!("{LAMPREY_BANNER}");
+            println!();
+            println!(
+                "  Island Mountain MAI + Lamprey   build {}",
+                env!("CARGO_PKG_VERSION")
+            );
+            println!("  starting REST + gRPC; logs follow.");
+            println!();
+        }
+
         info!(
             tier = ?self.config.tier,
             rest_port = self.config.server.port,
