@@ -42,6 +42,11 @@ def adapter() -> OllamaAdapter:
     return OllamaAdapter()
 
 
+async def _consume_stream(stream: Any) -> None:
+    async for _tok in stream:
+        pass
+
+
 # ─── Config Tests ────────────────────────────────────────────────────────────
 
 
@@ -143,9 +148,7 @@ class TestOllamaAdapter:
             await adapter.initialize({}, hil_handle=None)
 
         with pytest.raises(ValidationError):
-            stream = adapter.generate("   ", GenerationParams())
-            async for _tok in stream:
-                pass
+            await _consume_stream(adapter.generate("   ", GenerationParams()))
 
     @pytest.mark.asyncio
     async def test_generate_streaming(self, adapter: OllamaAdapter) -> None:

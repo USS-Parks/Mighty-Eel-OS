@@ -365,13 +365,7 @@ class AdapterBase(ABC):
         )
         self._entry_hil_handle: Any | None = None
 
-    def _validate_generate_request(
-        self,
-        prompt: str,
-        params: GenerationParams,
-        *,
-        stream: bool,
-    ) -> None:
+    def _validate_prompt(self, prompt: str) -> None:
         if not isinstance(prompt, str):
             raise ValidationError("prompt must be a string")
         if not prompt.strip():
@@ -379,9 +373,18 @@ class AdapterBase(ABC):
         if len(prompt) > 200_000:
             raise ValidationError("prompt too large")
 
-        if not isinstance(stream, bool):
-            raise ValidationError("stream must be a bool")
+    def _validate_stop_sequences(self, stop_sequences: list[Any]) -> None:
+        if not isinstance(stop_sequences, list):
+            raise ValidationError("stop_sequences must be a list")
+        if len(stop_sequences) > 32:
+            raise ValidationError("too many stop sequences")
+        for item in stop_sequences:
+            if not isinstance(item, str):
+                raise ValidationError("stop sequences must be strings")
+            if len(item) > 200:
+                raise ValidationError("stop sequence too long")
 
+    def _validate_generation_params(self, params: GenerationParams) -> None:
         if not isinstance(params, GenerationParams):
             raise ValidationError("params must be GenerationParams")
         if not isinstance(params.max_tokens, int):
@@ -404,15 +407,19 @@ class AdapterBase(ABC):
         if params.structured_schema is not None and not isinstance(params.structured_schema, dict):
             raise ValidationError("structured_schema must be a dict when present")
 
-        if not isinstance(params.stop_sequences, list):
-            raise ValidationError("stop_sequences must be a list")
-        if len(params.stop_sequences) > 32:
-            raise ValidationError("too many stop sequences")
-        for item in params.stop_sequences:
-            if not isinstance(item, str):
-                raise ValidationError("stop sequences must be strings")
-            if len(item) > 200:
-                raise ValidationError("stop sequence too long")
+        self._validate_stop_sequences(params.stop_sequences)
+
+    def _validate_generate_request(
+        self,
+        prompt: str,
+        params: GenerationParams,
+        *,
+        stream: bool,
+    ) -> None:
+        self._validate_prompt(prompt)
+        if not isinstance(stream, bool):
+            raise ValidationError("stream must be a bool")
+        self._validate_generation_params(params)
 
     def _validate_embed_request(self, texts: list[str]) -> None:
         caps = self.capabilities()
