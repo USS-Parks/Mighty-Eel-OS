@@ -117,6 +117,7 @@ class VllmAdapter(AdapterBase):
     ) -> GenerationResult | AsyncIterator[Token]:
         """Generate from vLLM. Dual-mode: await for result, async-for for streaming."""
         self._ensure_initialized()
+        self._validate_generate_request(prompt, params, stream=stream)
         assert self._client is not None
 
         if stream:
@@ -234,6 +235,7 @@ class VllmAdapter(AdapterBase):
     async def embed(self, texts: list[str]) -> list[Embedding]:
         """Compute embeddings via vLLM's /v1/embeddings endpoint."""
         self._ensure_initialized()
+        self._validate_embed_request(texts)
         assert self._client is not None
 
         resp = await maybe_await(self._client.embeddings, texts)

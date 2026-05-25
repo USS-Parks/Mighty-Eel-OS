@@ -168,15 +168,22 @@ impl ApiError {
     /// internal paths, or stack traces.
     pub fn safe_message(&self) -> String {
         match self {
-            Self::BadRequest(detail) => format!("Bad request: {detail}"),
-            Self::ValidationFailed(detail) => format!("Validation failed: {detail}"),
+            Self::BadRequest(detail) => {
+                format!("Bad request: {}", sanitize_error_detail(detail))
+            }
+            Self::ValidationFailed(detail) => {
+                format!("Validation failed: {}", sanitize_error_detail(detail))
+            }
             Self::UnsupportedContentType => "Unsupported content type".to_string(),
             Self::PayloadTooLarge => "Request payload exceeds size limit".to_string(),
             Self::RequestTimeout => "Request timed out".to_string(),
             Self::ModelNotFound(id) => format!("Model not found: {id}"),
             Self::ModelUnavailable(_) => "Requested model is not available".to_string(),
             Self::ModelIncompatible(detail) => {
-                format!("Model does not support this operation: {detail}")
+                format!(
+                    "Model does not support this operation: {}",
+                    sanitize_error_detail(detail)
+                )
             }
             Self::ModelLoading => "Model is currently loading, try again shortly".to_string(),
             Self::SystemOverloaded => "System is at capacity, try again later".to_string(),
@@ -184,7 +191,9 @@ impl ApiError {
             Self::HardwareFault => "A hardware fault was detected".to_string(),
             Self::ServiceUnavailable => "Service is temporarily unavailable".to_string(),
             Self::AdapterCrashed(_) => "Adapter process crashed, request failed".to_string(),
-            Self::PermissionDenied(detail) => format!("Permission denied: {detail}"),
+            Self::PermissionDenied(detail) => {
+                format!("Permission denied: {}", sanitize_error_detail(detail))
+            }
             Self::Unauthorized => "Authentication required".to_string(),
             Self::ProfileNotFound(_) => "Profile not found".to_string(),
             Self::TokenInvalid => "Invalid authentication token".to_string(),
@@ -196,7 +205,10 @@ impl ApiError {
                 "Air-gap policy violation detected, service suspended".to_string()
             }
             Self::EndpointDisabled(detail) => {
-                format!("Endpoint disabled by active profile: {detail}")
+                format!(
+                    "Endpoint disabled by active profile: {}",
+                    sanitize_error_detail(detail)
+                )
             }
         }
     }
@@ -305,13 +317,34 @@ fn sanitize_error_detail(detail: &str) -> String {
         "huggingface",
     ];
 
+    let detail = redact_paths(detail);
     let lower = detail.to_lowercase();
     for name in BACKEND_NAMES {
         if lower.contains(name) {
             return "Operation could not be completed".to_string();
         }
     }
-    detail.to_string()
+    detail
+}
+
+fn redact_paths(input: &str) -> String {
+    const REDACTED: &str = "<redacted_path>";
+    let mut out: Vec<&str> = Vec::new();
+    for token in input.split_whitespace() {
+        let looks_windows = token.contains(":\\") || token.contains(":/");
+        let looks_posix = token.starts_with("/Users/")
+            || token.starts_with("/home/")
+            || token.starts_with("/etc/")
+            || token.starts_with("/var/")
+            || token.starts_with("/opt/")
+            || token.starts_with("/tmp/");
+        if looks_windows || looks_posix {
+            out.push(REDACTED);
+        } else {
+            out.push(token);
+        }
+    }
+    out.join(" ")
 }
 
 impl std::fmt::Display for ApiError {
@@ -387,6 +420,19 @@ mod tests {
         let detail = "Model not loaded";
         let sanitized = sanitize_error_detail(detail);
         assert_eq!(sanitized, "Model not loaded");
+    }
+
+    #[test]
+    fn test_sanitize_redacts_paths() {
+        let detail = "failed to read C:\\secrets\\auth_keys.toml: access denied";
+        let sanitized = sanitize_error_detail(detail);
+        assert!(!sanitized.contains("C:\\"));
+        assert!(sanitized.contains("<redacted_path>"));
+
+        let detail = "invalid config at /etc/mai/auth_keys.toml";
+        let sanitized = sanitize_error_detail(detail);
+        assert!(!sanitized.contains("/etc/mai/"));
+        assert!(sanitized.contains("<redacted_path>"));
     }
 
     #[test]

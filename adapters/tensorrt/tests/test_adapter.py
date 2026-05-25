@@ -258,6 +258,20 @@ class TestShutdown:
 
 class TestGenerateNonStreaming:
     @pytest.mark.asyncio
+    async def test_rejects_empty_prompt(self, adapter: TensorRtAdapter) -> None:
+        client = _stub_client_for_init()
+        await _initialize_with_stub(adapter, client)
+        with pytest.raises(ValidationError):
+            await adapter.generate("", GenerationParams(), stream=False)
+
+    @pytest.mark.asyncio
+    async def test_rejects_invalid_sampling_params(self, adapter: TensorRtAdapter) -> None:
+        client = _stub_client_for_init()
+        await _initialize_with_stub(adapter, client)
+        with pytest.raises(ValidationError):
+            await adapter.generate("hi", GenerationParams(max_tokens=0), stream=False)
+
+    @pytest.mark.asyncio
     async def test_returns_generation_result(self, adapter: TensorRtAdapter) -> None:
         client = _stub_client_for_init()
         await _initialize_with_stub(adapter, client)

@@ -158,6 +158,7 @@ class TensorRtAdapter(AdapterBase):
         tokens as Triton emits them.
         """
         self._ensure_initialized()
+        self._validate_generate_request(prompt, params, stream=stream)
         if stream:
             return self._generate_stream(prompt, params)
         return await self._generate_one(prompt, params)

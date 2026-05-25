@@ -110,6 +110,7 @@ class OllamaAdapter(AdapterBase):
     ) -> AsyncIterator[Token]:
         """Stream tokens from Ollama /api/generate endpoint."""
         self._ensure_initialized()
+        self._validate_generate_request(prompt, params, stream=True)
         assert self._client is not None
 
         options = _params_to_ollama_options(params)
@@ -207,6 +208,7 @@ class OllamaAdapter(AdapterBase):
     async def embed(self, texts: list[str]) -> list[Embedding]:
         """Compute embeddings via Ollama /api/embed endpoint."""
         self._ensure_initialized()
+        self._validate_embed_request(texts)
         assert self._client is not None
 
         if not self._embedding_model:

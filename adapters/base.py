@@ -365,6 +365,77 @@ class AdapterBase(ABC):
         )
         self._entry_hil_handle: Any | None = None
 
+    def _validate_generate_request(
+        self,
+        prompt: str,
+        params: GenerationParams,
+        *,
+        stream: bool,
+    ) -> None:
+        if not isinstance(prompt, str):
+            raise ValidationError("prompt must be a string")
+        if not prompt.strip():
+            raise ValidationError("prompt must not be empty")
+        if len(prompt) > 200_000:
+            raise ValidationError("prompt too large")
+
+        if not isinstance(stream, bool):
+            raise ValidationError("stream must be a bool")
+
+        if not isinstance(params, GenerationParams):
+            raise ValidationError("params must be GenerationParams")
+        if not isinstance(params.max_tokens, int):
+            raise ValidationError("max_tokens must be an int")
+        if params.max_tokens <= 0:
+            raise ValidationError("max_tokens must be > 0")
+        if params.max_tokens > 1_000_000:
+            raise ValidationError("max_tokens too large")
+
+        if not isinstance(params.temperature, (int, float)):
+            raise ValidationError("temperature must be a number")
+        if params.temperature < 0 or params.temperature > 2.0:
+            raise ValidationError("temperature out of range")
+
+        if not isinstance(params.top_p, (int, float)):
+            raise ValidationError("top_p must be a number")
+        if params.top_p <= 0 or params.top_p > 1.0:
+            raise ValidationError("top_p out of range")
+
+        if params.structured_schema is not None and not isinstance(params.structured_schema, dict):
+            raise ValidationError("structured_schema must be a dict when present")
+
+        if not isinstance(params.stop_sequences, list):
+            raise ValidationError("stop_sequences must be a list")
+        if len(params.stop_sequences) > 32:
+            raise ValidationError("too many stop sequences")
+        for item in params.stop_sequences:
+            if not isinstance(item, str):
+                raise ValidationError("stop sequences must be strings")
+            if len(item) > 200:
+                raise ValidationError("stop sequence too long")
+
+    def _validate_embed_request(self, texts: list[str]) -> None:
+        caps = self.capabilities()
+        if not caps.supports_embedding:
+            raise UnsupportedOperationError("embed")
+        if not isinstance(texts, list):
+            raise ValidationError("texts must be a list of strings")
+        if not texts:
+            return
+        if len(texts) > 2048:
+            raise ValidationError("too many texts")
+        total_chars = 0
+        for text in texts:
+            if not isinstance(text, str):
+                raise ValidationError("texts must be strings")
+            if not text.strip():
+                raise ValidationError("texts must not include empty strings")
+            if len(text) > 50_000:
+                raise ValidationError("text too large")
+            total_chars += len(text)
+        if total_chars > 200_000:
+            raise ValidationError("texts payload too large")
+
     def set_config(
         self,
         config: dict[str, Any] | None = None,

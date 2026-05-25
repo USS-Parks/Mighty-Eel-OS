@@ -124,6 +124,7 @@ class MLXAdapter(AdapterBase):
     ) -> GenerationResult | AsyncIterator[Token]:
         """Run a generation. Stream mode returns an async iterator."""
         self._ensure_initialized()
+        self._validate_generate_request(prompt, params, stream=stream)
         assert self._client is not None
 
         if stream:

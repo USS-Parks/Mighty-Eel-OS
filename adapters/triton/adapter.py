@@ -193,6 +193,7 @@ class TritonAdapter(AdapterBase):
         chunking a buffered response.
         """
         self._ensure_initialized()
+        self._validate_generate_request(prompt, params, stream=stream)
         self._require_text_io()
         if stream:
             return self._generate_stream(prompt, params)

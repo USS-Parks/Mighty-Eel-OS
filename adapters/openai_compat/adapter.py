@@ -148,6 +148,7 @@ class OpenAICompatAdapter(AdapterBase):
     ) -> GenerationResult | AsyncIterator[Token]:
         """Generate a single completion. Streams via SSE when requested."""
         self._ensure_initialized()
+        self._validate_generate_request(prompt, params, stream=stream)
         if stream:
             if not self._config.supports_streaming:
                 raise UnsupportedOperationError("generate(stream=True)")
@@ -267,10 +268,9 @@ class OpenAICompatAdapter(AdapterBase):
         if not self._config.supports_embeddings:
             raise UnsupportedOperationError("embed")
         assert self._client is not None
-        if not isinstance(texts, list):
-            raise ValidationError("texts must be a list")
         if not texts:
             return []
+        self._validate_embed_request(texts)
         model = self._embedding_model
         if not model:
             raise ModelNotFoundError(model="")

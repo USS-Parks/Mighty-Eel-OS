@@ -409,6 +409,32 @@ class TestInitialize:
 
 class TestGenerateUnary:
     @pytest.mark.asyncio
+    async def test_rejects_empty_prompt_before_network(self) -> None:
+        recipe = FakeRecipe()
+        with fake_server(recipe) as url:
+            adapter = OpenAICompatAdapter()
+            await adapter.initialize(_config_for(url))
+            try:
+                with pytest.raises(ValidationError):
+                    await adapter.generate("   ", GenerationParams())
+                assert recipe.request_count == {"models": 1}
+            finally:
+                await adapter.shutdown()
+
+    @pytest.mark.asyncio
+    async def test_rejects_invalid_sampling_params_before_network(self) -> None:
+        recipe = FakeRecipe()
+        with fake_server(recipe) as url:
+            adapter = OpenAICompatAdapter()
+            await adapter.initialize(_config_for(url))
+            try:
+                with pytest.raises(ValidationError):
+                    await adapter.generate("hi", GenerationParams(top_p=2.0))
+                assert recipe.request_count == {"models": 1}
+            finally:
+                await adapter.shutdown()
+
+    @pytest.mark.asyncio
     async def test_chat_happy_path(self) -> None:
         recipe = FakeRecipe(chat_body={
             "choices": [{

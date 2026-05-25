@@ -166,6 +166,7 @@ class OnnxRuntimeAdapter(AdapterBase):
         self._ensure_initialized()
         if not self._supports_generation:
             raise UnsupportedOperationError("generate")
+        self._validate_generate_request(prompt, params, stream=stream)
 
         if stream:
             return self._generate_stream(prompt, params)
@@ -299,6 +300,7 @@ class OnnxRuntimeAdapter(AdapterBase):
             raise UnsupportedOperationError("embed")
         if not texts:
             return []
+        self._validate_embed_request(texts)
 
         try:
             vectors = await asyncio.to_thread(self._run_embed, texts)

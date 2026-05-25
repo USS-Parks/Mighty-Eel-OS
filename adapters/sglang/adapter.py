@@ -104,6 +104,7 @@ class SglangAdapter(AdapterBase):
         stream: bool = False,
     ) -> GenerationResult | AsyncIterator[Token]:
         self._check_initialized()
+        self._validate_generate_request(prompt, params, stream=stream)
         assert self._client is not None
         assert self._cfg is not None
 

@@ -707,8 +707,13 @@ def tst_without_assertions(defn: CheckDef, ctx: ScanContext) -> list[Finding]:
     assertion_re = re.compile(r"\b(assert|expect\(|pytest\.raises|raises\(|assert_eq!|assert_ne!|assert!\()")
     for path in ctx.test_files():
         text = ctx.text_by_file.get(path, "")
-        if path.name == "__init__.py":
+        if path.name in {"__init__.py", "conftest.py"}:
             continue
+        if path.suffix == ".py":
+            if path.name.startswith("_"):
+                continue
+            if not (path.name.startswith("test_") or path.name.endswith("_test.py")):
+                continue
         if not assertion_re.search(text):
             evidence.append(f"{ctx.rel(path)} no assertion signal")
     return [finding(defn, evidence[:12])] if evidence else []

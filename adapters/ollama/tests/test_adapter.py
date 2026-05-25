@@ -18,6 +18,7 @@ from adapters.base import (
     GenerationParams,
     HealthStatusKind,
     ModelNotFoundError,
+    ValidationError,
 )
 from adapters.ollama.adapter import OllamaAdapter
 from adapters.ollama.client import OllamaClient, OllamaResponse, OllamaStreamChunk
@@ -132,6 +133,19 @@ class TestOllamaAdapter:
         with patch.object(OllamaClient, "health", return_value=False):
             with pytest.raises(BackendUnavailableError):
                 await adapter.initialize({}, hil_handle=None)
+
+    @pytest.mark.asyncio
+    async def test_generate_rejects_empty_prompt(self, adapter: OllamaAdapter) -> None:
+        with patch.object(OllamaClient, "health", return_value=True), \
+             patch.object(OllamaClient, "list_models", return_value=[
+                 {"name": "llama3.1:8b-instruct-q4_K_M"},
+             ]):
+            await adapter.initialize({}, hil_handle=None)
+
+        with pytest.raises(ValidationError):
+            stream = adapter.generate("   ", GenerationParams())
+            async for _tok in stream:
+                pass
 
     @pytest.mark.asyncio
     async def test_generate_streaming(self, adapter: OllamaAdapter) -> None:

@@ -151,6 +151,7 @@ class TgiAdapter(AdapterBase):
     ) -> GenerationResult | AsyncIterator[Token]:
         """Generate from TGI. Dual-mode: await for result, async-for for streaming."""
         self._ensure_initialized()
+        self._validate_generate_request(prompt, params, stream=stream)
         assert self._client is not None
 
         if stream:
