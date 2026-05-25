@@ -898,13 +898,45 @@ impl MaiClient {
 
     /// POST /v1/chat/completions with stream=true
     /// Returns an async stream of SSE chunks. Resume via Last-Event-ID.
-    pub async fn chat_stream(
+    pub async fn chat_stream(&self, request: ChatCompletionRequest) -> SdkResult<ChatStreamHandle> {
+        self.chat_stream_inner(request, None).await
+    }
+
+    /// POST /v1/chat/completions with stream=true and a `Last-Event-ID`
+    /// header set to `last_event_id`.
+    ///
+    /// J-17 resume primitive: pair this with [`ChatStreamHandle::last_event_id`]
+    /// from a previous handle to re-subscribe to a chat stream that was cut
+    /// off mid-flight. Per the SSE spec the server uses the `Last-Event-ID`
+    /// header to skip events the client has already seen.
+    ///
+    /// Callers that want automatic retry-with-resume should wrap this in
+    /// their own retry loop — the SDK intentionally does not auto-retry so
+    /// callers stay in control of backoff and cancellation.
+    pub async fn chat_stream_resume(
+        &self,
+        request: ChatCompletionRequest,
+        last_event_id: &str,
+    ) -> SdkResult<ChatStreamHandle> {
+        self.chat_stream_inner(request, Some(last_event_id)).await
+    }
+
+    /// Shared body for [`chat_stream`] and [`chat_stream_resume`]: forces
+    /// `stream = true`, optionally sets `Last-Event-ID`, sends the request,
+    /// and parses the SSE response body into a [`ChatStreamHandle`].
+    async fn chat_stream_inner(
         &self,
         mut request: ChatCompletionRequest,
+        last_event_id: Option<&str>,
     ) -> SdkResult<ChatStreamHandle> {
         request.stream = true;
-        let response = self
+        let mut builder = self
             .request_builder(Method::POST, "/v1/chat/completions")
+            .header("Accept", "text/event-stream");
+        if let Some(id) = last_event_id {
+            builder = builder.header("Last-Event-ID", id);
+        }
+        let response = builder
             .json(&request)
             .send()
             .await
