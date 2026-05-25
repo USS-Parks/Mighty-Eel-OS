@@ -35,17 +35,25 @@ OutputBaseFilename=lamprey-mai-setup-{#MyAppVersion}
 Compression=lzma2/ultra
 SolidCompression=yes
 WizardStyle=modern
-; Splash screens: the install-screen PNG is the gold "LAMPREY MAI"
-; badge that brackets the wizard.
-WizardImageFile=..\..\docs\assets\lamprey-mai-install-screen.png
+; Wizard splash (large left-panel image): uses the PORTRAIT variant
+; (lamprey-mai-install-wizard.png, ~1536x2941, aspect 0.522) so Inno
+; scales to its 164:314 panel without stretching the gold badge. The
+; landscape source lives at lamprey-mai-install-screen.png.
+WizardImageFile=..\..\docs\assets\lamprey-mai-install-wizard.png
+; Small header image (top-right of intermediate pages, ~55x58): the
+; near-square landscape badge fits this slot acceptably.
 WizardSmallImageFile=..\..\docs\assets\lamprey-mai-install-screen.png
 ; Setup .exe icon (what Explorer shows on lamprey-mai-setup-X.Y.Z.exe)
 ; and the icon shown in Add/Remove Programs for the uninstall entry.
 SetupIconFile=..\..\docs\assets\lamprey-mai.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
 PrivilegesRequired=admin
-ArchitecturesInstallIn64BitMode=x64
-ArchitecturesAllowed=x64
+; "x64compatible" is the Inno Setup 6.3+ identifier that replaces
+; the deprecated "x64". Covers native x64 AND ARM64 hosts running
+; x64-emulated installers, which is what we want for a Rust-built
+; x86_64 binary.
+ArchitecturesInstallIn64BitMode=x64compatible
+ArchitecturesAllowed=x64compatible
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
@@ -60,11 +68,12 @@ Source: "bin\lamprey-mai-admin.exe"; DestDir: "{app}"; Flags: ignoreversion
 ; Asset payload used by the launcher's splash + banner. These are baked
 ; into the exe via include_bytes! so duplicating them at install time
 ; is optional — kept here for operator inspection.
-Source: "..\..\docs\assets\lamprey-startup-image.png";     DestDir: "{app}\assets"; Flags: ignoreversion
-Source: "..\..\docs\assets\lamprey-mai-install-screen.png"; DestDir: "{app}\assets"; Flags: ignoreversion
-Source: "..\..\docs\assets\lamprey-mai-icon.png";          DestDir: "{app}\assets"; Flags: ignoreversion
-Source: "..\..\docs\assets\lamprey-mai.ico";               DestDir: "{app}\assets"; Flags: ignoreversion
-Source: "..\..\docs\assets\lamprey-banner.txt";            DestDir: "{app}\assets"; Flags: ignoreversion
+Source: "..\..\docs\assets\lamprey-startup-image.png";       DestDir: "{app}\assets"; Flags: ignoreversion
+Source: "..\..\docs\assets\lamprey-mai-install-screen.png";  DestDir: "{app}\assets"; Flags: ignoreversion
+Source: "..\..\docs\assets\lamprey-mai-install-wizard.png";  DestDir: "{app}\assets"; Flags: ignoreversion
+Source: "..\..\docs\assets\lamprey-mai-icon.png";            DestDir: "{app}\assets"; Flags: ignoreversion
+Source: "..\..\docs\assets\lamprey-mai.ico";                 DestDir: "{app}\assets"; Flags: ignoreversion
+Source: "..\..\docs\assets\lamprey-banner.txt";              DestDir: "{app}\assets"; Flags: ignoreversion
 
 [Icons]
 ; IconFilename binds the shortcut's icon directly to the .ico we ship,

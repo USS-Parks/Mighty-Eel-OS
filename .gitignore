@@ -40,3 +40,7 @@ tests/burn-in/results/
 node_modules/
 package-lock.json.bak
 *.log
+
+# Inno Setup build artifacts (LCH-1)
+packaging/windows/Output/
+packaging/windows/bin/
