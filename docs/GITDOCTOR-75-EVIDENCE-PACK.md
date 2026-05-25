@@ -39,6 +39,13 @@ This index is the “single page” entry point for the artifacts created during
 - HTTP client lifecycle evidence:
   - `docs/GITDOCTOR-75-ADAPTER-LIFECYCLE.md`
 
+## Local Load Balancing + Batching
+
+- Local adapter load-balancing design:
+  - `docs/GITDOCTOR-75-LOCAL-ADAPTER-BALANCING.md`
+- Batch capability matrix:
+  - `docs/GITDOCTOR-75-BATCHING-MATRIX.md`
+
 ## Caching Policy
 
 - Response caching decision:
@@ -46,7 +53,7 @@ This index is the “single page” entry point for the artifacts created during
 
 ## Contributor Entry Map
 
-- “First 30 minutes” map:
+- "First 30 minutes" map:
   - `docs/CONTRIBUTOR-ENTRY-MAP.md`
 
 ## Suggested Local Commands (offline)
@@ -55,4 +62,3 @@ This index is the “single page” entry point for the artifacts created during
   - `python tools/local_gitdoctor_scan.py --root . --format markdown --fail-on none`
 - E2E visibility (skips if binary not built):
   - `python -m pytest -q tests/e2e -m e2e`
-
