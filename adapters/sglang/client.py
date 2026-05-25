@@ -67,6 +67,18 @@ class SglangClient:
         self._timeout = timeout_ms / 1000.0
         self._stream_timeout = stream_timeout_ms / 1000.0
         self._health_timeout = health_check_timeout_ms / 1000.0
+        self._opener: urllib.request.OpenerDirector | None = urllib.request.build_opener()
+        self._closed = False
+
+    @property
+    def opener(self) -> urllib.request.OpenerDirector:
+        if self._opener is None or self._closed:
+            raise RuntimeError("SGLang client closed")
+        return self._opener
+
+    def close(self) -> None:
+        self._opener = None
+        self._closed = True
 
     def _request(
         self, method: str, path: str, body: dict[str, Any] | None = None,
@@ -80,7 +92,7 @@ class SglangClient:
         req = urllib.request.Request(url, data=data, headers=headers, method=method)
         t0 = time.monotonic()
         try:
-            with urllib.request.urlopen(req, timeout=timeout or self._timeout) as resp:
+            with self.opener.open(req, timeout=timeout or self._timeout) as resp:
                 raw = resp.read().decode()
                 elapsed = (time.monotonic() - t0) * 1000
                 return SglangResponse(
@@ -108,7 +120,7 @@ class SglangClient:
 
         req = urllib.request.Request(url, data=data, headers=headers, method="POST")
         try:
-            resp = urllib.request.urlopen(req, timeout=self._stream_timeout)
+            resp = self.opener.open(req, timeout=self._stream_timeout)
         except urllib.error.HTTPError as e:
             body_text = e.read().decode() if e.fp else ""
             self._handle_http_error(e.code, body_text)

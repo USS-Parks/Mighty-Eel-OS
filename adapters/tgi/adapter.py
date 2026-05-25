@@ -338,6 +338,11 @@ class TgiAdapter(AdapterBase):
         if not self._initialized and self._client is None:
             return
         self._initialized = False
+        if self._client is not None:
+            try:
+                await maybe_await(self._client.close)
+            except Exception:
+                logger.debug("tgi client close failed", exc_info=True)
         self._client = None
         self._model_id = ""
         self._start_time_ms = 0

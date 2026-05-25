@@ -290,6 +290,11 @@ class VllmAdapter(AdapterBase):
     async def shutdown(self) -> None:
         """Graceful shutdown. vLLM server lifecycle is external."""
         self._initialized = False
+        if self._client is not None:
+            try:
+                await maybe_await(self._client.close)
+            except Exception:
+                logger.warning("vLLM client close failed", exc_info=True)
         self._client = None
         logger.info("vLLM adapter shut down")
 

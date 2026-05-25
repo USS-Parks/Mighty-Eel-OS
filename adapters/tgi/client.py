@@ -68,6 +68,18 @@ class TgiClient:
         self._timeout = timeout_ms / 1000.0
         self._stream_timeout = stream_timeout_ms / 1000.0
         self._health_timeout = health_check_timeout_ms / 1000.0
+        self._opener: urllib.request.OpenerDirector | None = urllib.request.build_opener()
+        self._closed = False
+
+    @property
+    def opener(self) -> urllib.request.OpenerDirector:
+        if self._opener is None or self._closed:
+            raise RuntimeError("TGI client closed")
+        return self._opener
+
+    def close(self) -> None:
+        self._opener = None
+        self._closed = True
 
     def _request(
         self, method: str, path: str, body: dict[str, Any] | None = None,
@@ -81,7 +93,7 @@ class TgiClient:
         req = urllib.request.Request(url, data=data, headers=headers, method=method)
         t0 = time.monotonic()
         try:
-            with urllib.request.urlopen(req, timeout=timeout or self._timeout) as resp:
+            with self.opener.open(req, timeout=timeout or self._timeout) as resp:
                 raw = resp.read().decode()
                 elapsed = (time.monotonic() - t0) * 1000
                 parsed = json.loads(raw) if raw else {}
@@ -105,7 +117,7 @@ class TgiClient:
 
         req = urllib.request.Request(url, data=data, headers=headers, method="POST")
         try:
-            resp = urllib.request.urlopen(req, timeout=self._stream_timeout)
+            resp = self.opener.open(req, timeout=self._stream_timeout)
         except urllib.error.HTTPError as e:
             body_text = e.read().decode() if e.fp else ""
             self._handle_http_error(e.code, body_text)
@@ -251,7 +263,7 @@ class TgiClient:
         url = f"{self._base_url}/metrics"
         req = urllib.request.Request(url, method="GET")
         try:
-            with urllib.request.urlopen(req, timeout=self._health_timeout) as resp:
+            with self.opener.open(req, timeout=self._health_timeout) as resp:
                 return resp.read().decode("utf-8", errors="replace")
         except (urllib.error.URLError, TimeoutError, urllib.error.HTTPError):
             return ""

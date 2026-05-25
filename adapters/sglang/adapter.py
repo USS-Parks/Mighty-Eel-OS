@@ -11,6 +11,7 @@ validation, and an `requests_served` counter that feeds health.
 """
 from __future__ import annotations
 
+import contextlib
 import time
 from collections.abc import AsyncIterator
 from typing import Any
@@ -240,9 +241,10 @@ class SglangAdapter(AdapterBase):
 
     async def shutdown(self) -> None:
         # Idempotent: every member that holds backend state is dropped.
-        # SglangClient has no persistent socket pool but we release the
-        # reference so re-init constructs a fresh client.
         self._initialized = False
+        if self._client is not None:
+            with contextlib.suppress(Exception):
+                await maybe_await(self._client.close)
         self._client = None
         self._model_id = None
 

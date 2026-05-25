@@ -666,6 +666,16 @@ class TestVllmClientErrorMapping:
         with pytest.raises((BackendUnavailableError, AdapterTimeoutError)):
             client.models()
 
+    def test_opener_reused_across_accesses(self, client):
+        opener_before = client.opener
+        opener_after = client.opener
+        assert opener_before is opener_after
+
+    def test_close_releases_opener(self, client):
+        client.close()
+        with pytest.raises(RuntimeError):
+            _ = client.opener
+
 
 # ─── J-12: async context manager smoke ───────────────────────────────────────
 
