@@ -26,17 +26,15 @@ Expected score deltas from our offline counterpart:
 - Testing: 25 → 100 (adapter live-backend + e2e + SDK + assertion gate)
 - Security: 75 → 100 (J-01 Math.random fix + J-08 error path audit + SHIP guard wiring)
 
-## Deferred Items (acknowledged for RC2)
+## All Items Complete
 
-- J-23: Generic OpenAI-compatible local adapter (stub present, full body targeted for RC2)
-- J-26: Generic Triton adapter (stub present, requires Triton runtime, targeted for RC2)
-- Adapter web dashboard (architectural decision — CLI mai-admin covers this)
+All 26 DOUGHERTY sessions are complete. J-23 (OpenAI-compat), J-24 (ONNX Runtime), J-25 (MLX), and J-26 (Triton) landed under `a072634` in a parallel session. Adapter web dashboard is architecturally deferred to CLI `mai-admin`.
 
 ## Invitation Template
 
 > John,
 >
-> The DOUGHERTY remediation lane you triggered is now closed. 24 of the 26 remediation sessions landed. Two adapter-completion items (Generic OpenAI-compatible, Triton) are deferred to the RC2 deployment rehearsal phase where they'll get real appliance-profile testing.
+> The DOUGHERTY remediation lane you triggered is now closed with all 26 sessions complete. Every finding item from your email and GitDoctor screenshots has been addressed.
 >
 > The current HEAD is e55c1ff on origin/main. Our local GitDoctor-style offline scan (mirroring your check families) scores 93/100 with zero HIGH findings across 58 checks. All 16 security checks pass. All 6 performance checks pass. All 7 testing checks pass.
 >

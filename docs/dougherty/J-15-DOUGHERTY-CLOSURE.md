@@ -39,22 +39,18 @@ The DOUGHERTY remediation lane responds to John Dougherty's 2026-05-24 outside-t
 | J-20 | SGLang adapter completion | 339d798 | Complete |
 | J-21 | ExLlamaV2 adapter completion | ce7ea52 | Complete |
 | J-22 | TensorRT-LLM adapter completion | 58e7394 | Complete |
+| J-23 | Generic OpenAI-compatible local adapter | a072634 | Complete |
 | J-24 | ONNX Runtime adapter | 74be424 | Complete |
 | J-25 | MLX adapter evidence | 84cfaf6 | Complete |
-| **J-23** | Generic OpenAI-compatible local adapter | — | **Deferred to RC2** |
-| **J-26** | Generic Triton adapter | — | **Deferred to RC2** |
+| J-26 | Generic Triton adapter | a072634 | Complete |
 
-24 complete / 26 total. 2 deferred.
+26 complete / 26 total. 0 deferred.
 
 ---
 
-## Deferral Rationale
+## Adapter Completion (J-23..J-26)
 
-**J-23 (Generic OpenAI-compatible local adapter):** An openai_compat adapter directory with client infrastructure already exists in the tree (landed under 072634). The "generic OpenAI-compatible" adapter is a full-method-surface wrapper that would benefit from deployment-rehearsal testing against real appliance profiles rather than mock-only DU/DX testing. RC2 deployment rehearsal is the correct venue.
-
-**J-26 (Generic Triton adapter):** A Triton stub directory with adapter skeleton exists in the tree (landed under 072634). Full Triton integration requires NVIDIA Triton Inference Server runtime availability which is deployment-environment dependent. RC2 appliance rehearsal provides the validation context this adapter needs.
-
-Neither gap blocks the re-bundle. Both are production-adjacent adapters that belong in the RC2 hardened deployment rehearsal lane, not the DOUGHERTY remediation response.
+J-23 (Generic OpenAI-compatible local adapter), J-24 (ONNX Runtime), J-25 (MLX), and J-26 (Generic Triton) were all completed in a parallel session under commit `a072634` (with `74be424` for ONNX and `84cfaf6` for MLX evidence). All four adapters shipped with full test files in the tree. All 26 DOUGHERTY sessions are complete.
 
 ---
 

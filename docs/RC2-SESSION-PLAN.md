@@ -4,7 +4,7 @@
 **Phase:** RC2 Deployment Rehearsal
 **Predecessor:** RC1.2 (re-bundled, DOUGHERTY closed)
 **Freeze:** e55c1ff (Memorial Day 2026-05-25)
-**Sessions:** RC2-01 .. RC2-08
+**Sessions:** RC2-01 .. RC2-07
 **Audience:** release engineers, deployment operators
 
 ---
@@ -31,9 +31,8 @@ and proves it works outside the development environment.
 | RC2-03 | Service management + observability wiring | RC2-01 | M |
 | RC2-04 | Backup/restore drill in production profile | RC2-02 | M |
 | RC2-05 | 72-hour burn-in with production posture | RC2-02, RC2-04 | L |
-| RC2-06 | Deferred adapter completion (J-23, J-26) | — | L |
-| RC2-07 | Operator runbook finalisation | RC2-01..RC2-04 | M |
-| RC2-08 | Final production gate + go/no-go | RC2-01..RC2-07 | M |
+| RC2-06 | Operator runbook finalisation | RC2-01..RC2-04 | M |
+| RC2-07 | Final production gate + go/no-go | RC2-01..RC2-06 | M |
 
 ---
 
@@ -151,26 +150,7 @@ the release package without source-code access.
 
 ---
 
-## Session RC2-06: Deferred Adapter Completion
-
-**Goal:** Complete the two adapter items deferred from DOUGHERTY (J-23, J-26).
-
-**Deliverables:**
-1. J-23: Generic OpenAI-compatible local adapter — full method surface (chat, completion, embedding, streaming, model list)
-2. J-26: Generic Triton adapter — full Triton Inference Server integration
-3. Live-backend tests for both (or documented skip if runtime unavailable)
-4. Update docs/ADAPTER-COMPLETION-MATRIX.md to mark both complete
-5. Re-run local GitDoctor scan to confirm no regressions
-
-**Acceptance:**
-- [ ] OpenAI-compat adapter has full method surface with tests
-- [ ] Triton adapter has full method surface (runtime availability permitting)
-- [ ] Completion matrix updated
-- [ ] Local scan score maintained or improved
-
----
-
-## Session RC2-07: Operator Runbook Finalisation
+## Session RC2-06: Operator Runbook Finalisation
 
 **Goal:** Complete all operator-facing documentation for a production deployment.
 
@@ -193,7 +173,7 @@ the release package without source-code access.
 
 ---
 
-## Session RC2-08: Final Production Gate
+## Session RC2-07: Final Production Gate
 
 **Goal:** Go/no-go decision on whether RC2 is shippable as a production appliance.
 
@@ -227,16 +207,16 @@ RC2-01 (Clean-install rehearsal)
     +-- RC2-02 (Production posture) ----+
     +-- RC2-03 (Service + observability) |
     |                                    v
-    +-- RC2-06 (Adapters deferred)    RC2-04 (Backup/restore drill)
+    |                                 RC2-04 (Backup/restore drill)
     |                                    |
     v                                    v
 RC2-05 (72-hour burn-in) <--------------+
     |
     v
-RC2-07 (Runbook finalisation)
+RC2-06 (Runbook finalisation)
     |
     v
-RC2-08 (Final gate + go/no-go)
+RC2-07 (Final gate + go/no-go)
     |
     v
 Production Appliance

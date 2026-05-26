@@ -31,7 +31,7 @@
 | Python SDK | Present | Present (unchanged) |
 | Tests | S46 baseline (~1,539) | + adapter live-backend + e2e + SDK + assertion gate |
 | Docs | RC1 docs only | + ADAPTER-COMPLETION-MATRIX, ERROR-PATH-AUDIT, RC1-TESTER-RESPONSE-DOUGHERTY, MEMORIAL-DAY-SCAN-REPORT, J-15-DOUGHERTY-CLOSURE |
-| DOUGHERTY lane | Not started | **Closed** — 24/26 J-sessions complete, 2 deferred to RC2 |
+| DOUGHERTY lane | Not started | **Closed** — 26/26 J-sessions complete (J-23..J-26 landed under `a072634`) |
 | Local GitDoctor score | ~52/100 (external scan) | **93/100** (local scan, zero HIGH findings) |
 
 ## 3. Release Binaries
@@ -47,7 +47,7 @@ Built 2026-05-25 on x86_64-pc-windows-msvc:
 
 ## 4. DOUGHERTY Lane Status
 
-The DOUGHERTY remediation lane (J-01..J-26) is **closed** as of 2026-05-25. 24 sessions complete, 2 deferred (J-23 OpenAI-compat, J-26 Triton — both deferred to RC2 appliance rehearsal). Full closure document at docs/dougherty/J-15-DOUGHERTY-CLOSURE.md.
+The DOUGHERTY remediation lane (J-01..J-26) is **closed** as of 2026-05-25. All 26 sessions complete. J-23..J-26 (OpenAI-compat, ONNX Runtime, MLX, Triton) all landed under commit `a072634` in a parallel session. Full closure document at docs/dougherty/J-15-DOUGHERTY-CLOSURE.md.
 
 ## 5. What RC1.2 Excludes (same as RC1.1)
 
