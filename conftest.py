@@ -13,11 +13,43 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
+import tempfile
 import urllib.error
 import urllib.request
+import uuid
+from pathlib import Path
 from typing import Any
 
 import pytest
+
+REPO_ROOT = Path(__file__).resolve().parent
+
+
+def _configure_workspace_temp_root() -> None:
+    """Keep pytest scratch space out of ACL-hostile system temp roots."""
+    default_root = REPO_ROOT / ".tmp" / f"pytest-{uuid.uuid4().hex}"
+    root = Path(os.environ.get("MAI_PYTEST_TMP", default_root))
+    root.mkdir(parents=True, exist_ok=True)
+    os.environ["TMP"] = str(root)
+    os.environ["TEMP"] = str(root)
+    tempfile.tempdir = str(root)
+
+
+_configure_workspace_temp_root()
+
+
+@pytest.fixture
+def tmp_path() -> Path:
+    """Cross-platform writable scratch directory for Python tests."""
+    root = Path(tempfile.gettempdir())
+    root.mkdir(parents=True, exist_ok=True)
+    path = root / f"mai-test-{uuid.uuid4().hex}"
+    path.mkdir()
+    try:
+        yield path
+    finally:
+        shutil.rmtree(path, ignore_errors=True)
 
 # ─── Marks ──────────────────────────────────────────────────────────────────
 

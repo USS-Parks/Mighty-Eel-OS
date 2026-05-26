@@ -17,10 +17,10 @@ def test_required_pytest_markers_are_declared() -> None:
     joined = "\n".join(markers)
     for required in ("integration:", "e2e:", "live_backend:"):
         assert required in joined
+    assert len(markers) >= 3
 
 
 def test_e2e_suite_is_discoverable() -> None:
     e2e_smoke = REPO_ROOT / "tests" / "e2e" / "test_compliance_smoke.py"
     text = e2e_smoke.read_text(encoding="utf-8")
     assert "pytestmark = pytest.mark.e2e" in text
-
