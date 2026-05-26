@@ -46,6 +46,34 @@ def is_apple_silicon() -> bool:
     return platform.system() == "Darwin" and platform.machine() in {"arm64", "aarch64"}
 
 
+def _tokenizer_config(model_path: str, tokenizer_path: str) -> dict[str, str] | None:
+    if tokenizer_path == model_path:
+        return None
+    return {"path": tokenizer_path}
+
+
+def _load_model_handles(mlx_lm: Any, model_path: str, tokenizer_path: str) -> tuple[Any, Any]:
+    return mlx_lm.load(
+        model_path,
+        tokenizer_config=_tokenizer_config(model_path, tokenizer_path),
+    )
+
+
+def _wrong_platform_message() -> str:
+    return (
+        "MLX requires Apple Silicon (Darwin/arm64); "
+        f"runtime is {platform.system()}/{platform.machine()}"
+    )
+
+
+def _chunk_text(chunk: Any) -> str:
+    if isinstance(chunk, str):
+        return chunk
+    if hasattr(chunk, "text"):
+        return chunk.text
+    return str(chunk)
+
+
 class MLXClient:
     """In-process MLX client.
 
@@ -98,12 +126,8 @@ class MLXClient:
             raise MLXLoadError("model_path is empty; nothing to load")
 
         try:
-            self._model, self._tokenizer = mlx_lm.load(
-                self.model_path,
-                tokenizer_config={"path": self.tokenizer_path}
-                if self.tokenizer_path != self.model_path
-                else None,
-            )
+            handles = _load_model_handles(mlx_lm, self.model_path, self.tokenizer_path)
+            self._model, self._tokenizer = handles
         except FileNotFoundError as e:
             raise MLXLoadError(f"model path not found: {self.model_path}") from e
         except Exception as e:
@@ -122,10 +146,7 @@ class MLXClient:
         if self._mlx_lm is not None:
             return self._mlx_lm
         if not is_apple_silicon():
-            raise MLXLoadError(
-                "MLX requires Apple Silicon (Darwin/arm64); "
-                f"runtime is {platform.system()}/{platform.machine()}",
-            )
+            raise MLXLoadError(_wrong_platform_message())
         try:
             import mlx_lm  # type: ignore[import-not-found]
         except ImportError as e:
@@ -190,12 +211,7 @@ class MLXClient:
             temp=temperature,
             top_p=top_p,
         ):
-            if isinstance(chunk, str):
-                yield chunk
-            elif hasattr(chunk, "text"):
-                yield chunk.text
-            else:
-                yield str(chunk)
+            yield _chunk_text(chunk)
 
     def _estimate_tokens(self, text: str) -> int:
         """Best-effort token count using the loaded tokenizer."""

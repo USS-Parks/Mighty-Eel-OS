@@ -49,6 +49,89 @@ from adapters.mlx.config import MLXConfig
 logger = logging.getLogger("mai.adapters.mlx")
 
 
+def _raise_load_error(error: MLXLoadError, model_path: str) -> None:
+    msg = str(error).lower()
+    if "not found" in msg or "no such" in msg:
+        raise ModelNotFoundError(model_path) from error
+    raise BackendUnavailableError(detail=str(error)) from error
+
+
+async def _stream_tokens(
+    chunks_iter: Any,
+    deadline: float,
+    timeout_ms: int,
+) -> AsyncIterator[Token]:
+    index = 0
+    for chunk in chunks_iter:
+        if time.monotonic() > deadline:
+            raise AdapterTimeoutError(timeout_ms)
+        if not chunk:
+            continue
+        yield Token(text=chunk, index=index, is_end_of_text=False)
+        index += 1
+    yield Token(text="", index=index, is_end_of_text=True)
+
+
+async def _stream_from_client(
+    client: MLXClient,
+    prompt: str,
+    params: GenerationParams,
+    stream_timeout_ms: int,
+) -> AsyncIterator[Token]:
+    deadline = time.monotonic() + (stream_timeout_ms / 1000.0)
+    chunks_iter = await asyncio.to_thread(
+        client.stream_generate,
+        prompt,
+        max_tokens=params.max_tokens,
+        temperature=params.temperature,
+        top_p=params.top_p,
+    )
+    async for token in _stream_tokens(chunks_iter, deadline, stream_timeout_ms):
+        yield token
+
+
+async def _counted_stream(owner: Any, stream: AsyncIterator[Token]) -> AsyncIterator[Token]:
+    try:
+        async for token in stream:
+            yield token
+    except MLXLoadError as e:
+        raise BackendUnavailableError(detail=str(e)) from e
+    owner._requests_served += 1
+
+
+def _lost_handle_status(start_time_ms: int) -> HealthStatus:
+    return HealthStatus.degraded(
+        reason="MLX client lost model handle",
+        uptime_ms=int(time.time() * 1000) - start_time_ms,
+    )
+
+
+def _capability_extra() -> dict[str, Any]:
+    return {
+        "in_process": True,
+        "apple_silicon_only": True,
+        "platform_ok": is_apple_silicon(),
+    }
+
+
+async def _run_generate(
+    client: MLXClient,
+    prompt: str,
+    params: GenerationParams,
+    timeout_ms: int,
+) -> tuple[str, int, bool]:
+    return await asyncio.wait_for(
+        asyncio.to_thread(
+            client.generate,
+            prompt,
+            max_tokens=params.max_tokens,
+            temperature=params.temperature,
+            top_p=params.top_p,
+        ),
+        timeout=timeout_ms / 1000.0,
+    )
+
+
 @mai_adapter(name="mlx", version="1.0.0")
 class MLXAdapter(AdapterBase):
     """MLX backend adapter (Apple Silicon, in-process)."""
@@ -93,10 +176,7 @@ class MLXAdapter(AdapterBase):
         try:
             await asyncio.to_thread(client.load)
         except MLXLoadError as e:
-            msg = str(e).lower()
-            if "not found" in msg or "no such" in msg:
-                raise ModelNotFoundError(self._config.model_path) from e
-            raise BackendUnavailableError(detail=str(e)) from e
+            _raise_load_error(e, self._config.model_path)
 
         self._start_time_ms = int(time.time() * 1000)
         self._initialized = True
@@ -137,16 +217,7 @@ class MLXAdapter(AdapterBase):
             return self._generate_stream(prompt, params)
 
         try:
-            text, tokens, hit_max = await asyncio.wait_for(
-                asyncio.to_thread(
-                    self._client.generate,
-                    prompt,
-                    max_tokens=params.max_tokens,
-                    temperature=params.temperature,
-                    top_p=params.top_p,
-                ),
-                timeout=self._config.timeout_ms / 1000.0,
-            )
+            text, tokens, hit_max = await self._generate_once(prompt, params)
         except TimeoutError as e:
             raise AdapterTimeoutError(self._config.timeout_ms) from e
         except MLXLoadError as e:
@@ -160,39 +231,25 @@ class MLXAdapter(AdapterBase):
             finish_reason=reason,
         )
 
-    async def _generate_stream(
+    async def _generate_once(
+        self,
+        prompt: str,
+        params: GenerationParams,
+    ) -> tuple[str, int, bool]:
+        assert self._client is not None
+        return await _run_generate(self._client, prompt, params, self._config.timeout_ms)
+
+    def _generate_stream(
         self,
         prompt: str,
         params: GenerationParams,
     ) -> AsyncIterator[Token]:
         """Yield tokens in order with a stream-level wall-clock budget."""
         assert self._client is not None
-        deadline = time.monotonic() + (self._config.stream_timeout_ms / 1000.0)
-
-        chunks_iter = await asyncio.to_thread(
-            self._client.stream_generate,
-            prompt,
-            max_tokens=params.max_tokens,
-            temperature=params.temperature,
-            top_p=params.top_p,
+        stream = _stream_from_client(
+            self._client, prompt, params, self._config.stream_timeout_ms,
         )
-
-        index = 0
-        try:
-            for chunk in chunks_iter:
-                if time.monotonic() > deadline:
-                    raise AdapterTimeoutError(self._config.stream_timeout_ms)
-                if not chunk:
-                    continue
-                yield Token(text=chunk, index=index, is_end_of_text=False)
-                index += 1
-        except MLXLoadError as e:
-            raise BackendUnavailableError(detail=str(e)) from e
-
-        # Terminal sentinel so downstream consumers know the stream ended
-        # without inspecting mlx-lm internals.
-        yield Token(text="", index=index, is_end_of_text=True)
-        self._requests_served += 1
+        return _counted_stream(self, stream)
 
     async def generate_batch(
         self,
@@ -222,10 +279,7 @@ class MLXAdapter(AdapterBase):
         if not self._initialized or self._client is None:
             return HealthStatus.unavailable()
         if not self._client.loaded:
-            return HealthStatus.degraded(
-                reason="MLX client lost model handle",
-                uptime_ms=int(time.time() * 1000) - self._start_time_ms,
-            )
+            return _lost_handle_status(self._start_time_ms)
         uptime = int(time.time() * 1000) - self._start_time_ms
         return HealthStatus.healthy(
             uptime_ms=uptime,
@@ -249,11 +303,7 @@ class MLXAdapter(AdapterBase):
             supports_embedding=False,
             supports_hot_swap=False,
             backend_version=backend_version,
-            extra={
-                "in_process": True,
-                "apple_silicon_only": True,
-                "platform_ok": is_apple_silicon(),
-            },
+            extra=_capability_extra(),
         )
 
     async def shutdown(self) -> None:

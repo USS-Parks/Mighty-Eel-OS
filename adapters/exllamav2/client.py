@@ -57,7 +57,9 @@ def _parse_response(resp: Any, started_at: float) -> ExllamaResponse:
     )
 
 
-def _open_response(req: urllib.request.Request, timeout: float, started_at: float) -> ExllamaResponse:
+def _open_response(
+    req: urllib.request.Request, timeout: float, started_at: float,
+) -> ExllamaResponse:
     resp = urllib.request.urlopen(req, timeout=timeout)
     try:
         return _parse_response(resp, started_at)

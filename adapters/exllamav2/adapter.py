@@ -88,6 +88,12 @@ async def _stream_tokens(
             token_index += 1
 
 
+async def _counted_stream(owner: Any, stream: AsyncIterator[Token]) -> AsyncIterator[Token]:
+    async for token in stream:
+        yield token
+    owner._requests_served += 1
+
+
 async def _chat_completion_body(
     client: ExLlamaV2Client,
     model: str,
@@ -230,17 +236,8 @@ class ExLlamaV2Adapter(AdapterBase):
     ) -> AsyncIterator[Token]:
         """Stream tokens from ExLlamaV2."""
         assert self._client is not None
-        return self._stream_and_count(self._client, prompt, params)
-
-    async def _stream_and_count(
-        self,
-        client: ExLlamaV2Client,
-        prompt: str,
-        params: GenerationParams,
-    ) -> AsyncIterator[Token]:
-        async for token in _stream_tokens(client, self._model, prompt, params):
-            yield token
-        self._requests_served += 1
+        stream = _stream_tokens(self._client, self._model, prompt, params)
+        return _counted_stream(self, stream)
 
     async def generate_batch(
         self, prompts: list[str], params: GenerationParams,

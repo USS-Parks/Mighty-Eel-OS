@@ -12,7 +12,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Iterator
 from typing import Any
 
 from adapters.base import (
@@ -34,6 +34,39 @@ from adapters.ollama.client import OllamaClient, OllamaStreamChunk
 from adapters.ollama.config import OllamaConfig
 
 logger = logging.getLogger("mai.adapters.ollama")
+
+
+def _stream_tokens(chunks: list[OllamaStreamChunk]) -> Iterator[Token]:
+    token_index = 0
+    for chunk in chunks:
+        if not chunk.content:
+            continue
+        yield Token(
+            text=chunk.content,
+            logprob=None,
+            index=token_index,
+            is_end_of_text=chunk.done,
+        )
+        token_index += 1
+    if not chunks or not chunks[-1].done:
+        yield Token(text="", logprob=None, index=token_index, is_end_of_text=True)
+
+
+def _resolve_required_model(model: str, models: list[str]) -> str:
+    if model in models:
+        return model
+    base_name = model.split(":", maxsplit=1)[0]
+    matched = next((m for m in models if m.startswith(base_name)), None)
+    if matched is None:
+        raise ModelNotFoundError(model=model)
+    return matched
+
+
+def _not_ready_error() -> AdapterError:
+    return AdapterError(
+        code="NotReady",
+        detail="Adapter not initialized. Call initialize() first.",
+    )
 
 
 @mai_adapter(name="ollama", version="1.0.0")
@@ -106,20 +139,8 @@ class OllamaAdapter(AdapterBase):
             self._collect_stream, model, prompt, options,
         )
 
-        token_index = 0
-        for chunk in chunks:
-            if chunk.content:
-                yield Token(
-                    text=chunk.content,
-                    logprob=None,
-                    index=token_index,
-                    is_end_of_text=chunk.done,
-                )
-                token_index += 1
-
-        # Ensure we always yield an end token
-        if not chunks or not chunks[-1].done:
-            yield Token(text="", logprob=None, index=token_index, is_end_of_text=True)
+        for token in _stream_tokens(chunks):
+            yield token
 
         self._requests_served += 1
 
@@ -152,9 +173,7 @@ class OllamaAdapter(AdapterBase):
         results: list[GenerationResult] = []
 
         for prompt in prompts:
-            resp = await asyncio.to_thread(
-                self._generate_non_streaming, prompt, options,
-            )
+            resp = await asyncio.to_thread(self._generate_non_streaming, prompt, options)
             results.append(resp)
 
         self._requests_served += 1
@@ -265,12 +284,7 @@ class OllamaAdapter(AdapterBase):
         assert self._client is not None
 
         models = await self.list_models()
-        if model not in models:
-            base_name = model.split(":", maxsplit=1)[0]
-            matched = [m for m in models if m.startswith(base_name)]
-            if not matched:
-                raise ModelNotFoundError(model=model)
-            model = matched[0]
+        model = _resolve_required_model(model, models)
 
         self._model = model
         logger.info(f"Switched active model to: {model}")
@@ -280,10 +294,7 @@ class OllamaAdapter(AdapterBase):
     def _ensure_initialized(self) -> None:
         """Raise if adapter is not initialized."""
         if not self._initialized:
-            raise AdapterError(
-                code="NotReady",
-                detail="Adapter not initialized. Call initialize() first.",
-            )
+            raise _not_ready_error()
 
 
 def _params_to_ollama_options(params: GenerationParams) -> dict[str, Any]:

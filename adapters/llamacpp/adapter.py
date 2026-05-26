@@ -90,6 +90,12 @@ async def _stream_tokens(
             token_index += 1
 
 
+async def _counted_stream(owner: Any, stream: AsyncIterator[Token]) -> AsyncIterator[Token]:
+    async for token in stream:
+        yield token
+    owner._requests_served += 1
+
+
 async def _chat_completion_body(
     client: LlamaCppClient,
     prompt: str,
@@ -227,18 +233,8 @@ class LlamaCppAdapter(AdapterBase):
         """Stream tokens from llama-server."""
         assert self._client is not None
         grammar = _grammar_for_params(self._config.default_grammar, params)
-        return self._stream_and_count(self._client, prompt, params, grammar)
-
-    async def _stream_and_count(
-        self,
-        client: LlamaCppClient,
-        prompt: str,
-        params: GenerationParams,
-        grammar: str | None,
-    ) -> AsyncIterator[Token]:
-        async for token in _stream_tokens(client, prompt, params, grammar):
-            yield token
-        self._requests_served += 1
+        stream = _stream_tokens(self._client, prompt, params, grammar)
+        return _counted_stream(self, stream)
 
     async def generate_batch(
         self, prompts: list[str], params: GenerationParams,
