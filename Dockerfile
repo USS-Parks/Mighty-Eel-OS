@@ -52,7 +52,7 @@
 # ----------------------------------------------------------------------
 # Stage 1: rust-builder
 # ----------------------------------------------------------------------
-FROM --platform=linux/amd64 rust:1.88-slim-bookworm@sha256:a6cab604fa016ac022e78c24038497eb7617ab59150ca4c3dd2ede0fbd514d4b AS rust-builder
+FROM rust:1.88-slim-bookworm@sha256:a6cab604fa016ac022e78c24038497eb7617ab59150ca4c3dd2ede0fbd514d4b AS rust-builder
 
 # Build-time deps for native crates and code generators:
 #   pkg-config + libssl-dev — generic C toolchain glue for ring/blake3/etc.
@@ -115,7 +115,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
 # ----------------------------------------------------------------------
 # Stage 2: python-builder
 # ----------------------------------------------------------------------
-FROM --platform=linux/amd64 python:3.12-slim-bookworm@sha256:42ada43c4265e1ed6db62ad8df62af99a4abb9a9d49622032522ac76efb0bcef AS python-builder
+FROM python:3.12-slim-bookworm@sha256:42ada43c4265e1ed6db62ad8df62af99a4abb9a9d49622032522ac76efb0bcef AS python-builder
 
 WORKDIR /pybuild
 
@@ -136,7 +136,7 @@ RUN pip install --no-cache-dir --no-deps --require-hashes \
 # the adapters are loaded by spawning a separate Python container.
 # A future session may produce a combined runtime if there is
 # operational demand.
-FROM --platform=linux/amd64 gcr.io/distroless/cc-debian12:nonroot@sha256:7f376818a75cc40e78ea271a2f96102377059e5e860cf4b0253d886b5e3a9034 AS runtime
+FROM gcr.io/distroless/cc-debian12:nonroot@sha256:7f376818a75cc40e78ea271a2f96102377059e5e860cf4b0253d886b5e3a9034 AS runtime
 
 # Copy the two Rust binaries from stage 1.
 COPY --from=rust-builder /out/mai-api          /usr/local/bin/mai-api
