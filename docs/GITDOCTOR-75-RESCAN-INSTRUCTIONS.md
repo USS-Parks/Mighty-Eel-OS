@@ -14,6 +14,10 @@
 
 ## Pre-Scan Sanity (offline)
 
+- Rust offline cache verification:
+  - `scripts\prepare-cargo-offline-cache.ps1 -VerifyOnly`
+- Rust LIVE-02 gates after cache verification:
+  - `scripts\prepare-cargo-offline-cache.ps1 -VerifyOnly -RunGates`
 - Local GitDoctor-style scan:
   - `python tools/local_gitdoctor_scan.py --root . --format markdown --fail-on none`
 - Targeted acceptance tests (fast):

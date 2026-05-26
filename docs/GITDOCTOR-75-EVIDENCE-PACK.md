@@ -58,6 +58,10 @@ This index is the “single page” entry point for the artifacts created during
 
 ## Suggested Local Commands (offline)
 
+- Rust offline cache preflight:
+  - `scripts\prepare-cargo-offline-cache.ps1 -VerifyOnly`
+- Rust LIVE-02 gates after preflight:
+  - `scripts\prepare-cargo-offline-cache.ps1 -VerifyOnly -RunGates`
 - Local scanner parity (GitDoctor-style):
   - `python tools/local_gitdoctor_scan.py --root . --format markdown --fail-on none`
 - Local scan snapshot (latest run in this lane):
