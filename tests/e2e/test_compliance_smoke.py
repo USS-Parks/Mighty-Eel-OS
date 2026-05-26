@@ -38,6 +38,7 @@ import urllib.error
 import urllib.request
 import uuid
 from collections.abc import Iterator
+from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
@@ -174,12 +175,10 @@ def running_server() -> Iterator[int]:
     except BaseException:
         # If startup fails or a test raises, capture the binary's
         # stdout so the failure message tells us why.
-        try:
+        with suppress(Exception):
             if log_path.is_file():
                 tail = log_path.read_text(errors="replace")[-2000:]
                 sys.stderr.write(f"\nmai-api stdout tail:\n{tail}\n")
-        except Exception:
-            pass
         raise
     finally:
         proc.terminate()
@@ -188,10 +187,8 @@ def running_server() -> Iterator[int]:
         except subprocess.TimeoutExpired:
             proc.kill()
             proc.wait(timeout=5)
-        try:
+        with suppress(Exception):
             log_fh.close()
-        except Exception:
-            pass
 
 
 def test_health_live_returns_status_live(running_server: int) -> None:

@@ -324,9 +324,7 @@ def sec_sql_interpolation(defn: CheckDef, ctx: ScanContext) -> list[Finding]:
         if stripped.startswith(("///", "//!")):
             return True
         # Markdown / doc-like fences that sometimes appear in code blocks
-        if path.suffix.lower() in {".md", ".rst"}:
-            return True
-        return False
+        return path.suffix.lower() in {".md", ".rst"}
 
     evidence: list[str] = []
     for path, lines in code_file_lines(ctx):
