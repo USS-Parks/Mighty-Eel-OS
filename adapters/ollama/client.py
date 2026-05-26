@@ -1,11 +1,4 @@
-"""Ollama HTTP client: typed wrapper around Ollama's REST API.
-
-All requests target localhost only (air-gapped by design).
-No external network access. Uses stdlib urllib to avoid
-third-party HTTP library dependencies.
-
-Session 08 deliverable.
-"""
+"""Ollama HTTP client for the local REST API."""
 
 from __future__ import annotations
 

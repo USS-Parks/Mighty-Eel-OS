@@ -1,14 +1,4 @@
-"""SGLang backend adapter for MAI.
-
-Implements RadixAttention KV cache reuse, constrained decoding
-(regex, JSON schema, choice), and OpenAI-compatible streaming over
-SGLang's HTTP server.
-
-J-20 (DOUGHERTY lane) brought this adapter to the shared adapter
-contract: typed error mapping, idempotent shutdown, response unwrap
-for both `SglangResponse` and raw dicts, generate_batch input
-validation, and an `requests_served` counter that feeds health.
-"""
+"""SGLang adapter with RadixAttention, constrained decoding, and streaming."""
 from __future__ import annotations
 
 import contextlib
@@ -24,7 +14,6 @@ from adapters.base import (
     BackendCrashedError,
     BackendUnavailableError,
     Embedding,
-    FinishReason,
     GenerationParams,
     GenerationResult,
     HealthStatus,
@@ -40,7 +29,7 @@ from adapters.sglang.adapter_helpers import (
     chunk_content,
     chunk_finish_reason,
     result_from_response,
-    unwrap_body,
+    run_native_generate,
 )
 from adapters.sglang.client import SglangClient
 from adapters.sglang.config import SglangConfig
@@ -287,35 +276,15 @@ class SglangAdapter(AdapterBase):
         self._check_initialized()
         assert self._client is not None
 
-        kwargs: dict[str, Any] = {}
-        if params.max_tokens is not None:
-            kwargs["max_tokens"] = params.max_tokens
-        if params.temperature is not None:
-            kwargs["temperature"] = params.temperature
-        if json_schema is not None:
-            kwargs["json_schema"] = json_schema
-        if regex is not None:
-            kwargs["regex"] = regex
-
-        try:
-            resp = await maybe_await(self._client.generate, prompt, **kwargs)
-        except AdapterError:
-            raise
-        except TimeoutError as exc:
-            raise AdapterTimeoutError(str(exc)) from exc
-        except OSError as exc:
-            raise BackendCrashedError(str(exc)) from exc
-
-        self._requests_served += 1
-        body = unwrap_body(resp)
-        meta = body.get("meta_info", {}) if isinstance(body.get("meta_info"), dict) else {}
-        finish = meta.get("finish_reason", "stop")
-        reason = FinishReason.MAX_TOKENS if finish == "length" else FinishReason.STOP
-        return GenerationResult(
-            text=str(body.get("text", "")),
-            tokens_generated=int(meta.get("completion_tokens", 0)),
-            finish_reason=reason,
+        result = await run_native_generate(
+            self._client,
+            prompt,
+            params,
+            json_schema=json_schema,
+            regex=regex,
         )
+        self._requests_served += 1
+        return result
 
     # ─── helpers ──────────────────────────────────────────────────────────
 

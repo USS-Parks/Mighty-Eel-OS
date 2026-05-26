@@ -21,19 +21,12 @@ from typing import Any
 from adapters.base import (
     AdapterTimeoutError,
     BackendUnavailableError,
-    ContextExceededError,
-    ModelNotFoundError,
-    OutOfMemoryError,
-    RateLimitedError,
     ValidationError,
 )
 from adapters.openai_compat.http_helpers import (
     OpenAICompatResponse,
     OpenAICompatStreamChunk,
-    error_detail,
-    extract_model,
-    is_context_error,
-    is_oom_error,
+    raise_for_http_error,
     read_http_error_body,
     stream_chunk_from_payload,
 )
@@ -278,35 +271,4 @@ class OpenAICompatClient:
                 logger.debug("stream close raised; ignoring", exc_info=True)
 
     def _handle_http_error(self, status: int, body_text: str) -> None:
-        """Map an HTTP error response to a typed MAI adapter error.
-
-        Returns instead of raising only for 5xx codes so the caller can
-        decide whether to retry; all other codes raise here.
-        """
-        if status == 429:
-            raise RateLimitedError()
-        if status in (408, 504):
-            raise AdapterTimeoutError(timeout_ms=int(self._timeout * 1000))
-        detail = error_detail(body_text)
-        detail_l = detail.lower()
-        if status == 404:
-            # OpenAI-style "model_not_found" or generic missing route.
-            if "model" in detail_l or not detail:
-                raise ModelNotFoundError(model=extract_model(detail) or "unknown")
-            raise BackendUnavailableError(f"HTTP 404: {detail[:200]}")
-        if status == 400:
-            if is_context_error(detail_l):
-                raise ContextExceededError(max_context=0)
-            if is_oom_error(detail_l):
-                raise OutOfMemoryError()
-            raise ValidationError(detail or "invalid request")
-        if status == 401 or status == 403:
-            raise ValidationError(detail or f"auth rejected ({status})")
-        if status == 422:
-            raise ValidationError(detail or "unprocessable entity")
-        if status >= 500:
-            if is_oom_error(detail_l):
-                raise OutOfMemoryError()
-            # 5xx falls through to the caller for retry/raise decision.
-            return
-        raise BackendUnavailableError(f"unexpected HTTP {status}: {detail[:200]}")
+        raise_for_http_error(status, body_text, self._timeout)

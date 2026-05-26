@@ -3,20 +3,27 @@
 from __future__ import annotations
 
 import asyncio
-import contextlib
-import importlib
 import json
 import logging
 import sys
-import time
 import traceback
 from typing import Any
 
 from adapters.base import (
     AdapterBase,
     AdapterError,
-    GenerationParams,
-    get_adapter,
+)
+from adapters.runner_helpers import (
+    capability_payload,
+    handshake_payload,
+    health_payload,
+    now_ms,
+    parse_generation_params,
+)
+from adapters.runner_loading import (
+    load_adapter,
+    load_registered_adapter,
+    read_startup_config,
 )
 
 logger = logging.getLogger("mai.adapters.runner")
@@ -45,7 +52,7 @@ class AdapterRunner:
     async def run(self, startup_config: dict[str, Any]) -> None:
         """Main lifecycle: handshake then request loop."""
         self._running = True
-        self._start_time_ms = _now_ms()
+        self._start_time_ms = now_ms()
 
         loop = asyncio.get_event_loop()
         self._reader = asyncio.StreamReader()
@@ -68,26 +75,12 @@ class AdapterRunner:
             sys.exit(1)
 
         caps = self._adapter.capabilities()
-        handshake = {
-            "request_id": "",  # Not a request, but IpcEvent requires this field
-            "type": "handshake",
-            "adapter_name": self._adapter_name,
-            "version": self._version,
-            "handle": self._handle or f"{self._adapter_name}-{_now_ms()}",
-            "capabilities": {
-                "max_context_window": caps.max_context_window,
-                "supported_quantizations": caps.supported_quantizations,
-                "supports_streaming": caps.supports_streaming,
-                "supports_batching": caps.supports_batching,
-                "supports_structured_output": caps.supports_structured_output,
-                "supports_vision": caps.supports_vision,
-                "supports_tool_calling": caps.supports_tool_calling,
-                "supports_continuous_batching": caps.supports_continuous_batching,
-                "supports_embedding": caps.supports_embedding,
-                "supports_hot_swap": caps.supports_hot_swap,
-                "backend_version": caps.backend_version,
-            },
-        }
+        handshake = handshake_payload(
+            adapter_name=self._adapter_name,
+            version=self._version,
+            handle=self._handle or f"{self._adapter_name}-{now_ms()}",
+            caps=caps,
+        )
         await self._send_line(handshake)
         logger.info(f"Handshake sent for {self._adapter_name}")
 
@@ -151,7 +144,7 @@ class AdapterRunner:
         if method == "inference":
             prompt = payload.get("prompt", "")
             params = payload.get("params", {})
-            gen_params = _parse_generation_params(params)
+            gen_params = parse_generation_params(params)
 
             # Stream tokens
             token_index = 0
@@ -186,30 +179,16 @@ class AdapterRunner:
         elif method == "health":
             status = await self._adapter.health_check()
             await self._send_event(request_id, "result", {
-                "data": {
-                    "status": status.kind.value,
-                    "uptime_ms": status.uptime_ms or (_now_ms() - self._start_time_ms),
-                    "requests_served": self._requests_served,
-                },
+                "data": health_payload(
+                    status, self._start_time_ms, self._requests_served,
+                ),
             })
             await self._send_event(request_id, "done", {})
 
         elif method == "capabilities":
             caps = self._adapter.capabilities()
             await self._send_event(request_id, "result", {
-                "data": {
-                    "max_context_window": caps.max_context_window,
-                    "supported_quantizations": caps.supported_quantizations,
-                    "supports_streaming": caps.supports_streaming,
-                    "supports_batching": caps.supports_batching,
-                    "supports_structured_output": caps.supports_structured_output,
-                    "supports_vision": caps.supports_vision,
-                    "supports_tool_calling": caps.supports_tool_calling,
-                    "supports_continuous_batching": caps.supports_continuous_batching,
-                    "supports_embedding": caps.supports_embedding,
-                    "supports_hot_swap": caps.supports_hot_swap,
-                    "backend_version": caps.backend_version,
-                },
+                "data": capability_payload(caps),
             })
             await self._send_event(request_id, "done", {})
 
@@ -221,7 +200,7 @@ class AdapterRunner:
 
         elif method == "heartbeat":
             await self._send_event(request_id, "result", {
-                "data": {"timestamp_ms": _now_ms()},
+                "data": {"timestamp_ms": now_ms()},
             })
             await self._send_event(request_id, "done", {})
 
@@ -250,56 +229,6 @@ class AdapterRunner:
         event.update(fields)
         await self._send_line(event)
 
-
-def _parse_generation_params(raw: dict[str, Any]) -> GenerationParams:
-    """Convert a dict to GenerationParams with defaults."""
-    return GenerationParams(
-        temperature=raw.get("temperature", 0.7),
-        top_p=raw.get("top_p", 0.9),
-        max_tokens=raw.get("max_tokens", 512),
-        stop_sequences=raw.get("stop_sequences", []),
-        structured_schema=raw.get("structured_schema"),
-    )
-
-
-def _now_ms() -> int:
-    """Current time in milliseconds."""
-    return int(time.time() * 1000)
-
-
-def load_adapter(module_path: str, class_name: str) -> AdapterBase:
-    """Dynamically load an adapter class from module path and class name."""
-    try:
-        module = importlib.import_module(module_path)
-    except ImportError as e:
-        logger.error(f"Failed to import adapter module '{module_path}': {e}")
-        sys.exit(1)
-
-    cls = getattr(module, class_name, None)
-    if cls is None:
-        logger.error(f"Class '{class_name}' not found in module '{module_path}'")
-        sys.exit(1)
-
-    if not issubclass(cls, AdapterBase):
-        logger.error(f"'{class_name}' does not inherit from AdapterBase")
-        sys.exit(1)
-
-    return cls()
-
-
-def _read_startup_config() -> dict[str, Any]:
-    """Read the startup config JSON from stdin (first line, blocking)."""
-    line = sys.stdin.readline()
-    if not line:
-        logger.error("No startup config received on stdin (EOF)")
-        sys.exit(1)
-    try:
-        return json.loads(line.strip())
-    except json.JSONDecodeError as e:
-        logger.error(f"Invalid startup config JSON: {e}")
-        sys.exit(1)
-
-
 def main() -> None:
     """Entry point. Usage: python3 runner.py <adapter_name>."""
     if len(sys.argv) != 2:
@@ -312,7 +241,7 @@ def main() -> None:
     adapter_name = sys.argv[1]
     logger.info(f"Runner started for adapter: {adapter_name}")
 
-    startup_config = _read_startup_config()
+    startup_config = read_startup_config()
     logger.info(f"Received startup config: adapter_name={startup_config.get('adapter_name')}")
 
     module_path = startup_config.get("module_path", "")
@@ -325,17 +254,7 @@ def main() -> None:
         adapter = load_adapter(module_path, entry_class)
         version = getattr(adapter, "_mai_adapter_version", "1.0.0")
     else:
-        with contextlib.suppress(ImportError):
-            importlib.import_module(f"adapters.{adapter_name}.adapter")
-        cls = get_adapter(adapter_name)
-        if cls is None:
-            logger.error(
-                f"Adapter '{adapter_name}' not found in registry and no "
-                f"module_path/entry_class provided in startup config"
-            )
-            sys.exit(1)
-        adapter = cls()
-        version = getattr(cls, "_mai_adapter_version", "1.0.0")
+        adapter, version = load_registered_adapter(adapter_name)
 
     runner = AdapterRunner(adapter, adapter_name, version)
 

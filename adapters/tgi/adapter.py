@@ -14,17 +14,22 @@ from adapters.base import (
     AdapterCapabilities,
     BackendUnavailableError,
     Embedding,
-    FinishReason,
     GenerationParams,
     GenerationResult,
     HealthStatus,
     Token,
     UnsupportedOperationError,
-    ValidationError,
     mai_adapter,
     maybe_await,
 )
-from adapters.tgi.client import TgiClient, TgiResponse
+from adapters.tgi.adapter_helpers import (
+    STREAM_SENTINEL,
+    body_dict,
+    next_or_sentinel,
+    result_from_body,
+    validate_config,
+)
+from adapters.tgi.client import TgiClient
 from adapters.tgi.config import TgiConfig
 
 logger = logging.getLogger("mai.adapters.tgi")
@@ -64,14 +69,7 @@ class TgiAdapter(AdapterBase):
         elif hasattr(self, "_cfg") and self._cfg is not None:
             self._config = self._cfg
 
-        # Config validation. TgiConfig.from_dict accepts arbitrary values, so
-        # we sanity-check the bits that drive the URL/timeouts here.
-        if not isinstance(self._config.host, str) or not self._config.host:
-            raise ValidationError("TGI host must be a non-empty string")
-        if not isinstance(self._config.port, int) or self._config.port <= 0:
-            raise ValidationError("TGI port must be a positive integer")
-        if self._config.timeout_ms <= 0 or self._config.stream_timeout_ms <= 0:
-            raise ValidationError("TGI timeouts must be positive integers")
+        validate_config(self._config)
 
         if hil_handle is not None:
             self._hil_handle = hil_handle
@@ -114,23 +112,6 @@ class TgiAdapter(AdapterBase):
                 "TGI adapter is not initialized; call initialize() first",
             )
 
-    @staticmethod
-    def _body_dict(resp: TgiResponse | dict[str, Any]) -> dict[str, Any]:
-        """Normalize a /generate response payload into a dict.
-
-        TGI's /generate returns a single object for a string prompt and an
-        array for a list-of-strings prompt. We send a single string, so we
-        only need to handle the dict case here. Anything else is treated
-        as an empty body so the adapter degrades to ``text=""``
-        deterministically rather than raising AttributeError.
-        """
-        if isinstance(resp, dict):
-            return resp
-        body = getattr(resp, "body", None)
-        if isinstance(body, dict):
-            return body
-        return {}
-
     async def generate(
         self,
         prompt: str,
@@ -157,15 +138,9 @@ class TgiAdapter(AdapterBase):
             watermark=self._config.watermark,
             stream=False,
         )
-        body = self._body_dict(resp)
-        generated = body.get("generated_text", "")
-        details = body.get("details") or {}
-        tokens_out = details.get("generated_tokens", len(generated) // 4)
-        finish = details.get("finish_reason", "stop_sequence")
-        reason = FinishReason.MAX_TOKENS if finish == "length" else FinishReason.STOP
-
+        body = body_dict(resp)
         self._requests_served += 1
-        return GenerationResult(text=generated, tokens_generated=tokens_out, finish_reason=reason)
+        return result_from_body(body)
 
     async def _generate_stream(
         self, prompt: str, params: GenerationParams,
@@ -190,20 +165,12 @@ class TgiAdapter(AdapterBase):
             stream=True,
         )
 
-        _sentinel = object()
-
-        def _next_chunk() -> Any:
-            try:
-                return next(chunks_iter)  # type: ignore[arg-type]
-            except StopIteration:
-                return _sentinel
-
         token_index = 0
         emitted_any = False
         try:
             while True:
-                chunk = await asyncio.to_thread(_next_chunk)
-                if chunk is _sentinel:
+                chunk = await asyncio.to_thread(next_or_sentinel, chunks_iter)
+                if chunk is STREAM_SENTINEL:
                     break
                 is_end = chunk.finish_reason is not None or chunk.generated_text is not None
                 if chunk.token_text:
@@ -258,15 +225,7 @@ class TgiAdapter(AdapterBase):
                 watermark=self._config.watermark,
                 stream=False,
             )
-            body = self._body_dict(resp)
-            generated = body.get("generated_text", "")
-            details = body.get("details") or {}
-            tokens_out = details.get("generated_tokens", len(generated) // 4)
-            finish = details.get("finish_reason", "stop_sequence")
-            reason = FinishReason.MAX_TOKENS if finish == "length" else FinishReason.STOP
-            results.append(GenerationResult(
-                text=generated, tokens_generated=tokens_out, finish_reason=reason,
-            ))
+            results.append(result_from_body(body_dict(resp)))
 
         self._requests_served += len(prompts)
         return results

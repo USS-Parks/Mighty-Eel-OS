@@ -11,62 +11,34 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import time
-from collections.abc import AsyncIterator, Iterator
+from collections.abc import AsyncIterator
 from typing import Any
 
 from adapters.base import (
     AdapterBase,
     AdapterCapabilities,
-    AdapterError,
     BackendUnavailableError,
     Embedding,
-    FinishReason,
     GenerationParams,
     GenerationResult,
     HealthStatus,
-    ModelNotFoundError,
     Token,
     UnsupportedOperationError,
     mai_adapter,
+)
+from adapters.ollama.adapter_helpers import (
+    generation_result_from_body,
+    not_ready_error,
+    now_ms,
+    params_to_ollama_options,
+    resolve_default_model,
+    resolve_required_model,
+    stream_tokens,
 )
 from adapters.ollama.client import OllamaClient, OllamaStreamChunk
 from adapters.ollama.config import OllamaConfig
 
 logger = logging.getLogger("mai.adapters.ollama")
-
-
-def _stream_tokens(chunks: list[OllamaStreamChunk]) -> Iterator[Token]:
-    token_index = 0
-    for chunk in chunks:
-        if not chunk.content:
-            continue
-        yield Token(
-            text=chunk.content,
-            logprob=None,
-            index=token_index,
-            is_end_of_text=chunk.done,
-        )
-        token_index += 1
-    if not chunks or not chunks[-1].done:
-        yield Token(text="", logprob=None, index=token_index, is_end_of_text=True)
-
-
-def _resolve_required_model(model: str, models: list[str]) -> str:
-    if model in models:
-        return model
-    base_name = model.split(":", maxsplit=1)[0]
-    matched = next((m for m in models if m.startswith(base_name)), None)
-    if matched is None:
-        raise ModelNotFoundError(model=model)
-    return matched
-
-
-def _not_ready_error() -> AdapterError:
-    return AdapterError(
-        code="NotReady",
-        detail="Adapter not initialized. Call initialize() first.",
-    )
 
 
 @mai_adapter(name="ollama", version="1.0.0")
@@ -99,7 +71,7 @@ class OllamaAdapter(AdapterBase):
         self._config = OllamaConfig.from_dict(config) if config else OllamaConfig()
         self._client = OllamaClient(self._config)
         self._hil_handle = hil_handle
-        self._start_time_ms = _now_ms()
+        self._start_time_ms = now_ms()
 
         # Verify Ollama server is reachable
         healthy = await asyncio.to_thread(self._client.health)
@@ -113,7 +85,7 @@ class OllamaAdapter(AdapterBase):
         self._model = self._config.default_model
         self._embedding_model = self._config.embedding_model
 
-        self._model = _resolve_default_model(self._model, self._available_models)
+        self._model = resolve_default_model(self._model, self._available_models)
 
         self._initialized = True
         logger.info(
@@ -131,7 +103,7 @@ class OllamaAdapter(AdapterBase):
         self._validate_generate_request(prompt, params, stream=True)
         assert self._client is not None
 
-        options = _params_to_ollama_options(params)
+        options = params_to_ollama_options(params)
         model = self._model
 
         # Run blocking stream in thread, yield tokens
@@ -139,7 +111,7 @@ class OllamaAdapter(AdapterBase):
             self._collect_stream, model, prompt, options,
         )
 
-        for token in _stream_tokens(chunks):
+        for token in stream_tokens(chunks):
             yield token
 
         self._requests_served += 1
@@ -169,7 +141,7 @@ class OllamaAdapter(AdapterBase):
         self._ensure_initialized()
         assert self._client is not None
 
-        options = _params_to_ollama_options(params)
+        options = params_to_ollama_options(params)
         results: list[GenerationResult] = []
 
         for prompt in prompts:
@@ -193,21 +165,7 @@ class OllamaAdapter(AdapterBase):
         )
         # Non-streaming returns OllamaResponse
         body = resp.body
-        text = body.get("response", "")
-        eval_count = body.get("eval_count", 0)
-
-        # Determine finish reason
-        done_reason = body.get("done_reason", "stop")
-        if done_reason == "length":
-            finish = FinishReason.MAX_TOKENS
-        else:
-            finish = FinishReason.STOP
-
-        return GenerationResult(
-            text=text,
-            tokens_generated=eval_count,
-            finish_reason=finish,
-        )
+        return generation_result_from_body(body)
 
     async def embed(self, texts: list[str]) -> list[Embedding]:
         """Compute embeddings via Ollama /api/embed endpoint."""
@@ -241,7 +199,7 @@ class OllamaAdapter(AdapterBase):
         if not healthy:
             return HealthStatus.unavailable()
 
-        uptime_ms = _now_ms() - self._start_time_ms
+        uptime_ms = now_ms() - self._start_time_ms
         return HealthStatus.healthy(
             uptime_ms=uptime_ms,
             requests_served=self._requests_served,
@@ -284,7 +242,7 @@ class OllamaAdapter(AdapterBase):
         assert self._client is not None
 
         models = await self.list_models()
-        model = _resolve_required_model(model, models)
+        model = resolve_required_model(model, models)
 
         self._model = model
         logger.info(f"Switched active model to: {model}")
@@ -294,38 +252,4 @@ class OllamaAdapter(AdapterBase):
     def _ensure_initialized(self) -> None:
         """Raise if adapter is not initialized."""
         if not self._initialized:
-            raise _not_ready_error()
-
-
-def _params_to_ollama_options(params: GenerationParams) -> dict[str, Any]:
-    """Convert MAI GenerationParams to Ollama options dict."""
-    options: dict[str, Any] = {
-        "temperature": params.temperature,
-        "top_p": params.top_p,
-        "num_predict": params.max_tokens,
-    }
-    if params.stop_sequences:
-        options["stop"] = params.stop_sequences
-    return options
-
-
-def _resolve_default_model(model: str, available_models: list[str]) -> str:
-    """Return an exact or tag-compatible Ollama model name."""
-    if not model or model in available_models:
-        return model
-
-    base_name = model.split(":", maxsplit=1)[0]
-    matched = next((m for m in available_models if m.startswith(base_name)), None)
-    if matched is not None:
-        logger.info(f"Exact model '{model}' not found, using closest match: '{matched}'")
-        return matched
-
-    logger.warning(
-        f"Default model '{model}' not available locally. Available: {available_models}",
-    )
-    return model
-
-
-def _now_ms() -> int:
-    """Current time in milliseconds."""
-    return int(time.time() * 1000)
+            raise not_ready_error()

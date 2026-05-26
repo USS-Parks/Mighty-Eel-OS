@@ -4,8 +4,16 @@ from __future__ import annotations
 
 from typing import Any
 
-from adapters.base import BackendCrashedError, FinishReason, GenerationParams, GenerationResult
-from adapters.sglang.client import SglangResponse, SglangStreamChunk
+from adapters.base import (
+    AdapterError,
+    AdapterTimeoutError,
+    BackendCrashedError,
+    FinishReason,
+    GenerationParams,
+    GenerationResult,
+    maybe_await,
+)
+from adapters.sglang.client import SglangClient, SglangResponse, SglangStreamChunk
 
 
 def build_kwargs(params: GenerationParams) -> dict[str, Any]:
@@ -76,3 +84,52 @@ def chunk_finish_reason(chunk: Any) -> str | None:
             if fr is not None:
                 return str(fr)
     return None
+
+
+def build_native_kwargs(
+    params: GenerationParams,
+    json_schema: dict[str, Any] | None,
+    regex: str | None,
+) -> dict[str, Any]:
+    kwargs: dict[str, Any] = {}
+    if params.max_tokens is not None:
+        kwargs["max_tokens"] = params.max_tokens
+    if params.temperature is not None:
+        kwargs["temperature"] = params.temperature
+    if json_schema is not None:
+        kwargs["json_schema"] = json_schema
+    if regex is not None:
+        kwargs["regex"] = regex
+    return kwargs
+
+
+def native_result_from_response(resp: Any) -> GenerationResult:
+    body = unwrap_body(resp)
+    meta = body.get("meta_info", {}) if isinstance(body.get("meta_info"), dict) else {}
+    finish = meta.get("finish_reason", "stop")
+    reason = FinishReason.MAX_TOKENS if finish == "length" else FinishReason.STOP
+    return GenerationResult(
+        text=str(body.get("text", "")),
+        tokens_generated=int(meta.get("completion_tokens", 0)),
+        finish_reason=reason,
+    )
+
+
+async def run_native_generate(
+    client: SglangClient,
+    prompt: str,
+    params: GenerationParams,
+    *,
+    json_schema: dict[str, Any] | None,
+    regex: str | None,
+) -> GenerationResult:
+    kwargs = build_native_kwargs(params, json_schema, regex)
+    try:
+        resp = await maybe_await(client.generate, prompt, **kwargs)
+    except AdapterError:
+        raise
+    except TimeoutError as exc:
+        raise AdapterTimeoutError(str(exc)) from exc
+    except OSError as exc:
+        raise BackendCrashedError(str(exc)) from exc
+    return native_result_from_response(resp)

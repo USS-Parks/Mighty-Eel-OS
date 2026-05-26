@@ -20,13 +20,21 @@ from adapters.base import (
     AdapterCapabilities,
     BackendUnavailableError,
     Embedding,
-    FinishReason,
     GenerationParams,
     GenerationResult,
     HealthStatus,
     Token,
     mai_adapter,
     maybe_await,
+)
+from adapters.vllm.adapter_helpers import (
+    body_from_response,
+    chat_kwargs,
+    chat_messages,
+    embeddings_from_body,
+    generation_result_from_body,
+    resolve_default_model,
+    token_from_chunk,
 )
 from adapters.vllm.client import VllmClient
 from adapters.vllm.config import VllmConfig
@@ -83,17 +91,9 @@ class VllmAdapter(AdapterBase):
             models_data = models_data.get("data", [])
         self._available_models = [m.get("id", "") for m in models_data]
 
-        # Set default model
-        self._model = self._config.default_model
-        if self._available_models and self._model not in self._available_models:
-            # Try partial match
-            for m in self._available_models:
-                if self._model in m or m in self._model:
-                    self._model = m
-                    break
-            else:
-                if self._available_models:
-                    self._model = self._available_models[0]
+        self._model = resolve_default_model(
+            self._config.default_model, self._available_models,
+        )
 
         self._start_time_ms = int(time.time() * 1000)
         self._initialized = True
@@ -124,74 +124,45 @@ class VllmAdapter(AdapterBase):
         if stream:
             return self._generate_stream(prompt, params)
 
-        # Non-streaming: return GenerationResult
-        messages = [{"role": "user", "content": prompt}]
-        kwargs: dict[str, Any] = {}
-        if params.structured_schema:
-            kwargs["guided_json"] = params.structured_schema
-
         resp = await maybe_await(
             self._client.chat_completions,
             model=self._model,
-            messages=messages,
+            messages=chat_messages(prompt),
             temperature=params.temperature,
             top_p=params.top_p,
             max_tokens=params.max_tokens,
             stop=params.stop_sequences or None,
             stream=False,
-            **kwargs,
+            **chat_kwargs(params),
         )
-        if isinstance(resp, dict):
-            body = resp
-        else:
-            body = resp.body if hasattr(resp, "body") else resp
-        choices = body.get("choices", [])
-        if choices:
-            choice = choices[0]
-            text = choice.get("message", {}).get("content", "")
-            finish = choice.get("finish_reason", "stop")
-            usage = body.get("usage", {})
-            tokens_out = usage.get("completion_tokens", len(text) // 4)
-            reason = FinishReason.MAX_TOKENS if finish == "length" else FinishReason.STOP
-        else:
-            text, tokens_out, reason = "", 0, FinishReason.STOP
-
         self._requests_served += 1
-        return GenerationResult(text=text, tokens_generated=tokens_out, finish_reason=reason)
+        return generation_result_from_body(body_from_response(resp))
 
     async def _generate_stream(
         self, prompt: str, params: GenerationParams,
     ) -> AsyncIterator[Token]:
         """Stream tokens from vLLM via OpenAI-compatible SSE."""
         assert self._client is not None
-        messages = [{"role": "user", "content": prompt}]
-        kwargs: dict[str, Any] = {}
-        if params.structured_schema:
-            kwargs["guided_json"] = params.structured_schema
-
         chunks = await asyncio.to_thread(
             self._client.chat_completions,
             model=self._model,
-            messages=messages,
+            messages=chat_messages(prompt),
             temperature=params.temperature,
             top_p=params.top_p,
             max_tokens=params.max_tokens,
             stop=params.stop_sequences or None,
             stream=True,
-            **kwargs,
+            **chat_kwargs(params),
         )
 
         token_index = 0
         for chunk in chunks:
-            if chunk.content:
-                yield Token(
-                    text=chunk.content,
-                    index=token_index,
-                    is_end_of_text=chunk.finish_reason is not None,
-                )
+            token = token_from_chunk(chunk, token_index)
+            if token is None:
+                continue
+            yield token
+            if token.text:
                 token_index += 1
-            elif chunk.finish_reason:
-                yield Token(text="", index=token_index, is_end_of_text=True)
 
         self._requests_served += 1
 
@@ -204,31 +175,17 @@ class VllmAdapter(AdapterBase):
 
         results: list[GenerationResult] = []
         for prompt in prompts:
-            messages = [{"role": "user", "content": prompt}]
             resp = await asyncio.to_thread(
                 self._client.chat_completions,
                 model=self._model,
-                messages=messages,
+                messages=chat_messages(prompt),
                 temperature=params.temperature,
                 top_p=params.top_p,
                 max_tokens=params.max_tokens,
                 stop=params.stop_sequences or None,
                 stream=False,
             )
-            # resp is VllmResponse
-            choices = resp.body.get("choices", [])
-            if choices:
-                choice = choices[0]
-                text = choice.get("message", {}).get("content", "")
-                finish = choice.get("finish_reason", "stop")
-                usage = resp.body.get("usage", {})
-                tokens_out = usage.get("completion_tokens", len(text) // 4)
-                reason = FinishReason.MAX_TOKENS if finish == "length" else FinishReason.STOP
-                results.append(GenerationResult(
-                    text=text, tokens_generated=tokens_out, finish_reason=reason,
-                ))
-            else:
-                results.append(GenerationResult(text="", tokens_generated=0))
+            results.append(generation_result_from_body(resp.body))
 
         self._requests_served += len(prompts)
         return results
@@ -240,21 +197,7 @@ class VllmAdapter(AdapterBase):
         assert self._client is not None
 
         resp = await maybe_await(self._client.embeddings, texts)
-        if isinstance(resp, dict):
-            body = resp
-        else:
-            body = resp.body if hasattr(resp, "body") else resp
-
-        embeddings: list[Embedding] = []
-        data = body.get("data", [])
-        usage = body.get("usage", {})
-        total_tokens = usage.get("total_tokens", sum(len(t) // 4 for t in texts))
-        per_text_tokens = total_tokens // max(len(texts), 1)
-
-        for item in data:
-            vector = item.get("embedding", [])
-            embeddings.append(Embedding(vector=vector, input_tokens=per_text_tokens))
-
+        embeddings = embeddings_from_body(body_from_response(resp), texts)
         self._requests_served += 1
         return embeddings
 

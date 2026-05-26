@@ -23,6 +23,11 @@ from adapters.base import (
     mai_adapter,
     maybe_await,
 )
+from adapters.openai_compat.adapter_helpers import (
+    chat_messages,
+    resolve_models,
+    tokens_from_chunks,
+)
 from adapters.openai_compat.client import (
     OpenAICompatClient,
     OpenAICompatResponse,
@@ -32,7 +37,6 @@ from adapters.openai_compat.config import OpenAICompatConfig
 from adapters.openai_compat.responses import (
     embeddings_from_response,
     extract_model_ids,
-    first_or_empty,
     result_from_chat,
     result_from_completion,
 )
@@ -97,20 +101,8 @@ class OpenAICompatAdapter(AdapterBase):
             raise
 
         self._known_models = extract_model_ids(payload)
-        self._chat_model = (
-            self._config.chat_model
-            or self._config.default_model
-            or first_or_empty(self._known_models)
-        )
-        self._completion_model = (
-            self._config.completion_model
-            or self._config.default_model
-            or first_or_empty(self._known_models)
-        )
-        self._embedding_model = (
-            self._config.embedding_model
-            or self._config.default_model
-            or first_or_empty(self._known_models)
+        self._chat_model, self._completion_model, self._embedding_model = (
+            resolve_models(self._config, self._known_models)
         )
 
         self._start_time_ms = int(time.time() * 1000)
@@ -173,12 +165,11 @@ class OpenAICompatAdapter(AdapterBase):
             )
             result = result_from_completion(resp)
         else:
-            messages = [{"role": "user", "content": prompt}]
             resp = cast(
                 "OpenAICompatResponse",
                 await asyncio.to_thread(
                     self._client.chat_completions,
-                    messages=messages,
+                    messages=chat_messages(prompt),
                     model=model,
                     temperature=params.temperature,
                     top_p=params.top_p,
@@ -201,12 +192,11 @@ class OpenAICompatAdapter(AdapterBase):
         model = self._chat_model
         if not model:
             raise ModelNotFoundError(model="")
-        messages = [{"role": "user", "content": prompt}]
         chunks = cast(
             "Iterator[OpenAICompatStreamChunk]",
             await asyncio.to_thread(
                 self._client.chat_completions,
-                messages=messages,
+                messages=chat_messages(prompt),
                 model=model,
                 temperature=params.temperature,
                 top_p=params.top_p,
@@ -216,25 +206,8 @@ class OpenAICompatAdapter(AdapterBase):
                 extra=dict(self._config.extra_request_fields) or None,
             ),
         )
-        token_index = 0
-        saw_any = False
-        for chunk in chunks:
-            saw_any = True
-            if chunk.content:
-                yield Token(
-                    text=chunk.content,
-                    index=token_index,
-                    is_end_of_text=chunk.stop,
-                )
-                token_index += 1
-            elif chunk.stop:
-                yield Token(text="", index=token_index, is_end_of_text=True)
-                token_index += 1
-        if not saw_any:
-            # Backend ended the stream without sending any frames at
-            # all. Surface a single end-of-text marker so callers do
-            # not hang waiting for one.
-            yield Token(text="", index=0, is_end_of_text=True)
+        for token in tokens_from_chunks(chunks):
+            yield token
         self._requests_served += 1
 
     async def generate_batch(

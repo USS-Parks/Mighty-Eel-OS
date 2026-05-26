@@ -23,6 +23,7 @@ from adapters.base import (
     mai_adapter,
     maybe_await,
 )
+from adapters.triton.adapter_helpers import build_text_input, decode_text_outputs
 from adapters.triton.client import InferResponse, TritonClient
 from adapters.triton.config import TritonConfig
 
@@ -116,46 +117,6 @@ class TritonAdapter(AdapterBase):
                 "generate (configure input/output BYTES text tensors)",
             )
 
-    def _build_text_input(self, prompts: list[str]) -> list[dict[str, Any]]:
-        # KServe v2 BYTES tensors: shape=[N], data is a flat list of N
-        # UTF-8 strings (Triton accepts strings directly; binary BYTES
-        # would need the binary_data tensor extension which this adapter
-        # does not implement).
-        return [{
-            "name": self._tconfig.input_tensor_name,
-            "shape": [len(prompts)],
-            "datatype": "BYTES",
-            "data": list(prompts),
-        }]
-
-    def _decode_text_outputs(self, resp_body: dict[str, Any]) -> list[str]:
-        outputs = resp_body.get("outputs", [])
-        if not isinstance(outputs, list):
-            raise BackendUnavailableError(
-                detail="triton response missing outputs list",
-            )
-        target = self._tconfig.output_tensor_name
-        for out in outputs:
-            if not isinstance(out, dict):
-                continue
-            if out.get("name") != target:
-                continue
-            data = out.get("data", [])
-            if not isinstance(data, list):
-                return []
-            flat: list[str] = []
-            for item in data:
-                if isinstance(item, list):
-                    flat.extend(str(x) for x in item)
-                elif isinstance(item, (bytes, bytearray)):
-                    flat.append(item.decode("utf-8", errors="replace"))
-                else:
-                    flat.append(str(item))
-            return flat
-        raise BackendUnavailableError(
-            detail=f"triton response missing output tensor '{target}'",
-        )
-
     async def generate(
         self,
         prompt: str,
@@ -228,7 +189,7 @@ class TritonAdapter(AdapterBase):
 
     async def _infer_text(self, prompts: list[str]) -> InferResponse:
         assert self._client is not None
-        inputs = self._build_text_input(prompts)
+        inputs = build_text_input(self._tconfig.input_tensor_name, prompts)
         outputs = [{"name": self._tconfig.output_tensor_name}]
         result = await maybe_await(
             self._client.infer,
@@ -242,6 +203,9 @@ class TritonAdapter(AdapterBase):
                 detail="triton client.infer returned a non-InferResponse value",
             )
         return result
+
+    def _decode_text_outputs(self, resp_body: dict[str, Any]) -> list[str]:
+        return decode_text_outputs(resp_body, self._tconfig.output_tensor_name)
 
     # ─── Embed / raw infer surface ────────────────────────────────────────
 

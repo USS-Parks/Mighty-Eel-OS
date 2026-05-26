@@ -7,6 +7,16 @@ import urllib.error
 from dataclasses import dataclass
 from typing import Any
 
+from adapters.base import (
+    AdapterTimeoutError,
+    BackendUnavailableError,
+    ContextExceededError,
+    ModelNotFoundError,
+    OutOfMemoryError,
+    RateLimitedError,
+    ValidationError,
+)
+
 
 @dataclass
 class OpenAICompatResponse:
@@ -93,3 +103,32 @@ def extract_model(detail: str) -> str | None:
             except ValueError:
                 continue
     return None
+
+
+def raise_for_http_error(status: int, body_text: str, timeout: float) -> None:
+    """Map an HTTP error response to a typed MAI adapter error."""
+    if status == 429:
+        raise RateLimitedError()
+    if status in (408, 504):
+        raise AdapterTimeoutError(timeout_ms=int(timeout * 1000))
+    detail = error_detail(body_text)
+    detail_l = detail.lower()
+    if status == 404:
+        if "model" in detail_l or not detail:
+            raise ModelNotFoundError(model=extract_model(detail) or "unknown")
+        raise BackendUnavailableError(f"HTTP 404: {detail[:200]}")
+    if status == 400:
+        if is_context_error(detail_l):
+            raise ContextExceededError(max_context=0)
+        if is_oom_error(detail_l):
+            raise OutOfMemoryError()
+        raise ValidationError(detail or "invalid request")
+    if status == 401 or status == 403:
+        raise ValidationError(detail or f"auth rejected ({status})")
+    if status == 422:
+        raise ValidationError(detail or "unprocessable entity")
+    if status >= 500:
+        if is_oom_error(detail_l):
+            raise OutOfMemoryError()
+        return
+    raise BackendUnavailableError(f"unexpected HTTP {status}: {detail[:200]}")

@@ -22,13 +22,13 @@ from adapters.base import (
     mai_adapter,
 )
 from adapters.tensorrt.adapter_helpers import (
-    STREAM_SENTINEL,
-    next_or_sentinel,
+    batch_parallelism,
     now_ms,
     result_from_body,
+    stream_tokens_from_triton,
     validate_config,
 )
-from adapters.tensorrt.client import TensorRtClient, TritonResponse, TritonStreamChunk
+from adapters.tensorrt.client import TensorRtClient, TritonResponse
 from adapters.tensorrt.config import TensorRtConfig
 
 logger = logging.getLogger("mai.adapters.tensorrt")
@@ -38,11 +38,7 @@ _BATCH_PARALLELISM_DEFAULT: int = 8
 
 @mai_adapter(name="tensorrt", version="1.0.0")
 class TensorRtAdapter(AdapterBase):
-    """TensorRT-LLM backend adapter.
-
-    Provides the highest-throughput path for NVIDIA H100/H200 hardware.
-    Manages a single pooled HTTP client over Triton's KFServing API.
-    """
+    """TensorRT-LLM adapter over Triton's KFServing API."""
 
     def __init__(self, config: dict[str, Any] | None = None) -> None:
         super().__init__(config)
@@ -171,50 +167,12 @@ class TensorRtAdapter(AdapterBase):
     ) -> AsyncIterator[Token]:
         """Stream tokens from Triton's SSE generate_stream endpoint."""
         assert self._client is not None
-        # ``client.generate(..., stream=True)`` returns a sync iterator
-        # built around an open HTTP response. Construction itself can
-        # block (handshake + headers), so wrap it in to_thread. After
-        # construction we step the iterator one chunk at a time, each
-        # ``next`` going through to_thread to avoid blocking the loop.
-        stream = await asyncio.to_thread(
-            self._client.generate,
-            model=self._model_name,
-            prompt=prompt,
-            max_tokens=params.max_tokens,
-            temperature=params.temperature,
-            top_p=params.top_p,
-            stop=params.stop_sequences or None,
-            stream=True,
-        )
-        if isinstance(stream, TritonResponse):
-            raise BackendCrashedError(
-                detail="stream generate received a non-streaming response",
-            )
-
-        token_index = 0
         try:
-            while True:
-                chunk = await asyncio.to_thread(next_or_sentinel, stream)
-                if chunk is STREAM_SENTINEL:
-                    break
-                assert isinstance(chunk, TritonStreamChunk)
-                if chunk.text:
-                    yield Token(
-                        text=chunk.text,
-                        index=token_index,
-                        is_end_of_text=chunk.finished,
-                    )
-                    token_index += 1
-                if chunk.finished:
-                    break
-            # Always close with an end-of-text marker (consumer contract).
-            yield Token(text="", index=token_index, is_end_of_text=True)
+            async for token in stream_tokens_from_triton(
+                self._client, self._model_name, prompt, params,
+            ):
+                yield token
         finally:
-            # If the underlying iterator is a generator with a .close(),
-            # tell it to clean up its response.
-            close = getattr(stream, "close", None)
-            if callable(close):
-                await asyncio.to_thread(close)
             self._requests_served += 1
 
     async def generate_batch(
@@ -228,9 +186,10 @@ class TensorRtAdapter(AdapterBase):
         if not prompts:
             return []
 
-        parallelism = max(
-            1,
-            min(len(prompts), self._config.max_concurrent_requests or _BATCH_PARALLELISM_DEFAULT),
+        parallelism = batch_parallelism(
+            len(prompts),
+            self._config.max_concurrent_requests,
+            _BATCH_PARALLELISM_DEFAULT,
         )
         sem = asyncio.Semaphore(parallelism)
 

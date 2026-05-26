@@ -9,8 +9,6 @@ Session 09 deliverable.
 
 from __future__ import annotations
 
-import asyncio
-import json
 import logging
 import time
 from collections.abc import AsyncIterator
@@ -21,7 +19,6 @@ from adapters.base import (
     AdapterCapabilities,
     BackendUnavailableError,
     Embedding,
-    FinishReason,
     GenerationParams,
     GenerationResult,
     HealthStatus,
@@ -30,100 +27,17 @@ from adapters.base import (
     mai_adapter,
     maybe_await,
 )
+from adapters.llamacpp.adapter_helpers import (
+    batch_results,
+    counted_stream,
+    generation_result_from_body,
+    grammar_for_params,
+    stream_tokens,
+)
 from adapters.llamacpp.client import LlamaCppClient
 from adapters.llamacpp.config import LlamaCppConfig
 
 logger = logging.getLogger("mai.adapters.llamacpp")
-
-
-def _generation_result_from_body(body: dict[str, Any]) -> GenerationResult:
-    choices = body.get("choices", [])
-    if not choices:
-        return GenerationResult(text="", tokens_generated=0)
-    choice = choices[0]
-    text = choice.get("message", {}).get("content", "")
-    finish = choice.get("finish_reason", "stop")
-    reason = FinishReason.MAX_TOKENS if finish == "length" else FinishReason.STOP
-    tokens_out = body.get("usage", {}).get("completion_tokens", len(text) // 4)
-    return GenerationResult(text=text, tokens_generated=tokens_out, finish_reason=reason)
-
-
-def _token_from_stream_chunk(chunk: Any, index: int) -> Token | None:
-    if chunk.content:
-        return Token(text=chunk.content, index=index, is_end_of_text=chunk.stop)
-    if chunk.stop:
-        return Token(text="", index=index, is_end_of_text=True)
-    return None
-
-
-def _grammar_for_params(default_grammar: str | None, params: GenerationParams) -> str | None:
-    if not params.structured_schema:
-        return default_grammar
-    return json.dumps(params.structured_schema) if not default_grammar else default_grammar
-
-
-async def _stream_tokens(
-    client: LlamaCppClient,
-    prompt: str,
-    params: GenerationParams,
-    grammar: str | None,
-) -> AsyncIterator[Token]:
-    messages = [{"role": "user", "content": prompt}]
-    chunks = await asyncio.to_thread(
-        client.chat_completions,
-        messages=messages,
-        temperature=params.temperature,
-        top_p=params.top_p,
-        max_tokens=params.max_tokens,
-        stop=params.stop_sequences or None,
-        stream=True,
-        grammar=grammar,
-    )
-
-    token_index = 0
-    for chunk in chunks:
-        token = _token_from_stream_chunk(chunk, token_index)
-        if token is None:
-            continue
-        yield token
-        if token.text:
-            token_index += 1
-
-
-async def _counted_stream(owner: Any, stream: AsyncIterator[Token]) -> AsyncIterator[Token]:
-    async for token in stream:
-        yield token
-    owner._requests_served += 1
-
-
-async def _chat_completion_body(
-    client: LlamaCppClient,
-    prompt: str,
-    params: GenerationParams,
-) -> dict[str, Any]:
-    messages = [{"role": "user", "content": prompt}]
-    resp = await asyncio.to_thread(
-        client.chat_completions,
-        messages=messages,
-        temperature=params.temperature,
-        top_p=params.top_p,
-        max_tokens=params.max_tokens,
-        stop=params.stop_sequences or None,
-        stream=False,
-    )
-    return resp.body
-
-
-async def _batch_results(
-    client: LlamaCppClient,
-    prompts: list[str],
-    params: GenerationParams,
-) -> list[GenerationResult]:
-    results: list[GenerationResult] = []
-    for prompt in prompts:
-        body = await _chat_completion_body(client, prompt, params)
-        results.append(_generation_result_from_body(body))
-    return results
 
 
 @mai_adapter(name="llamacpp", version="1.0.0")
@@ -225,16 +139,16 @@ class LlamaCppAdapter(AdapterBase):
         else:
             body = resp.body if hasattr(resp, "body") else resp
         self._requests_served += 1
-        return _generation_result_from_body(body)
+        return generation_result_from_body(body)
 
     def _generate_stream(
         self, prompt: str, params: GenerationParams,
     ) -> AsyncIterator[Token]:
         """Stream tokens from llama-server."""
         assert self._client is not None
-        grammar = _grammar_for_params(self._config.default_grammar, params)
-        stream = _stream_tokens(self._client, prompt, params, grammar)
-        return _counted_stream(self, stream)
+        grammar = grammar_for_params(self._config.default_grammar, params)
+        stream = stream_tokens(self._client, prompt, params, grammar)
+        return counted_stream(self, stream)
 
     async def generate_batch(
         self, prompts: list[str], params: GenerationParams,
@@ -243,7 +157,7 @@ class LlamaCppAdapter(AdapterBase):
         self._ensure_initialized()
         assert self._client is not None
 
-        results = await _batch_results(self._client, prompts, params)
+        results = await batch_results(self._client, prompts, params)
         self._requests_served += len(prompts)
         return results
 

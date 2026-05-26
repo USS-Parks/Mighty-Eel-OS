@@ -2,10 +2,19 @@
 
 from __future__ import annotations
 
+import asyncio
 import time
+from collections.abc import AsyncIterator
 from typing import Any
 
-from adapters.base import FinishReason, GenerationParams, ValidationError
+from adapters.base import (
+    BackendCrashedError,
+    FinishReason,
+    GenerationParams,
+    Token,
+    ValidationError,
+)
+from adapters.tensorrt.client import TensorRtClient, TritonResponse, TritonStreamChunk
 from adapters.tensorrt.config import TensorRtConfig
 
 STREAM_SENTINEL: Any = object()
@@ -73,3 +82,53 @@ def next_or_sentinel(iterator: Any) -> Any:
 
 def now_ms() -> int:
     return int(time.time() * 1000)
+
+
+def batch_parallelism(
+    prompt_count: int, configured_limit: int | None, default_limit: int,
+) -> int:
+    return max(1, min(prompt_count, configured_limit or default_limit))
+
+
+async def stream_tokens_from_triton(
+    client: TensorRtClient,
+    model_name: str,
+    prompt: str,
+    params: GenerationParams,
+) -> AsyncIterator[Token]:
+    stream = await asyncio.to_thread(
+        client.generate,
+        model=model_name,
+        prompt=prompt,
+        max_tokens=params.max_tokens,
+        temperature=params.temperature,
+        top_p=params.top_p,
+        stop=params.stop_sequences or None,
+        stream=True,
+    )
+    if isinstance(stream, TritonResponse):
+        raise BackendCrashedError(
+            detail="stream generate received a non-streaming response",
+        )
+
+    token_index = 0
+    try:
+        while True:
+            chunk = await asyncio.to_thread(next_or_sentinel, stream)
+            if chunk is STREAM_SENTINEL:
+                break
+            assert isinstance(chunk, TritonStreamChunk)
+            if chunk.text:
+                yield Token(
+                    text=chunk.text,
+                    index=token_index,
+                    is_end_of_text=chunk.finished,
+                )
+                token_index += 1
+            if chunk.finished:
+                break
+        yield Token(text="", index=token_index, is_end_of_text=True)
+    finally:
+        close = getattr(stream, "close", None)
+        if callable(close):
+            await asyncio.to_thread(close)

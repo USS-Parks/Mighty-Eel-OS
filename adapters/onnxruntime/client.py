@@ -1,20 +1,7 @@
-"""ONNX Runtime client: thin in-process wrapper around onnxruntime / -genai.
+"""ONNX Runtime client boundary.
 
-Why a separate client module
-----------------------------
-1. ONNX Runtime is a heavy native dependency. Importing it at module
-   import time would force every adapter consumer to ship the wheel
-   even when only the embedded NDJSON runner / Rust integration tests
-   need to import `adapters.onnxruntime`. Imports happen inside
-   :meth:`OnnxRuntimeClient.load` instead.
-2. The unit tests mock at the boundary defined here. The adapter never
-   touches `onnxruntime` directly; it talks to this client.
-3. Two backend shapes share one client surface: encoder-only sessions
-   loaded through ``onnxruntime.InferenceSession`` (embeddings only)
-   and autoregressive models loaded through ``onnxruntime_genai``
-   (generation + streaming).
-
-DOUGHERTY J-24 deliverable.
+Heavy runtime imports are delayed until load time so other adapter
+consumers can import this package without native ONNX wheels.
 """
 
 from __future__ import annotations
@@ -24,6 +11,10 @@ import os
 from collections.abc import Iterator
 from typing import Any
 
+from adapters.onnxruntime.client_helpers import (
+    generate_genai_chunks,
+    safe_import,
+)
 from adapters.onnxruntime.types import (
     LoadedModelInfo,
     OnnxRuntimeClientError,
@@ -79,7 +70,7 @@ class OnnxRuntimeClient:
                 "ModelNotFound", f"model path does not exist: {self._model_path}",
             )
 
-        ort_module = self._safe_import("onnxruntime")
+        ort_module = safe_import("onnxruntime")
         if ort_module is None:
             raise OnnxRuntimeClientError(
                 "BackendUnavailable",
@@ -101,7 +92,7 @@ class OnnxRuntimeClient:
         # Prefer onnxruntime-genai for generation. Fall back to plain
         # session if the package is missing — generation will then be
         # unsupported and the adapter will report it honestly.
-        genai_module = self._safe_import("onnxruntime_genai")
+        genai_module = safe_import("onnxruntime_genai")
         if genai_module is not None:
             self._load_genai(genai_module)
             self._info = LoadedModelInfo(
@@ -181,45 +172,15 @@ class OnnxRuntimeClient:
         assert self._genai_model is not None
         assert self._genai_tokenizer is not None
 
-        try:
-            params = genai.GeneratorParams(self._genai_model)
-            params.set_search_options(
-                max_length=max_tokens,
-                temperature=temperature,
-                top_p=top_p,
-            )
-            input_tokens = self._genai_tokenizer.encode(prompt)
-            params.input_ids = input_tokens
-
-            generator = genai.Generator(self._genai_model, params)
-            stream = self._genai_tokenizer.create_stream()
-
-            yielded_any = False
-            try:
-                while not generator.is_done():
-                    generator.compute_logits()
-                    generator.generate_next_token()
-                    new_token = generator.get_next_tokens()[0]
-                    text = stream.decode(new_token)
-                    if text:
-                        yielded_any = True
-                        yield OnnxStreamChunk(text=text, is_final=False)
-            finally:
-                # Always emit a terminator so downstream code can rely on it.
-                # `yielded_any` reserved for future logging of empty-stream
-                # cases; not used in the terminator payload itself.
-                _ = yielded_any
-                yield OnnxStreamChunk(text="", is_final=True)
-        except MemoryError as exc:
-            raise OnnxRuntimeClientError(
-                "OutOfMemory", f"ONNX Runtime memory exhausted: {exc}",
-            ) from exc
-        except OnnxRuntimeClientError:
-            raise
-        except Exception as exc:
-            raise OnnxRuntimeClientError(
-                "BackendCrashed", f"ONNX Runtime generation failed: {exc}",
-            ) from exc
+        yield from generate_genai_chunks(
+            genai,
+            self._genai_model,
+            self._genai_tokenizer,
+            prompt,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            top_p=top_p,
+        )
 
     # ── embeddings ──────────────────────────────────────────────────────────
 
@@ -325,13 +286,3 @@ class OnnxRuntimeClient:
                 "BackendUnavailable",
                 f"ONNX Runtime refused to load model: {exc}",
             ) from exc
-
-    @staticmethod
-    def _safe_import(module_name: str) -> Any:
-        """Import on demand. Returns the module or None when missing."""
-        try:
-            import importlib
-
-            return importlib.import_module(module_name)
-        except ImportError:
-            return None

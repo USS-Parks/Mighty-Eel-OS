@@ -1,22 +1,7 @@
-"""ONNX Runtime adapter — in-process inference for CPU/DirectML/CUDA.
+"""ONNX Runtime in-process adapter for CPU, DirectML, and CUDA.
 
-This is the CPU and enterprise-Windows fallback path. It does not spawn
-an external server; it loads an .onnx (or onnxruntime-genai model
-directory) into the adapter subprocess.
-
-Capability flags are determined AT initialize-time, not at import-time,
-because the same package serves three legitimate model shapes:
-
-  * onnxruntime-genai autoregressive model
-        → generation + streaming, no embeddings
-  * plain InferenceSession with ``embedding_only: true``
-        → embeddings only, generation is UnsupportedOperationError
-  * plain InferenceSession with ``embedding_only: false``
-        → degraded — no generation, no embeddings; the adapter still
-          initializes so health/capability surfaces work, but every
-          inference path raises UnsupportedOperationError.
-
-DOUGHERTY J-24 deliverable.
+Capabilities are resolved after model load because this adapter supports
+generation, embedding-only, and degraded session shapes.
 """
 
 from __future__ import annotations
@@ -33,7 +18,6 @@ from adapters.base import (
     AdapterTimeoutError,
     BackendUnavailableError,
     Embedding,
-    FinishReason,
     GenerationParams,
     GenerationResult,
     HealthStatus,
@@ -41,6 +25,12 @@ from adapters.base import (
     UnsupportedOperationError,
     ValidationError,
     mai_adapter,
+)
+from adapters.onnxruntime.adapter_helpers import (
+    embeddings_from_vectors,
+    generation_result,
+    readiness_status,
+    tokens_from_chunks,
 )
 from adapters.onnxruntime.client import (
     OnnxRuntimeClient,
@@ -163,13 +153,8 @@ class OnnxRuntimeAdapter(AdapterBase):
         except OnnxRuntimeClientError as exc:
             raise_typed(exc.kind, exc.detail, model_id=self._model_id)
 
-        finish = FinishReason.MAX_TOKENS if count >= max_tokens else FinishReason.STOP
         self._requests_served += 1
-        return GenerationResult(
-            text=text,
-            tokens_generated=count,
-            finish_reason=finish,
-        )
+        return generation_result(text, count, max_tokens)
 
     def _run_generate_once(
         self,
@@ -213,19 +198,8 @@ class OnnxRuntimeAdapter(AdapterBase):
             raise_typed(exc.kind, exc.detail, model_id=self._model_id)
             return  # unreachable, satisfies typing
 
-        token_index = 0
-        for chunk in chunks:
-            if chunk.is_final:
-                yield Token(
-                    text="", index=token_index, is_end_of_text=True,
-                )
-            else:
-                yield Token(
-                    text=chunk.text,
-                    index=token_index,
-                    is_end_of_text=False,
-                )
-                token_index += 1
+        for token in tokens_from_chunks(chunks):
+            yield token
         self._requests_served += 1
 
     def _collect_stream(
@@ -278,10 +252,7 @@ class OnnxRuntimeAdapter(AdapterBase):
             raise_typed(exc.kind, exc.detail, model_id=self._model_id)
             return []  # unreachable
 
-        embeddings = [
-            Embedding(vector=v, input_tokens=max(1, len(t.split())))
-            for v, t in zip(vectors, texts, strict=False)
-        ]
+        embeddings = embeddings_from_vectors(vectors, texts)
         self._requests_served += 1
         return embeddings
 
@@ -293,20 +264,12 @@ class OnnxRuntimeAdapter(AdapterBase):
         """Cheap in-process readiness probe; no I/O."""
         if not self._initialized or self._client is None:
             return HealthStatus.unavailable()
-        if not self._client.is_ready():
-            uptime = int(time.time() * 1000) - self._start_time_ms
-            return HealthStatus.degraded(
-                reason="ONNX Runtime client not ready", uptime_ms=uptime,
-            )
-        if not (self._supports_generation or self._supports_embedding):
-            uptime = int(time.time() * 1000) - self._start_time_ms
-            return HealthStatus.degraded(
-                reason="loaded model exposes neither generation nor embedding",
-                uptime_ms=uptime,
-            )
-        uptime = int(time.time() * 1000) - self._start_time_ms
-        return HealthStatus.healthy(
-            uptime_ms=uptime, requests_served=self._requests_served,
+        return readiness_status(
+            start_time_ms=self._start_time_ms,
+            requests_served=self._requests_served,
+            client_ready=self._client.is_ready(),
+            supports_generation=self._supports_generation,
+            supports_embedding=self._supports_embedding,
         )
 
     def capabilities(self) -> AdapterCapabilities:
