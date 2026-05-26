@@ -1,25 +1,4 @@
-"""Generic Triton adapter.
-
-Distinct from the TensorRT-LLM adapter in ``adapters/tensorrt/``. This
-adapter targets generic NVIDIA Triton Inference Server workloads
-(non-LLM, multimodal, embedding, classifier, custom models) via the
-KServe v2 HTTP protocol.
-
-Two surfaces are available:
-
-- the high-level ``generate`` / ``generate_batch`` text surface, which
-  is enabled only when the operator wires BYTES text tensors via
-  ``TritonConfig.input_tensor_name`` / ``output_tensor_name``. When
-  that contract is not met, the surface raises
-  ``UnsupportedOperationError`` -- per
-  ``docs/ADAPTER-SHARED-CONTRACT.md`` the adapter must not fake a
-  capability it cannot honour;
-- the low-level ``infer`` surface, which proxies KServe v2 inference
-  with operator-constructed tensors and stays available for non-text
-  workloads regardless of the text-IO convention.
-
-J-26 deliverable per ``docs/JOHN-REMEDIATION-ROSTER.md``.
-"""
+"""Generic NVIDIA Triton adapter for KServe v2 workloads."""
 
 from __future__ import annotations
 
@@ -280,12 +259,7 @@ class TritonAdapter(AdapterBase):
         inputs: list[dict[str, Any]],
         outputs: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
-        """Raw KServe v2 inference for non-text workloads.
-
-        Operators construct the input tensors themselves
-        (``name``/``shape``/``datatype``/``data``). Returns the parsed
-        Triton response body.
-        """
+        """Raw KServe v2 inference for non-text workloads."""
         self._ensure_initialized()
         assert self._client is not None
         result = await maybe_await(
@@ -325,15 +299,7 @@ class TritonAdapter(AdapterBase):
         )
 
     def capabilities(self) -> AdapterCapabilities:
-        """Capabilities track what the adapter can actually do today.
-
-        ``supports_streaming`` is False because KServe v2 HTTP /infer is
-        unary -- the adapter does not implement a streaming transport.
-        ``supports_batching`` is True only when the operator wired BYTES
-        text tensors (the only path that produces a meaningful batch
-        through this adapter; raw ``infer`` is one-tensor-at-a-time from
-        the caller's perspective).
-        """
+        """Capabilities track what the adapter can actually do today."""
         text_io = self._tconfig.supports_text_io
         return AdapterCapabilities(
             max_context_window=self._tconfig.max_input_len if text_io else 0,

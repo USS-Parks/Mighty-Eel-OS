@@ -35,7 +35,14 @@ from adapters.base import (
     mai_adapter,
     maybe_await,
 )
-from adapters.sglang.client import SglangClient, SglangResponse, SglangStreamChunk
+from adapters.sglang.adapter_helpers import (
+    build_kwargs,
+    chunk_content,
+    chunk_finish_reason,
+    result_from_response,
+    unwrap_body,
+)
+from adapters.sglang.client import SglangClient
 from adapters.sglang.config import SglangConfig
 
 
@@ -110,7 +117,7 @@ class SglangAdapter(AdapterBase):
         assert self._client is not None
         assert self._cfg is not None
 
-        kwargs = self._build_kwargs(params)
+        kwargs = build_kwargs(params)
 
         if stream:
             return self._stream_generate(prompt, kwargs)
@@ -131,7 +138,7 @@ class SglangAdapter(AdapterBase):
             raise BackendCrashedError(str(exc)) from exc
 
         self._requests_served += 1
-        return self._result_from_response(resp)
+        return result_from_response(resp)
 
     async def _stream_generate(
         self,
@@ -157,8 +164,8 @@ class SglangAdapter(AdapterBase):
         index = 0
         try:
             for chunk in chunks:
-                content = self._chunk_content(chunk)
-                finish = self._chunk_finish_reason(chunk)
+                content = chunk_content(chunk)
+                finish = chunk_finish_reason(chunk)
                 is_end = finish is not None
                 if content or is_end:
                     yield Token(
@@ -300,7 +307,7 @@ class SglangAdapter(AdapterBase):
             raise BackendCrashedError(str(exc)) from exc
 
         self._requests_served += 1
-        body = self._unwrap_body(resp)
+        body = unwrap_body(resp)
         meta = body.get("meta_info", {}) if isinstance(body.get("meta_info"), dict) else {}
         finish = meta.get("finish_reason", "stop")
         reason = FinishReason.MAX_TOKENS if finish == "length" else FinishReason.STOP
@@ -311,76 +318,6 @@ class SglangAdapter(AdapterBase):
         )
 
     # ─── helpers ──────────────────────────────────────────────────────────
-
-    def _build_kwargs(self, params: GenerationParams) -> dict[str, Any]:
-        kwargs: dict[str, Any] = {}
-        if params.max_tokens is not None:
-            kwargs["max_tokens"] = params.max_tokens
-        if params.temperature is not None:
-            kwargs["temperature"] = params.temperature
-        if params.top_p is not None:
-            kwargs["top_p"] = params.top_p
-        if params.stop:
-            kwargs["stop"] = list(params.stop)
-        extra = params.extra or {}
-        if "json_schema" in extra:
-            kwargs["json_schema"] = extra["json_schema"]
-        if "regex" in extra:
-            kwargs["regex"] = extra["regex"]
-        return kwargs
-
-    @staticmethod
-    def _unwrap_body(resp: Any) -> dict[str, Any]:
-        """Return the response body whether `resp` is a `SglangResponse`
-        dataclass or already a raw dict (the shape unit tests pass).
-        """
-        if isinstance(resp, SglangResponse):
-            return resp.body
-        if isinstance(resp, dict):
-            return resp
-        raise BackendCrashedError(
-            f"unexpected sglang response type: {type(resp).__name__}",
-        )
-
-    def _result_from_response(self, resp: Any) -> GenerationResult:
-        body = self._unwrap_body(resp)
-        choices = body.get("choices") or []
-        if not choices:
-            raise BackendCrashedError("sglang response missing choices")
-        first = choices[0] if isinstance(choices[0], dict) else {}
-        message = first.get("message", {}) if isinstance(first.get("message"), dict) else {}
-        usage = body.get("usage", {}) if isinstance(body.get("usage"), dict) else {}
-        finish = first.get("finish_reason", "stop")
-        reason = FinishReason.MAX_TOKENS if finish == "length" else FinishReason.STOP
-        return GenerationResult(
-            text=str(message.get("content", "")),
-            tokens_generated=int(usage.get("completion_tokens", 0)),
-            finish_reason=reason,
-        )
-
-    @staticmethod
-    def _chunk_content(chunk: Any) -> str:
-        if isinstance(chunk, SglangStreamChunk):
-            return chunk.content or ""
-        if isinstance(chunk, dict):
-            choices = chunk.get("choices") or []
-            if choices and isinstance(choices[0], dict):
-                delta = choices[0].get("delta", {})
-                if isinstance(delta, dict):
-                    return str(delta.get("content") or "")
-        return ""
-
-    @staticmethod
-    def _chunk_finish_reason(chunk: Any) -> str | None:
-        if isinstance(chunk, SglangStreamChunk):
-            return chunk.finish_reason
-        if isinstance(chunk, dict):
-            choices = chunk.get("choices") or []
-            if choices and isinstance(choices[0], dict):
-                fr = choices[0].get("finish_reason")
-                if fr is not None:
-                    return str(fr)
-        return None
 
     def _check_initialized(self) -> None:
         if not self._initialized:

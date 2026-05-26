@@ -16,7 +16,6 @@ import time
 import urllib.error
 import urllib.request
 from collections.abc import Iterator
-from dataclasses import dataclass
 from typing import Any
 
 from adapters.base import (
@@ -28,27 +27,18 @@ from adapters.base import (
     RateLimitedError,
     ValidationError,
 )
+from adapters.openai_compat.http_helpers import (
+    OpenAICompatResponse,
+    OpenAICompatStreamChunk,
+    error_detail,
+    extract_model,
+    is_context_error,
+    is_oom_error,
+    read_http_error_body,
+    stream_chunk_from_payload,
+)
 
 logger = logging.getLogger("mai.adapters.openai_compat.client")
-
-
-@dataclass
-class OpenAICompatResponse:
-    """Parsed unary response from an OpenAI-compatible server."""
-
-    status_code: int
-    body: dict[str, Any]
-    elapsed_ms: float
-
-
-@dataclass
-class OpenAICompatStreamChunk:
-    """One SSE event from ``/v1/chat/completions`` with ``stream=true``."""
-
-    content: str
-    finish_reason: str | None
-    stop: bool = False
-
 
 class OpenAICompatClient:
     """Pooled HTTP client for a generic OpenAI-compatible local backend.
@@ -210,7 +200,7 @@ class OpenAICompatClient:
                         elapsed_ms=elapsed,
                     )
             except urllib.error.HTTPError as e:
-                body_text = _read_http_error_body(e)
+                body_text = read_http_error_body(e)
                 self._handle_http_error(e.code, body_text)
                 # _handle_http_error only returns on 5xx with no retry decision.
                 if e.code >= 500 and attempt < attempts - 1:
@@ -255,7 +245,7 @@ class OpenAICompatClient:
         try:
             resp = self._opener.open(req, timeout=self._stream_timeout)
         except urllib.error.HTTPError as e:
-            body_text = _read_http_error_body(e)
+            body_text = read_http_error_body(e)
             self._handle_http_error(e.code, body_text)
             raise BackendUnavailableError(
                 f"HTTP {e.code} on stream open: {body_text[:200]}",
@@ -278,7 +268,7 @@ class OpenAICompatClient:
                 payload = line_str[len("data:") :].strip()
                 if payload == "[DONE]":
                     break
-                chunk = _stream_chunk_from_payload(payload)
+                chunk = stream_chunk_from_payload(payload)
                 if chunk is not None:
                     yield chunk
         finally:
@@ -297,17 +287,17 @@ class OpenAICompatClient:
             raise RateLimitedError()
         if status in (408, 504):
             raise AdapterTimeoutError(timeout_ms=int(self._timeout * 1000))
-        detail = _error_detail(body_text)
+        detail = error_detail(body_text)
         detail_l = detail.lower()
         if status == 404:
             # OpenAI-style "model_not_found" or generic missing route.
             if "model" in detail_l or not detail:
-                raise ModelNotFoundError(model=_extract_model(detail) or "unknown")
+                raise ModelNotFoundError(model=extract_model(detail) or "unknown")
             raise BackendUnavailableError(f"HTTP 404: {detail[:200]}")
         if status == 400:
-            if _is_context_error(detail_l):
+            if is_context_error(detail_l):
                 raise ContextExceededError(max_context=0)
-            if _is_oom_error(detail_l):
+            if is_oom_error(detail_l):
                 raise OutOfMemoryError()
             raise ValidationError(detail or "invalid request")
         if status == 401 or status == 403:
@@ -315,80 +305,8 @@ class OpenAICompatClient:
         if status == 422:
             raise ValidationError(detail or "unprocessable entity")
         if status >= 500:
-            if _is_oom_error(detail_l):
+            if is_oom_error(detail_l):
                 raise OutOfMemoryError()
             # 5xx falls through to the caller for retry/raise decision.
             return
         raise BackendUnavailableError(f"unexpected HTTP {status}: {detail[:200]}")
-
-
-def _read_http_error_body(error: urllib.error.HTTPError) -> str:
-    try:
-        if error.fp is not None:
-            return error.fp.read().decode("utf-8", errors="replace")
-    except (OSError, AttributeError):
-        return ""
-    return ""
-
-
-def _stream_chunk_from_payload(payload: str) -> OpenAICompatStreamChunk | None:
-    try:
-        event = json.loads(payload)
-    except json.JSONDecodeError:
-        # Malformed frames are tolerated mid-stream so a single bad keepalive
-        # line does not kill a long generation. Persistent corruption surfaces
-        # as an empty stream, which the adapter maps to a terminal marker.
-        return None
-    choices = event.get("choices") or []
-    if not choices:
-        return None
-    choice = choices[0]
-    delta = choice.get("delta") or {}
-    content = delta.get("content") or ""
-    finish_reason = choice.get("finish_reason")
-    return OpenAICompatStreamChunk(
-        content=content,
-        finish_reason=finish_reason,
-        stop=finish_reason is not None,
-    )
-
-
-def _error_detail(body_text: str) -> str:
-    try:
-        err_body = json.loads(body_text) if body_text else {}
-    except (json.JSONDecodeError, TypeError):
-        return body_text[:200]
-    if not isinstance(err_body, dict):
-        return ""
-    err = err_body.get("error")
-    if isinstance(err, dict):
-        return str(err.get("message") or err.get("type") or "")
-    if isinstance(err, str):
-        return err
-    return str(err_body.get("message") or "")
-
-
-def _is_context_error(detail_l: str) -> bool:
-    return (
-        "context" in detail_l
-        and ("exceed" in detail_l or "too long" in detail_l or "length" in detail_l)
-    )
-
-
-def _is_oom_error(detail_l: str) -> bool:
-    return "out of memory" in detail_l or "oom" in detail_l
-
-
-def _extract_model(detail: str) -> str | None:
-    """Pull a model id out of a ``Model 'foo' not found`` style message."""
-    if not detail:
-        return None
-    for quote in ("'", '"'):
-        if quote in detail:
-            try:
-                left = detail.index(quote) + 1
-                right = detail.index(quote, left)
-                return detail[left:right]
-            except ValueError:
-                continue
-    return None

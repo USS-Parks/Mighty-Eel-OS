@@ -46,6 +46,61 @@ class ExllamaStreamChunk:
     finish_reason: str | None = None
 
 
+def _parse_response(resp: Any, started_at: float) -> ExllamaResponse:
+    """Read and parse a non-streaming ExLlamaV2 response."""
+    raw = resp.read().decode()
+    elapsed = (time.monotonic() - started_at) * 1000
+    return ExllamaResponse(
+        status_code=resp.status,
+        body=json.loads(raw) if raw else {},
+        elapsed_ms=elapsed,
+    )
+
+
+def _open_response(req: urllib.request.Request, timeout: float, started_at: float) -> ExllamaResponse:
+    resp = urllib.request.urlopen(req, timeout=timeout)
+    try:
+        return _parse_response(resp, started_at)
+    finally:
+        resp.close()
+
+
+def _raise_url_error(error: urllib.error.URLError, timeout: float) -> None:
+    if "timed out" in str(error.reason):
+        raise AdapterTimeoutError(timeout_ms=int(timeout * 1000)) from error
+    raise BackendUnavailableError() from error
+
+
+def _stream_chunks_from_response(resp: Any) -> Iterator[ExllamaStreamChunk]:
+    for line in resp:
+        chunk = _stream_chunk_from_line(line)
+        if chunk == "done":
+            break
+        if chunk is not None:
+            yield chunk
+
+
+def _stream_chunk_from_line(line: bytes) -> ExllamaStreamChunk | str | None:
+    line_str = line.decode().strip()
+    if not line_str or not line_str.startswith("data: "):
+        return None
+    payload = line_str[6:]
+    if payload == "[DONE]":
+        return "done"
+    try:
+        chunk_data = json.loads(payload)
+    except json.JSONDecodeError:
+        return None
+    choices = chunk_data.get("choices", [])
+    if not choices:
+        return None
+    choice = choices[0]
+    delta = choice.get("delta", {})
+    content = delta.get("content", "")
+    finish_reason = choice.get("finish_reason")
+    return ExllamaStreamChunk(content=content, finish_reason=finish_reason)
+
+
 class ExLlamaV2Client:
     """HTTP client for ExLlamaV2 server.
 
@@ -69,25 +124,18 @@ class ExLlamaV2Client:
 
         req = urllib.request.Request(url, data=data, headers=headers, method=method)
         t0 = time.monotonic()
+        request_timeout = timeout or self._timeout
         try:
-            with urllib.request.urlopen(req, timeout=timeout or self._timeout) as resp:
-                raw = resp.read().decode()
-                elapsed = (time.monotonic() - t0) * 1000
-                return ExllamaResponse(
-                    status_code=resp.status,
-                    body=json.loads(raw) if raw else {},
-                    elapsed_ms=elapsed,
-                )
+            return _open_response(req, request_timeout, t0)
         except urllib.error.HTTPError as e:
             body_text = e.read().decode() if e.fp else ""
             self._handle_http_error(e.code, body_text)
             raise BackendUnavailableError() from e
         except urllib.error.URLError as e:
-            if "timed out" in str(e.reason):
-                raise AdapterTimeoutError(timeout_ms=int((timeout or self._timeout) * 1000)) from e
+            _raise_url_error(e, request_timeout)
             raise BackendUnavailableError() from e
         except TimeoutError as e:
-            raise AdapterTimeoutError(timeout_ms=int((timeout or self._timeout) * 1000)) from e
+            raise AdapterTimeoutError(timeout_ms=int(request_timeout * 1000)) from e
 
     def _stream_request(self, path: str, body: dict[str, Any]) -> Iterator[ExllamaStreamChunk]:
         """Execute streaming request via SSE."""
@@ -107,25 +155,7 @@ class ExLlamaV2Client:
             raise BackendUnavailableError() from e
 
         try:
-            for line in resp:
-                line_str = line.decode().strip()
-                if not line_str or not line_str.startswith("data: "):
-                    continue
-                payload = line_str[6:]
-                if payload == "[DONE]":
-                    break
-                try:
-                    chunk_data = json.loads(payload)
-                except json.JSONDecodeError:
-                    continue
-                choices = chunk_data.get("choices", [])
-                if not choices:
-                    continue
-                choice = choices[0]
-                delta = choice.get("delta", {})
-                content = delta.get("content", "")
-                finish_reason = choice.get("finish_reason")
-                yield ExllamaStreamChunk(content=content, finish_reason=finish_reason)
+            yield from _stream_chunks_from_response(resp)
         finally:
             resp.close()
 

@@ -80,22 +80,7 @@ class OllamaAdapter(AdapterBase):
         self._model = self._config.default_model
         self._embedding_model = self._config.embedding_model
 
-        # Verify default model is available (warn but don't fail)
-        if self._model and self._model not in self._available_models:
-            # Try partial match (ollama uses tag format model:tag)
-            base_name = self._model.split(":")[0]
-            matched = [m for m in self._available_models if m.startswith(base_name)]
-            if matched:
-                logger.info(
-                    f"Exact model '{self._model}' not found, "
-                    f"using closest match: '{matched[0]}'",
-                )
-                self._model = matched[0]
-            else:
-                logger.warning(
-                    f"Default model '{self._model}' not available locally. "
-                    f"Available: {self._available_models}",
-                )
+        self._model = _resolve_default_model(self._model, self._available_models)
 
         self._initialized = True
         logger.info(
@@ -311,6 +296,23 @@ def _params_to_ollama_options(params: GenerationParams) -> dict[str, Any]:
     if params.stop_sequences:
         options["stop"] = params.stop_sequences
     return options
+
+
+def _resolve_default_model(model: str, available_models: list[str]) -> str:
+    """Return an exact or tag-compatible Ollama model name."""
+    if not model or model in available_models:
+        return model
+
+    base_name = model.split(":", maxsplit=1)[0]
+    matched = next((m for m in available_models if m.startswith(base_name)), None)
+    if matched is not None:
+        logger.info(f"Exact model '{model}' not found, using closest match: '{matched}'")
+        return matched
+
+    logger.warning(
+        f"Default model '{model}' not available locally. Available: {available_models}",
+    )
+    return model
 
 
 def _now_ms() -> int:

@@ -88,14 +88,10 @@ class MLXAdapter(AdapterBase):
         if not self._config.model_path:
             raise ValidationError("MLX requires model_path")
 
-        if self._client is None:
-            self._client = MLXClient(
-                model_path=self._config.model_path,
-                tokenizer_path=self._config.tokenizer_path,
-            )
+        client = self._ensure_client()
 
         try:
-            await asyncio.to_thread(self._client.load)
+            await asyncio.to_thread(client.load)
         except MLXLoadError as e:
             msg = str(e).lower()
             if "not found" in msg or "no such" in msg:
@@ -107,9 +103,19 @@ class MLXAdapter(AdapterBase):
         logger.info(
             "MLX adapter initialized: path=%s backend=%s",
             self._config.model_path,
-            self._client.backend_version,
+            client.backend_version,
         )
         return f"mlx-{self._start_time_ms}"
+
+    def _ensure_client(self) -> MLXClient:
+        """Return the live client, creating it once from the active config."""
+        if self._client is not None:
+            return self._client
+        self._client = MLXClient(
+            model_path=self._config.model_path,
+            tokenizer_path=self._config.tokenizer_path,
+        )
+        return self._client
 
     def _ensure_initialized(self) -> None:
         if not self._initialized or self._client is None or not self._client.loaded:

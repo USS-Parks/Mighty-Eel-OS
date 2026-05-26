@@ -1,12 +1,4 @@
-"""Generic OpenAI-compatible local backend adapter.
-
-Targets local OpenAI-compatible servers (LM Studio, LocalAI, FastChat,
-internal gateways). All HTTP calls go through the pooled
-``OpenAICompatClient``, and lifecycle, capability reporting, and error
-mapping follow ``docs/ADAPTER-SHARED-CONTRACT.md``.
-
-DOUGHERTY J-23.
-"""
+"""Generic OpenAI-compatible local backend adapter."""
 
 from __future__ import annotations
 
@@ -21,7 +13,6 @@ from adapters.base import (
     AdapterCapabilities,
     BackendUnavailableError,
     Embedding,
-    FinishReason,
     GenerationParams,
     GenerationResult,
     HealthStatus,
@@ -38,6 +29,14 @@ from adapters.openai_compat.client import (
     OpenAICompatStreamChunk,
 )
 from adapters.openai_compat.config import OpenAICompatConfig
+from adapters.openai_compat.responses import (
+    embeddings_from_response,
+    extract_model_ids,
+    first_or_empty,
+    result_from_chat,
+    result_from_completion,
+)
+from adapters.openai_compat.validation import validate_config
 
 logger = logging.getLogger("mai.adapters.openai_compat")
 
@@ -76,7 +75,7 @@ class OpenAICompatAdapter(AdapterBase):
         if hil_handle is not None:
             self._hil_handle = hil_handle
 
-        self._validate_config()
+        validate_config(self._config)
 
         if self._client is None:
             self._client = OpenAICompatClient(
@@ -88,12 +87,6 @@ class OpenAICompatAdapter(AdapterBase):
                 retry_backoff_ms=self._config.retry_backoff_ms,
             )
 
-        # Readiness probe: GET /v1/models. A backend that does not
-        # expose the endpoint still returns 200 with an empty list on
-        # most local servers; either way, a network round-trip proves
-        # the host is up. Failure here surfaces as a typed adapter
-        # error (BackendUnavailableError or AdapterTimeoutError) from
-        # the client.
         try:
             payload = await maybe_await(self._client.models)
         except BackendUnavailableError:
@@ -103,21 +96,21 @@ class OpenAICompatAdapter(AdapterBase):
             self._client = None
             raise
 
-        self._known_models = _extract_model_ids(payload)
+        self._known_models = extract_model_ids(payload)
         self._chat_model = (
             self._config.chat_model
             or self._config.default_model
-            or _first_or_empty(self._known_models)
+            or first_or_empty(self._known_models)
         )
         self._completion_model = (
             self._config.completion_model
             or self._config.default_model
-            or _first_or_empty(self._known_models)
+            or first_or_empty(self._known_models)
         )
         self._embedding_model = (
             self._config.embedding_model
             or self._config.default_model
-            or _first_or_empty(self._known_models)
+            or first_or_empty(self._known_models)
         )
 
         self._start_time_ms = int(time.time() * 1000)
@@ -178,7 +171,7 @@ class OpenAICompatAdapter(AdapterBase):
                     extra=dict(self._config.extra_request_fields) or None,
                 ),
             )
-            result = _result_from_completion(resp)
+            result = result_from_completion(resp)
         else:
             messages = [{"role": "user", "content": prompt}]
             resp = cast(
@@ -195,7 +188,7 @@ class OpenAICompatAdapter(AdapterBase):
                     extra=dict(self._config.extra_request_fields) or None,
                 ),
             )
-            result = _result_from_chat(resp)
+            result = result_from_chat(resp)
         self._requests_served += 1
         return result
 
@@ -279,7 +272,7 @@ class OpenAICompatAdapter(AdapterBase):
             input_texts=texts,
             model=model,
         )
-        return _embeddings_from_response(resp, len(texts))
+        return embeddings_from_response(resp, len(texts))
 
     # ─── Health ───────────────────────────────────────────────────────
 
@@ -295,7 +288,7 @@ class OpenAICompatAdapter(AdapterBase):
             logger.warning("openai_compat health probe failed", exc_info=True)
             return HealthStatus.unavailable()
         uptime = int(time.time() * 1000) - self._start_time_ms
-        models = _extract_model_ids(payload)
+        models = extract_model_ids(payload)
         if not models and not self._known_models:
             return HealthStatus.degraded(
                 reason="backend reachable but exposes no models",
@@ -330,136 +323,5 @@ class OpenAICompatAdapter(AdapterBase):
         if not self._initialized or self._client is None:
             raise BackendUnavailableError("adapter not initialized")
 
-    def _validate_config(self) -> None:
-        cfg = self._config
-        if cfg.scheme not in ("http", "https"):
-            raise ValidationError(f"invalid scheme: {cfg.scheme!r}")
-        if not cfg.host:
-            raise ValidationError("host must be set")
-        if not (0 < cfg.port < 65536):
-            raise ValidationError(f"port out of range: {cfg.port}")
-        if cfg.prefer_endpoint not in ("chat", "completion"):
-            raise ValidationError(
-                f"prefer_endpoint must be 'chat' or 'completion', got "
-                f"{cfg.prefer_endpoint!r}",
-            )
-        if cfg.timeout_ms <= 0 or cfg.stream_timeout_ms <= 0:
-            raise ValidationError("timeouts must be positive")
-        if cfg.max_retries < 0:
-            raise ValidationError("max_retries must be >= 0")
-
 
 # ─── Response helpers ─────────────────────────────────────────────────
-
-
-def _extract_model_ids(payload: dict[str, Any]) -> list[str]:
-    """Pull a list of model ids out of ``GET /v1/models`` shapes.
-
-    Tolerates both ``{"data": [{"id": "x"}, ...]}`` (OpenAI canonical)
-    and ``{"models": ["x", ...]}`` (some local servers).
-    """
-    if not isinstance(payload, dict):
-        return []
-    data = payload.get("data")
-    if isinstance(data, list):
-        ids = [str(m.get("id")) for m in data if isinstance(m, dict) and m.get("id")]
-        if ids:
-            return ids
-    models = payload.get("models")
-    if isinstance(models, list):
-        return [str(m) for m in models if m]
-    return []
-
-
-def _first_or_empty(items: list[str]) -> str:
-    return items[0] if items else ""
-
-
-def _result_from_chat(resp: OpenAICompatResponse) -> GenerationResult:
-    """Map a unary chat-completion response to a GenerationResult."""
-    body = resp.body if isinstance(resp, OpenAICompatResponse) else resp
-    choices = body.get("choices") or []
-    if not choices:
-        return GenerationResult(text="", tokens_generated=0, finish_reason=FinishReason.STOP)
-    choice = choices[0]
-    message = choice.get("message") or {}
-    text = str(message.get("content") or "")
-    finish = str(choice.get("finish_reason") or "stop")
-    usage = body.get("usage") or {}
-    tokens_out = int(usage.get("completion_tokens") or max(len(text) // 4, 1 if text else 0))
-    return GenerationResult(
-        text=text,
-        tokens_generated=tokens_out,
-        finish_reason=_finish_from_str(finish),
-    )
-
-
-def _result_from_completion(resp: OpenAICompatResponse) -> GenerationResult:
-    """Map a unary text-completion response to a GenerationResult."""
-    body = resp.body if isinstance(resp, OpenAICompatResponse) else resp
-    choices = body.get("choices") or []
-    if not choices:
-        return GenerationResult(text="", tokens_generated=0, finish_reason=FinishReason.STOP)
-    choice = choices[0]
-    text = str(choice.get("text") or "")
-    finish = str(choice.get("finish_reason") or "stop")
-    usage = body.get("usage") or {}
-    tokens_out = int(usage.get("completion_tokens") or max(len(text) // 4, 1 if text else 0))
-    return GenerationResult(
-        text=text,
-        tokens_generated=tokens_out,
-        finish_reason=_finish_from_str(finish),
-    )
-
-
-def _finish_from_str(value: str) -> FinishReason:
-    v = value.lower()
-    if v == "length":
-        return FinishReason.MAX_TOKENS
-    if v == "stop_sequence":
-        return FinishReason.STOP_SEQUENCE
-    return FinishReason.STOP
-
-
-def _embeddings_from_response(
-    resp: OpenAICompatResponse,
-    expected: int,
-) -> list[Embedding]:
-    body = resp.body if isinstance(resp, OpenAICompatResponse) else resp
-    data = body.get("data") if isinstance(body, dict) else None
-    if not isinstance(data, list):
-        raise ValidationError("embeddings response missing 'data' list")
-    usage = body.get("usage") if isinstance(body, dict) else None
-    total_prompt_tokens = 0
-    if isinstance(usage, dict):
-        total_prompt_tokens = int(usage.get("prompt_tokens") or 0)
-    per_input_tokens = (
-        total_prompt_tokens // expected if expected and total_prompt_tokens else 0
-    )
-
-    # Preserve OpenAI's "index" ordering when the backend supplies it;
-    # fall back to list position when it does not.
-    indexed: list[tuple[int, Embedding]] = []
-    for fallback_idx, entry in enumerate(data):
-        if not isinstance(entry, dict):
-            raise ValidationError("embedding entry must be an object")
-        raw_vector = entry.get("embedding")
-        if not isinstance(raw_vector, list) or not raw_vector:
-            raise ValidationError("embedding entry missing non-empty vector")
-        vector = [float(x) for x in raw_vector]
-        idx = entry.get("index")
-        idx_int = int(idx) if isinstance(idx, int) else fallback_idx
-        indexed.append((idx_int, Embedding(vector=vector, input_tokens=per_input_tokens)))
-    indexed.sort(key=lambda pair: pair[0])
-    return [emb for _, emb in indexed]
-
-
-# Keep names importable even if linters miss the indirect use through
-# ``_stream_request`` Iterator type hints.
-__all__ = [
-    "OpenAICompatAdapter",
-    "OpenAICompatClient",
-    "OpenAICompatConfig",
-    "OpenAICompatResponse",
-    "OpenAICompatStreamChunk",
-]

@@ -1,35 +1,9 @@
-"""TensorRT-LLM backend adapter.
-
-NVIDIA's highest-throughput local-inference path via Triton Inference
-Server with the TensorRT-LLM backend. Targets H100/H200 SXM5 hardware
-with NVLink awareness, inflight batching, and INT8/FP8 quantization.
-
-Refactored under DOUGHERTY J-22 to satisfy
-``docs/ADAPTER-SHARED-CONTRACT.md`` and
-``docs/ADAPTER-TEST-HARNESS-LOCK.md``:
-
-- ``__init__`` stores config only; no sockets, no network calls
-- ``initialize`` validates config, creates a pooled client, probes
-  Triton readiness, and is safe to call again after ``shutdown``
-- ``generate(stream=False)`` returns ``GenerationResult``
-- ``generate(stream=True)`` returns an ``AsyncIterator[Token]`` that
-  yields lazily as Triton emits SSE frames -- no buffering
-- ``generate_batch`` preserves input order, validates empty input,
-  applies bounded concurrency
-- ``embed`` raises ``UnsupportedOperationError`` (TensorRT-LLM has no
-  embedding endpoint on the Triton TRT-LLM backend)
-- ``health_check`` reports the 3 contract states (healthy / degraded /
-  unavailable) and is cheap (no generation)
-- ``capabilities`` truthfully reflects the implemented code paths
-- ``shutdown`` closes the client and is idempotent; post-shutdown calls
-  fail deterministically with a typed adapter error
-"""
+"""TensorRT-LLM backend adapter."""
 
 from __future__ import annotations
 
 import asyncio
 import logging
-import time
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -40,21 +14,25 @@ from adapters.base import (
     BackendCrashedError,
     BackendUnavailableError,
     Embedding,
-    FinishReason,
     GenerationParams,
     GenerationResult,
     HealthStatus,
     Token,
     UnsupportedOperationError,
-    ValidationError,
     mai_adapter,
+)
+from adapters.tensorrt.adapter_helpers import (
+    STREAM_SENTINEL,
+    next_or_sentinel,
+    now_ms,
+    result_from_body,
+    validate_config,
 )
 from adapters.tensorrt.client import TensorRtClient, TritonResponse, TritonStreamChunk
 from adapters.tensorrt.config import TensorRtConfig
 
 logger = logging.getLogger("mai.adapters.tensorrt")
 
-_STREAM_SENTINEL: Any = object()
 _BATCH_PARALLELISM_DEFAULT: int = 8
 
 
@@ -87,7 +65,7 @@ class TensorRtAdapter(AdapterBase):
         """Initialize the adapter. Probes Triton readiness and model state."""
         if config is not None:
             self._config = TensorRtConfig.from_dict(config)
-        _validate_config(self._config)
+        validate_config(self._config)
 
         if hil_handle is not None:
             self._hil_handle = hil_handle
@@ -118,7 +96,7 @@ class TensorRtAdapter(AdapterBase):
                 self._model_name,
             )
 
-        self._start_time_ms = _now_ms()
+        self._start_time_ms = now_ms()
         self._requests_served = 0
         self._initialized = True
         logger.info(
@@ -182,7 +160,7 @@ class TensorRtAdapter(AdapterBase):
             raise BackendCrashedError(
                 detail="non-streaming generate received a stream iterator",
             )
-        text, tokens_out, finish = _result_from_body(resp.body, params)
+        text, tokens_out, finish = result_from_body(resp.body, params)
         self._requests_served += 1
         return GenerationResult(
             text=text, tokens_generated=tokens_out, finish_reason=finish,
@@ -216,8 +194,8 @@ class TensorRtAdapter(AdapterBase):
         token_index = 0
         try:
             while True:
-                chunk = await asyncio.to_thread(_next_or_sentinel, stream)
-                if chunk is _STREAM_SENTINEL:
+                chunk = await asyncio.to_thread(next_or_sentinel, stream)
+                if chunk is STREAM_SENTINEL:
                     break
                 assert isinstance(chunk, TritonStreamChunk)
                 if chunk.text:
@@ -293,7 +271,7 @@ class TensorRtAdapter(AdapterBase):
         )
         self._engine_ready = engine_now
 
-        uptime = _now_ms() - self._start_time_ms
+        uptime = now_ms() - self._start_time_ms
         if engine_now:
             return HealthStatus.healthy(
                 uptime_ms=uptime, requests_served=self._requests_served,
@@ -360,73 +338,3 @@ class TensorRtAdapter(AdapterBase):
 
 
 # ─── Module-local helpers ──────────────────────────────────────────────────
-
-
-def _validate_config(config: TensorRtConfig) -> None:
-    """Reject obviously-invalid TensorRT configs with a typed ValidationError."""
-    if not config.host:
-        raise ValidationError("host must be set")
-    if config.port <= 0 or config.port > 65535:
-        raise ValidationError(f"port out of range: {config.port}")
-    if config.timeout_ms <= 0:
-        raise ValidationError(f"timeout_ms must be positive: {config.timeout_ms}")
-    if config.stream_timeout_ms <= 0:
-        raise ValidationError(
-            f"stream_timeout_ms must be positive: {config.stream_timeout_ms}",
-        )
-    if not config.default_model:
-        raise ValidationError("default_model must be set (Triton model name)")
-
-
-def _result_from_body(
-    body: dict[str, Any], params: GenerationParams,
-) -> tuple[str, int, FinishReason]:
-    """Extract ``(text, tokens_generated, finish_reason)`` from a Triton body."""
-    text = ""
-    if "text_output" in body:
-        text = body.get("text_output") or ""
-    elif "choices" in body:
-        choices = body.get("choices") or []
-        if choices and isinstance(choices[0], dict):
-            text = choices[0].get("text") or choices[0].get("message", {}).get(
-                "content", "",
-            ) or ""
-    tokens_out_raw = body.get("output_tokens") or body.get("generated_tokens")
-    if isinstance(tokens_out_raw, int) and tokens_out_raw >= 0:
-        tokens_out = tokens_out_raw
-    else:
-        tokens_out = max(1, len(text) // 4) if text else 0
-    finish_raw = body.get("finish_reason") or body.get("stop_reason") or "stop"
-    finish = _map_finish_reason(finish_raw, tokens_out, params)
-    return text, tokens_out, finish
-
-
-def _map_finish_reason(
-    raw: str, tokens_out: int, params: GenerationParams,
-) -> FinishReason:
-    """Map Triton's finish-reason string into the MAI enum."""
-    if raw in ("length", "max_tokens"):
-        return FinishReason.MAX_TOKENS
-    if raw == "stop_sequence" or (params.stop_sequences and raw == "stop"):
-        # When stop sequences are configured AND backend reports "stop",
-        # we can't always tell which fired; conservatively report STOP.
-        return FinishReason.STOP_SEQUENCE if raw == "stop_sequence" else FinishReason.STOP
-    if tokens_out >= params.max_tokens:
-        return FinishReason.MAX_TOKENS
-    return FinishReason.STOP
-
-
-def _next_or_sentinel(iterator: Any) -> Any:
-    """``next(iterator)`` that returns a sentinel on StopIteration.
-
-    asyncio.to_thread can't propagate StopIteration cleanly, so we wrap
-    the sync ``next`` call and surface end-of-stream as a sentinel.
-    """
-    try:
-        return next(iterator)
-    except StopIteration:
-        return _STREAM_SENTINEL
-
-
-def _now_ms() -> int:
-    return int(time.time() * 1000)

@@ -1,21 +1,4 @@
-"""MAI Adapter Runner: NDJSON IPC subprocess protocol handler (v1.0).
-
-Spawned by AdapterProcess as:  python3 runner.py <adapter_name>
-
-Protocol (IPC-PROTOCOL.md):
-  Phase 1 - Startup:
-    Rust writes startup config JSON on stdin (one line).
-    Runner reads it, imports the adapter, calls initialize(), then writes
-    a handshake response on stdout.
-  Phase 2 - Request loop:
-    Rust writes: {"request_id": "<uuid>", "type": "<method>", "payload": {}}
-    Runner replies with NDJSON events:
-      token, usage, result, done, error  (all carry request_id)
-
-Stderr is reserved for Python logging. Never parsed by Rust.
-
-Session 08 original / Session 14a NDJSON rewrite.
-"""
+"""NDJSON IPC subprocess protocol handler for MAI adapters."""
 
 from __future__ import annotations
 
@@ -38,7 +21,6 @@ from adapters.base import (
 
 logger = logging.getLogger("mai.adapters.runner")
 
-# Redirect logging to stderr so stdout is reserved for protocol messages.
 logging.basicConfig(
     stream=sys.stderr,
     level=logging.INFO,
@@ -47,11 +29,7 @@ logging.basicConfig(
 
 
 class AdapterRunner:
-    """NDJSON IPC protocol handler for a single adapter subprocess.
-
-    Phase 1: Read startup config from stdin, initialize adapter, send handshake.
-    Phase 2: Read IPC requests from stdin, dispatch, write NDJSON events to stdout.
-    """
+    """NDJSON IPC protocol handler for a single adapter subprocess."""
 
     def __init__(self, adapter: AdapterBase, adapter_name: str, version: str) -> None:
         self._adapter = adapter
@@ -74,7 +52,6 @@ class AdapterRunner:
         protocol = asyncio.StreamReaderProtocol(self._reader)
         await loop.connect_read_pipe(lambda: protocol, sys.stdin)
 
-        # stdout writer: use raw fd for binary writes
         transport, _ = await loop.connect_write_pipe(
             asyncio.streams.FlowControlMixin, sys.stdout,
         )
@@ -139,7 +116,6 @@ class AdapterRunner:
                 logger.error(f"Runner loop error: {traceback.format_exc()}")
                 break
 
-        # Attempt graceful shutdown
         try:
             await self._adapter.shutdown()
         except Exception:
@@ -325,12 +301,7 @@ def _read_startup_config() -> dict[str, Any]:
 
 
 def main() -> None:
-    """Entry point. Usage: python3 runner.py <adapter_name>
-
-    The adapter name is the only CLI argument. Module path and class name
-    are provided in the startup config JSON on stdin per IPC-PROTOCOL.md.
-    The runner also checks the @mai_adapter registry as a fallback.
-    """
+    """Entry point. Usage: python3 runner.py <adapter_name>."""
     if len(sys.argv) != 2:
         print(
             "Usage: python3 runner.py <adapter_name>",
@@ -341,14 +312,12 @@ def main() -> None:
     adapter_name = sys.argv[1]
     logger.info(f"Runner started for adapter: {adapter_name}")
 
-    # Read startup config from stdin (Phase 1 of IPC protocol)
     startup_config = _read_startup_config()
     logger.info(f"Received startup config: adapter_name={startup_config.get('adapter_name')}")
 
     module_path = startup_config.get("module_path", "")
     entry_class = startup_config.get("entry_class", "")
 
-    # Try direct import first (from startup config)
     adapter: AdapterBase | None = None
     version = "1.0.0"
 
@@ -356,8 +325,6 @@ def main() -> None:
         adapter = load_adapter(module_path, entry_class)
         version = getattr(adapter, "_mai_adapter_version", "1.0.0")
     else:
-        # Fallback: look up in the @mai_adapter registry
-        # Import all adapter modules to trigger registration
         with contextlib.suppress(ImportError):
             importlib.import_module(f"adapters.{adapter_name}.adapter")
         cls = get_adapter(adapter_name)

@@ -22,50 +22,15 @@ from __future__ import annotations
 import logging
 import os
 from collections.abc import Iterator
-from dataclasses import dataclass
 from typing import Any
 
+from adapters.onnxruntime.types import (
+    LoadedModelInfo,
+    OnnxRuntimeClientError,
+    OnnxStreamChunk,
+)
+
 logger = logging.getLogger("mai.adapters.onnxruntime.client")
-
-
-# ─── Public client errors ────────────────────────────────────────────────────
-
-
-class OnnxRuntimeClientError(RuntimeError):
-    """Local client-side error. The adapter maps this to a typed MAI error."""
-
-    def __init__(self, kind: str, detail: str) -> None:
-        self.kind = kind
-        self.detail = detail
-        super().__init__(f"[{kind}] {detail}")
-
-
-# ─── Streaming chunk shape ───────────────────────────────────────────────────
-
-
-@dataclass
-class OnnxStreamChunk:
-    """One streaming step yielded by :meth:`OnnxRuntimeClient.generate_stream`."""
-
-    text: str
-    is_final: bool = False
-
-
-# ─── Capability flags discovered after load() ────────────────────────────────
-
-
-@dataclass
-class _LoadedModelInfo:
-    """What we discovered about the loaded model. Drives capability flags."""
-
-    supports_generation: bool
-    supports_embedding: bool
-    backend: str  # "genai" or "session" or "none"
-    backend_version: str
-    model_id: str
-
-
-# ─── Client ──────────────────────────────────────────────────────────────────
 
 
 class OnnxRuntimeClient:
@@ -74,7 +39,6 @@ class OnnxRuntimeClient:
     Lifecycle:
         c = OnnxRuntimeClient(model_path=..., tokenizer_path=..., providers=...)
         info = c.load(embedding_only=False)
-        # ... use generate_once / generate_stream / embed ...
         c.close()
     """
 
@@ -93,11 +57,11 @@ class OnnxRuntimeClient:
         self._ort_session: Any = None
         self._ort_module: Any = None
         self._closed = False
-        self._info: _LoadedModelInfo | None = None
+        self._info: LoadedModelInfo | None = None
 
     # ── load / close ────────────────────────────────────────────────────────
 
-    def load(self, *, embedding_only: bool) -> _LoadedModelInfo:
+    def load(self, *, embedding_only: bool) -> LoadedModelInfo:
         """Resolve providers, import the right runtime, and load the model.
 
         Raises :class:`OnnxRuntimeClientError` with one of these kinds:
@@ -125,7 +89,7 @@ class OnnxRuntimeClient:
 
         if embedding_only:
             self._load_inference_session()
-            self._info = _LoadedModelInfo(
+            self._info = LoadedModelInfo(
                 supports_generation=False,
                 supports_embedding=True,
                 backend="session",
@@ -140,7 +104,7 @@ class OnnxRuntimeClient:
         genai_module = self._safe_import("onnxruntime_genai")
         if genai_module is not None:
             self._load_genai(genai_module)
-            self._info = _LoadedModelInfo(
+            self._info = LoadedModelInfo(
                 supports_generation=True,
                 supports_embedding=False,
                 backend="genai",
@@ -154,7 +118,7 @@ class OnnxRuntimeClient:
 
         # onnxruntime-genai not available — degrade to session.
         self._load_inference_session()
-        self._info = _LoadedModelInfo(
+        self._info = LoadedModelInfo(
             supports_generation=False,
             supports_embedding=False,
             backend="session",
@@ -304,7 +268,7 @@ class OnnxRuntimeClient:
             return False
         return self._info.supports_generation or self._info.supports_embedding
 
-    def info(self) -> _LoadedModelInfo | None:
+    def info(self) -> LoadedModelInfo | None:
         """Return the post-load info struct, or None when unloaded."""
         return self._info
 

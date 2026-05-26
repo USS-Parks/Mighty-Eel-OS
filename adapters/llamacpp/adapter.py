@@ -36,6 +36,90 @@ from adapters.llamacpp.config import LlamaCppConfig
 logger = logging.getLogger("mai.adapters.llamacpp")
 
 
+def _generation_result_from_body(body: dict[str, Any]) -> GenerationResult:
+    choices = body.get("choices", [])
+    if not choices:
+        return GenerationResult(text="", tokens_generated=0)
+    choice = choices[0]
+    text = choice.get("message", {}).get("content", "")
+    finish = choice.get("finish_reason", "stop")
+    reason = FinishReason.MAX_TOKENS if finish == "length" else FinishReason.STOP
+    tokens_out = body.get("usage", {}).get("completion_tokens", len(text) // 4)
+    return GenerationResult(text=text, tokens_generated=tokens_out, finish_reason=reason)
+
+
+def _token_from_stream_chunk(chunk: Any, index: int) -> Token | None:
+    if chunk.content:
+        return Token(text=chunk.content, index=index, is_end_of_text=chunk.stop)
+    if chunk.stop:
+        return Token(text="", index=index, is_end_of_text=True)
+    return None
+
+
+def _grammar_for_params(default_grammar: str | None, params: GenerationParams) -> str | None:
+    if not params.structured_schema:
+        return default_grammar
+    return json.dumps(params.structured_schema) if not default_grammar else default_grammar
+
+
+async def _stream_tokens(
+    client: LlamaCppClient,
+    prompt: str,
+    params: GenerationParams,
+    grammar: str | None,
+) -> AsyncIterator[Token]:
+    messages = [{"role": "user", "content": prompt}]
+    chunks = await asyncio.to_thread(
+        client.chat_completions,
+        messages=messages,
+        temperature=params.temperature,
+        top_p=params.top_p,
+        max_tokens=params.max_tokens,
+        stop=params.stop_sequences or None,
+        stream=True,
+        grammar=grammar,
+    )
+
+    token_index = 0
+    for chunk in chunks:
+        token = _token_from_stream_chunk(chunk, token_index)
+        if token is None:
+            continue
+        yield token
+        if token.text:
+            token_index += 1
+
+
+async def _chat_completion_body(
+    client: LlamaCppClient,
+    prompt: str,
+    params: GenerationParams,
+) -> dict[str, Any]:
+    messages = [{"role": "user", "content": prompt}]
+    resp = await asyncio.to_thread(
+        client.chat_completions,
+        messages=messages,
+        temperature=params.temperature,
+        top_p=params.top_p,
+        max_tokens=params.max_tokens,
+        stop=params.stop_sequences or None,
+        stream=False,
+    )
+    return resp.body
+
+
+async def _batch_results(
+    client: LlamaCppClient,
+    prompts: list[str],
+    params: GenerationParams,
+) -> list[GenerationResult]:
+    results: list[GenerationResult] = []
+    for prompt in prompts:
+        body = await _chat_completion_body(client, prompt, params)
+        results.append(_generation_result_from_body(body))
+    return results
+
+
 @mai_adapter(name="llamacpp", version="1.0.0")
 class LlamaCppAdapter(AdapterBase):
     """llama.cpp backend adapter.
@@ -66,20 +150,15 @@ class LlamaCppAdapter(AdapterBase):
             self._config = self._cfg
         if hil_handle is not None:
             self._hil_handle = hil_handle
-        if self._client is None:
-            self._client = LlamaCppClient(
-                base_url=self._config.base_url,
-                timeout_ms=self._config.timeout_ms,
-                stream_timeout_ms=self._config.stream_timeout_ms,
-            )
+        client = self._ensure_client()
 
         # Verify server health
-        health = await maybe_await(self._client.health)
+        health = await maybe_await(client.health)
         if health.get("status") == "error":
             raise BackendUnavailableError()
 
         # Get server properties for context size
-        props = await maybe_await(self._client.props)
+        props = await maybe_await(client.props)
         self._context_size = props.get("default_generation_settings", {}).get(
             "n_ctx", self._config.context_size
         )
@@ -92,6 +171,17 @@ class LlamaCppAdapter(AdapterBase):
             f"ctx={self._context_size}, gpu_layers={self._config.n_gpu_layers}",
         )
         return f"llamacpp-{self._start_time_ms}"
+
+    def _ensure_client(self) -> LlamaCppClient:
+        """Return the live client, creating it once from the active config."""
+        if self._client is not None:
+            return self._client
+        self._client = LlamaCppClient(
+            base_url=self._config.base_url,
+            timeout_ms=self._config.timeout_ms,
+            stream_timeout_ms=self._config.stream_timeout_ms,
+        )
+        return self._client
 
     def _ensure_initialized(self) -> None:
         """Guard against calls before initialization."""
@@ -128,55 +218,26 @@ class LlamaCppAdapter(AdapterBase):
             body = resp
         else:
             body = resp.body if hasattr(resp, "body") else resp
-        choices = body.get("choices", [])
-        if choices:
-            choice = choices[0]
-            text = choice.get("message", {}).get("content", "")
-            finish = choice.get("finish_reason", "stop")
-            usage = body.get("usage", {})
-            tokens_out = usage.get("completion_tokens", len(text) // 4)
-            reason = FinishReason.MAX_TOKENS if finish == "length" else FinishReason.STOP
-        else:
-            text, tokens_out, reason = "", 0, FinishReason.STOP
-
         self._requests_served += 1
-        return GenerationResult(text=text, tokens_generated=tokens_out, finish_reason=reason)
+        return _generation_result_from_body(body)
 
-    async def _generate_stream(
+    def _generate_stream(
         self, prompt: str, params: GenerationParams,
     ) -> AsyncIterator[Token]:
         """Stream tokens from llama-server."""
         assert self._client is not None
-        messages = [{"role": "user", "content": prompt}]
+        grammar = _grammar_for_params(self._config.default_grammar, params)
+        return self._stream_and_count(self._client, prompt, params, grammar)
 
-        # Use grammar if structured schema requested
-        grammar = self._config.default_grammar
-        if params.structured_schema:
-            grammar = json.dumps(params.structured_schema) if not grammar else grammar
-
-        chunks = await asyncio.to_thread(
-            self._client.chat_completions,
-            messages=messages,
-            temperature=params.temperature,
-            top_p=params.top_p,
-            max_tokens=params.max_tokens,
-            stop=params.stop_sequences or None,
-            stream=True,
-            grammar=grammar,
-        )
-
-        token_index = 0
-        for chunk in chunks:
-            if chunk.content:
-                yield Token(
-                    text=chunk.content,
-                    index=token_index,
-                    is_end_of_text=chunk.stop,
-                )
-                token_index += 1
-            elif chunk.stop:
-                yield Token(text="", index=token_index, is_end_of_text=True)
-
+    async def _stream_and_count(
+        self,
+        client: LlamaCppClient,
+        prompt: str,
+        params: GenerationParams,
+        grammar: str | None,
+    ) -> AsyncIterator[Token]:
+        async for token in _stream_tokens(client, prompt, params, grammar):
+            yield token
         self._requests_served += 1
 
     async def generate_batch(
@@ -186,31 +247,7 @@ class LlamaCppAdapter(AdapterBase):
         self._ensure_initialized()
         assert self._client is not None
 
-        results: list[GenerationResult] = []
-        for prompt in prompts:
-            messages = [{"role": "user", "content": prompt}]
-            resp = await asyncio.to_thread(
-                self._client.chat_completions,
-                messages=messages,
-                temperature=params.temperature,
-                top_p=params.top_p,
-                max_tokens=params.max_tokens,
-                stop=params.stop_sequences or None,
-                stream=False,
-            )
-            choices = resp.body.get("choices", [])
-            if choices:
-                choice = choices[0]
-                text = choice.get("message", {}).get("content", "")
-                finish = choice.get("finish_reason", "stop")
-                reason = FinishReason.MAX_TOKENS if finish == "length" else FinishReason.STOP
-                tokens_out = resp.body.get("usage", {}).get("completion_tokens", len(text) // 4)
-                results.append(GenerationResult(
-                    text=text, tokens_generated=tokens_out, finish_reason=reason,
-                ))
-            else:
-                results.append(GenerationResult(text="", tokens_generated=0))
-
+        results = await _batch_results(self._client, prompts, params)
         self._requests_served += len(prompts)
         return results
 
@@ -237,9 +274,7 @@ class LlamaCppAdapter(AdapterBase):
         """llama.cpp capabilities: streaming, grammar constraints, no native batching."""
         return AdapterCapabilities(
             max_context_window=self._context_size,
-            supported_quantizations=[
-                "gguf_q4_0", "gguf_q4_K_M", "gguf_q5_K_M", "gguf_q8_0", "gguf_f16",
-            ],
+            supported_quantizations=_supported_quantizations(),
             supports_streaming=True,
             supports_batching=False,
             supports_structured_output=True,  # via GBNF grammar
@@ -271,3 +306,6 @@ class LlamaCppAdapter(AdapterBase):
         assert self._client is not None
         return await maybe_await(self._client.slots)
 
+
+def _supported_quantizations() -> list[str]:
+    return ["gguf_q4_0", "gguf_q4_K_M", "gguf_q5_K_M", "gguf_q8_0", "gguf_f16"]

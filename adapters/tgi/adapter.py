@@ -1,11 +1,4 @@
-"""TGI (Text Generation Inference) backend adapter.
-
-HuggingFace's production inference server with quantization (bitsandbytes,
-GPTQ, AWQ), speculative decoding, watermarking for compliance audit trails,
-and Flash Attention optimization.
-
-Session 09 deliverable.
-"""
+"""TGI (Text Generation Inference) backend adapter."""
 
 from __future__ import annotations
 
@@ -39,12 +32,7 @@ logger = logging.getLogger("mai.adapters.tgi")
 
 @mai_adapter(name="tgi", version="1.0.0")
 class TgiAdapter(AdapterBase):
-    """HuggingFace Text Generation Inference adapter.
-
-    Supports quantization configs, speculative decoding with draft models,
-    watermarking for compliance, and Flash Attention. TGI serves one model
-    per instance; multi-model requires multiple TGI processes.
-    """
+    """HuggingFace Text Generation Inference adapter."""
 
     def __init__(self, config: dict[str, Any] | None = None) -> None:
         super().__init__(config)

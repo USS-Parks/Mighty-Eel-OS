@@ -30,17 +30,13 @@ from typing import Any
 from adapters.base import (
     AdapterBase,
     AdapterCapabilities,
-    AdapterError,
     AdapterTimeoutError,
-    BackendCrashedError,
     BackendUnavailableError,
     Embedding,
     FinishReason,
     GenerationParams,
     GenerationResult,
     HealthStatus,
-    ModelNotFoundError,
-    OutOfMemoryError,
     Token,
     UnsupportedOperationError,
     ValidationError,
@@ -52,29 +48,9 @@ from adapters.onnxruntime.client import (
     OnnxStreamChunk,
 )
 from adapters.onnxruntime.config import OnnxRuntimeConfig
+from adapters.onnxruntime.error_mapping import raise_typed
 
 logger = logging.getLogger("mai.adapters.onnxruntime")
-
-
-# Map client error kinds → MAI typed error factories. Kept as a function
-# so we can resolve the error variant in one place; the dict approach
-# would force eager constructor calls.
-def _raise_typed(kind: str, detail: str, *, model_id: str = "") -> None:
-    """Translate a client-error kind into the matching MAI typed error."""
-    if kind == "ValidationError":
-        raise ValidationError(detail)
-    if kind == "BackendUnavailable":
-        raise BackendUnavailableError(detail)
-    if kind == "ModelNotFound":
-        raise ModelNotFoundError(model_id or detail)
-    if kind == "OutOfMemory":
-        raise OutOfMemoryError()
-    if kind == "UnsupportedOperation":
-        raise UnsupportedOperationError(detail)
-    if kind == "BackendCrashed":
-        raise BackendCrashedError(detail)
-    # Catch-all so we never leak a raw client exception.
-    raise AdapterError(code=kind or "InternalError", detail=detail)
 
 
 @mai_adapter(name="onnxruntime", version="1.0.0")
@@ -91,8 +67,6 @@ class OnnxRuntimeAdapter(AdapterBase):
         self._supports_embedding: bool = False
         self._backend_version: str = "unknown"
         self._model_id: str = ""
-
-    # ── lifecycle ───────────────────────────────────────────────────────────
 
     async def initialize(
         self,
@@ -124,7 +98,7 @@ class OnnxRuntimeAdapter(AdapterBase):
                 client.load, embedding_only=self._cfg.embedding_only,
             )
         except OnnxRuntimeClientError as exc:
-            _raise_typed(exc.kind, exc.detail, model_id=self._cfg.model_path)
+            raise_typed(exc.kind, exc.detail, model_id=self._cfg.model_path)
             return ""  # pragma: no cover — _raise_typed always raises
 
         self._client = client
@@ -152,8 +126,6 @@ class OnnxRuntimeAdapter(AdapterBase):
         self._client = None
         self._initialized = False
         logger.info("ONNX Runtime adapter shut down")
-
-    # ── generation ──────────────────────────────────────────────────────────
 
     async def generate(
         self,
@@ -189,7 +161,7 @@ class OnnxRuntimeAdapter(AdapterBase):
         except TimeoutError as exc:  # asyncio.wait_for raises TimeoutError in 3.11+
             raise AdapterTimeoutError(self._cfg.timeout_ms) from exc
         except OnnxRuntimeClientError as exc:
-            _raise_typed(exc.kind, exc.detail, model_id=self._model_id)
+            raise_typed(exc.kind, exc.detail, model_id=self._model_id)
 
         finish = FinishReason.MAX_TOKENS if count >= max_tokens else FinishReason.STOP
         self._requests_served += 1
@@ -238,7 +210,7 @@ class OnnxRuntimeAdapter(AdapterBase):
         except TimeoutError as exc:
             raise AdapterTimeoutError(self._cfg.stream_timeout_ms) from exc
         except OnnxRuntimeClientError as exc:
-            _raise_typed(exc.kind, exc.detail, model_id=self._model_id)
+            raise_typed(exc.kind, exc.detail, model_id=self._model_id)
             return  # unreachable, satisfies typing
 
         token_index = 0
@@ -291,8 +263,6 @@ class OnnxRuntimeAdapter(AdapterBase):
             results.append(result)
         return results
 
-    # ── embeddings ──────────────────────────────────────────────────────────
-
     async def embed(self, texts: list[str]) -> list[Embedding]:
         """Compute embeddings via the loaded InferenceSession."""
         self._ensure_initialized()
@@ -305,7 +275,7 @@ class OnnxRuntimeAdapter(AdapterBase):
         try:
             vectors = await asyncio.to_thread(self._run_embed, texts)
         except OnnxRuntimeClientError as exc:
-            _raise_typed(exc.kind, exc.detail, model_id=self._model_id)
+            raise_typed(exc.kind, exc.detail, model_id=self._model_id)
             return []  # unreachable
 
         embeddings = [
@@ -318,8 +288,6 @@ class OnnxRuntimeAdapter(AdapterBase):
     def _run_embed(self, texts: list[str]) -> list[list[float]]:
         assert self._client is not None
         return self._client.embed(texts)
-
-    # ── health / capabilities ───────────────────────────────────────────────
 
     async def health_check(self) -> HealthStatus:
         """Cheap in-process readiness probe; no I/O."""
@@ -360,8 +328,6 @@ class OnnxRuntimeAdapter(AdapterBase):
                 "model_id": self._model_id,
             },
         )
-
-    # ── internals ───────────────────────────────────────────────────────────
 
     def _ensure_initialized(self) -> None:
         if not self._initialized or self._client is None:

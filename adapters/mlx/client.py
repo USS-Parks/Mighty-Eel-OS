@@ -92,23 +92,13 @@ class MLXClient:
         if self._loaded:
             return
 
-        if self._mlx_lm is None:
-            if not is_apple_silicon():
-                raise MLXLoadError(
-                    "MLX requires Apple Silicon (Darwin/arm64); "
-                    f"runtime is {platform.system()}/{platform.machine()}",
-                )
-            try:
-                import mlx_lm  # type: ignore[import-not-found]
-            except ImportError as e:
-                raise MLXLoadError(f"mlx-lm not installed: {e}") from e
-            self._mlx_lm = mlx_lm
+        mlx_lm = self._ensure_mlx_module()
 
         if not self.model_path:
             raise MLXLoadError("model_path is empty; nothing to load")
 
         try:
-            self._model, self._tokenizer = self._mlx_lm.load(
+            self._model, self._tokenizer = mlx_lm.load(
                 self.model_path,
                 tokenizer_config={"path": self.tokenizer_path}
                 if self.tokenizer_path != self.model_path
@@ -119,13 +109,29 @@ class MLXClient:
         except Exception as e:
             raise MLXLoadError(f"mlx-lm load failed: {e}") from e
 
-        self._backend_version = getattr(self._mlx_lm, "__version__", "unknown")
+        self._backend_version = getattr(mlx_lm, "__version__", "unknown")
         self._loaded = True
         logger.info(
             "MLX client loaded: path=%s version=%s",
             self.model_path,
             self._backend_version,
         )
+
+    def _ensure_mlx_module(self) -> Any:
+        """Return the injected or lazily imported mlx_lm module."""
+        if self._mlx_lm is not None:
+            return self._mlx_lm
+        if not is_apple_silicon():
+            raise MLXLoadError(
+                "MLX requires Apple Silicon (Darwin/arm64); "
+                f"runtime is {platform.system()}/{platform.machine()}",
+            )
+        try:
+            import mlx_lm  # type: ignore[import-not-found]
+        except ImportError as e:
+            raise MLXLoadError(f"mlx-lm not installed: {e}") from e
+        self._mlx_lm = mlx_lm
+        return self._mlx_lm
 
     def generate(
         self,
