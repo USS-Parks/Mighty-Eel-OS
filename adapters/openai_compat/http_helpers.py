@@ -7,8 +7,6 @@ import urllib.error
 from dataclasses import dataclass
 from typing import Any
 
-from adapters.base import BackendCrashedError
-
 
 @dataclass
 class OpenAICompatResponse:
