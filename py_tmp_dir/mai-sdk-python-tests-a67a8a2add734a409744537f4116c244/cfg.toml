@@ -1,6 +1,0 @@
-base_url = "http://file:8000/v1"
-api_key = "im-file"
-timeout = 45.0
-[retry]
-max_retries = 5
-base_delay = 2.0

@@ -15,6 +15,7 @@ build/
 .pytest-tmp/
 pytest_temp/
 py_tmp_dir/
+temp_test_dir/
 
 # IDE
 .vscode/
@@ -40,6 +41,7 @@ tests/burn-in/results/
 /12
 /et HEAD
 /pytest-cache-files-*
+pytest-cache-files-*/
 # Junk from sandbox sed failures
 .integrity/scripts/c *
 

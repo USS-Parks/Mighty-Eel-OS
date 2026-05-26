@@ -1,4 +1,0 @@
-[server]
-port = 54332
-grpc_port = 54333
-bind_address = "127.0.0.1"
