@@ -75,32 +75,32 @@ def _raise_url_error(error: urllib.error.URLError, timeout: float) -> None:
 
 def _stream_chunks_from_response(resp: Any) -> Iterator[ExllamaStreamChunk]:
     for line in resp:
-        chunk = _stream_chunk_from_line(line)
-        if chunk == "done":
+        done, chunk = _stream_chunk_from_line(line)
+        if done:
             break
         if chunk is not None:
             yield chunk
 
 
-def _stream_chunk_from_line(line: bytes) -> ExllamaStreamChunk | str | None:
+def _stream_chunk_from_line(line: bytes) -> tuple[bool, ExllamaStreamChunk | None]:
     line_str = line.decode().strip()
     if not line_str or not line_str.startswith("data: "):
-        return None
+        return False, None
     payload = line_str[6:]
     if payload == "[DONE]":
-        return "done"
+        return True, None
     try:
         chunk_data = json.loads(payload)
     except json.JSONDecodeError:
-        return None
+        return False, None
     choices = chunk_data.get("choices", [])
     if not choices:
-        return None
+        return False, None
     choice = choices[0]
     delta = choice.get("delta", {})
     content = delta.get("content", "")
     finish_reason = choice.get("finish_reason")
-    return ExllamaStreamChunk(content=content, finish_reason=finish_reason)
+    return False, ExllamaStreamChunk(content=content, finish_reason=finish_reason)
 
 
 class ExLlamaV2Client:
