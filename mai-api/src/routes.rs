@@ -203,6 +203,7 @@ pub fn build_router(state: AppState) -> Router {
             "/v1/trust/revocation_status",
             get(handlers::trust::revocation_status),
         )
+        .route("/v1/trust/refresh", post(handlers::trust::force_refresh))
         .route(
             "/v1/auth/exchange_token",
             post(handlers::trust::exchange_token),
