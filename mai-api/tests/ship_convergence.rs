@@ -103,6 +103,7 @@ fn local_dev_profile(state_dir: PathBuf) -> ShipProfile {
             metrics_exporter: MetricsExporter::Prometheus,
             alerts_enabled: false,
         },
+        openbao: None,
     }
 }
 

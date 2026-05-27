@@ -43,10 +43,6 @@ pub enum VaultBuildError {
     EmptyRoot,
     #[error("vault.root {path:?} does not exist; create it before boot in production")]
     RootMissing { path: PathBuf },
-    #[error(
-        "vault.backend \"file-dev\" is reserved for a future session and is not yet implemented"
-    )]
-    FileDevUnsupported,
 }
 
 /// Construct the vault implementation selected by the profile.
@@ -58,15 +54,15 @@ pub enum VaultBuildError {
 /// | production  | zfs      | false      | [`ZfsVault`]                  |
 /// | production  | zfs      | true       | [`StubAllowedInProduction`]   |
 /// | production  | stub     | any        | [`StubInProduction`]          |
-/// | production  | file-dev | any        | [`FileDevUnsupported`]        |
+/// | production  | file-dev | false      | [`FileDevVault`]               |
 /// | local-dev   | zfs      | any        | [`ZfsVault`]                  |
 /// | local-dev   | stub     | true       | [`LocalDevStubVault`]         |
 /// | local-dev   | stub     | false      | [`StubNotAllowed`]            |
-/// | local-dev   | file-dev | any        | [`FileDevUnsupported`]        |
+/// | local-dev   | file-dev | any        | [`FileDevVault`]               |
 ///
 /// [`StubAllowedInProduction`]: VaultBuildError::StubAllowedInProduction
 /// [`StubInProduction`]: VaultBuildError::StubInProduction
-/// [`FileDevUnsupported`]: VaultBuildError::FileDevUnsupported
+/// [`FileDevVault`]: mai_vault::file_dev::FileDevVault
 /// [`StubNotAllowed`]: VaultBuildError::StubNotAllowed
 pub fn build_vault(profile: &ShipProfile) -> Result<Box<dyn VaultInterface>, VaultBuildError> {
     let root = profile.vault.root.as_path();

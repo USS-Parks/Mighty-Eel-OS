@@ -9,6 +9,7 @@ repository.workspace = true
 
 [dependencies]
 tokio = { workspace = true }
+tokio-util = "0.7"
 axum = { workspace = true }
 tonic = { workspace = true }
 prost = { workspace = true }

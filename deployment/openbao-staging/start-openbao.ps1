@@ -110,6 +110,15 @@ path "kv/data/tenants/*" {
   capabilities = ["read"]
 }
 path "kv/metadata/tenants/*" {
+  capabilities = ["read"]
+}
+path "kv/data/revocations/*" {
+  capabilities = ["read"]
+}
+path "kv/metadata/revocations/*" {
+  capabilities = ["read"]
+}
+path "kv/metadata/tenants/*" {
   capabilities = ["list","read"]
 }
 path "transit/sign/lamprey-claim-signer" {
@@ -139,6 +148,11 @@ $tenantAttrs = @{
 }
 $wrapper = @{data=@{attributes=($tenantAttrs | ConvertTo-Json -Compress)}}
 Invoke-Bao -Method Post -Path "kv/data/tenants/tribal-health-demo" -Body $wrapper | Out-Null
+
+# ── 6.5. Revocation path ──────────────────────────────────────────────
+Write-Host "Writing initial revocation list..." -ForegroundColor Cyan
+$revocationsEntry = @{data=@{snapshots=@()}}
+Invoke-Bao -Method Post -Path "kv/data/revocations/tribal-health-demo" -Body $revocationsEntry | Out-Null
 
 # ── 7. Generate appliance secret_id ──────────────────────────────────
 Write-Host "Generating appliance secret_id..." -ForegroundColor Cyan

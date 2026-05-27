@@ -16,6 +16,7 @@
 //! - `GET  /v1/trust/claims`            — list every cached claim
 //! - `GET  /v1/trust/bundle_status`     — bundle version + freshness
 //! - `GET  /v1/trust/revocation_status` — single-claim lookup
+//! - `POST /v1/trust/refresh`           — force-sync revocation snapshots from OpenBao
 //! - `POST /v1/auth/exchange_token`     — local-dev token stub
 
 use axum::Json;
@@ -88,6 +89,7 @@ pub struct TrustStatusResponse {
     pub claim_count: usize,
     pub airgap: AirGapView,
     pub offline_backlog: usize,
+    pub openbao_health: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -133,6 +135,18 @@ pub async fn get_trust_status(
     let cache = state.trust_cache.read().await;
     let now = LocalTrustCache::now_secs();
     let connectivity = cache.evaluate(state.airgap_policy.state(), true, now);
+    let failures = state
+        .openbao_consecutive_failures
+        .load(std::sync::atomic::Ordering::Relaxed);
+    let openbao_health = if state.openbao_bridge.read().await.is_none() {
+        "no-bridge"
+    } else if failures == 0 {
+        "connected"
+    } else if failures < 3 {
+        "degraded"
+    } else {
+        "disconnected"
+    };
     let response = TrustStatusResponse {
         mode: connectivity.label().to_string(),
         bundle_version: cache.bundle_version().map(str::to_string),
@@ -146,6 +160,7 @@ pub async fn get_trust_status(
             is_air_gapped: state.airgap_policy.state().is_air_gapped(),
         },
         offline_backlog: cache.offline_audit_backlog(),
+        openbao_health: openbao_health.to_string(),
     };
     Ok(Json(response))
 }
@@ -209,6 +224,65 @@ pub async fn revocation_status(
     }))
 }
 
+#[derive(Debug, Serialize)]
+pub struct TrustRefreshResponse {
+    pub snapshots_ingested: usize,
+    pub refreshed_at_secs: u64,
+    pub consecutive_failures: u32,
+}
+
+/// `POST /v1/trust/refresh`
+///
+/// Force-sync revocation snapshots from OpenBao into the local trust
+/// cache. Requires a configured bridge client; returns 503 when no
+/// bridge is wired (local-dev or air-gapped posture).
+pub async fn force_refresh(
+    State(state): State<AppState>,
+    _profile: ProfileInfo,
+) -> Result<impl IntoResponse, ApiError> {
+    let guard = state.openbao_bridge.read().await;
+    let bridge = guard.as_ref().ok_or_else(|| {
+        tracing::warn!("force_refresh: no bridge client wired");
+        ApiError::ServiceUnavailable
+    })?;
+
+    let tenant_id = "tribal-health-demo";
+
+    match bridge.fetch_revocation_snapshots(tenant_id).await {
+        Ok(snapshots) => {
+            let count = snapshots.len();
+            if count > 0 {
+                state
+                    .trust_cache
+                    .write()
+                    .await
+                    .record_revocations(snapshots);
+            }
+            state
+                .openbao_consecutive_failures
+                .store(0, std::sync::atomic::Ordering::Relaxed);
+            let now = LocalTrustCache::now_secs();
+            tracing::info!(count, "force_refresh: snapshots ingested");
+            Ok(Json(TrustRefreshResponse {
+                snapshots_ingested: count,
+                refreshed_at_secs: now,
+                consecutive_failures: 0,
+            }))
+        }
+        Err(e) => {
+            let prev = state
+                .openbao_consecutive_failures
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            tracing::error!(
+                error = %e,
+                failures = prev + 1,
+                "force_refresh: OpenBao unreachable"
+            );
+            Err(ApiError::ServiceUnavailable)
+        }
+    }
+}
+
 /// `POST /v1/auth/exchange_token`
 ///
 /// Profile-aware token exchange (SHIP-07 Slice B). Behaviour switches
@@ -240,7 +314,8 @@ pub async fn exchange_token(
     match state.trust_exchange_mode {
         TrustExchangeMode::LocalDevSynthetic => mint_local_dev_synthetic(profile, req),
         TrustExchangeMode::OpenBaoBridge => {
-            let bridge = state.openbao_bridge.as_ref().ok_or_else(|| {
+            let guard = state.openbao_bridge.read().await;
+            let bridge = guard.as_ref().ok_or_else(|| {
                 tracing::error!(
                     "exchange_token: OpenBaoBridge mode selected but no bridge client wired"
                 );
@@ -255,7 +330,10 @@ pub async fn exchange_token(
                 req.scopes.clone()
             };
 
-            match bridge.issue_claim(&req.subject_id, tenant_id, roles).await {
+            match bridge
+                .issue_claim(&req.subject_id, tenant_id, roles, Some(&state.trust_cache))
+                .await
+            {
                 Ok(claim) => {
                     let now = SystemTime::now()
                         .duration_since(UNIX_EPOCH)

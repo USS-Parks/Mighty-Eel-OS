@@ -12,10 +12,13 @@
 //! cloud OpenBao Trust Core. It moves ONLY identity metadata — never
 //! prompts, completions, embeddings, or regulated payloads (§2.2).
 
+use crate::ship_profile::{KvPathConfig, OpenbaoConfig, PkiRoleConfig, TransitKeysConfig};
+use mai_compliance::trust_cache::{LocalTrustCache, RevocationSnapshot, SnapshotStatus};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
 
 /// OpenBao bridge client configuration.
@@ -31,9 +34,40 @@ pub struct OpenBaoBridgeConfig {
     pub wrapped_secret_id: Option<String>,
     /// Request timeout.
     pub timeout: Duration,
+    /// Transit key names from ship profile.
+    pub transit_keys: TransitKeysConfig,
+    /// KV paths from ship profile.
+    pub kv_paths: KvPathConfig,
+    /// PKI role from ship profile.
+    pub pki_role: PkiRoleConfig,
 }
 
 impl OpenBaoBridgeConfig {
+    /// Build from a ship profile `[openbao]` section. Secrets are
+    /// NOT in the profile — they come from environment variables.
+    pub fn from_profile(profile: &OpenbaoConfig) -> Self {
+        let secret_id = std::env::var("MAI_OPENBAO_SECRET_ID").ok();
+        let wrapped_secret_id = std::env::var("MAI_OPENBAO_WRAPPED_SECRET_ID").ok();
+
+        if secret_id.is_none() && wrapped_secret_id.is_none() {
+            warn!(
+                "MAI_OPENBAO_SECRET_ID and MAI_OPENBAO_WRAPPED_SECRET_ID are both unset; \
+                 bridge client will fail closed on first use"
+            );
+        }
+
+        Self {
+            address: profile.address.clone(),
+            role_id: profile.role_id.clone(),
+            secret_id,
+            wrapped_secret_id,
+            timeout: Duration::from_secs(profile.timeout_secs),
+            transit_keys: profile.transit.clone(),
+            kv_paths: profile.kv.clone(),
+            pki_role: profile.pki.clone(),
+        }
+    }
+
     /// Staging config. Reads secrets from environment variables — never
     /// hardcoded in source.
     ///
@@ -68,7 +102,24 @@ impl OpenBaoBridgeConfig {
             secret_id,
             wrapped_secret_id,
             timeout: Duration::from_secs(10),
+            transit_keys: TransitKeysConfig::default(),
+            kv_paths: KvPathConfig::default(),
+            pki_role: PkiRoleConfig::default(),
         }
+    }
+
+    /// Builder: override the AppRole secret_id (for hot-reload).
+    #[must_use]
+    pub fn with_secret_id(mut self, id: String) -> Self {
+        self.secret_id = Some(id);
+        self
+    }
+
+    /// Builder: override the wrapped secret_id token.
+    #[must_use]
+    pub fn with_wrapped_secret_id(mut self, token: String) -> Self {
+        self.wrapped_secret_id = Some(token);
+        self
     }
 }
 
@@ -256,7 +307,10 @@ impl OpenBaoBridgeClient {
         token: &str,
         tenant_id: &str,
     ) -> Result<TenantAttributes, OpenBaoBridgeError> {
-        let url = format!("{}/v1/kv/data/tenants/{tenant_id}", self.config.address);
+        let url = format!(
+            "{}/v1/{}/{tenant_id}",
+            self.config.address, self.config.kv_paths.tenant_path
+        );
         let resp = self
             .client
             .get(&url)
@@ -289,6 +343,62 @@ impl OpenBaoBridgeClient {
         Ok(attrs)
     }
 
+    /// Fetch revocation snapshots for a tenant from OpenBao KV.
+    /// Returns an empty vec when the path does not exist or contains no
+    /// snapshots (graceful first-boot / pre-provisioned state).
+    pub async fn fetch_revocation_snapshots(
+        &self,
+        tenant_id: &str,
+    ) -> Result<Vec<RevocationSnapshot>, OpenBaoBridgeError> {
+        let token = self.login().await?;
+        let url = format!(
+            "{}/v1/{}/{tenant_id}",
+            self.config.address, self.config.kv_paths.revocation_path
+        );
+        let resp = self
+            .client
+            .get(&url)
+            .header("X-Vault-Token", &token)
+            .send()
+            .await?;
+
+        if resp.status() == reqwest::StatusCode::NOT_FOUND {
+            debug!(%tenant_id, "revocation path not found, returning empty");
+            return Ok(Vec::new());
+        }
+
+        let body: KvV2Response = resp
+            .json()
+            .await
+            .map_err(|e| OpenBaoBridgeError::Protocol(format!("revocation kv read parse: {e}")))?;
+
+        // KV v2 stores snapshots under data.data, potentially as a
+        // string-serialized array (bao kv put convention) or a raw array.
+        let snapshots_val = body
+            .data
+            .data
+            .get("snapshots")
+            .cloned()
+            .unwrap_or(body.data.data.clone());
+        let snapshots: Vec<RevocationSnapshot> = if let serde_json::Value::String(s) =
+            &snapshots_val
+        {
+            serde_json::from_str(s).map_err(|e| {
+                OpenBaoBridgeError::Protocol(format!("revocation snapshots parse from string: {e}"))
+            })?
+        } else {
+            serde_json::from_value(snapshots_val).map_err(|e| {
+                OpenBaoBridgeError::Protocol(format!("revocation snapshots parse from object: {e}"))
+            })?
+        };
+        debug!(
+            count = snapshots.len(),
+            %tenant_id,
+            "Revocation snapshots fetched"
+        );
+        Ok(snapshots)
+    }
+
     /// Sign a claim payload with the Lamprey claim-signer transit key.
     pub async fn sign_claim(
         &self,
@@ -296,8 +406,8 @@ impl OpenBaoBridgeClient {
         claim_json: &str,
     ) -> Result<String, OpenBaoBridgeError> {
         let url = format!(
-            "{}/v1/transit/sign/lamprey-claim-signer",
-            self.config.address
+            "{}/v1/transit/sign/{}",
+            self.config.address, self.config.transit_keys.claim_signer_key
         );
         let b64 = base64::Engine::encode(
             &base64::engine::general_purpose::STANDARD,
@@ -326,11 +436,16 @@ impl OpenBaoBridgeClient {
     ///
     /// Returns a fully signed Lamprey claim suitable for injection into
     /// the local trust cache and for presentation to the policy runtime.
+    ///
+    /// When `trust_cache` is provided, the claim's `revocation_status`
+    /// reflects the last-known snapshot (Valid, Revoked, or Unknown)
+    /// instead of being hardcoded to `"valid"`.
     pub async fn issue_claim(
         &self,
         subject_id: &str,
         tenant_id: &str,
         roles: Vec<String>,
+        trust_cache: Option<&Arc<RwLock<LocalTrustCache>>>,
     ) -> Result<SignedLampreyClaim, OpenBaoBridgeError> {
         let token = self.login().await?;
         let tenant = self.get_tenant(&token, tenant_id).await?;
@@ -342,6 +457,17 @@ impl OpenBaoBridgeClient {
         let expire_secs = now_secs + 900;
 
         let claim_id = format!("clm_{}_{:04x}", now_secs, rand::random::<u16>());
+
+        let revocation_status = if let Some(cache) = trust_cache {
+            let status = cache.read().await.revocation_status(&claim_id);
+            match status {
+                SnapshotStatus::Valid => "valid",
+                SnapshotStatus::Revoked => "revoked",
+                SnapshotStatus::Unknown => "unknown",
+            }
+        } else {
+            "valid"
+        };
 
         let issued = chrono::Utc::now();
         let expires = issued + chrono::TimeDelta::seconds(900);
@@ -363,7 +489,7 @@ impl OpenBaoBridgeClient {
             "country": "US",
             "person_type": "us_person",
             "offline_mode": false,
-            "revocation_status": "valid",
+            "revocation_status": revocation_status,
         });
 
         let claim_str = serde_json::to_string(&claim_json)
@@ -387,10 +513,10 @@ impl OpenBaoBridgeClient {
             "country": "US",
             "person_type": "us_person",
             "offline_mode": false,
-            "revocation_status": "valid",
+            "revocation_status": revocation_status,
             "signature": {
                 "alg": "ed25519",
-                "key_id": "lamprey-claim-signer",
+                "key_id": self.config.transit_keys.claim_signer_key,
                 "value": sig_value,
             },
         });

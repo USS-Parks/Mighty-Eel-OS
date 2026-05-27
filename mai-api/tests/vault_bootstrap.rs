@@ -79,6 +79,7 @@ fn baseline(mode: ProfileMode, root: PathBuf) -> ShipProfile {
             metrics_exporter: MetricsExporter::Prometheus,
             alerts_enabled: false,
         },
+        openbao: None,
     }
 }
 
@@ -166,18 +167,18 @@ fn local_dev_rejects_stub_when_flag_clear() {
     );
 }
 
-#[test]
-fn file_dev_backend_builds_in_local_dev() {
-    // 6d8bf8e implemented FileDev as production-capable. Prior to that the
-    // builder rejected file-dev with VaultBuildError::FileDevUnsupported; it
-    // now returns a usable FileDevVault for local-dev profiles and (when root
-    // exists) for production. Cover the local-dev case here; production root
-    // presence is exercised by `production_rejects_missing_root`.
+#[tokio::test]
+async fn file_dev_backend_is_accepted() {
     let temp = tempfile::tempdir().unwrap();
-    let mut p = baseline(ProfileMode::LocalDev, temp.path().to_path_buf());
+    let root = temp.path().join("vault");
+    std::fs::create_dir_all(&root).unwrap();
+    let mut p = baseline(ProfileMode::LocalDev, root);
     p.vault.backend = VaultBackend::FileDev;
-    let vault = build_vault(&p).expect("file-dev must build successfully in local-dev");
-    drop(vault);
+    let vault = build_vault(&p).expect("file-dev must be accepted in local-dev mode");
+    assert!(
+        vault.load_model_weights("any").await.is_err(),
+        "stub-like: no models on disk"
+    );
 }
 
 #[tokio::test]
