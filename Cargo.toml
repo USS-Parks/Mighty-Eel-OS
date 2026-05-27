@@ -49,10 +49,10 @@ thiserror = "2"
 async-trait = "0.1"
 
 # Request validation (API layer)
-validator = { version = "0.16", features = ["derive"] }
+validator = { version = "0.20", features = ["derive"] }
 
 # FFI bridge (Rust ↔ Python, adapter framework)
-pyo3 = { version = "0.22", features = ["auto-initialize"] }
+pyo3 = { version = "0.24", features = ["auto-initialize"] }
 
 # Logging
 tracing = "0.1"
