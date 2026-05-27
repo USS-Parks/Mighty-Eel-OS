@@ -1,13 +1,18 @@
 # OpenBao Connection — Staging Environment
-# Used by mai-api for bootstrapping local trust cache in production posture.
+# Used as a human-readable reference. Secrets are NOT stored here.
+#
+# Set before starting mai-api:
+#   $env:MAI_OPENBAO_SECRET_ID = '<value>'
+#
+# Generate a fresh secret:
+#   .\ir-respond.ps1 rotate-appliance
 
 [openbao]
 address = "http://localhost:8200"
-root_token = "root"  # dev only; use wrapped tokens in production
 
 [auth.approle]
 role_id = "8053c291-8f60-381f-e283-5e645e5907f4"
-# secret_id delivered via response-wrapped token: s.Xl7phjp4xdaBcti6tKABsmin
+# secret_id: MUST be set via MAI_OPENBAO_SECRET_ID env var. Never in source.
 
 [transit]
 claim_signer_key = "lamprey-claim-signer"
