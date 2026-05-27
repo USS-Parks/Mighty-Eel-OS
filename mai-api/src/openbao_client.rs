@@ -13,10 +13,12 @@
 //! prompts, completions, embeddings, or regulated payloads (§2.2).
 
 use crate::ship_profile::{KvPathConfig, OpenbaoConfig, PkiRoleConfig, TransitKeysConfig};
+use mai_compliance::trust_cache::{LocalTrustCache, RevocationSnapshot, SnapshotStatus};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
 
 /// OpenBao bridge client configuration.
@@ -341,6 +343,62 @@ impl OpenBaoBridgeClient {
         Ok(attrs)
     }
 
+    /// Fetch revocation snapshots for a tenant from OpenBao KV.
+    /// Returns an empty vec when the path does not exist or contains no
+    /// snapshots (graceful first-boot / pre-provisioned state).
+    pub async fn fetch_revocation_snapshots(
+        &self,
+        tenant_id: &str,
+    ) -> Result<Vec<RevocationSnapshot>, OpenBaoBridgeError> {
+        let token = self.login().await?;
+        let url = format!(
+            "{}/v1/{}/{tenant_id}",
+            self.config.address, self.config.kv_paths.revocation_path
+        );
+        let resp = self
+            .client
+            .get(&url)
+            .header("X-Vault-Token", &token)
+            .send()
+            .await?;
+
+        if resp.status() == reqwest::StatusCode::NOT_FOUND {
+            debug!(%tenant_id, "revocation path not found, returning empty");
+            return Ok(Vec::new());
+        }
+
+        let body: KvV2Response = resp
+            .json()
+            .await
+            .map_err(|e| OpenBaoBridgeError::Protocol(format!("revocation kv read parse: {e}")))?;
+
+        // KV v2 stores snapshots under data.data, potentially as a
+        // string-serialized array (bao kv put convention) or a raw array.
+        let snapshots_val = body
+            .data
+            .data
+            .get("snapshots")
+            .cloned()
+            .unwrap_or(body.data.data.clone());
+        let snapshots: Vec<RevocationSnapshot> = if let serde_json::Value::String(s) =
+            &snapshots_val
+        {
+            serde_json::from_str(s).map_err(|e| {
+                OpenBaoBridgeError::Protocol(format!("revocation snapshots parse from string: {e}"))
+            })?
+        } else {
+            serde_json::from_value(snapshots_val).map_err(|e| {
+                OpenBaoBridgeError::Protocol(format!("revocation snapshots parse from object: {e}"))
+            })?
+        };
+        debug!(
+            count = snapshots.len(),
+            %tenant_id,
+            "Revocation snapshots fetched"
+        );
+        Ok(snapshots)
+    }
+
     /// Sign a claim payload with the Lamprey claim-signer transit key.
     pub async fn sign_claim(
         &self,
@@ -378,11 +436,16 @@ impl OpenBaoBridgeClient {
     ///
     /// Returns a fully signed Lamprey claim suitable for injection into
     /// the local trust cache and for presentation to the policy runtime.
+    ///
+    /// When `trust_cache` is provided, the claim's `revocation_status`
+    /// reflects the last-known snapshot (Valid, Revoked, or Unknown)
+    /// instead of being hardcoded to `"valid"`.
     pub async fn issue_claim(
         &self,
         subject_id: &str,
         tenant_id: &str,
         roles: Vec<String>,
+        trust_cache: Option<&Arc<RwLock<LocalTrustCache>>>,
     ) -> Result<SignedLampreyClaim, OpenBaoBridgeError> {
         let token = self.login().await?;
         let tenant = self.get_tenant(&token, tenant_id).await?;
@@ -394,6 +457,17 @@ impl OpenBaoBridgeClient {
         let expire_secs = now_secs + 900;
 
         let claim_id = format!("clm_{}_{:04x}", now_secs, rand::random::<u16>());
+
+        let revocation_status = if let Some(cache) = trust_cache {
+            let status = cache.read().await.revocation_status(&claim_id);
+            match status {
+                SnapshotStatus::Valid => "valid",
+                SnapshotStatus::Revoked => "revoked",
+                SnapshotStatus::Unknown => "unknown",
+            }
+        } else {
+            "valid"
+        };
 
         let issued = chrono::Utc::now();
         let expires = issued + chrono::TimeDelta::seconds(900);
@@ -415,7 +489,7 @@ impl OpenBaoBridgeClient {
             "country": "US",
             "person_type": "us_person",
             "offline_mode": false,
-            "revocation_status": "valid",
+            "revocation_status": revocation_status,
         });
 
         let claim_str = serde_json::to_string(&claim_json)
@@ -439,10 +513,10 @@ impl OpenBaoBridgeClient {
             "country": "US",
             "person_type": "us_person",
             "offline_mode": false,
-            "revocation_status": "valid",
+            "revocation_status": revocation_status,
             "signature": {
                 "alg": "ed25519",
-                "key_id": "lamprey-claim-signer",
+                "key_id": self.config.transit_keys.claim_signer_key,
                 "value": sig_value,
             },
         });

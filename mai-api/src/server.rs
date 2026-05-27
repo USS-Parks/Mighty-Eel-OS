@@ -24,7 +24,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::net::TcpListener;
 use tokio::signal;
 use tokio::sync::{Mutex, RwLock};
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 
 use crate::air_gap::{AirGapChecker, DevSwitchReader};
 use crate::audit::{AuditWriter, MemoryAuditWriter};
@@ -593,6 +593,67 @@ fn apply_ship_profile(
     } else {
         None
     };
+
+    // Spawn background trust-refresh loop when the bridge is wired and
+    // the profile's trust_refresh section is enabled.
+    if let (Some(ob), Some(bridge)) = (&profile.openbao, &bridge_client) {
+        if ob.trust_refresh.enabled {
+            let cache = state.trust_cache.clone();
+            let bridge_clone = bridge.clone();
+            let failures = state.openbao_consecutive_failures.clone();
+            let cancel = state.cancel_token.clone();
+            let interval_secs = ob.trust_refresh.interval_secs;
+            let interval = Duration::from_secs(interval_secs);
+            let tenant_id = "tribal-health-demo".to_string();
+
+            tokio::spawn(async move {
+                info!(interval_secs, "background trust-refresh loop started");
+                loop {
+                    tokio::select! {
+                        _ = cancel.cancelled() => {
+                            info!("trust-refresh loop: cancellation received, shutting down");
+                            break;
+                        }
+                        _ = tokio::time::sleep(interval) => {}
+                    }
+
+                    match bridge_clone.fetch_revocation_snapshots(&tenant_id).await {
+                        Ok(snapshots) => {
+                            if !snapshots.is_empty() {
+                                cache.write().await.record_revocations(snapshots);
+                            }
+                            failures.store(0, std::sync::atomic::Ordering::Relaxed);
+                            debug!("trust-refresh: snapshots ingested, failures reset");
+                        }
+                        Err(e) => {
+                            let prev = failures.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                            let current = prev + 1;
+                            if current >= 10 {
+                                tracing::error!(
+                                    failures = current,
+                                    error = %e,
+                                    "trust-refresh: OpenBao unreachable ({} consecutive failures)", current
+                                );
+                            } else if current >= 3 {
+                                tracing::warn!(
+                                    failures = current,
+                                    "trust-refresh: OpenBao degraded ({} consecutive failures)",
+                                    current
+                                );
+                            } else {
+                                tracing::debug!(
+                                    failures = current,
+                                    "trust-refresh: transient OpenBao error"
+                                );
+                            }
+                        }
+                    }
+                }
+            });
+        } else {
+            info!("trust-refresh disabled by profile");
+        }
+    }
 
     // Boot bundle verification: required in production, skipped for
     // local-dev where bundles are typically not provisioned during

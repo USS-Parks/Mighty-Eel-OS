@@ -256,7 +256,10 @@ pub async fn exchange_token(
                 req.scopes.clone()
             };
 
-            match bridge.issue_claim(&req.subject_id, tenant_id, roles).await {
+            match bridge
+                .issue_claim(&req.subject_id, tenant_id, roles, Some(&state.trust_cache))
+                .await
+            {
                 Ok(claim) => {
                     let now = SystemTime::now()
                         .duration_since(UNIX_EPOCH)

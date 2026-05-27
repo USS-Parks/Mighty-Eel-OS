@@ -6,6 +6,7 @@
 
 use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};
+use tokio_util::sync::CancellationToken;
 
 use crate::audit::AuditWriter;
 use crate::auth::AuthState;
@@ -109,6 +110,14 @@ pub struct AppState {
     /// `Arc<RwLock<...>>` so credential rotation (TLM-4) can hot-swap
     /// the client without a process restart.
     pub openbao_bridge: Arc<RwLock<Option<OpenBaoBridgeClient>>>,
+    /// Consecutive OpenBao connectivity failures since the last
+    /// successful probe. Reset to 0 on success, incremented on each
+    /// error. Drives the trust status endpoint's health assessment.
+    pub openbao_consecutive_failures: Arc<std::sync::atomic::AtomicU32>,
+    /// Cancellation token signalled when the server is shutting down.
+    /// The background trust-refresh loop checks this on each iteration
+    /// to exit cleanly.
+    pub cancel_token: CancellationToken,
 }
 
 /// SHIP-07 Slice B: captured ship-profile + runtime introspection.
@@ -176,6 +185,8 @@ impl AppState {
             // a limiter via [`AppState::with_rate_limiter`].
             rate_limiter: None,
             openbao_bridge: Arc::new(RwLock::new(None)),
+            openbao_consecutive_failures: Arc::new(std::sync::atomic::AtomicU32::new(0)),
+            cancel_token: CancellationToken::new(),
         }
     }
 

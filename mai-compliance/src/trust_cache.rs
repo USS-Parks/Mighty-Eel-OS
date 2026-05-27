@@ -202,6 +202,18 @@ impl LocalTrustCache {
         Ok(())
     }
 
+    /// Insert revocation snapshots without replacing the bundle version
+    /// or refresh timestamp. Used by the background refresh loop to
+    /// incrementally update revocation state between full bundle refreshes.
+    ///
+    /// Each snapshot replaces any previously-held entry for the same
+    /// `claim_id`.
+    pub fn record_revocations(&mut self, snapshots: Vec<RevocationSnapshot>) {
+        for snap in snapshots {
+            self.revocations.insert(snap.claim_id.clone(), snap);
+        }
+    }
+
     /// Verify a [`SignedPolicyBundle`] and, on success, apply its contents
     /// to the cache (BF-3 entry point).
     ///
