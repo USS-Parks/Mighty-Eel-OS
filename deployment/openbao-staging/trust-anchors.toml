@@ -1,0 +1,19 @@
+# Trust Anchors — OpenBao Staging Environment
+# Generated: 2026-05-26
+# These are the public keys for offline claim/bundle/revocation verification.
+# Do NOT commit the corresponding private keys (held inside OpenBao transit engine).
+
+[anchors.claim_signer]
+alg = "ed25519"
+public_key = "JiIGy70TraYKd10drUHCZD6ERNkL2FZwiPH/Jwxlqys="
+rotation = "quarterly"
+
+[anchors.bundle_signer]
+alg = "ed25519"
+public_key = "VtO51NHKcwtNB6IaOKnil+WIy4vuZJXUIdx6CMO2S58="
+rotation = "quarterly"
+
+[anchors.revocation_signer]
+alg = "ed25519"
+public_key = "G5+UBB7ULePvPpofAOhIDJCkzfQhnTqNKK5rxJ6Flkw="
+rotation = "monthly"

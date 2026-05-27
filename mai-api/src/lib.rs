@@ -73,6 +73,9 @@ pub mod grpc;
 // Session 11e: Server Bootstrap
 pub mod server;
 
+// OpenBao Trust Bridge HTTP client (BF-6 bridge integration)
+pub mod openbao_client;
+
 // Public re-exports for SDK consumers and binary entry point
 pub use audit_wal::{
     ReplayOutcome, WalAuditConfig, WalAuditError, WalAuditWriter, replay_and_verify,

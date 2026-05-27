@@ -20,6 +20,7 @@
 
 pub mod audit;
 pub mod config;
+pub mod file_dev;
 pub mod init;
 pub mod pqc;
 pub mod profiles;
@@ -27,6 +28,6 @@ pub mod tpm;
 pub mod vectors;
 pub mod zfs;
 
-// Re-export the unified vault type
 pub use config::VaultConfig;
+pub use file_dev::FileDevVault;
 pub use zfs::ZfsVault;

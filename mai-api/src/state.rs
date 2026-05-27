@@ -11,6 +11,7 @@ use crate::audit::AuditWriter;
 use crate::auth::AuthState;
 use crate::config::ServerConfig;
 use crate::metrics::MetricsRegistry;
+use crate::openbao_client::OpenBaoBridgeClient;
 use crate::production_guard::RuntimeChecks;
 use crate::rate_limit::RateLimiter;
 use crate::ship_profile::ShipProfile;
@@ -102,6 +103,11 @@ pub struct AppState {
     /// [`crate::rate_limit`] for the bucket implementation and
     /// [`crate::middleware::rate_limit_middleware`] for the axum glue.
     pub rate_limiter: Option<Arc<RateLimiter>>,
+    /// OpenBao bridge client for claim issuance and trust cache refresh.
+    /// `None` when the server booted without a ship profile or when
+    /// `TrustExchangeMode` is not `OpenBaoBridge`. Production startup
+    /// constructs one from the staging config.
+    pub openbao_bridge: Option<OpenBaoBridgeClient>,
 }
 
 /// SHIP-07 Slice B: captured ship-profile + runtime introspection.
@@ -168,6 +174,7 @@ impl AppState {
             // no-profile bring-up path are unchanged. Production wires
             // a limiter via [`AppState::with_rate_limiter`].
             rate_limiter: None,
+            openbao_bridge: None,
         }
     }
 
@@ -231,6 +238,15 @@ impl AppState {
     #[must_use]
     pub fn with_trust_exchange_mode(mut self, mode: TrustExchangeMode) -> Self {
         self.trust_exchange_mode = mode;
+        self
+    }
+
+    /// Attach the OpenBao bridge client for claim issuance and trust
+    /// cache refresh. Production startup calls this when
+    /// [`TrustExchangeMode::OpenBaoBridge`] is selected.
+    #[must_use]
+    pub fn with_openbao_bridge(mut self, bridge: OpenBaoBridgeClient) -> Self {
+        self.openbao_bridge = Some(bridge);
         self
     }
 

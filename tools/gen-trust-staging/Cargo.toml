@@ -1,0 +1,20 @@
+[package]
+name = "gen-trust-staging"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+license = "LicenseRef-Proprietary"
+description = "One-shot staging trust material generator — NOT a production binary"
+publish = false
+
+[[bin]]
+name = "gen-trust-staging"
+path = "src/main.rs"
+
+[dependencies]
+mai-compliance = { path = "../../mai-compliance" }
+ml-dsa = "0.0.4"
+rand = "0.9"
+hex = "0.4"
+serde = { workspace = true }
+serde_json = { workspace = true }

@@ -37,7 +37,9 @@ use crate::routes::build_router;
 use crate::sealer_builder::build_sealer;
 use crate::ship_profile::{ProfileMode, ShipProfile, load_ship_profile};
 use crate::state::{AppState, ShipReadiness};
-use crate::trust_builder::{TrustComponents, build_trust_components, verify_boot_bundle};
+use crate::trust_builder::{
+    TrustComponents, TrustExchangeMode, build_trust_components, verify_boot_bundle,
+};
 use crate::vault_builder::build_vault;
 
 use mai_compliance::audit::AuditLog as ComplianceAuditLog;
@@ -573,6 +575,18 @@ fn apply_ship_profile(
         "trust components built"
     );
 
+    // Wire the OpenBao bridge client when the exchange mode is
+    // OpenBaoBridge. Uses the staging config (hardcoded for now;
+    // a follow-up session moves it to the ship profile).
+    let bridge_client = if matches!(exchange_mode, TrustExchangeMode::OpenBaoBridge) {
+        use crate::openbao_client::{OpenBaoBridgeClient, OpenBaoBridgeConfig};
+        let bridge = OpenBaoBridgeClient::new(OpenBaoBridgeConfig::staging());
+        info!("OpenBao bridge client wired (staging config)");
+        Some(bridge)
+    } else {
+        None
+    };
+
     // Boot bundle verification: required in production, skipped for
     // local-dev where bundles are typically not provisioned during
     // bring-up.
@@ -663,6 +677,12 @@ fn apply_ship_profile(
         .with_bundle_verifier(bundle_verifier)
         .with_trust_exchange_mode(exchange_mode)
         .with_ship_readiness(readiness);
+
+    let state = if let Some(bridge) = bridge_client {
+        state.with_openbao_bridge(bridge)
+    } else {
+        state
+    };
 
     Ok((state, runtime))
 }

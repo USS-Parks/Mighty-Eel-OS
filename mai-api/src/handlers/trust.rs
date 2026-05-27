@@ -240,17 +240,46 @@ pub async fn exchange_token(
     match state.trust_exchange_mode {
         TrustExchangeMode::LocalDevSynthetic => mint_local_dev_synthetic(profile, req),
         TrustExchangeMode::OpenBaoBridge => {
-            // Production profiles select OpenBaoBridge but the live
-            // HTTP client has not landed yet (SHIP-08+). Fail closed
-            // with 503 — never silently fall through to the synthetic
-            // mint, which would leak a non-cryptographic token into a
-            // production audit trail.
-            tracing::warn!(
-                profile = %profile.profile_id,
-                subject = %req.subject_id,
-                "exchange_token: OpenBao bridge client not wired; rejecting with 503"
-            );
-            Err(ApiError::ServiceUnavailable)
+            let bridge = state.openbao_bridge.as_ref().ok_or_else(|| {
+                tracing::error!(
+                    "exchange_token: OpenBaoBridge mode selected but no bridge client wired"
+                );
+                ApiError::ServiceUnavailable
+            })?;
+
+            let tenant_id = req.tenant_id.as_deref().unwrap_or("tribal-health-demo");
+
+            let roles = if req.scopes.is_empty() {
+                vec!["clinician".to_string()]
+            } else {
+                req.scopes.clone()
+            };
+
+            match bridge.issue_claim(&req.subject_id, tenant_id, roles).await {
+                Ok(claim) => {
+                    let now = SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .map_or(0, |d| d.as_secs());
+                    Ok(Json(ExchangeTokenResponse {
+                        token: claim.claim_id.clone(),
+                        token_type: "Bearer".to_string(),
+                        subject_id: claim.subject_id,
+                        tenant_id: claim.tenant_id,
+                        scopes: claim.roles,
+                        issued_at_secs: now,
+                        expires_at_secs: now.saturating_add(900),
+                        mode: "openbao-bridge".to_string(),
+                    }))
+                }
+                Err(e) => {
+                    tracing::error!(
+                        error = %e,
+                        subject = %req.subject_id,
+                        "exchange_token: OpenBao bridge claim issuance failed"
+                    );
+                    Err(ApiError::ServiceUnavailable)
+                }
+            }
         }
         TrustExchangeMode::Disabled => Err(ApiError::EndpointDisabled(
             "token exchange disabled by active ship profile".to_string(),

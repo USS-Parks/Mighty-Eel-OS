@@ -1,0 +1,12 @@
+# MAI API Key Auth — OpenBao Staging
+# Key: mai-staging-key-2026-05-26
+
+[settings]
+allow_internal_profile_header = false
+rate_limit_per_minute = 60
+
+[[keys]]
+hash = "ddeaf6c5c0619a945130e0cadb36c28e623c17658d0e3c04617f2657dc2b2f53"
+profile_id = "admin"
+role = "admin"
+display_name = "Staging Admin"

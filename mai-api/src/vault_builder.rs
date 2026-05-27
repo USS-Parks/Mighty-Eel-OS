@@ -25,7 +25,7 @@ use std::path::{Path, PathBuf};
 
 use async_trait::async_trait;
 use mai_core::vault::{VaultError, VaultInterface};
-use mai_vault::{VaultConfig as MaiVaultConfig, ZfsVault};
+use mai_vault::{FileDevVault, VaultConfig as MaiVaultConfig, ZfsVault};
 
 use crate::ship_profile::{ProfileMode, ShipProfile, VaultBackend};
 
@@ -92,7 +92,14 @@ pub fn build_vault(profile: &ShipProfile) -> Result<Box<dyn VaultInterface>, Vau
                 Ok(Box::new(LocalDevStubVault))
             }
         }
-        VaultBackend::FileDev => Err(VaultBuildError::FileDevUnsupported),
+        VaultBackend::FileDev => {
+            if is_production && !root.exists() {
+                return Err(VaultBuildError::RootMissing {
+                    path: root.to_path_buf(),
+                });
+            }
+            Ok(Box::new(FileDevVault::new(zfs_config_from_root(root))))
+        }
         VaultBackend::Zfs => {
             if is_production && !root.exists() {
                 return Err(VaultBuildError::RootMissing {

@@ -1,0 +1,65 @@
+# MAI deployment profile: openbao-staging
+#
+# Local-dev mode with real ML-DSA trust anchors and a signed policy bundle.
+# Vault uses stub (ZFS unavailable on Windows). Trust components are real.
+# This validates the trust fabric end-to-end against a live OpenBao instance
+# without requiring Linux-native ZFS.
+
+[profile]
+name = "openbao-staging"
+mode = "local-dev"
+allow_demo_defaults = false
+fail_closed = true
+
+[paths]
+state_dir  = "C:\\Users\\17076\\Documents\\Claude\\Island Mountain Mighty Eel OS\\mai\\deployment\\openbao-staging\\state"
+config_dir = "C:\\Users\\17076\\Documents\\Claude\\Island Mountain Mighty Eel OS\\mai\\deployment\\openbao-staging"
+log_dir    = "C:\\Users\\17076\\Documents\\Claude\\Island Mountain Mighty Eel OS\\mai\\deployment\\openbao-staging\\logs"
+run_dir    = "C:\\Users\\17076\\Documents\\Claude\\Island Mountain Mighty Eel OS\\mai\\deployment\\openbao-staging\\state"
+backup_dir = "C:\\Users\\17076\\Documents\\Claude\\Island Mountain Mighty Eel OS\\mai\\deployment\\openbao-staging\\backups"
+
+[vault]
+backend                    = "stub"
+root                       = "C:\\Users\\17076\\Documents\\Claude\\Island Mountain Mighty Eel OS\\mai\\deployment\\openbao-staging\\state"
+require_sealed_master_key  = false
+require_pqc                = false
+allow_stub                 = true
+
+[audit]
+api_writer                  = "wal"
+compliance_writer           = "wal"
+wal_dir                     = "C:\\Users\\17076\\Documents\\Claude\\Island Mountain Mighty Eel OS\\mai\\deployment\\openbao-staging\\state"
+require_hash_chain          = false
+require_pqc_checkpoints     = false
+require_encryption_at_rest  = false
+allow_memory_writer         = true
+allow_null_sealer           = true
+
+[trust]
+anchors_dir               = "C:\\Users\\17076\\Documents\\Claude\\Island Mountain Mighty Eel OS\\mai\\deployment\\openbao-staging\\anchors"
+bundle_cache_dir          = "C:\\Users\\17076\\Documents\\Claude\\Island Mountain Mighty Eel OS\\mai\\deployment\\openbao-staging\\bundle-cache"
+verifier                  = "ml-dsa"
+allow_accept_all_verifier  = false
+allow_local_dev_exchange  = true
+require_trust_anchor      = true
+require_bundle_on_boot    = true
+
+[auth]
+auth_keys_path                = "C:\\Users\\17076\\Documents\\Claude\\Island Mountain Mighty Eel OS\\mai\\deployment\\openbao-staging\\auth_keys.toml"
+allow_internal_profile_header = false
+require_nonempty_key_store    = true
+
+[dashboard]
+enabled                     = false
+allow_default_admin_token   = true
+
+[network]
+bind_address                   = "127.0.0.1"
+tls_mode                       = "direct"
+require_forwarded_proto_header = false
+
+[observability]
+log_format       = "text"
+log_rotation     = false
+metrics_exporter = "none"
+alerts_enabled   = false

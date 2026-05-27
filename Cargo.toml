@@ -15,6 +15,7 @@ members = [
     "tools/rule-tester",
     "tools/mai-admin",
     "tools/mai-launcher",
+    "tools/gen-trust-staging",
 ]
 
 [workspace.package]

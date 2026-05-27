@@ -41,6 +41,10 @@ hex = "0.4"
 # CSPRNG for API key generation (Session 26: OS-backed entropy via OsRng).
 rand = "0.8"
 
+# OpenBao bridge client (BF-6 / SHIP-08)
+reqwest = { version = "0.12", features = ["json"] }
+base64 = "0.22"
+
 # File watching for config hot-reload
 notify = { version = "7", features = ["macos_kqueue"] }
 
@@ -66,7 +70,6 @@ prost-build = "0.13"
 [dev-dependencies]
 tokio-test = { workspace = true }
 mockall = { workspace = true }
-reqwest = { version = "0.12", features = ["json"] }
 # SHIP-03: tempdir-backed vault root for vault_builder integration tests.
 tempfile = "3"
 # SHIP-06: ML-DSA-87 key generation + signing inside trust_production.rs so
