@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# IGD-05: commit-msg hook — enforce the MAI canonical co-author footer.
+# Install: git config core.hooksPath .githooks (already configured for pre-commit).
+# Bypass: git commit --no-verify (discouraged; see docs/COMMIT-MSG-HOOK.md).
+# CI mirror: .github/workflows/commit-msg-check.yml
+
+set -euo pipefail
+
+msg_file="${1:-}"
+if [ -z "$msg_file" ] || [ ! -f "$msg_file" ]; then
+    echo "commit-msg: no message file argument" >&2
+    exit 1
+fi
+
+# Skip auto-generated subjects whose author cannot easily edit them.
+first_line=$(head -n 1 "$msg_file" 2>/dev/null || true)
+case "$first_line" in
+    "Merge "*|"Revert "*|"fixup! "*|"squash! "*) exit 0 ;;
+esac
+
+required='Co-Authored by Basho Parks and Claude Opus 4\.7 xHigh <basho@islandmountain\.io> <claude@anthropic\.com>'
+
+if grep -qiE "$required" "$msg_file"; then
+    exit 0
+fi
+
+cat >&2 <<'ERR'
+
+============================================================================
+commit-msg hook (IGD-05): missing canonical co-author footer.
+
+Every commit must end with a line containing:
+  Copyright 2026 - Co-Authored by Basho Parks and Claude Opus 4.7 xHigh \
+    <basho@islandmountain.io> <claude@anthropic.com>
+
+Append the footer to your commit message and try again.
+See docs/COMMIT-MSG-HOOK.md.
+============================================================================
+ERR
+exit 1
