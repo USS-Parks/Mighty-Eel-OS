@@ -104,32 +104,32 @@ impl FileDevVault {
         let mut index = self.model_index.write().await;
         index.clear();
 
-        if models_dir.is_dir() {
-            if let Ok(entries) = std::fs::read_dir(models_dir) {
-                for entry in entries.flatten() {
-                    let path = entry.path();
-                    if path.is_dir()
-                        && path.file_name().and_then(|n| n.to_str()) != Some("snapshots")
-                        && let Some(model_id) = path.file_name().and_then(|n| n.to_str())
-                    {
-                        let manifest_path = path.join("manifest.json");
-                        if manifest_path.exists() {
-                            match Self::read_model_manifest(&manifest_path) {
-                                Ok((hash, size)) => {
-                                    debug!(model_id, hash = %hash, size, "Found model");
-                                    index.insert(
-                                        model_id.to_string(),
-                                        ModelEntry {
-                                            expected_hash: hash,
-                                            size_bytes: size,
-                                            path: path.clone(),
-                                            verified: false,
-                                        },
-                                    );
-                                }
-                                Err(e) => {
-                                    warn!(model_id, error = %e, "Skipping model with invalid manifest");
-                                }
+        if models_dir.is_dir()
+            && let Ok(entries) = std::fs::read_dir(models_dir)
+        {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir()
+                    && path.file_name().and_then(|n| n.to_str()) != Some("snapshots")
+                    && let Some(model_id) = path.file_name().and_then(|n| n.to_str())
+                {
+                    let manifest_path = path.join("manifest.json");
+                    if manifest_path.exists() {
+                        match Self::read_model_manifest(&manifest_path) {
+                            Ok((hash, size)) => {
+                                debug!(model_id, hash = %hash, size, "Found model");
+                                index.insert(
+                                    model_id.to_string(),
+                                    ModelEntry {
+                                        expected_hash: hash,
+                                        size_bytes: size,
+                                        path: path.clone(),
+                                        verified: false,
+                                    },
+                                );
+                            }
+                            Err(e) => {
+                                warn!(model_id, error = %e, "Skipping model with invalid manifest");
                             }
                         }
                     }
@@ -150,12 +150,11 @@ impl FileDevVault {
         if let Ok(entries) = std::fs::read_dir(&snap_dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
-                if path.extension().and_then(|s| s.to_str()) == Some("json") {
-                    if let Ok(content) = std::fs::read_to_string(&path) {
-                        if let Ok(snap) = serde_json::from_str::<SnapshotInfo>(&content) {
-                            snaps.push(snap);
-                        }
-                    }
+                if path.extension().and_then(|s| s.to_str()) == Some("json")
+                    && let Ok(content) = std::fs::read_to_string(&path)
+                    && let Ok(snap) = serde_json::from_str::<SnapshotInfo>(&content)
+                {
+                    snaps.push(snap);
                 }
             }
         }
