@@ -1,0 +1,23 @@
+# EditorConfig for the MAI workspace.
+# https://editorconfig.org/
+#
+# IGD-08: declares insert_final_newline=true so newly-created files
+# inherit the trailing-newline rule that gitleaks-adjacent tooling
+# and ruff both expect. UTF-8 + LF defaults match the rest of the
+# repo (cargo fmt, ruff, mypy all assume LF).
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+indent_style = space
+trim_trailing_whitespace = true
+
+[*.{md,markdown}]
+# Markdown uses trailing whitespace for hard-break lines.
+trim_trailing_whitespace = false
+
+[Makefile]
+indent_style = tab
