@@ -1,0 +1,41 @@
+name: commit-msg-check
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  check-footer:
+    name: Canonical co-author footer
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify every commit message in range
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            range="${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"
+          else
+            range="${{ github.event.before }}..${{ github.sha }}"
+          fi
+          required='Co-Authored by Basho Parks and Claude Opus 4\.7 xHigh <basho@islandmountain\.io> <claude@anthropic\.com>'
+          fail=0
+          for sha in $(git rev-list "$range"); do
+            subj=$(git log -1 --format=%s "$sha")
+            case "$subj" in "Merge "*|"Revert "*|"fixup! "*|"squash! "*) continue ;; esac
+            if ! git log -1 --format=%B "$sha" | grep -qiE "$required"; then
+              echo "::error::commit $sha missing canonical co-author footer (subject: $subj)"
+              fail=1
+            fi
+          done
+          [ "$fail" -eq 0 ] || exit 1
+          echo "All commits in range carry the canonical footer."
