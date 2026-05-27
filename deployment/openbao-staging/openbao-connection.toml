@@ -6,8 +6,13 @@ address = "http://localhost:8200"
 root_token = "root"  # dev only; use wrapped tokens in production
 
 [auth.approle]
-role_id = "8053c291-8f60-381f-e283-5e645e5907f4"
-# secret_id delivered via response-wrapped token: s.Xl7phjp4xdaBcti6tKABsmin
+# Operator reference only — values below are NOT loaded by code.
+# `OpenBaoBridgeConfig::staging()` reads these env vars at runtime:
+#   OPENBAO_APPROLE_ROLE_ID            — AppRole role identifier
+#   OPENBAO_APPROLE_SECRET_ID          — long-lived secret_id, OR
+#   OPENBAO_APPROLE_WRAPPED_SECRET_ID  — single-use response-wrapped token
+role_id = "<set via OPENBAO_APPROLE_ROLE_ID>"
+# secret_id delivered via OPENBAO_APPROLE_WRAPPED_SECRET_ID — never commit literals
 
 [transit]
 claim_signer_key = "lamprey-claim-signer"

@@ -34,16 +34,33 @@ pub struct OpenBaoBridgeConfig {
 }
 
 impl OpenBaoBridgeConfig {
-    /// Staging config pointing at the Docker OpenBao instance.
-    #[must_use]
-    pub fn staging() -> Self {
-        Self {
-            address: "http://localhost:8200".into(),
-            role_id: "8053c291-8f60-381f-e283-5e645e5907f4".into(),
-            secret_id: Some("6d5213b7-3e34-bf22-138e-70f7957c064f".into()),
-            wrapped_secret_id: None,
-            timeout: Duration::from_secs(10),
+    /// Staging config sourced from environment variables. Fails closed if
+    /// the required AppRole material is not provided.
+    ///
+    /// Environment:
+    /// - `OPENBAO_ADDRESS`                   (optional, default `http://localhost:8200`)
+    /// - `OPENBAO_APPROLE_ROLE_ID`           (required)
+    /// - `OPENBAO_APPROLE_SECRET_ID`         (required unless the wrapped form is set)
+    /// - `OPENBAO_APPROLE_WRAPPED_SECRET_ID` (alternative to plain secret_id)
+    pub fn staging() -> Result<Self, OpenBaoBridgeError> {
+        let address =
+            std::env::var("OPENBAO_ADDRESS").unwrap_or_else(|_| "http://localhost:8200".into());
+        let role_id = std::env::var("OPENBAO_APPROLE_ROLE_ID")
+            .map_err(|_| OpenBaoBridgeError::Config("OPENBAO_APPROLE_ROLE_ID is not set".into()))?;
+        let secret_id = std::env::var("OPENBAO_APPROLE_SECRET_ID").ok();
+        let wrapped_secret_id = std::env::var("OPENBAO_APPROLE_WRAPPED_SECRET_ID").ok();
+        if secret_id.is_none() && wrapped_secret_id.is_none() {
+            return Err(OpenBaoBridgeError::Config(
+                "set either OPENBAO_APPROLE_SECRET_ID or OPENBAO_APPROLE_WRAPPED_SECRET_ID".into(),
+            ));
         }
+        Ok(Self {
+            address,
+            role_id,
+            secret_id,
+            wrapped_secret_id,
+            timeout: Duration::from_secs(10),
+        })
     }
 }
 

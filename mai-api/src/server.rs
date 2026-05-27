@@ -580,8 +580,10 @@ fn apply_ship_profile(
     // a follow-up session moves it to the ship profile).
     let bridge_client = if matches!(exchange_mode, TrustExchangeMode::OpenBaoBridge) {
         use crate::openbao_client::{OpenBaoBridgeClient, OpenBaoBridgeConfig};
-        let bridge = OpenBaoBridgeClient::new(OpenBaoBridgeConfig::staging());
-        info!("OpenBao bridge client wired (staging config)");
+        let cfg = OpenBaoBridgeConfig::staging()
+            .map_err(|e| ServerError::Init(format!("openbao bridge config: {e}")))?;
+        let bridge = OpenBaoBridgeClient::new(cfg);
+        info!("OpenBao bridge client wired (staging config from env)");
         Some(bridge)
     } else {
         None
