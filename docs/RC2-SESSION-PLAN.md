@@ -1,9 +1,12 @@
 ﻿# RC2 Hardened Release Candidate — Session Plan
 
+> **STATUS as of 2026-05-26 — IN-FLIGHT (production-validation evidence committed)**
+> Predecessor lanes done: SHIP-HARDENING (closed 2026-05-23), DOUGHERTY (closed 2026-05-25 via `a072634`), RC1.2 re-ship (closed 2026-05-25 at freeze `e55c1ff`). RC2 production validation evidence committed at `ee6eb13` ([`RC2-PRODUCTION-VALIDATION.md`](RC2-PRODUCTION-VALIDATION.md)) — labelled "all gates GO." Concurrent GITDOCTOR-75 + IGD lanes are still in-flight and may push origin/main past `e55c1ff` before RC2 starts a clean-install rehearsal (RC2-01); RC2 itself remains anchored to a future re-frozen commit, not `e55c1ff` verbatim.
+
 **Project:** Lamprey MAI
 **Phase:** RC2 Deployment Rehearsal
 **Predecessor:** RC1.2 (re-bundled, DOUGHERTY closed)
-**Freeze:** e55c1ff (Memorial Day 2026-05-25)
+**Freeze:** e55c1ff (Memorial Day 2026-05-25) — RC1.2 reference; RC2 will rebase to a post-GITDOCTOR-75 freeze
 **Sessions:** RC2-01 .. RC2-07
 **Audience:** release engineers, deployment operators
 

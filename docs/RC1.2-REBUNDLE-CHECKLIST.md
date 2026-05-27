@@ -1,5 +1,8 @@
 # RC1.2 re-bundle checklist (RC-10 prep)
 
+> **STATUS — COMPLETE (2026-05-25)**
+> RC-10 ran and produced the RC1.2 bundle at freeze `e55c1ff`. RC-11 re-ship also closed 2026-05-25 ([`RC1.2-RESHIP.md`](RC1.2-RESHIP.md)). Kept as the canonical record of the gating prerequisites that had to be met. All prerequisites below are now satisfied.
+
 **Purpose:** prerequisite checklist for the RC-10 re-bundle session, which
 follows the DOUGHERTY lane (J-01..J-15). RC-10 produces the RC1.2 tester
 bundle that supersedes the RC1.1-docs assembly at
@@ -18,7 +21,7 @@ documented in `project_rc_release_lane.md`.
 - [x] J-18..J-26 W3 adapter completion matrix committed
 - [x] J-14 rescan evidence committed (`b899a84` on `session/J-14`)
 - [x] J-15 response doc committed (this session)
-- [ ] `session/J-14` and `session/J-15` merged to `origin/main` (gate before RC-10 starts)
+- [x] `session/J-14` and `session/J-15` merged to `origin/main` (merged via `059a6e3` 2026-05-25)
 
 ## Freeze-commit decision
 

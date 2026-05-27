@@ -1,11 +1,14 @@
 # John Dougherty Remediation Plan (DOUGHERTY Lane)
 
+> **STATUS — CLOSED (2026-05-25). SUPERSEDED.**
+> This is the original draft of the DOUGHERTY plan. The canonical re-emitted version lives at [`../JOHN-REMEDIATION-PLAN.md`](../JOHN-REMEDIATION-PLAN.md) (top-level `docs/`) and was amended to add J-10b. Lane closed 2026-05-25 with all 27 sessions (J-01..J-26 + J-10b) complete; J-23..J-26 landed under `a072634`. Closure document: [`J-15-DOUGHERTY-CLOSURE.md`](J-15-DOUGHERTY-CLOSURE.md). Current build work is in the GITDOCTOR-75 lane.
+
 **Project:** Island Mountain Model Abstraction Interface (MAI) — Lamprey RC1
 **Source Trigger:** Email from John Dougherty (independent tester, Colorado), 2026-05-24
 **Trigger Artifact:** GitDoctor scan of `USS-Parks/im-mighty-eel-mai` (15 screenshots in `.tester-feedback-2026-05-24/`)
 **Lane Name:** DOUGHERTY (sessions prefixed `J-`)
 **Sessions:** J-01 … J-26 (26 sessions). Amended 2026-05-24 to add J-16/J-17 for `mai-sdk-rs` stubs and J-18..J-26 for comprehensive adapter completion. J-14 (rescan) and J-15 (response) keep their numbers; the dependency graph in §4 routes J-14 through J-16..J-26.
-**Status of plan:** ACTIVE 2026-05-24. J-01..J-13, J-16/J-16b, and multiple adapter-completion sessions have landed; remaining open items are tracked in `JOHN-REMEDIATION-ROSTER.md`.
+**Status of plan:** **CLOSED 2026-05-25** (was ACTIVE 2026-05-24). Superseded by top-level canonical re-emit; kept as historical record.
 **Scope guarantee:** This plan addresses every line of John's email AND every flagged issue across all 15 GitDoctor screenshots. Items judged to be false positives are kept in scope as documented refutations, not silently dropped.
 
 ---
