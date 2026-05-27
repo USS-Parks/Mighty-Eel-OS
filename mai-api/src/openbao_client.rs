@@ -40,6 +40,8 @@ pub struct OpenBaoBridgeConfig {
     pub kv_paths: KvPathConfig,
     /// PKI role from ship profile.
     pub pki_role: PkiRoleConfig,
+    /// Whether mTLS is enabled (requires HTTPS address).
+    pub use_mtls: bool,
 }
 
 impl OpenBaoBridgeConfig {
@@ -65,6 +67,7 @@ impl OpenBaoBridgeConfig {
             transit_keys: profile.transit.clone(),
             kv_paths: profile.kv.clone(),
             pki_role: profile.pki.clone(),
+            use_mtls: false,
         }
     }
 
@@ -105,6 +108,7 @@ impl OpenBaoBridgeConfig {
             transit_keys: TransitKeysConfig::default(),
             kv_paths: KvPathConfig::default(),
             pki_role: PkiRoleConfig::default(),
+            use_mtls: false,
         }
     }
 
@@ -119,6 +123,20 @@ impl OpenBaoBridgeConfig {
     #[must_use]
     pub fn with_wrapped_secret_id(mut self, token: String) -> Self {
         self.wrapped_secret_id = Some(token);
+        self
+    }
+
+    /// Builder: enable mTLS for this config.
+    #[must_use]
+    pub fn with_mtls(mut self, enabled: bool) -> Self {
+        self.use_mtls = enabled;
+        self
+    }
+
+    /// Builder: set the PKI role name.
+    #[must_use]
+    pub fn with_pki_role(mut self, role: String) -> Self {
+        self.pki_role = PkiRoleConfig { role };
         self
     }
 }
@@ -184,6 +202,28 @@ struct TransitSignData {
     key_version: u32,
 }
 
+#[derive(Debug, Serialize)]
+struct PkiIssueRequest {
+    common_name: String,
+    ttl: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct PkiIssueResponse {
+    data: PkiIssueData,
+}
+
+#[derive(Debug, Deserialize)]
+struct PkiIssueData {
+    certificate: String,
+    issuing_ca: String,
+    ca_chain: Vec<String>,
+    private_key: String,
+    private_key_type: String,
+    serial_number: String,
+    expiration: i64,
+}
+
 // ─── Bridge output types ───────────────────────────────────────────
 
 /// A Lamprey claim, signed by the OpenBao Transit engine.
@@ -226,6 +266,16 @@ pub struct TenantAttributes {
     pub max_data_classification: String,
 }
 
+/// A certificate issued by the OpenBao PKI engine for mTLS.
+#[derive(Debug, Clone)]
+pub struct IssuedCertificate {
+    pub certificate: String,
+    pub private_key: String,
+    pub ca_chain: Vec<String>,
+    pub serial_number: String,
+    pub expiration: i64,
+}
+
 // ─── Bridge client ─────────────────────────────────────────────────
 
 /// OpenBao HTTP bridge client.
@@ -248,6 +298,32 @@ impl OpenBaoBridgeClient {
             client,
             config: Arc::new(config),
         }
+    }
+
+    /// Build a client with mTLS enabled using PEM-encoded certificates.
+    /// The client presents `client_cert_pem` + `client_key_pem` and
+    /// trusts `ca_cert_pem` as the root of trust.
+    pub fn new_with_mtls(
+        config: OpenBaoBridgeConfig,
+        ca_cert_pem: &str,
+        client_cert_pem: &str,
+        client_key_pem: &str,
+    ) -> Result<Self, OpenBaoBridgeError> {
+        let identity_pem = format!("{client_cert_pem}\n{client_key_pem}");
+        let identity = reqwest::Identity::from_pem(identity_pem.as_bytes())
+            .map_err(|e| OpenBaoBridgeError::Config(format!("client identity PEM parse: {e}")))?;
+        let ca = reqwest::Certificate::from_pem(ca_cert_pem.as_bytes())
+            .map_err(|e| OpenBaoBridgeError::Config(format!("CA certificate PEM parse: {e}")))?;
+        let client = Client::builder()
+            .identity(identity)
+            .add_root_certificate(ca)
+            .timeout(config.timeout)
+            .build()
+            .map_err(|e| OpenBaoBridgeError::Config(format!("mTLS client build: {e}")))?;
+        Ok(Self {
+            client,
+            config: Arc::new(config),
+        })
     }
 
     /// Resolve the AppRole secret_id: unwrap a wrapped token, or use
@@ -430,6 +506,48 @@ impl OpenBaoBridgeClient {
             "Claim signed via OpenBao transit"
         );
         Ok(body.data.signature)
+    }
+
+    /// Issue a client certificate from the OpenBao PKI engine for mTLS.
+    /// Returns the PEM-encoded certificate, private key, and CA chain.
+    pub async fn issue_appliance_cert(
+        &self,
+        client_token: &str,
+        common_name: &str,
+        ttl: &str,
+    ) -> Result<IssuedCertificate, OpenBaoBridgeError> {
+        let url = format!(
+            "{}/v1/pki/issue/{}",
+            self.config.address, self.config.pki_role.role
+        );
+        let req = PkiIssueRequest {
+            common_name: common_name.into(),
+            ttl: ttl.into(),
+        };
+        let resp = self
+            .client
+            .post(&url)
+            .header("X-Vault-Token", client_token)
+            .json(&req)
+            .send()
+            .await?;
+        let body: PkiIssueResponse = resp
+            .json()
+            .await
+            .map_err(|e| OpenBaoBridgeError::Protocol(format!("pki issue parse: {e}")))?;
+        info!(
+            cn = %common_name,
+            serial = %body.data.serial_number,
+            expiration = body.data.expiration,
+            "PKI certificate issued"
+        );
+        Ok(IssuedCertificate {
+            certificate: body.data.certificate,
+            private_key: body.data.private_key,
+            ca_chain: body.data.ca_chain,
+            serial_number: body.data.serial_number,
+            expiration: body.data.expiration,
+        })
     }
 
     /// Full claim issuance flow: auth → tenant lookup → claim build → sign.
