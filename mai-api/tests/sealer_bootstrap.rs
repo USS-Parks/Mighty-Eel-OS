@@ -81,6 +81,7 @@ fn baseline(mode: ProfileMode, wal_dir: PathBuf) -> ShipProfile {
             metrics_exporter: MetricsExporter::Prometheus,
             alerts_enabled: false,
         },
+        openbao: None,
     }
 }
 

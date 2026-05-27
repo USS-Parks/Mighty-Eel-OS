@@ -79,6 +79,7 @@ fn baseline(mode: ProfileMode, root: PathBuf) -> ShipProfile {
             metrics_exporter: MetricsExporter::Prometheus,
             alerts_enabled: false,
         },
+        openbao: None,
     }
 }
 
@@ -166,17 +167,17 @@ fn local_dev_rejects_stub_when_flag_clear() {
     );
 }
 
-#[test]
-fn file_dev_backend_is_unsupported() {
+#[tokio::test]
+async fn file_dev_backend_is_accepted() {
     let temp = tempfile::tempdir().unwrap();
-    let mut p = baseline(ProfileMode::LocalDev, temp.path().to_path_buf());
+    let root = temp.path().join("vault");
+    std::fs::create_dir_all(&root).unwrap();
+    let mut p = baseline(ProfileMode::LocalDev, root);
     p.vault.backend = VaultBackend::FileDev;
-    let err = build_vault(&p)
-        .map(|_| ())
-        .expect_err("file-dev must be rejected until implemented");
+    let vault = build_vault(&p).expect("file-dev must be accepted in local-dev mode");
     assert!(
-        matches!(err, VaultBuildError::FileDevUnsupported),
-        "got {err:?}"
+        vault.load_model_weights("any").await.is_err(),
+        "stub-like: no models on disk"
     );
 }
 

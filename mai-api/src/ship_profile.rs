@@ -42,6 +42,12 @@ pub struct ShipProfile {
     pub dashboard: DashboardConfig,
     pub network: NetworkConfig,
     pub observability: ObservabilityConfig,
+    /// Optional `[openbao]` bridge configuration. When present, the
+    /// server wires the OpenBao bridge client from this section
+    /// instead of falling back to `OpenBaoBridgeConfig::staging()`.
+    /// Required when the exchange mode is `OpenBaoBridge`.
+    #[serde(default)]
+    pub openbao: Option<OpenbaoConfig>,
 }
 
 /// `[profile]` section.
@@ -199,6 +205,125 @@ pub enum LogFormat {
 pub enum MetricsExporter {
     None,
     Prometheus,
+}
+
+/// `[openbao]` section — bridge configuration for the Ring-1 ↔ Ring-3
+/// trust bridge. Secrets (secret_id, wrapped_secret_id) are NEVER stored
+/// here; they come from environment variables at runtime.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OpenbaoConfig {
+    pub address: String,
+    pub role_id: String,
+    #[serde(default = "default_timeout_secs")]
+    pub timeout_secs: u64,
+    #[serde(default)]
+    pub transit: TransitKeysConfig,
+    #[serde(default)]
+    pub kv: KvPathConfig,
+    #[serde(default)]
+    pub pki: PkiRoleConfig,
+    #[serde(default)]
+    pub trust_refresh: TrustRefreshConfig,
+}
+
+fn default_timeout_secs() -> u64 {
+    10
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TransitKeysConfig {
+    #[serde(default = "default_claim_signer_key")]
+    pub claim_signer_key: String,
+    #[serde(default = "default_bundle_signer_key")]
+    pub bundle_signer_key: String,
+    #[serde(default = "default_revocation_signer_key")]
+    pub revocation_signer_key: String,
+}
+
+impl Default for TransitKeysConfig {
+    fn default() -> Self {
+        Self {
+            claim_signer_key: default_claim_signer_key(),
+            bundle_signer_key: default_bundle_signer_key(),
+            revocation_signer_key: default_revocation_signer_key(),
+        }
+    }
+}
+
+fn default_claim_signer_key() -> String {
+    "lamprey-claim-signer".into()
+}
+fn default_bundle_signer_key() -> String {
+    "lamprey-bundle-signer".into()
+}
+fn default_revocation_signer_key() -> String {
+    "lamprey-revocation-signer".into()
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KvPathConfig {
+    #[serde(default = "default_tenant_path")]
+    pub tenant_path: String,
+    #[serde(default = "default_revocation_path")]
+    pub revocation_path: String,
+}
+
+impl Default for KvPathConfig {
+    fn default() -> Self {
+        Self {
+            tenant_path: default_tenant_path(),
+            revocation_path: default_revocation_path(),
+        }
+    }
+}
+
+fn default_tenant_path() -> String {
+    "kv/tenants".into()
+}
+fn default_revocation_path() -> String {
+    "kv/revocations".into()
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PkiRoleConfig {
+    #[serde(default = "default_pki_role")]
+    pub role: String,
+}
+
+impl Default for PkiRoleConfig {
+    fn default() -> Self {
+        Self {
+            role: default_pki_role(),
+        }
+    }
+}
+
+fn default_pki_role() -> String {
+    "mai-appliance".into()
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TrustRefreshConfig {
+    #[serde(default = "default_refresh_enabled")]
+    pub enabled: bool,
+    #[serde(default = "default_refresh_interval_secs")]
+    pub interval_secs: u64,
+}
+
+impl Default for TrustRefreshConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_refresh_enabled(),
+            interval_secs: default_refresh_interval_secs(),
+        }
+    }
+}
+
+fn default_refresh_enabled() -> bool {
+    true
+}
+fn default_refresh_interval_secs() -> u64 {
+    300
 }
 
 /// Errors produced by [`load_ship_profile`] and [`ShipProfile::validate`].
@@ -645,5 +770,86 @@ alerts_enabled = true
             }
             other => panic!("expected Validation error, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn deserializes_openbao_section_with_defaults() {
+        let toml = format!(
+            "{}\n{}",
+            baseline(),
+            r#"
+[openbao]
+address = "http://localhost:8200"
+role_id = "8053c291-8f60-381f-e283-5e645e5907f4"
+"#
+        );
+        let p = parse_ship_profile(&toml).expect("profile with openbao must parse");
+        let ob = p.openbao.expect("openbao section must be present");
+        assert_eq!(ob.address, "http://localhost:8200");
+        assert_eq!(ob.role_id, "8053c291-8f60-381f-e283-5e645e5907f4");
+        assert_eq!(ob.timeout_secs, 10);
+        assert_eq!(ob.transit.claim_signer_key, "lamprey-claim-signer");
+        assert_eq!(ob.transit.bundle_signer_key, "lamprey-bundle-signer");
+        assert_eq!(
+            ob.transit.revocation_signer_key,
+            "lamprey-revocation-signer"
+        );
+        assert_eq!(ob.kv.tenant_path, "kv/tenants");
+        assert_eq!(ob.kv.revocation_path, "kv/revocations");
+        assert_eq!(ob.pki.role, "mai-appliance");
+        assert!(ob.trust_refresh.enabled);
+        assert_eq!(ob.trust_refresh.interval_secs, 300);
+    }
+
+    #[test]
+    fn deserializes_openbao_section_with_custom_values() {
+        let toml = format!(
+            "{}\n{}",
+            baseline(),
+            r#"
+[openbao]
+address = "https://bao.example.com:8200"
+role_id = "custom-role"
+timeout_secs = 30
+
+[openbao.transit]
+claim_signer_key = "custom-claim-key"
+bundle_signer_key = "custom-bundle-key"
+revocation_signer_key = "custom-revocation-key"
+
+[openbao.kv]
+tenant_path = "secret/tenants"
+revocation_path = "secret/revocations"
+
+[openbao.pki]
+role = "custom-role"
+
+[openbao.trust_refresh]
+enabled = false
+interval_secs = 600
+"#
+        );
+        let p = parse_ship_profile(&toml).expect("profile with custom openbao must parse");
+        let ob = p.openbao.expect("openbao section must be present");
+        assert_eq!(ob.address, "https://bao.example.com:8200");
+        assert_eq!(ob.role_id, "custom-role");
+        assert_eq!(ob.timeout_secs, 30);
+        assert_eq!(ob.transit.claim_signer_key, "custom-claim-key");
+        assert_eq!(ob.transit.bundle_signer_key, "custom-bundle-key");
+        assert_eq!(ob.transit.revocation_signer_key, "custom-revocation-key");
+        assert_eq!(ob.kv.tenant_path, "secret/tenants");
+        assert_eq!(ob.kv.revocation_path, "secret/revocations");
+        assert_eq!(ob.pki.role, "custom-role");
+        assert!(!ob.trust_refresh.enabled);
+        assert_eq!(ob.trust_refresh.interval_secs, 600);
+    }
+
+    #[test]
+    fn openbao_section_absent_is_none() {
+        let p = parse_ship_profile(baseline()).expect("baseline must validate");
+        assert!(
+            p.openbao.is_none(),
+            "openbao is optional and must default to None"
+        );
     }
 }

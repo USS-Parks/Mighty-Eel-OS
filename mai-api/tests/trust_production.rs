@@ -101,6 +101,7 @@ fn baseline(mode: ProfileMode, anchors_dir: PathBuf, bundle_cache_dir: PathBuf) 
             metrics_exporter: MetricsExporter::Prometheus,
             alerts_enabled: false,
         },
+        openbao: None,
     }
 }
 

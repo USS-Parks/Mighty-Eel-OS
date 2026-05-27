@@ -12,6 +12,7 @@
 //! cloud OpenBao Trust Core. It moves ONLY identity metadata — never
 //! prompts, completions, embeddings, or regulated payloads (§2.2).
 
+use crate::ship_profile::{KvPathConfig, OpenbaoConfig, PkiRoleConfig, TransitKeysConfig};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -31,9 +32,40 @@ pub struct OpenBaoBridgeConfig {
     pub wrapped_secret_id: Option<String>,
     /// Request timeout.
     pub timeout: Duration,
+    /// Transit key names from ship profile.
+    pub transit_keys: TransitKeysConfig,
+    /// KV paths from ship profile.
+    pub kv_paths: KvPathConfig,
+    /// PKI role from ship profile.
+    pub pki_role: PkiRoleConfig,
 }
 
 impl OpenBaoBridgeConfig {
+    /// Build from a ship profile `[openbao]` section. Secrets are
+    /// NOT in the profile — they come from environment variables.
+    pub fn from_profile(profile: &OpenbaoConfig) -> Self {
+        let secret_id = std::env::var("MAI_OPENBAO_SECRET_ID").ok();
+        let wrapped_secret_id = std::env::var("MAI_OPENBAO_WRAPPED_SECRET_ID").ok();
+
+        if secret_id.is_none() && wrapped_secret_id.is_none() {
+            warn!(
+                "MAI_OPENBAO_SECRET_ID and MAI_OPENBAO_WRAPPED_SECRET_ID are both unset; \
+                 bridge client will fail closed on first use"
+            );
+        }
+
+        Self {
+            address: profile.address.clone(),
+            role_id: profile.role_id.clone(),
+            secret_id,
+            wrapped_secret_id,
+            timeout: Duration::from_secs(profile.timeout_secs),
+            transit_keys: profile.transit.clone(),
+            kv_paths: profile.kv.clone(),
+            pki_role: profile.pki.clone(),
+        }
+    }
+
     /// Staging config. Reads secrets from environment variables — never
     /// hardcoded in source.
     ///
@@ -68,7 +100,24 @@ impl OpenBaoBridgeConfig {
             secret_id,
             wrapped_secret_id,
             timeout: Duration::from_secs(10),
+            transit_keys: TransitKeysConfig::default(),
+            kv_paths: KvPathConfig::default(),
+            pki_role: PkiRoleConfig::default(),
         }
+    }
+
+    /// Builder: override the AppRole secret_id (for hot-reload).
+    #[must_use]
+    pub fn with_secret_id(mut self, id: String) -> Self {
+        self.secret_id = Some(id);
+        self
+    }
+
+    /// Builder: override the wrapped secret_id token.
+    #[must_use]
+    pub fn with_wrapped_secret_id(mut self, token: String) -> Self {
+        self.wrapped_secret_id = Some(token);
+        self
     }
 }
 
@@ -256,7 +305,10 @@ impl OpenBaoBridgeClient {
         token: &str,
         tenant_id: &str,
     ) -> Result<TenantAttributes, OpenBaoBridgeError> {
-        let url = format!("{}/v1/kv/data/tenants/{tenant_id}", self.config.address);
+        let url = format!(
+            "{}/v1/{}/{tenant_id}",
+            self.config.address, self.config.kv_paths.tenant_path
+        );
         let resp = self
             .client
             .get(&url)
@@ -296,8 +348,8 @@ impl OpenBaoBridgeClient {
         claim_json: &str,
     ) -> Result<String, OpenBaoBridgeError> {
         let url = format!(
-            "{}/v1/transit/sign/lamprey-claim-signer",
-            self.config.address
+            "{}/v1/transit/sign/{}",
+            self.config.address, self.config.transit_keys.claim_signer_key
         );
         let b64 = base64::Engine::encode(
             &base64::engine::general_purpose::STANDARD,

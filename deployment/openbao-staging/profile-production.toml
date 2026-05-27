@@ -63,3 +63,24 @@ log_format       = "text"
 log_rotation     = false
 metrics_exporter = "none"
 alerts_enabled   = false
+
+[openbao]
+address = "http://localhost:8200"
+role_id = "8053c291-8f60-381f-e283-5e645e5907f4"
+# secrets come from environment variables, NEVER from this file
+
+[openbao.transit]
+claim_signer_key      = "lamprey-claim-signer"
+bundle_signer_key     = "lamprey-bundle-signer"
+revocation_signer_key = "lamprey-revocation-signer"
+
+[openbao.kv]
+tenant_path     = "kv/tenants"
+revocation_path = "kv/revocations"
+
+[openbao.pki]
+role = "mai-appliance"
+
+[openbao.trust_refresh]
+enabled       = true
+interval_secs = 300

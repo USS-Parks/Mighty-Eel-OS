@@ -576,12 +576,19 @@ fn apply_ship_profile(
     );
 
     // Wire the OpenBao bridge client when the exchange mode is
-    // OpenBaoBridge. Uses the staging config (hardcoded for now;
-    // a follow-up session moves it to the ship profile).
+    // OpenBaoBridge. If the ship profile has an `[openbao]` section,
+    // use it (secrets still come from env); otherwise fall back to
+    // `::staging()` for no-profile / legacy bring-up.
     let bridge_client = if matches!(exchange_mode, TrustExchangeMode::OpenBaoBridge) {
         use crate::openbao_client::{OpenBaoBridgeClient, OpenBaoBridgeConfig};
-        let bridge = OpenBaoBridgeClient::new(OpenBaoBridgeConfig::staging());
-        info!("OpenBao bridge client wired (staging config)");
+        let config = if let Some(ref ob) = profile.openbao {
+            OpenBaoBridgeConfig::from_profile(ob)
+        } else {
+            info!("no [openbao] section in ship profile, falling back to staging() config");
+            OpenBaoBridgeConfig::staging()
+        };
+        let bridge = OpenBaoBridgeClient::new(config);
+        info!("OpenBao bridge client wired");
         Some(bridge)
     } else {
         None

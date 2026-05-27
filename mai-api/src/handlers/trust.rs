@@ -240,7 +240,8 @@ pub async fn exchange_token(
     match state.trust_exchange_mode {
         TrustExchangeMode::LocalDevSynthetic => mint_local_dev_synthetic(profile, req),
         TrustExchangeMode::OpenBaoBridge => {
-            let bridge = state.openbao_bridge.as_ref().ok_or_else(|| {
+            let guard = state.openbao_bridge.read().await;
+            let bridge = guard.as_ref().ok_or_else(|| {
                 tracing::error!(
                     "exchange_token: OpenBaoBridge mode selected but no bridge client wired"
                 );
