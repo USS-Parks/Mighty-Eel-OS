@@ -7,6 +7,7 @@
 # Usage:
 #   .\ir-respond.ps1 health-check
 #   .\ir-respond.ps1 revoke-secret <secret_id>
+#   .\ir-respond.ps1 revoke-claim  <claim_id> [tenant_id]
 #   .\ir-respond.ps1 audit-since <minutes>
 #   .\ir-respond.ps1 audit-by-token <prefix>
 #   .\ir-respond.ps1 rotate-appliance
@@ -15,7 +16,7 @@
 
 param(
     [Parameter(Position=0)]
-    [ValidateSet("revoke-secret","audit-since","audit-by-token","rotate-appliance","health-check")]
+    [ValidateSet("revoke-secret","revoke-claim","audit-since","audit-by-token","rotate-appliance","health-check")]
     [string]$Action,
 
     [Parameter(ValueFromRemainingArguments)]
@@ -76,6 +77,42 @@ if ($Action -eq "revoke-secret") {
         Write-IR "INFO" "Secret successfully revoked."
     } else {
         Write-IR "WARN" "Secret may still be valid."
+    }
+    exit 0
+}
+
+if ($Action -eq "revoke-claim") {
+    $claimId = $ActionArgs[0]
+    $tenantId = if ($ActionArgs[1]) { $ActionArgs[1] } else { "tribal-health-demo" }
+    if (-not $claimId) {
+        Write-Host "Usage: ir-respond.ps1 revoke-claim CLAIM_ID [TENANT_ID]"
+        exit 1
+    }
+
+    $now = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+    Write-IR "INFO" "Revoking claim $claimId for tenant $tenantId"
+
+    $snapshot = @{
+        claim_id = $claimId
+        status = "Revoked"
+        recorded_at_secs = $now
+    }
+    $entry = @{ data = @{ snapshots = @($snapshot) } }
+    $body = ConvertTo-Json -Depth 4 -Compress $entry
+
+    try {
+        Invoke-BaoAPI -Method Post -Path "kv/data/revocations/$tenantId" -Body @{
+            data = @{ snapshots = @($snapshot) }
+        }
+        Write-IR "INFO" "Revocation snapshot written to kv/revocations/$tenantId"
+        Write-Host "  Claim:    $claimId"
+        Write-Host "  Status:   Revoked"
+        Write-Host "  Tenant:   $tenantId"
+        Write-Host ""
+        Write-Host "Run .\ir-respond.ps1 audit-since 1 to verify the audit trail."
+    } catch {
+        Write-IR "ERROR" "Failed to write revocation: $_"
+        exit 1
     }
     exit 0
 }
@@ -205,6 +242,7 @@ OpenBao Incident Response — MAI Trust Core Operations
 Usage:
   ir-respond.ps1 health-check
   ir-respond.ps1 revoke-secret SECRET_ID
+  ir-respond.ps1 revoke-claim  CLAIM_ID [TENANT_ID]
   ir-respond.ps1 audit-since MINUTES
   ir-respond.ps1 audit-by-token TOKEN_PREFIX
   ir-respond.ps1 rotate-appliance
