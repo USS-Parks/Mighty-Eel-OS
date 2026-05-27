@@ -53,7 +53,8 @@ package-lock.json.bak
 # Inno Setup build artifacts (LCH-1)
 packaging/windows/Output/
 packaging/windows/bin/
-deployment/openbao-staging/state/
-deployment/openbao-staging/bundle-signer-staging.pub
-deployment/openbao-staging/bundle-signer.pub
-deployment/openbao-staging/bundle.json
+
+# Local staging artifacts (IGD-01): never commit live keys / tokens.
+# Subsumes the 4 path-specific entries added by c8055ea.
+deployment/openbao-staging/
+deployment/*-staging/

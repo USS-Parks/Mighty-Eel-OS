@@ -53,6 +53,16 @@ paths = [
     # only, never logged).
     '''^test-evidence/''',
     '''(^|/)test-evidence/''',
+
+    # IGD-01: deployment/*-staging/ holds untracked local connection
+    # files with real-shaped credentials (Vault service tokens,
+    # signing keys, etc.) for staging-only use. .gitignore prevents
+    # commit; this entry prevents `gitleaks detect --no-git` from
+    # repeatedly flagging the untracked file on every CI run. Narrow
+    # path-level allowlist only — it cannot silence secrets elsewhere
+    # in the tree.
+    '''^deployment/[^/]*-staging/''',
+    '''(^|/)deployment/[^/]*-staging/''',
 ]
 
 # ---------------------------------------------------------------------------
