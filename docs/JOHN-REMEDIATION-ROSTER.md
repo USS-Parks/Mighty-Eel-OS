@@ -1,5 +1,8 @@
 # John Dougherty Remediation Prompt Roster
 
+> **STATUS — CLOSED (2026-05-25)**
+> All 27 sessions (J-01..J-26 plus J-10b) executed. J-23..J-26 landed under `a072634`. Closure: [`dougherty/J-15-DOUGHERTY-CLOSURE.md`](dougherty/J-15-DOUGHERTY-CLOSURE.md). Roster kept as historical reference for what each session covered; for the prompts of the next lane see [`GITDOCTOR-75-PROMPT-ROSTER.md`](GITDOCTOR-75-PROMPT-ROSTER.md).
+
 **Lane:** DOUGHERTY (sessions `J-01` through `J-26` plus `J-10b`; amended 2026-05-24 to add SDK work in W10, comprehensive adapter completion in W3, and independent evidence-tool closure before J-14)
 **Companion plan:** `JOHN-REMEDIATION-PLAN.md` (read it first)
 **Source feedback:** John Dougherty email 2026-05-24 + GitDoctor scan screenshots in `.tester-feedback-2026-05-24/`

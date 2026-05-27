@@ -1,12 +1,15 @@
 # John Dougherty Remediation Plan (DOUGHERTY Lane)
 
+> **STATUS — CLOSED (2026-05-25)**
+> All 26 J-sessions (J-01..J-26 plus J-10b) complete. J-23..J-26 (OpenAI-compat, ONNX Runtime, MLX, Triton adapters) landed under `a072634` in a parallel session. Closure document: [`dougherty/J-15-DOUGHERTY-CLOSURE.md`](dougherty/J-15-DOUGHERTY-CLOSURE.md). RC1.2 re-bundle + re-ship (RC-10 + RC-11) shipped at freeze `e55c1ff` with local GitDoctor score 93/100. Kept as the canonical record of what the DOUGHERTY response covered. Current build work has moved to the GITDOCTOR-75 lane — see [`GITDOCTOR-75-REMEDIATION-PLAN.md`](GITDOCTOR-75-REMEDIATION-PLAN.md).
+
 **Project:** Island Mountain Model Abstraction Interface (MAI) — Lamprey RC1
 **Source Trigger:** Email from John Dougherty (independent tester, Colorado), 2026-05-24
 **Trigger Artifact:** GitDoctor scan of `USS-Parks/im-mighty-eel-mai` (15 screenshots in `.tester-feedback-2026-05-24/`)
 **Lane Name:** DOUGHERTY (sessions prefixed `J-`)
-**Sessions:** J-01 … J-26 plus J-10b (27 execution sessions, plan-only this session — implementation begins next session). Amended 2026-05-24 to add J-16/J-17 for `mai-sdk-rs` stubs, J-18..J-26 for comprehensive adapter completion, and J-10b for independent evidence-tool closure. J-14 (rescan) and J-15 (response) keep their numbers; the dependency graph in §4 now routes J-14 through J-10b and J-16..J-26.
-**Status of plan:** DRAFT 2026-05-24, awaits Basho sign-off before any J-session opens
-**Scope guarantee:** This plan addresses every line of John's email AND every flagged issue across all 15 GitDoctor screenshots. Items judged to be false positives are kept in scope as documented refutations, not silently dropped.
+**Sessions:** J-01 … J-26 plus J-10b (27 execution sessions). Amended 2026-05-24 to add J-16/J-17 for `mai-sdk-rs` stubs, J-18..J-26 for comprehensive adapter completion, and J-10b for independent evidence-tool closure. J-14 (rescan) and J-15 (response) keep their numbers; the dependency graph in §4 routed J-14 through J-10b and J-16..J-26.
+**Status of plan:** **CLOSED 2026-05-25** (all 26 sessions landed; previously DRAFT 2026-05-24)
+**Scope guarantee:** This plan addressed every line of John's email AND every flagged issue across all 15 GitDoctor screenshots. Items judged to be false positives are kept in scope as documented refutations, not silently dropped.
 
 ---
 

@@ -1,14 +1,19 @@
 # MAI Document Index
 
 **Project:** Island Mountain Model Abstraction Interface (MAI)
-**Last Updated:** 2026-05-24
+**Last Updated:** 2026-05-26 (post-RC1.2 governance sweep, see [LOCAL-GITDOCTOR-EVIDENCE-2026-05-26.md](LOCAL-GITDOCTOR-EVIDENCE-2026-05-26.md))
 
-> **Current build state**
+> **Current build state (2026-05-26)**
 > - **Mainline (Sessions 1-46 + BF-1..BF-7): CLOSED** — Gate D shipped at commit `22f0f66`.
-> - **Ship hardening (SHIP-01..SHIP-17): CLOSED** — final hotfix at `dceaabc`.
-> - **RC1 release (RC-01..RC-10): CLOSED** — bundle shipped to outside tester John Dougherty 2026-05-24; RC-09 closed at `e2d9ea6`.
-> - **DOUGHERTY remediation lane (J-01..J-26): ACTIVE** — current mainline work. See [`dougherty/JOHN-REMEDIATION-PLAN.md`](dougherty/JOHN-REMEDIATION-PLAN.md) and [`dougherty/JOHN-REMEDIATION-ROSTER.md`](dougherty/JOHN-REMEDIATION-ROSTER.md). Recent landings: J-05 adapter matrix (`63a0327`), J-06 ollama live test (`c92918c`), J-07 llamacpp live test (`3fa93ce`).
-> - **Next gate:** RC-11 re-ship after DOUGHERTY closes.
+> - **Ship hardening (SHIP-01..SHIP-17): CLOSED 2026-05-23** — final hotfix at `dceaabc`.
+> - **RC1 release (RC-01..RC-10): CLOSED 2026-05-24** — RC1.0 to John Dougherty (`e2d9ea6`).
+> - **DOUGHERTY remediation lane (J-01..J-26): CLOSED 2026-05-25** — J-23..J-26 landed under `a072634`; closure doc at [`dougherty/J-15-DOUGHERTY-CLOSURE.md`](dougherty/J-15-DOUGHERTY-CLOSURE.md). All 26 sessions complete.
+> - **RC1.2 re-ship (RC-11): COMPLETE 2026-05-25** — freeze `e55c1ff`, local GitDoctor score **93/100** at freeze; bundle assembled, ready for tester re-scan.
+> - **GITDOCTOR-75 lane (GD75-01..GD75-16): IN-FLIGHT** — GD75-07/08/09/10/14/15 landed (`24a6700`, `a121d4a`, `28f0386`, `23b876c`); target external rescan ≥95/100. See [`GITDOCTOR-75-REMEDIATION-PLAN.md`](GITDOCTOR-75-REMEDIATION-PLAN.md).
+> - **IGD lane (internal-scan follow-up, loose): IN-FLIGHT** — IGD-01/04/05/08 merged today (`ae30614`, `ad8420a`, `330185a`, `a6f3ffc`); fixes gitleaks allowlist + deployment-staging gitignore, clippy collapsible_if, commit-msg hook + CI co-author enforcement, trailing newlines + .editorconfig. No formal plan doc; traceable via `git log --grep IGD-`.
+> - **Recent today (2026-05-26):** SEC-1 (GitHub secret-scan alert #1 — Vault token leak — closed/revoked; superseded by parallel commits `c75e95f`+`c8055ea`); HF-2 (`c108ea0`, re-add tracing::warn import); WARN-1, CLIP-1, GOV-1 (this sweep).
+> - **Latest local scan (2026-05-26, GOV-1):** [LOCAL-GITDOCTOR-EVIDENCE-2026-05-26.md](LOCAL-GITDOCTOR-EVIDENCE-2026-05-26.md). Layer 1 mapped: **90/100** (52/58 — down 3 points vs Memorial Day 93/100 because the SEC-1 env-var refactor introduced CFG-001 hardcoded-localhost fallback in `openbao_client.rs` and REV-005 HIGH `.unwrap_or_default()` at `openbao_client.rs:340`). Layer 2 independent tools: 5 FAIL (cargo test workspace, cargo audit `pyo3 0.22.6` advisory + `proc-macro-error` unmaintained, cargo deny `idna 0.5`, pip-audit pip 26.0.1 CVE-2026-3219/6357, detect-secrets keyword in `mai-sdk-python/docs/authentication.md`). Layer 3 adversarial: PASS. Address these in the GITDOCTOR-75 / IGD lanes.
+> - **Next gate:** RC2 deployment rehearsal (RC2-01..RC2-08). Production-validation evidence already committed at `ee6eb13`. See [`RC2-SESSION-PLAN.md`](RC2-SESSION-PLAN.md).
 >
 > Docs marked **STATUS — CLOSED** / **STATUS — SUPERSEDED** at the top are kept for historical reference and do not drive active work.
 

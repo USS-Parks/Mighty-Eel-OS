@@ -1,0 +1,452 @@
+{
+  "mapped_scan": {
+    "category_scores": {
+      "Code Quality": {
+        "failed": 3,
+        "passed": 7,
+        "score": 70,
+        "total": 10
+      },
+      "Configuration": {
+        "failed": 1,
+        "passed": 6,
+        "score": 86,
+        "total": 7
+      },
+      "Performance": {
+        "failed": 0,
+        "passed": 6,
+        "score": 100,
+        "total": 6
+      },
+      "Project Hygiene": {
+        "failed": 0,
+        "passed": 5,
+        "score": 100,
+        "total": 5
+      },
+      "Review Integrity": {
+        "failed": 2,
+        "passed": 6,
+        "score": 75,
+        "total": 8
+      },
+      "Security": {
+        "failed": 0,
+        "passed": 16,
+        "score": 100,
+        "total": 16
+      },
+      "Testing": {
+        "failed": 0,
+        "passed": 6,
+        "score": 100,
+        "total": 6
+      }
+    },
+    "failed": 6,
+    "findings": [
+      {
+        "category": "Code Quality",
+        "check_id": "QUA-001",
+        "description": "Large files may need focused modules.",
+        "evidence": [
+          "apps/openbao-trust-demo/main.py 369 lines",
+          "compliance-dashboard/app.py 456 lines",
+          "mai-adapters/src/bridge.rs 373 lines",
+          "mai-adapters/src/config.rs 359 lines",
+          "mai-adapters/src/manager.rs 647 lines",
+          "mai-adapters/src/process.rs 611 lines",
+          "mai-agent/src/context.rs 860 lines",
+          "mai-agent/src/rag.rs 751 lines",
+          "mai-agent/src/stt.rs 619 lines",
+          "mai-agent/src/tasks.rs 869 lines",
+          "mai-agent/src/tools.rs 783 lines",
+          "mai-agent/src/types.rs 749 lines"
+        ],
+        "evidence_layer": "mapped-check",
+        "origin": "john-finding",
+        "severity": "MEDIUM",
+        "title": "God files over 300 lines"
+      },
+      {
+        "category": "Code Quality",
+        "check_id": "QUA-008",
+        "description": "Many exports can indicate an unfocused module.",
+        "evidence": [
+          "mai-adapters/src/bridge.rs 27 exports",
+          "mai-agent/src/context.rs 19 exports",
+          "mai-agent/src/rag.rs 15 exports",
+          "mai-agent/src/stt.rs 15 exports",
+          "mai-agent/src/tasks.rs 23 exports",
+          "mai-agent/src/tools.rs 22 exports",
+          "mai-agent/src/types.rs 39 exports",
+          "mai-api/src/auth.rs 22 exports"
+        ],
+        "evidence_layer": "mapped-check",
+        "origin": "john-finding",
+        "severity": "LOW",
+        "title": "Modules with 15+ exports"
+      },
+      {
+        "category": "Code Quality",
+        "check_id": "QUA-009",
+        "description": "4+ indentation levels make code harder to read.",
+        "evidence": [
+          "adapters/ollama/client.py:82 ~4 indentation levels",
+          "adapters/onnxruntime/adapter.py:77 ~4 indentation levels",
+          "adapters/onnxruntime/client.py:66 ~4 indentation levels",
+          "adapters/onnxruntime/client_helpers.py:43 ~4 indentation levels",
+          "adapters/onnxruntime/config.py:73 ~4 indentation levels",
+          "adapters/openai_compat/adapter.py:86 ~4 indentation levels",
+          "adapters/openai_compat/adapter_helpers.py:35 ~4 indentation levels",
+          "adapters/openai_compat/client.py:175 ~4 indentation levels"
+        ],
+        "evidence_layer": "mapped-check",
+        "origin": "john-finding",
+        "severity": "MEDIUM",
+        "title": "Deeply nested code"
+      },
+      {
+        "category": "Configuration",
+        "check_id": "CFG-001",
+        "description": "Hardcoded localhost URLs may not deploy cleanly.",
+        "evidence": [
+          "mai-api/src/openbao_client.rs:24 /// OpenBao server address (e.g. `http://localhost:8200`).",
+          "mai-api/src/openbao_client.rs:41 /// - `MAI_OPENBAO_ADDR` \u2014 OpenBao address (default: `http://localhost:8200`)",
+          "mai-api/src/openbao_client.rs:52 std::env::var(\"MAI_OPENBAO_ADDR\").unwrap_or_else(|_| \"http://localhost:8200\".into());"
+        ],
+        "evidence_layer": "mapped-check",
+        "origin": "john-finding",
+        "severity": "LOW",
+        "title": "Hardcoded localhost URLs in source"
+      },
+      {
+        "category": "Review Integrity",
+        "check_id": "REV-005",
+        "description": "Broad errors that pass, return None, or default silently hide broken paths.",
+        "evidence": [
+          "mai-api/src/openbao_client.rs:340 .unwrap_or_default()"
+        ],
+        "evidence_layer": "mapped-check",
+        "origin": "review-integrity",
+        "severity": "HIGH",
+        "title": "Silent broad error handling"
+      },
+      {
+        "category": "Review Integrity",
+        "check_id": "REV-007",
+        "description": "Repeated blocks across modules suggest copy-forward implementation that deserves review.",
+        "evidence": [
+          "mai-core/src/power/demotion.rs:12 duplicates 6-line block in mai-core/src/power/mod.rs:92",
+          "mai-api/src/types.rs:183 duplicates 6-line block in mai-core/src/registry.rs:36",
+          "mai-hil/src/drivers/amd.rs:125 duplicates 6-line block in mai-hil/src/drivers/cpu.rs:130",
+          "mai-hil/src/drivers/amd.rs:126 duplicates 6-line block in mai-hil/src/drivers/cpu.rs:131",
+          "mai-hil/src/drivers/amd.rs:127 duplicates 6-line block in mai-hil/src/drivers/cpu.rs:132",
+          "mai-hil/src/drivers/amd.rs:128 duplicates 6-line block in mai-hil/src/drivers/cpu.rs:133",
+          "mai-hil/src/drivers/amd.rs:147 duplicates 6-line block in mai-hil/src/drivers/cpu.rs:149",
+          "mai-hil/src/drivers/amd.rs:148 duplicates 6-line block in mai-hil/src/drivers/cpu.rs:150"
+        ],
+        "evidence_layer": "mapped-check",
+        "origin": "review-integrity",
+        "severity": "LOW",
+        "title": "Duplicated boilerplate blocks"
+      }
+    ],
+    "overall_score": 90,
+    "passed": 52,
+    "root": "C:\\Users\\17076\\Documents\\Claude\\Island Mountain Mighty Eel OS\\mai-worktrees\\mai-GOV-1",
+    "total_checks": 58
+  },
+  "probes": [
+    {
+      "command": [
+        "C:\\Python314\\python.exe",
+        "-m",
+        "pytest",
+        "tools/local_gitdoctor_tests",
+        "-q"
+      ],
+      "exit_code": 0,
+      "layer": "adversarial-fixture",
+      "output_tail": ".....                                                                    [100%]\n5 passed in 0.57s",
+      "probe_id": "ADV-001",
+      "reason": "",
+      "status": "PASS",
+      "title": "Known-bad and known-clean scanner fixtures",
+      "toolchain": "scanner"
+    },
+    {
+      "command": [
+        "cargo",
+        "check",
+        "--workspace"
+      ],
+      "exit_code": 0,
+      "layer": "independent-implementation",
+      "output_tail": " Checking clap_builder v4.6.0\n   Compiling validator_derive v0.16.0\n    Checking dashmap v6.2.1\n   Compiling prost-build v0.13.5\n    Checking miniz_oxide v0.8.9\n    Checking notify-types v1.0.1\n    Checking headers v0.4.1\n    Checking serde_urlencoded v0.7.1\n    Checking tracing-serde v0.2.0\n    Checking icu_provider v2.2.0\n    Checking chacha20poly1305 v0.10.1\n    Checking tokio-util v0.7.18\n    Checking tower v0.5.3\n    Checking tracing-subscriber v0.3.23\n    Checking tokio-native-tls v0.3.1\n   Compiling pyo3-macros v0.22.6\n   Compiling tonic-build v0.12.3\n    Checking icu_normalizer v2.2.0\n    Checking icu_properties v2.2.0\n    Checking tokio-stream v0.1.18\n    Checking h2 v0.4.14\n    Checking tower v0.4.13\n    Checking tokio-tungstenite v0.29.0\n    Checking walkdir v2.5.0\n   Compiling vswhom v0.1.0\n   Compiling clap_derive v4.6.1\n   Compiling winreg v0.52.0\n   Compiling toml v0.8.23\n    Checking hkdf v0.12.4\n    Checking axum v0.7.9\n    Checking windows-result v0.2.0\n    Checking filetime v0.2.29\n    Checking flate2 v1.1.9\n    Checking windows-strings v0.1.0\n    Checking notify v7.0.0\n    Checking fdeflate v0.3.7\n   Compiling windows-implement v0.58.0\n   Compiling windows-interface v0.58.0\n    Checking pxfm v0.1.29\n    Checking idna_adapter v1.2.2\n   Compiling mai-api v0.1.0 (C:\\Users\\17076\\Documents\\Claude\\Island Mountain Mighty Eel OS\\mai-worktrees\\mai-GOV-1\\mai-api)\n   Compiling embed-resource v2.5.2\n    Checking idna v1.1.0\n    Checking bytemuck v1.25.0\n    Checking png v0.18.1\n    Checking byteorder-lite v0.1.0\n    Checking url v2.5.8\n    Checking mai-hil v0.1.0 (C:\\Users\\17076\\Documents\\Claude\\Island Mountain Mighty Eel OS\\mai-worktrees\\mai-GOV-1\\mai-hil)\n    Checking mai-router v0.1.0 (C:\\Users\\17076\\Documents\\Claude\\Island Mountain Mighty Eel OS\\mai-worktrees\\mai-GOV-1\\mai-router)\n    Checking windows-core v0.58.0\n    Checking tower-http v0.6.11\n    Checking validator v0.16.1\n   Compiling mai-launcher v0.1.0 (C:\\Users\\17076\\Documents\\Claude\\Island Mountain Mighty Eel OS\\mai-worktrees\\mai-GOV-1\\tools\\mai-launcher)\n    Checking clap v4.6.1\n    Checking windows v0.58.0\n    Checking rule-tester v0.1.0 (C:\\Users\\17076\\Documents\\Claude\\Island Mountain Mighty Eel OS\\mai-worktrees\\mai-GOV-1\\tools\\rule-tester)\n    Checking mai-core v0.1.0 (C:\\Users\\17076\\Documents\\Claude\\Island Mountain Mighty Eel OS\\mai-worktrees\\mai-GOV-1\\mai-core)\n    Checking moxcms v0.8.1\n    Checking hyper v1.9.0\n    Checking hyper-util v0.1.20\n    Checking image v0.25.10\n    Checking hyper-timeout v0.5.2\n    Checking hyper-tls v0.6.0\n    Checking axum v0.8.9\n    Checking reqwest v0.12.28\n    Checking tonic v0.12.3\n    Checking mai-compliance v0.1.0 (C:\\Users\\17076\\Documents\\Claude\\Island Mountain Mighty Eel OS\\mai-worktrees\\mai-GOV-1\\mai-compliance)\n    Checking mai-adapters v0.1.0 (C:\\Users\\17076\\Documents\\Claude\\Island Mountain Mighty Eel OS\\mai-worktrees\\mai-GOV-1\\mai-adapters)\n    Checking mai-vault v0.1.0 (C:\\Users\\17076\\Documents\\Claude\\Island Mountain Mighty Eel OS\\mai-worktrees\\mai-GOV-1\\mai-vault)\n    Checking mai-scheduler v0.1.0 (C:\\Users\\17076\\Documents\\Claude\\Island Mountain Mighty Eel OS\\mai-worktrees\\mai-GOV-1\\mai-scheduler)\n    Checking mai-agent v0.1.0 (C:\\Users\\17076\\Documents\\Claude\\Island Mountain Mighty Eel OS\\mai-worktrees\\mai-GOV-1\\mai-agent)\n    Checking mai-pkg-builder v0.1.0 (C:\\Users\\17076\\Documents\\Claude\\Island Mountain Mighty Eel OS\\mai-worktrees\\mai-GOV-1\\tools\\pkg-builder)\n    Checking mai-sdk-rs v0.1.0 (C:\\Users\\17076\\Documents\\Claude\\Island Mountain Mighty Eel OS\\mai-worktrees\\mai-GOV-1\\mai-sdk-rs)\n    Checking tonic-reflection v0.12.3\n    Checking axum-extra v0.10.3\n    Checking mai-admin v0.1.0 (C:\\Users\\17076\\Documents\\Claude\\Island Mountain Mighty Eel OS\\mai-worktrees\\mai-GOV-1\\tools\\mai-admin)\n    Checking gen-trust-staging v0.1.0 (C:\\Users\\17076\\Documents\\Claude\\Island Mountain Mighty Eel OS\\mai-worktrees\\mai-GOV-1\\tools\\gen-trust-staging)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1m 09s",
+      "probe_id": "IND-RS-001",
+      "reason": "",
+      "status": "PASS",
+      "title": "cargo check workspace",
+      "toolchain": "Rust"
+    },
+    {
+      "command": [
+        "cargo",
+        "clippy",
+        "--workspace",
+        "--",
+        "-D",
+        "warnings",
+        "-A",
+        "clippy::pedantic"
+      ],
+      "exit_code": 0,
+      "layer": "independent-implementation",
+      "output_tail": "Checking mai-hil v0.1.0 (C:\\Users\\17076\\Documents\\Claude\\Island Mountain Mighty Eel OS\\mai-worktrees\\mai-GOV-1\\mai-hil)\n   Compiling mai-api v0.1.0 (C:\\Users\\17076\\Documents\\Claude\\Island Mountain Mighty Eel OS\\mai-worktrees\\mai-GOV-1\\mai-api)\n   Compiling mai-launcher v0.1.0 (C:\\Users\\17076\\Documents\\Claude\\Island Mountain Mighty Eel OS\\mai-worktrees\\mai-GOV-1\\tools\\mai-launcher)\n    Checking mai-router v0.1.0 (C:\\Users\\17076\\Documents\\Claude\\Island Mountain Mighty Eel OS\\mai-worktrees\\mai-GOV-1\\mai-router)\n    Checking mai-sdk-rs v0.1.0 (C:\\Users\\17076\\Documents\\Claude\\Island Mountain Mighty Eel OS\\mai-worktrees\\mai-GOV-1\\mai-sdk-rs)\n    Checking rule-tester v0.1.0 (C:\\Users\\17076\\Documents\\Claude\\Island Mountain Mighty Eel OS\\mai-worktrees\\mai-GOV-1\\tools\\rule-tester)\n    Checking mai-core v0.1.0 (C:\\Users\\17076\\Documents\\Claude\\Island Mountain Mighty Eel OS\\mai-worktrees\\mai-GOV-1\\mai-core)\n    Checking mai-compliance v0.1.0 (C:\\Users\\17076\\Documents\\Claude\\Island Mountain Mighty Eel OS\\mai-worktrees\\mai-GOV-1\\mai-compliance)\n    Checking mai-vault v0.1.0 (C:\\Users\\17076\\Documents\\Claude\\Island Mountain Mighty Eel OS\\mai-worktrees\\mai-GOV-1\\mai-vault)\n    Checking mai-adapters v0.1.0 (C:\\Users\\17076\\Documents\\Claude\\Island Mountain Mighty Eel OS\\mai-worktrees\\mai-GOV-1\\mai-adapters)\n    Checking mai-scheduler v0.1.0 (C:\\Users\\17076\\Documents\\Claude\\Island Mountain Mighty Eel OS\\mai-worktrees\\mai-GOV-1\\mai-scheduler)\n    Checking mai-pkg-builder v0.1.0 (C:\\Users\\17076\\Documents\\Claude\\Island Mountain Mighty Eel OS\\mai-worktrees\\mai-GOV-1\\tools\\pkg-builder)\n    Checking mai-agent v0.1.0 (C:\\Users\\17076\\Documents\\Claude\\Island Mountain Mighty Eel OS\\mai-worktrees\\mai-GOV-1\\mai-agent)\n    Checking mai-admin v0.1.0 (C:\\Users\\17076\\Documents\\Claude\\Island Mountain Mighty Eel OS\\mai-worktrees\\mai-GOV-1\\tools\\mai-admin)\n    Checking gen-trust-staging v0.1.0 (C:\\Users\\17076\\Documents\\Claude\\Island Mountain Mighty Eel OS\\mai-worktrees\\mai-GOV-1\\tools\\gen-trust-staging)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 40.80s",
+      "probe_id": "IND-RS-002",
+      "reason": "",
+      "status": "PASS",
+      "title": "cargo clippy workspace",
+      "toolchain": "Rust"
+    },
+    {
+      "command": [
+        "cargo",
+        "test",
+        "--workspace"
+      ],
+      "exit_code": 101,
+      "layer": "independent-implementation",
+      "output_tail": "ers\\17076\\Documents\\Claude\\Island Mountain Mighty Eel OS\\mai-worktrees\\mai-GOV-1\\mai-sdk-rs)\n   Compiling tonic-reflection v0.12.3\n   Compiling mai-pkg-builder v0.1.0 (C:\\Users\\17076\\Documents\\Claude\\Island Mountain Mighty Eel OS\\mai-worktrees\\mai-GOV-1\\tools\\pkg-builder)\n   Compiling axum-extra v0.10.3\n   Compiling mai-admin v0.1.0 (C:\\Users\\17076\\Documents\\Claude\\Island Mountain Mighty Eel OS\\mai-worktrees\\mai-GOV-1\\tools\\mai-admin)\n   Compiling gen-trust-staging v0.1.0 (C:\\Users\\17076\\Documents\\Claude\\Island Mountain Mighty Eel OS\\mai-worktrees\\mai-GOV-1\\tools\\gen-trust-staging)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 2m 09s\n     Running unittests src\\main.rs (target\\debug\\deps\\gen_trust_staging-63901ec21a4fe3b0.exe)\n     Running unittests src\\lib.rs (target\\debug\\deps\\mai_adapters-f9871af847c75a38.exe)\n     Running tests\\benchmarks.rs (target\\debug\\deps\\benchmarks-462bd97f631b0f2d.exe)\n     Running tests\\e2e_integration.rs (target\\debug\\deps\\e2e_integration-e85b2dfef23b23e5.exe)\n     Running tests\\integration_adapters.rs (target\\debug\\deps\\integration_adapters-46205f85e094bb7d.exe)\n     Running unittests src\\lib.rs (target\\debug\\deps\\mai_admin-04753dbbd9d99b7d.exe)\n     Running unittests src\\main.rs (target\\debug\\deps\\lamprey_mai_admin-5a15dd84b31aa280.exe)\n     Running tests\\backup_e2e.rs (target\\debug\\deps\\backup_e2e-ff198278b964b4f7.exe)\n     Running tests\\restore_e2e.rs (target\\debug\\deps\\restore_e2e-eec8e3b748bb4809.exe)\n     Running unittests src\\lib.rs (target\\debug\\deps\\mai_agent-e1ac0651f933f8e2.exe)\n     Running tests\\rag_pipeline_test.rs (target\\debug\\deps\\rag_pipeline_test-b61ad18dbbcf09ae.exe)\n     Running tests\\task_lifecycle_test.rs (target\\debug\\deps\\task_lifecycle_test-39aef54fb06003a7.exe)\n     Running tests\\tool_calling_test.rs (target\\debug\\deps\\tool_calling_test-be822d73f289c5c2.exe)\n     Running unittests src\\lib.rs (target\\debug\\deps\\mai_api-fd5d6dbc3fad1cd2.exe)\n     Running unittests src\\main.rs (target\\debug\\deps\\lamprey_mai_api-96a60793d98ddd5e.exe)\n     Running unittests src\\bin\\mai_ship_validate.rs (target\\debug\\deps\\lamprey_mai_ship_validate-b29a9f0102d004a4.exe)\n     Running tests\\audit_wal.rs (target\\debug\\deps\\audit_wal-f198c0f67acc3c64.exe)\n     Running tests\\auth_bypass_consistency.rs (target\\debug\\deps\\auth_bypass_consistency-6f21d686595469ce.exe)\n     Running tests\\auth_gate_a.rs (target\\debug\\deps\\auth_gate_a-7a9c054db272a970.exe)\n     Running tests\\compliance_integration.rs (target\\debug\\deps\\compliance_integration-62825d59e0bafdbc.exe)\n     Running tests\\grpc_integration.rs (target\\debug\\deps\\grpc_integration-42eb4277df4fc583.exe)\n     Running tests\\health_system_j13.rs (target\\debug\\deps\\health_system_j13-2440b342f54986ca.exe)\n     Running tests\\http_integration.rs (target\\debug\\deps\\http_integration-25f7858b2ac99bf5.exe)\n     Running tests\\production_guard.rs (target\\debug\\deps\\production_guard-db4b7d15fc788c80.exe)\n     Running tests\\sealer_bootstrap.rs (target\\debug\\deps\\sealer_bootstrap-a5b28becd1f2fd7d.exe)\n     Running tests\\sec_95_rate_limit.rs (target\\debug\\deps\\sec_95_rate_limit-5541f5cc19541499.exe)\n     Running tests\\ship_07b_endpoints.rs (target\\debug\\deps\\ship_07b_endpoints-5a2035890a6618b3.exe)\n     Running tests\\ship_11_observability.rs (target\\debug\\deps\\ship_11_observability-2db5a30d1485ed89.exe)\n     Running tests\\ship_convergence.rs (target\\debug\\deps\\ship_convergence-8b330b098cf8ddbd.exe)\n     Running tests\\ship_profile.rs (target\\debug\\deps\\ship_profile-4bc3091ef11bf93b.exe)\n     Running tests\\streaming_integration.rs (target\\debug\\deps\\streaming_integration-40b4b34838c18a1e.exe)\n     Running tests\\system_integration.rs (target\\debug\\deps\\system_integration-ff72f0430ece41eb.exe)\n     Running tests\\trust_production.rs (target\\debug\\deps\\trust_production-1080cc7bf94cfd78.exe)\n     Running tests\\vault_bootstrap.rs (target\\debug\\deps\\vault_bootstrap-226bf4d8ff0cad8a.exe)\nerror: test failed, to rerun pass `-p mai-api --test vault_bootstrap`",
+      "probe_id": "IND-RS-003",
+      "reason": "",
+      "status": "FAIL",
+      "title": "cargo test workspace",
+      "toolchain": "Rust"
+    },
+    {
+      "command": [
+        "cargo",
+        "audit",
+        "--db",
+        "C:\\Users\\17076\\Documents\\Claude\\Island Mountain Mighty Eel OS\\mai-worktrees\\mai-GOV-1\\.tmp\\local-gitdoctor-evidence\\cargo-advisory-db",
+        "--stale",
+        "--format",
+        "json"
+      ],
+      "exit_code": 1,
+      "layer": "independent-implementation",
+      "output_tail": "read beyond the end of the `&str` data and potentially leak contents of the out-of-bounds read (by raising a Python exception containing a copy of the data including the overflow).\\n\\nIn PyO3 0.24.1 this function will now allocate a `CString` to guarantee a terminating nul bytes. PyO3 0.25 will likely offer an alternative API which takes `&CStr` arguments.\",\"date\":\"2025-04-01\",\"aliases\":[\"GHSA-pph8-gcv7-4qj5\"],\"related\":[],\"collection\":\"crates\",\"categories\":[\"memory-exposure\"],\"keywords\":[\"buffer-overflow\"],\"cvss\":null,\"informational\":null,\"references\":[],\"source\":null,\"url\":\"https://github.com/PyO3/pyo3/issues/5005\",\"withdrawn\":null,\"license\":\"CC0-1.0\",\"expect-deleted\":false},\"versions\":{\"patched\":[\">=0.24.1\"],\"unaffected\":[]},\"affected\":{\"arch\":[],\"os\":[],\"functions\":{\"pyo3::types::PyString::from_object\":[\"<0.24.1\"],\"pyo3::types::PyString::from_object_bound\":[\"<0.24.1\",\">=0.21.0\"]}},\"package\":{\"name\":\"pyo3\",\"version\":\"0.22.6\",\"source\":\"registry+https://github.com/rust-lang/crates.io-index\",\"checksum\":\"f402062616ab18202ae8319da13fa4279883a2b8a9d9f83f20dbade813ce1884\",\"dependencies\":[{\"name\":\"cfg-if\",\"version\":\"1.0.4\",\"source\":\"registry+https://github.com/rust-lang/crates.io-index\"},{\"name\":\"indoc\",\"version\":\"2.0.7\",\"source\":\"registry+https://github.com/rust-lang/crates.io-index\"},{\"name\":\"libc\",\"version\":\"0.2.186\",\"source\":\"registry+https://github.com/rust-lang/crates.io-index\"},{\"name\":\"memoffset\",\"version\":\"0.9.1\",\"source\":\"registry+https://github.com/rust-lang/crates.io-index\"},{\"name\":\"once_cell\",\"version\":\"1.21.4\",\"source\":\"registry+https://github.com/rust-lang/crates.io-index\"},{\"name\":\"portable-atomic\",\"version\":\"1.13.1\",\"source\":\"registry+https://github.com/rust-lang/crates.io-index\"},{\"name\":\"pyo3-build-config\",\"version\":\"0.22.6\",\"source\":\"registry+https://github.com/rust-lang/crates.io-index\"},{\"name\":\"pyo3-ffi\",\"version\":\"0.22.6\",\"source\":\"registry+https://github.com/rust-lang/crates.io-index\"},{\"name\":\"pyo3-macros\",\"version\":\"0.22.6\",\"source\":\"registry+https://github.com/rust-lang/crates.io-index\"},{\"name\":\"unindent\",\"version\":\"0.2.4\",\"source\":\"registry+https://github.com/rust-lang/crates.io-index\"}],\"replace\":null}}]},\"warnings\":{\"unmaintained\":[{\"kind\":\"unmaintained\",\"package\":{\"name\":\"proc-macro-error\",\"version\":\"1.0.4\",\"source\":\"registry+https://github.com/rust-lang/crates.io-index\",\"checksum\":\"da25490ff9892aab3fcf7c36f08cfb902dd3e71ca0f9f9517bea02a73a5ce38c\",\"dependencies\":[{\"name\":\"proc-macro-error-attr\",\"version\":\"1.0.4\",\"source\":\"registry+https://github.com/rust-lang/crates.io-index\"},{\"name\":\"proc-macro2\",\"version\":\"1.0.106\",\"source\":\"registry+https://github.com/rust-lang/crates.io-index\"},{\"name\":\"quote\",\"version\":\"1.0.45\",\"source\":\"registry+https://github.com/rust-lang/crates.io-index\"},{\"name\":\"syn\",\"version\":\"1.0.109\",\"source\":\"registry+https://github.com/rust-lang/crates.io-index\"},{\"name\":\"version_check\",\"version\":\"0.9.5\",\"source\":\"registry+https://github.com/rust-lang/crates.io-index\"}],\"replace\":null},\"advisory\":{\"id\":\"RUSTSEC-2024-0370\",\"package\":\"proc-macro-error\",\"title\":\"proc-macro-error is unmaintained\",\"description\":\"proc-macro-error's maintainer seems to be unreachable, with no commits for 2 years, no releases pushed for 4 years, and no activity on the GitLab repo or response to email.\\n\\nproc-macro-error also depends on `syn 1.x`, which may be bringing duplicate dependencies into dependant build trees.\\n\\n## Possible Alternative(s)\\n\\n- [manyhow](https://crates.io/crates/manyhow)\\n- [proc-macro-error2](https://crates.io/crates/proc-macro-error2)\\n- [proc-macro2-diagnostics](https://github.com/SergioBenitez/proc-macro2-diagnostics)\",\"date\":\"2024-09-01\",\"aliases\":[],\"related\":[],\"collection\":\"crates\",\"categories\":[],\"keywords\":[],\"cvss\":null,\"informational\":\"unmaintained\",\"references\":[],\"source\":null,\"url\":\"https://gitlab.com/CreepySkeleton/proc-macro-error/-/issues/20\",\"withdrawn\":null,\"license\":\"CC0-1.0\",\"expect-deleted\":false},\"affected\":null,\"versions\":{\"patched\":[],\"unaffected\":[]}}]}}",
+      "probe_id": "IND-RS-004",
+      "reason": "",
+      "status": "FAIL",
+      "title": "cargo audit",
+      "toolchain": "Rust"
+    },
+    {
+      "command": [
+        "cargo",
+        "deny",
+        "check"
+      ],
+      "exit_code": 1,
+      "layer": "independent-implementation",
+      "output_tail": "o introduce a DNS entry (and TLS certificate) for an `xn--`-masked name that turns into the name of the target when processed by `idna` 0.5.0 or earlier.\n      \n      ## Remedy\n      \n      Upgrade to `idna` 1.0.3 or later, if depending on `idna` directly, or to `url` 2.5.4 or later, if depending on `idna` via `url`. (This issue was fixed in `idna` 1.0.0, but versions earlier than 1.0.3 are not recommended for other reasons.)\n      \n      When upgrading, please take a moment to read about [alternative Unicode back ends for `idna`](https://docs.rs/crate/idna_adapter/latest).\n      \n      If you are using Rust earlier than 1.81 in combination with SQLx 0.8.2 or earlier, please also read an [issue](https://github.com/servo/rust-url/issues/992) about combining them with `url` 2.5.4 and `idna` 1.0.3.\n      \n      ## Additional information\n      \n      This issue resulted from `idna` 0.5.0 and earlier implementing the UTS 46 specification literally on this point and the specification having this bug. The specification bug has been fixed in [revision 33 of UTS 46](https://www.unicode.org/reports/tr46/tr46-33.html#Modifications).\n      \n      ## Acknowledgements\n      \n      Thanks to kageshiron for recognizing the security implications of this behavior.\n    \u251c Announcement: https://bugzilla.mozilla.org/show_bug.cgi?id=1887898\n    \u251c Solution: Upgrade to >=1.0.0 (try `cargo update -p idna`)\n    \u251c idna v0.4.0\n      \u2514\u2500\u2500 validator v0.16.1\n          \u2514\u2500\u2500 mai-api v0.1.0\n\nerror[unmaintained]: proc-macro-error is unmaintained\n    \u250c\u2500 C:\\Users\\17076\\Documents\\Claude\\Island Mountain Mighty Eel OS\\mai-worktrees\\mai-GOV-1/Cargo.lock:214:1\n    \u2502\n214 \u2502 proc-macro-error 1.0.4 registry+https://github.com/rust-lang/crates.io-index\n    \u2502 \u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501 unmaintained advisory detected\n    \u2502\n    \u251c ID: RUSTSEC-2024-0370\n    \u251c Advisory: https://rustsec.org/advisories/RUSTSEC-2024-0370\n    \u251c proc-macro-error's maintainer seems to be unreachable, with no commits for 2 years, no releases pushed for 4 years, and no activity on the GitLab repo or response to email.\n      \n      proc-macro-error also depends on `syn 1.x`, which may be bringing duplicate dependencies into dependant build trees.\n      \n      ## Possible Alternative(s)\n      \n      - [manyhow](https://crates.io/crates/manyhow)\n      - [proc-macro-error2](https://crates.io/crates/proc-macro-error2)\n      - [proc-macro2-diagnostics](https://github.com/SergioBenitez/proc-macro2-diagnostics)\n    \u251c Announcement: https://gitlab.com/CreepySkeleton/proc-macro-error/-/issues/20\n    \u251c Solution: No safe upgrade is available!\n    \u251c proc-macro-error v1.0.4\n      \u2514\u2500\u2500 validator_derive v0.16.0\n          \u2514\u2500\u2500 validator v0.16.1\n              \u2514\u2500\u2500 mai-api v0.1.0\n\nerror[vulnerability]: Risk of buffer overflow in `PyString::from_object`\n    \u250c\u2500 C:\\Users\\17076\\Documents\\Claude\\Island Mountain Mighty Eel OS\\mai-worktrees\\mai-GOV-1/Cargo.lock:222:1\n    \u2502\n222 \u2502 pyo3 0.22.6 registry+https://github.com/rust-lang/crates.io-index\n    \u2502 \u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501 security vulnerability detected\n    \u2502\n    \u251c ID: RUSTSEC-2025-0020\n    \u251c Advisory: https://rustsec.org/advisories/RUSTSEC-2025-0020\n    \u251c `PyString::from_object` took `&str` arguments and forwarded them directly to the Python C API without checking for terminating nul bytes. This could lead the Python interpreter to read beyond the end of the `&str` data and potentially leak contents of the out-of-bounds read (by raising a Python exception containing a copy of the data including the overflow).\n      \n      In PyO3 0.24.1 this function will now allocate a `CString` to guarantee a terminating nul bytes. PyO3 0.25 will likely offer an alternative API which takes `&CStr` arguments.\n    \u251c Announcement: https://github.com/PyO3/pyo3/issues/5005\n    \u251c Solution: Upgrade to >=0.24.1 (try `cargo update -p pyo3`)\n    \u251c pyo3 v0.22.6\n      \u2514\u2500\u2500 mai-adapters v0.1.0\n          \u2514\u2500\u2500 mai-api v0.1.0",
+      "probe_id": "IND-RS-005",
+      "reason": "",
+      "status": "FAIL",
+      "title": "cargo deny",
+      "toolchain": "Rust"
+    },
+    {
+      "command": [
+        "C:\\Python314\\python.exe",
+        "-m",
+        "pytest",
+        "-q",
+        "--ignore=target",
+        "--ignore=results"
+      ],
+      "exit_code": 0,
+      "layer": "independent-implementation",
+      "output_tail": "....................................................sssssss............. [  5%]\n............ssssss.....................................sssss............ [ 10%]\n..........ssssss..............................................ssssss.... [ 16%]\n.........................................ssssss......................... [ 21%]\n......................ssssss............................................ [ 27%]\n.............................sssss...................................... [ 32%]\n.................................................ssssss................. [ 38%]\n........................................................................ [ 43%]\nsssss.....................................................sssssss....... [ 49%]\n........................................................................ [ 54%]\n........................................................................ [ 60%]\n........................................................................ [ 65%]\n........................................................................ [ 71%]\n...............................................................s......s. [ 76%]\n.................ssssssssssss.sssssssss................................. [ 82%]\n........................................................................ [ 87%]\n........................................................................ [ 93%]\n........................................................................ [ 98%]\n..............                                                           [100%]\n1222 passed, 88 skipped in 113.18s (0:01:53)",
+      "probe_id": "IND-PY-001",
+      "reason": "",
+      "status": "PASS",
+      "title": "pytest repository tests",
+      "toolchain": "Python"
+    },
+    {
+      "command": [
+        "C:\\Python314\\python.exe",
+        "-m",
+        "ruff",
+        "check",
+        "."
+      ],
+      "exit_code": 0,
+      "layer": "independent-implementation",
+      "output_tail": "All checks passed!",
+      "probe_id": "IND-PY-002",
+      "reason": "",
+      "status": "PASS",
+      "title": "ruff lint",
+      "toolchain": "Python"
+    },
+    {
+      "command": [
+        "C:\\Python314\\python.exe",
+        "-m",
+        "bandit",
+        "-r",
+        ".",
+        "-f",
+        "json",
+        "-c",
+        "pyproject.toml"
+      ],
+      "exit_code": 0,
+      "layer": "independent-implementation",
+      "output_tail": "NCE.HIGH\": 0,\n      \"CONFIDENCE.LOW\": 0,\n      \"CONFIDENCE.MEDIUM\": 0,\n      \"CONFIDENCE.UNDEFINED\": 0,\n      \"SEVERITY.HIGH\": 0,\n      \"SEVERITY.LOW\": 0,\n      \"SEVERITY.MEDIUM\": 0,\n      \"SEVERITY.UNDEFINED\": 0,\n      \"loc\": 110,\n      \"nosec\": 0,\n      \"skipped_tests\": 0\n    },\n    \".\\\\tools\\\\trace-tools\\\\reconstruct.py\": {\n      \"CONFIDENCE.HIGH\": 0,\n      \"CONFIDENCE.LOW\": 0,\n      \"CONFIDENCE.MEDIUM\": 0,\n      \"CONFIDENCE.UNDEFINED\": 0,\n      \"SEVERITY.HIGH\": 0,\n      \"SEVERITY.LOW\": 0,\n      \"SEVERITY.MEDIUM\": 0,\n      \"SEVERITY.UNDEFINED\": 0,\n      \"loc\": 89,\n      \"nosec\": 0,\n      \"skipped_tests\": 0\n    },\n    \".\\\\tools\\\\trace-tools\\\\tests\\\\test_trace_tools.py\": {\n      \"CONFIDENCE.HIGH\": 0,\n      \"CONFIDENCE.LOW\": 0,\n      \"CONFIDENCE.MEDIUM\": 0,\n      \"CONFIDENCE.UNDEFINED\": 0,\n      \"SEVERITY.HIGH\": 0,\n      \"SEVERITY.LOW\": 0,\n      \"SEVERITY.MEDIUM\": 0,\n      \"SEVERITY.UNDEFINED\": 0,\n      \"loc\": 132,\n      \"nosec\": 0,\n      \"skipped_tests\": 0\n    },\n    \"_totals\": {\n      \"CONFIDENCE.HIGH\": 0,\n      \"CONFIDENCE.LOW\": 0,\n      \"CONFIDENCE.MEDIUM\": 0,\n      \"CONFIDENCE.UNDEFINED\": 0,\n      \"SEVERITY.HIGH\": 0,\n      \"SEVERITY.LOW\": 0,\n      \"SEVERITY.MEDIUM\": 0,\n      \"SEVERITY.UNDEFINED\": 0,\n      \"loc\": 33002,\n      \"nosec\": 0,\n      \"skipped_tests\": 2\n    }\n  },\n  \"results\": []\n}\n[main]\tINFO\tprofile include tests: None\n[main]\tINFO\tprofile exclude tests: B310,B607,B105,B311,B603,B404,B101\n[main]\tINFO\tcli include tests: None\n[main]\tINFO\tcli exclude tests: None\n[manager]\tWARNING\tTest in comment: HTML is not a test name or id, ignoring\n[manager]\tWARNING\tTest in comment: template is not a test name or id, ignoring\n[manager]\tWARNING\tTest in comment: every is not a test name or id, ignoring\n[manager]\tWARNING\tTest in comment: var is not a test name or id, ignoring\n[manager]\tWARNING\tTest in comment: passes is not a test name or id, ignoring\n[manager]\tWARNING\tTest in comment: through is not a test name or id, ignoring\n[manager]\tWARNING\tTest in comment: html is not a test name or id, ignoring\n[manager]\tWARNING\tTest in comment: escape is not a test name or id, ignoring\n[manager]\tWARNING\tTest in comment: not is not a test name or id, ignoring\n[manager]\tWARNING\tTest in comment: a is not a test name or id, ignoring\n[manager]\tWARNING\tTest in comment: SQL is not a test name or id, ignoring\n[manager]\tWARNING\tTest in comment: statement is not a test name or id, ignoring\n[tester]\tWARNING\tnosec encountered (B608), but no failed test on file .\\compliance-dashboard\\app.py:273\n[tester]\tWARNING\tnosec encountered (B608), but no failed test on file .\\compliance-dashboard\\app.py:273\n[tester]\tWARNING\tnosec encountered (B608), but no failed test on file .\\compliance-dashboard\\app.py:274\n[tester]\tWARNING\tnosec encountered (B608), but no failed test on file .\\compliance-dashboard\\app.py:274\n[tester]\tWARNING\tnosec encountered (B608), but no failed test on file .\\compliance-dashboard\\app.py:277\n[tester]\tWARNING\tnosec encountered (B608), but no failed test on file .\\compliance-dashboard\\app.py:278\n[tester]\tWARNING\tnosec encountered (B608), but no failed test on file .\\compliance-dashboard\\app.py:285\n[manager]\tWARNING\tTest in comment: test is not a test name or id, ignoring\n[manager]\tWARNING\tTest in comment: asserts is not a test name or id, ignoring\n[manager]\tWARNING\tTest in comment: ABSENCE is not a test name or id, ignoring\n[manager]\tWARNING\tTest in comment: of is not a test name or id, ignoring\n[manager]\tWARNING\tTest in comment: 0 is not a test name or id, ignoring\n[manager]\tWARNING\tTest in comment: 0 is not a test name or id, ignoring\n[manager]\tWARNING\tTest in comment: 0 is not a test name or id, ignoring\n[manager]\tWARNING\tTest in comment: 0 is not a test name or id, ignoring\n[manager]\tWARNING\tTest in comment: never is not a test name or id, ignoring\n[manager]\tWARNING\tTest in comment: binds is not a test name or id, ignoring\n[tester]\tWARNING\tnosec encountered (B104), but no failed test on file .\\tools\\packaging_tests\\test_systemd_units.py:167",
+      "probe_id": "IND-PY-003",
+      "reason": "",
+      "status": "PASS",
+      "title": "bandit security scan",
+      "toolchain": "Python"
+    },
+    {
+      "command": [
+        "C:\\Python314\\python.exe",
+        "-m",
+        "pip_audit",
+        "--cache-dir",
+        "C:\\Users\\17076\\Documents\\Claude\\Island Mountain Mighty Eel OS\\mai-worktrees\\mai-GOV-1\\.tmp\\local-gitdoctor-evidence\\pip-audit-cache",
+        "--progress-spinner",
+        "off",
+        "--format",
+        "json"
+      ],
+      "exit_code": 1,
+      "layer": "independent-implementation",
+      "output_tail": "mai-sdk (0.2.0)\"}, {\"name\": \"mando\", \"version\": \"0.7.1\", \"vulns\": []}, {\"name\": \"markdown-it-py\", \"version\": \"4.2.0\", \"vulns\": []}, {\"name\": \"mdurl\", \"version\": \"0.1.2\", \"vulns\": []}, {\"name\": \"msgpack\", \"version\": \"1.1.2\", \"vulns\": []}, {\"name\": \"mypy\", \"version\": \"2.1.0\", \"vulns\": []}, {\"name\": \"mypy-extensions\", \"version\": \"1.1.0\", \"vulns\": []}, {\"name\": \"packageurl-python\", \"version\": \"0.17.6\", \"vulns\": []}, {\"name\": \"packaging\", \"version\": \"26.2\", \"vulns\": []}, {\"name\": \"pathspec\", \"version\": \"1.1.1\", \"vulns\": []}, {\"name\": \"pillow\", \"version\": \"12.2.0\", \"vulns\": []}, {\"name\": \"pip\", \"version\": \"26.0.1\", \"vulns\": [{\"id\": \"CVE-2026-3219\", \"fix_versions\": [\"26.1\"], \"aliases\": [\"GHSA-58qw-9mgm-455v\"], \"description\": \"pip handles concatenated tar and ZIP files as ZIP files regardless of filename or whether a file is both a tar and ZIP file. This behavior could result in confusing installation behavior, such as installing \\\"incorrect\\\" files according to the filename of the archive. New behavior only proceeds with installation if the file identifies uniquely as a ZIP or tar archive, not as both.\"}, {\"id\": \"CVE-2026-6357\", \"fix_versions\": [\"26.1\"], \"aliases\": [\"GHSA-jp4c-xjxw-mgf9\"], \"description\": \"pip prior to version 26.1 would run self-update check functionality after installing wheel files which required importing well-known Python modules names. These module imports were intentionally deferred to increase startup time of the pip CLI. The patch changes self-update functionality to run before wheels are installed to prevent newly-installed modules from being imported shortly after the installation of a wheel package. Users should still review package contents prior to installation.\"}]}, {\"name\": \"pip-api\", \"version\": \"0.0.34\", \"vulns\": []}, {\"name\": \"pip-audit\", \"version\": \"2.10.0\", \"vulns\": []}, {\"name\": \"pip-requirements-parser\", \"version\": \"32.0.1\", \"vulns\": []}, {\"name\": \"pip-tools\", \"version\": \"7.5.3\", \"vulns\": []}, {\"name\": \"platformdirs\", \"version\": \"4.9.6\", \"vulns\": []}, {\"name\": \"pluggy\", \"version\": \"1.6.0\", \"vulns\": []}, {\"name\": \"py-serializable\", \"version\": \"2.1.0\", \"vulns\": []}, {\"name\": \"pycparser\", \"version\": \"3.0\", \"vulns\": []}, {\"name\": \"pydantic\", \"version\": \"2.13.4\", \"vulns\": []}, {\"name\": \"pydantic-core\", \"version\": \"2.46.4\", \"vulns\": []}, {\"name\": \"pygments\", \"version\": \"2.20.0\", \"vulns\": []}, {\"name\": \"pyparsing\", \"version\": \"3.3.2\", \"vulns\": []}, {\"name\": \"pypdf\", \"version\": \"6.12.1\", \"vulns\": []}, {\"name\": \"pyproject-hooks\", \"version\": \"1.2.0\", \"vulns\": []}, {\"name\": \"pytest\", \"version\": \"9.0.3\", \"vulns\": []}, {\"name\": \"pytest-asyncio\", \"version\": \"1.3.0\", \"vulns\": []}, {\"name\": \"python-docx\", \"version\": \"1.2.0\", \"vulns\": []}, {\"name\": \"python-dotenv\", \"version\": \"1.2.2\", \"vulns\": []}, {\"name\": \"python-multipart\", \"version\": \"0.0.29\", \"vulns\": []}, {\"name\": \"pyyaml\", \"version\": \"6.0.3\", \"vulns\": []}, {\"name\": \"radon\", \"version\": \"6.0.1\", \"vulns\": []}, {\"name\": \"requests\", \"version\": \"2.34.2\", \"vulns\": []}, {\"name\": \"rich\", \"version\": \"15.0.0\", \"vulns\": []}, {\"name\": \"ruff\", \"version\": \"0.15.14\", \"vulns\": []}, {\"name\": \"setuptools\", \"version\": \"82.0.1\", \"vulns\": []}, {\"name\": \"six\", \"version\": \"1.17.0\", \"vulns\": []}, {\"name\": \"sortedcontainers\", \"version\": \"2.4.0\", \"vulns\": []}, {\"name\": \"starlette\", \"version\": \"1.0.1\", \"vulns\": []}, {\"name\": \"stevedore\", \"version\": \"5.8.0\", \"vulns\": []}, {\"name\": \"structlog\", \"version\": \"25.5.0\", \"vulns\": []}, {\"name\": \"tomli\", \"version\": \"2.4.1\", \"vulns\": []}, {\"name\": \"tomli-w\", \"version\": \"1.2.0\", \"vulns\": []}, {\"name\": \"typing-extensions\", \"version\": \"4.15.0\", \"vulns\": []}, {\"name\": \"typing-inspection\", \"version\": \"0.4.2\", \"vulns\": []}, {\"name\": \"urllib3\", \"version\": \"2.7.0\", \"vulns\": []}, {\"name\": \"uvicorn\", \"version\": \"0.47.0\", \"vulns\": []}, {\"name\": \"watchfiles\", \"version\": \"1.2.0\", \"vulns\": []}, {\"name\": \"websockets\", \"version\": \"16.0\", \"vulns\": []}, {\"name\": \"wheel\", \"version\": \"0.47.0\", \"vulns\": []}], \"fixes\": []}\n\nFound 2 known vulnerabilities in 1 package",
+      "probe_id": "IND-PY-004",
+      "reason": "",
+      "status": "FAIL",
+      "title": "pip-audit dependency scan",
+      "toolchain": "Python"
+    },
+    {
+      "command": [
+        "gitleaks",
+        "detect",
+        "--source",
+        ".",
+        "--no-git",
+        "--redact"
+      ],
+      "exit_code": 0,
+      "layer": "independent-implementation",
+      "output_tail": "\u25cb\n    \u2502\u2572\n    \u2502 \u25cb\n    \u25cb \u2591\n    \u2591    gitleaks\n\n\u001b[90m9:25PM\u001b[0m \u001b[32mINF\u001b[0m \u001b[1mscanned ~13041108 bytes (13.04 MB) in 866ms\u001b[0m\n\u001b[90m9:25PM\u001b[0m \u001b[32mINF\u001b[0m \u001b[1mno leaks found\u001b[0m",
+      "probe_id": "IND-SEC-001",
+      "reason": "",
+      "status": "PASS",
+      "title": "gitleaks secret scan",
+      "toolchain": "Secrets"
+    },
+    {
+      "command": [
+        "C:\\Python314\\python.exe",
+        "C:\\Users\\17076\\Documents\\Claude\\Island Mountain Mighty Eel OS\\mai-worktrees\\mai-GOV-1\\tools\\detect_secrets_serial_scan.py",
+        "--all-files",
+        "--fail-on-findings",
+        "--exclude-files",
+        "(^|[\\\\/])(\\.git|\\.mypy_cache|\\.pytest_cache|\\.pytest-tmp|\\.ruff_cache|\\.tmp|node_modules|py_tmp_dir|pytest-cache-files-[^\\\\/]+|pytest_temp|results|target|temp_test_dir|test-evidence)([\\\\/]|$)|^docs[\\\\/]LOCAL-GITDOCTOR-EVIDENCE\\.(json|md)$|^docs[\\\\/]LOCAL-GITDOCTOR-REPORT\\.(json|md)$",
+        "."
+      ],
+      "exit_code": 1,
+      "layer": "independent-implementation",
+      "output_tail": "Documents\\\\Claude\\\\Island Mountain Mighty Eel OS\\\\mai-worktrees\\\\mai-GOV-1\\\\mai-sdk-python\\\\docs\\\\authentication.md\",\n        \"hashed_secret\": \"e59482cfc1d81e2c1fd4ad767bd8be6a8ef9cff3\",\n        \"is_verified\": false,\n        \"line_number\": 11,\n        \"type\": \"Secret Keyword\"\n      }\n    ],\n    \"mai-sdk-python\\\\docs\\\\quickstart.md\": [\n      {\n        \"filename\": \"C:\\\\Users\\\\17076\\\\Documents\\\\Claude\\\\Island Mountain Mighty Eel OS\\\\mai-worktrees\\\\mai-GOV-1\\\\mai-sdk-python\\\\docs\\\\quickstart.md\",\n        \"hashed_secret\": \"e59482cfc1d81e2c1fd4ad767bd8be6a8ef9cff3\",\n        \"is_verified\": false,\n        \"line_number\": 25,\n        \"type\": \"Secret Keyword\"\n      }\n    ],\n    \"mai-sdk-python\\\\src\\\\mai\\\\config.py\": [\n      {\n        \"filename\": \"C:\\\\Users\\\\17076\\\\Documents\\\\Claude\\\\Island Mountain Mighty Eel OS\\\\mai-worktrees\\\\mai-GOV-1\\\\mai-sdk-python\\\\src\\\\mai\\\\config.py\",\n        \"hashed_secret\": \"e59482cfc1d81e2c1fd4ad767bd8be6a8ef9cff3\",\n        \"is_verified\": false,\n        \"line_number\": 100,\n        \"type\": \"Secret Keyword\"\n      }\n    ],\n    \"mai-sdk-python\\\\tests\\\\test_config.py\": [\n      {\n        \"filename\": \"C:\\\\Users\\\\17076\\\\Documents\\\\Claude\\\\Island Mountain Mighty Eel OS\\\\mai-worktrees\\\\mai-GOV-1\\\\mai-sdk-python\\\\tests\\\\test_config.py\",\n        \"hashed_secret\": \"931adbe8ed8b0d58fad8c003a89eb53a44bf719f\",\n        \"is_verified\": false,\n        \"line_number\": 57,\n        \"type\": \"Secret Keyword\"\n      },\n      {\n        \"filename\": \"C:\\\\Users\\\\17076\\\\Documents\\\\Claude\\\\Island Mountain Mighty Eel OS\\\\mai-worktrees\\\\mai-GOV-1\\\\mai-sdk-python\\\\tests\\\\test_config.py\",\n        \"hashed_secret\": \"3e0f4f09b45944720e4c995bf92f3103902ca2d6\",\n        \"is_verified\": false,\n        \"line_number\": 65,\n        \"type\": \"Secret Keyword\"\n      },\n      {\n        \"filename\": \"C:\\\\Users\\\\17076\\\\Documents\\\\Claude\\\\Island Mountain Mighty Eel OS\\\\mai-worktrees\\\\mai-GOV-1\\\\mai-sdk-python\\\\tests\\\\test_config.py\",\n        \"hashed_secret\": \"3ff12f06475255a18c4744d4a1fa9c23a4470841\",\n        \"is_verified\": false,\n        \"line_number\": 72,\n        \"type\": \"Secret Keyword\"\n      }\n    ],\n    \"scripts\\\\build-package.ps1\": [\n      {\n        \"filename\": \"C:\\\\Users\\\\17076\\\\Documents\\\\Claude\\\\Island Mountain Mighty Eel OS\\\\mai-worktrees\\\\mai-GOV-1\\\\scripts\\\\build-package.ps1\",\n        \"hashed_secret\": \"20a14ede53d8f5ab25cbbea16357ffdd887e101d\",\n        \"is_verified\": false,\n        \"line_number\": 142,\n        \"type\": \"Base64 High Entropy String\"\n      }\n    ],\n    \"tools\\\\gpu_release_tests\\\\test_bundle_scripts.py\": [\n      {\n        \"filename\": \"C:\\\\Users\\\\17076\\\\Documents\\\\Claude\\\\Island Mountain Mighty Eel OS\\\\mai-worktrees\\\\mai-GOV-1\\\\tools\\\\gpu_release_tests\\\\test_bundle_scripts.py\",\n        \"hashed_secret\": \"26019c2e7b54c3d5b828190796fa49f2ae4b1a43\",\n        \"is_verified\": false,\n        \"line_number\": 97,\n        \"type\": \"Hex High Entropy String\"\n      },\n      {\n        \"filename\": \"C:\\\\Users\\\\17076\\\\Documents\\\\Claude\\\\Island Mountain Mighty Eel OS\\\\mai-worktrees\\\\mai-GOV-1\\\\tools\\\\gpu_release_tests\\\\test_bundle_scripts.py\",\n        \"hashed_secret\": \"158b484ae1f6f64f89da22397d25fbdafad02252\",\n        \"is_verified\": false,\n        \"line_number\": 125,\n        \"type\": \"Hex High Entropy String\"\n      },\n      {\n        \"filename\": \"C:\\\\Users\\\\17076\\\\Documents\\\\Claude\\\\Island Mountain Mighty Eel OS\\\\mai-worktrees\\\\mai-GOV-1\\\\tools\\\\gpu_release_tests\\\\test_bundle_scripts.py\",\n        \"hashed_secret\": \"ff998abc1ce6d8f01a675fa197368e44c8916e9c\",\n        \"is_verified\": false,\n        \"line_number\": 184,\n        \"type\": \"Hex High Entropy String\"\n      }\n    ],\n    \"tools\\\\mai-admin\\\\src\\\\audit.rs\": [\n      {\n        \"filename\": \"C:\\\\Users\\\\17076\\\\Documents\\\\Claude\\\\Island Mountain Mighty Eel OS\\\\mai-worktrees\\\\mai-GOV-1\\\\tools\\\\mai-admin\\\\src\\\\audit.rs\",\n        \"hashed_secret\": \"c0174d8dfe9687a8f29297449712d6ba12ed2bc3\",\n        \"is_verified\": false,\n        \"line_number\": 19,\n        \"type\": \"Hex High Entropy String\"\n      }\n    ]\n  },\n  \"version\": \"1.5.0\"\n}",
+      "probe_id": "IND-SEC-002",
+      "reason": "",
+      "status": "FAIL",
+      "title": "detect-secrets serial scan",
+      "toolchain": "Secrets"
+    },
+    {
+      "command": [
+        "hadolint",
+        "Dockerfile"
+      ],
+      "exit_code": null,
+      "layer": "independent-implementation",
+      "output_tail": "",
+      "probe_id": "IND-DOC-001",
+      "reason": "tool not installed: hadolint",
+      "status": "SKIPPED",
+      "title": "hadolint Dockerfile scan",
+      "toolchain": "Docker"
+    },
+    {
+      "command": [
+        "tokei",
+        "."
+      ],
+      "exit_code": 0,
+      "layer": "independent-implementation",
+      "output_tail": "\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n Language              Files        Lines         Code     Comments       Blanks\n\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n Dockerfile                1          167           52           99           16\n INI                       1           31           21            6            4\n JSON                      2         1293         1293            0            0\n PowerShell                9         1403         1118          127          158\n Protocol Buffers          2         1171          745          256          170\n Python                  244        41053        33492         1207         6354\n Shell                    14         1988         1478          277          233\n Plain Text               18          304            0          288           16\n TOML                     59         3103         1680         1023          400\n YAML                      2         1660         1539           53           68\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n Markdown                187        37614            0        28499         9115\n |- BASH                  39          418          354           42           22\n |- HCL                    1            6            5            1            0\n |- JSON                  24          919          914            0            5\n |- Markdown               1           21            0           11           10\n |- PowerShell            36          253          189           43           21\n |- Python                13          244          199           14           31\n |- Rust                   9          276          210           56           10\n |- TOML                   7          203          177            2           24\n |- YAML                   1            2            2            0            0\n (Total)                            39956         2050        28668         9238\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n Rust                    265        87352        73856         3398        10098\n |- Markdown             262        11606           20        10476         1110\n (Total)                            98958        73876        13874        11208\n\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n Total                   804       191087       117344        45878        27865\n\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501",
+      "probe_id": "IND-CPLX-001",
+      "reason": "",
+      "status": "PASS",
+      "title": "tokei line-count scan",
+      "toolchain": "Complexity"
+    },
+    {
+      "command": [
+        "scc",
+        "."
+      ],
+      "exit_code": 0,
+      "layer": "independent-implementation",
+      "output_tail": "\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nLanguage            Files       Lines    Blanks  Comments       Code Complexity\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nRust                  265      99,003    10,080    14,988     73,935      3,591\nPython                244      41,053     4,920     3,941     32,192      3,046\nMarkdown              194      40,622     9,386         0     31,236          0\nTOML                   61       3,226       414     1,106      1,706          6\nPlain Text             18         304        16         0        288          0\nShell                  18       2,277       280       315      1,682        240\nPowershell             10       1,443       153       122      1,168        200\nYAML                    9       2,457       156       193      2,108          0\nSystemd                 5         197        19         8        170          0\nJSON                    4       1,319         0         0      1,319          0\nJavaScript              4         446        39        41        366         29\nBASH                    3         232        39        36        157         36\nProtocol Buffe\u2026         2       1,171       170       256        745          0\nDocker ignore           1          57        11        15         31          0\nDockerfile              1         167        16        99         52          5\nINI                     1          31         4         6         21          0\nLicense                 1          11         1         0         10          0\nWindows Resour\u2026         1           7         0         6          1          0\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nTotal                 842     194,023    25,704    21,132    147,187      7,153\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nEstimated Cost to Develop (organic) $5,103,384\nEstimated Schedule Effort (organic) 25.55 months\nEstimated People Required (organic) 17.74\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nProcessed 7438793 bytes, 7.439 megabytes (SI)\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500",
+      "probe_id": "IND-CPLX-002",
+      "reason": "",
+      "status": "PASS",
+      "title": "scc complexity scan",
+      "toolchain": "Complexity"
+    },
+    {
+      "command": [
+        "C:\\Python314\\python.exe",
+        "-m",
+        "radon",
+        "cc",
+        "."
+      ],
+      "exit_code": 0,
+      "layer": "independent-implementation",
+      "output_tail": "_init__ - A\n    M 140:4 BatchAwareKvManager.__init__ - A\n    M 149:4 BatchAwareKvManager.set_active_batch - A\ntools\\simulator\\metrics.py\n    M 65:4 MetricsCollector.report - B\n    M 54:4 MetricsCollector.percentile - A\n    C 7:0 MetricsCollector - A\n    M 8:4 MetricsCollector.__init__ - A\n    M 21:4 MetricsCollector.record_latency - A\n    M 24:4 MetricsCollector.record_token_rate - A\n    M 27:4 MetricsCollector.record_batch - A\n    M 30:4 MetricsCollector.record_queue_depth - A\n    M 33:4 MetricsCollector.record_eviction - A\n    M 36:4 MetricsCollector.record_admission - A\n    M 39:4 MetricsCollector.record_request - A\n    M 42:4 MetricsCollector.record_completion - A\n    M 45:4 MetricsCollector.record_thrash - A\n    M 48:4 MetricsCollector.record_kv_utilization - A\n    M 51:4 MetricsCollector.record_violation - A\n    M 86:4 MetricsCollector.report_json - A\n    M 89:4 MetricsCollector.reset - A\ntools\\simulator\\replay_compare.py\n    F 45:0 run_trace_replay - B\n    F 136:0 compare_policies_on_trace - A\n    F 163:0 main - A\ntools\\simulator\\report.py\n    F 39:0 render_markdown - B\n    F 118:0 main - A\n    F 33:0 _fmt - A\n    F 84:0 find_best - A\n    F 114:0 render_json - A\ntools\\simulator\\trace_generator.py\n    F 29:0 load_trace - A\n    C 45:0 TraceGenerator - A\n    M 72:4 TraceGenerator._compute_offsets - A\n    M 92:4 TraceGenerator.generate - A\n    F 23:0 _parse_timestamp - A\n    M 59:4 TraceGenerator.__init__ - A\n    M 102:4 TraceGenerator._materialize - A\n    M 82:4 TraceGenerator.remaining - A\n    M 86:4 TraceGenerator.total - A\n    M 89:4 TraceGenerator.reset - A\ntools\\simulator\\workload.py\n    M 26:4 ChatWorkload.generate - B\n    C 11:0 ChatWorkload - A\n    C 80:0 MixedWorkload - A\n    C 53:0 BatchWorkload - A\n    M 81:4 MixedWorkload.__init__ - A\n    M 88:4 MixedWorkload.generate - A\n    C 7:0 WorkloadGenerator - A\n    M 63:4 BatchWorkload.generate - A\n    M 8:4 WorkloadGenerator.generate - A\n    M 12:4 ChatWorkload.__init__ - A\n    M 54:4 BatchWorkload.__init__ - A\ntools\\simulator\\tests\\test_replay_compare.py\n    F 59:0 test_run_trace_replay_emits_required_fields - B\n    F 120:0 test_report_markdown_includes_all_policies - A\n    F 138:0 test_report_find_best_picks_max_throughput_and_min_p95 - A\n    F 83:0 test_run_trace_replay_is_deterministic - A\n    F 112:0 test_compare_policies_runs_all_when_unspecified - A\n    F 20:0 _load - A\n    F 39:0 _write_trace - A\n    F 131:0 test_report_markdown_handles_empty_comparison - A\n    F 35:0 _iso - A\n    F 103:0 test_run_trace_replay_rejects_unknown_policy - A\ntools\\simulator\\tests\\test_simulator_extensions.py\n    F 61:0 test_trace_generator_preserves_inter_request_gaps - B\n    F 113:0 test_hybrid_emits_spike_during_window - B\n    F 87:0 test_trace_generator_marks_continuations - A\n    F 101:0 test_trace_generator_time_scale_compresses_timeline - A\n    F 16:0 _load - A\n    F 34:0 _write_trace - A\n    F 55:0 _to_iso - A\n    F 140:0 test_spike_config_validates - A\ntools\\smoke\\smoke_client.py\n    F 43:0 run - B\n    F 28:0 get - A\n    F 89:0 main - A\ntools\\trace-tools\\anonymize.py\n    F 46:0 anonymize_event - A\n    F 64:0 process - A\n    F 85:0 main - A\n    F 58:0 validate - A\n    F 39:0 rehash - A\ntools\\trace-tools\\calibrate.py\n    F 54:0 calibrate - B\n    F 40:0 load_sessions - A\n    F 106:0 main - A\n    F 89:0 clamp - A\n    F 93:0 render_toml - A\ntools\\trace-tools\\reconstruct.py\n    F 31:0 reconstruct - C\n    F 69:0 process - A\n    F 24:0 parse_timestamp - A\n    F 89:0 main - A\ntools\\trace-tools\\tests\\test_trace_tools.py\n    F 113:0 test_reconstruct_groups_events_by_session_and_computes_gaps - B\n    F 71:0 test_anonymize_strips_disallowed_fields_and_rehashes - B\n    F 146:0 test_calibrate_increases_alpha_with_repeat_traffic - B\n    F 159:0 test_calibrate_render_toml_includes_coefficients - A\n    F 139:0 test_calibrate_returns_defaults_for_empty_input - A\n    F 20:0 _load - A\n    F 34:0 _event - A\n    F 64:0 _write_ndjson - A\n    F 105:0 test_anonymize_validate_rejects_extra_fields - A",
+      "probe_id": "IND-CPLX-003",
+      "reason": "",
+      "status": "PASS",
+      "title": "radon complexity scan",
+      "toolchain": "Complexity"
+    }
+  ],
+  "root": "C:\\Users\\17076\\Documents\\Claude\\Island Mountain Mighty Eel OS\\mai-worktrees\\mai-GOV-1",
+  "summary": {
+    "adversarial-fixture": {
+      "FAIL": 0,
+      "PASS": 1,
+      "SKIPPED": 0,
+      "TOTAL": 1
+    },
+    "independent-implementation": {
+      "FAIL": 5,
+      "PASS": 9,
+      "SKIPPED": 1,
+      "TOTAL": 15
+    }
+  }
+}

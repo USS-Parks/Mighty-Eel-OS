@@ -1,13 +1,13 @@
 # MAI + Lamprey Cogent Deployment Roadmap
 
-> **STATUS as of 2026-05-24**
-> RC-01..RC-10 CLOSED. RC1 bundle (freeze `dceaabc`) shipped to external tester John Dougherty 2026-05-24 (RC-09 closed `e2d9ea6`). His GitDoctor + manual review produced 19 findings now tracked in the DOUGHERTY remediation lane (J-01..J-26 in `mai/docs/dougherty/JOHN-REMEDIATION-PLAN.md`). DOUGHERTY is the current active lane. RC-11 (re-bundle + re-ship) is the next milestone after DOUGHERTY closes.
+> **STATUS as of 2026-05-26**
+> RC-01..RC-11 CLOSED. RC1.0 bundle (`dceaabc`) shipped to John Dougherty 2026-05-24 (`e2d9ea6`); DOUGHERTY remediation lane (J-01..J-26) CLOSED 2026-05-25 with all 26 sessions complete (J-23..J-26 landed under `a072634`); RC1.2 re-bundle + re-ship complete at freeze `e55c1ff` with local GitDoctor score 93/100. Two follow-up lanes are now in-flight: **GITDOCTOR-75** (GD75-01..GD75-16, sessions GD75-07/08/09/10/14/15 landed; target external rescan ≥95/100) and the loose **IGD** internal-scan lane (IGD-01/04/05/08 landed today). RC2 deployment rehearsal (RC2-01..RC2-08) is the next milestone; production-validation evidence already committed at `ee6eb13`. Latest local scan: see [`LOCAL-GITDOCTOR-EVIDENCE-2026-05-26.md`](LOCAL-GITDOCTOR-EVIDENCE-2026-05-26.md).
 
 **Project:** Island Mountain Mighty Eel OS / MAI / Lamprey  
 **Purpose:** Turn the completed Gate D codebase into one coherent, testable, and eventually shippable software product.  
 **Audience:** project owner, vibe-coder operator, release engineers, testers, acquirer reviewers.  
-**Status:** execution roadmap — RC-01..RC-10 CLOSED; DOUGHERTY lane active; RC-11 pending.  
-**Last updated:** 2026-05-24.
+**Status:** execution roadmap — RC-01..RC-11 CLOSED; GITDOCTOR-75 + IGD lanes in-flight; RC2 pending.  
+**Last updated:** 2026-05-26.
 
 ---
 

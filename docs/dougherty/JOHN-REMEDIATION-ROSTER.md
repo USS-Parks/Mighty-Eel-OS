@@ -1,5 +1,8 @@
 # John Dougherty Remediation Prompt Roster
 
+> **STATUS — CLOSED (2026-05-25). SUPERSEDED.**
+> Original draft. Canonical re-emit lives at [`../JOHN-REMEDIATION-ROSTER.md`](../JOHN-REMEDIATION-ROSTER.md). Lane closed 2026-05-25 with all 27 sessions complete (top-level roster adds J-10b). See [`J-15-DOUGHERTY-CLOSURE.md`](J-15-DOUGHERTY-CLOSURE.md).
+
 **Lane:** DOUGHERTY (sessions `J-01` through `J-26`; amended 2026-05-24 to add SDK work in W10 and comprehensive adapter completion in W3)
 **Companion plan:** `JOHN-REMEDIATION-PLAN.md` (read it first)
 **Source feedback:** John Dougherty email 2026-05-24 + GitDoctor scan screenshots in `.tester-feedback-2026-05-24/`
