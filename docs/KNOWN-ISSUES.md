@@ -1,7 +1,7 @@
 # MAI Known Issues
 
 **Project:** Island Mountain Model Abstraction Interface (MAI)
-**Last Updated:** 2026-05-24 (governance sweep: SHIP-07 remainder and Rust SDK `todo!()` issue closed; active work is the DOUGHERTY lane)
+**Last Updated:** 2026-05-26 (IGD-10 added Issue #16: triaged 5 source-level Follow-up: markers as accept-and-tracked)
 
 ---
 
@@ -143,6 +143,28 @@ The SHIP-16 §15 grep sweep ran the term list from `docs/SHIP-HARDENING-PLAN.md`
 **Verification:** `grep -c 'todo!' mai-sdk-rs/src/lib.rs` returns 0; `cargo test -p mai-sdk-rs` runs the full integration surface (lib unit tests + 18 http_client + 7 streaming) green.
 
 **What is still NOT here:** the buffered `ChatStreamHandle` waits for the full SSE response before yielding the first chunk. A true incremental stream (yield-as-they-arrive) would require a different design (`tokio_stream::Stream` over `Response::bytes_stream`) — that is out of scope for this closure and not blocking RC-10. Callers wanting incremental delivery should use the Python SDK or wrap the response body manually.
+
+### 16. Source-level `Follow-up:` markers — triaged (IGD-10)
+
+**Severity:** Low (metric reporting gaps; none block ship or compliance)
+**Affects:** `mai-adapters/src/manager.rs:592`, `mai-core/src/models/usb.rs:161`, `mai-scheduler/src/default.rs:{394,399,402}`
+**Status:** Accept + tracked here per the IGD-10 triage on 2026-05-26.
+
+The 2026-05-26 internal GitDoctor scan (`docs/INTERNAL-GITDOCTOR-SCAN-2026-05-26.md`, M-2 finding) flagged 5 in-source `TODO` comments at the locations above. Between the scan and IGD-10 a parallel session converted the bare `// TODO` comments to `// Follow-up:` markers — the verification gate of `grep '\bTODO\b' **/src/*.rs` returns zero hits on the current HEAD. The underlying deferred work, however, was not implemented; this table tracks each item explicitly so the triage decision is recorded.
+
+| # | File | Deferred work | Why deferred | Target session |
+|---|---|---|---|---|
+| 1 | `mai-adapters/src/manager.rs:592` | `adapter_in_flight()` returns 0; should track per-adapter in-flight request count | Scheduler uses its own internal tracking; the manager-side counter is for least-loaded routing visibility, not correctness | Post-RC2 scheduler-metrics session |
+| 2 | `mai-core/src/models/usb.rs:161` | `fs_available_bytes()` returns 0; should call `GetDiskFreeSpaceExW` (Windows) / `statvfs` (POSIX) | Cross-platform API surface deserves its own session; downstream code already tolerates `0` defensively | Post-RC2 platform-support session |
+| 3 | `mai-scheduler/src/default.rs:394` | `healthy_instances` always set to `total_instances`; should integrate adapter health probe | Pinned to Session 22 in-source; S22 closed without the integration; non-blocking for routing decisions | Post-RC2 scheduler-metrics session |
+| 4 | `mai-scheduler/src/default.rs:399` | `avg_routing_latency_us` always 0; should track real routing latency | Pinned to Session 19 in-source; S19 closed without the integration; non-blocking | Post-RC2 scheduler-metrics session |
+| 5 | `mai-scheduler/src/default.rs:402` | `topology_has_anomalies` always false; should wire to `MetricsRefresher` | Pinned to Session 19 in-source; S19 closed without the integration; non-blocking | Post-RC2 scheduler-metrics session |
+
+**Owner:** Basho Parks (re-assign on session pickup).
+**Deadline:** TBD (driven by post-RC2 sequencing in `docs/COGENT-DEPLOYMENT-ROADMAP.md`).
+**Verification gate satisfied:** `grep '\bTODO\b' **/src/*.rs` returns zero hits on `main` HEAD.
+
+Note: Issue #14's `TODO` row above is the 2026-05-23 SHIP-16 audit snapshot and uses the original `manager.rs:586` line number; commits since (notably `6d8bf8e` FileDev landing) shifted it to line 592. The numbers in this Issue #16 are current as of 2026-05-26.
 
 ---
 
