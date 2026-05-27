@@ -167,17 +167,17 @@ fn local_dev_rejects_stub_when_flag_clear() {
 }
 
 #[test]
-fn file_dev_backend_is_unsupported() {
+fn file_dev_backend_builds_in_local_dev() {
+    // 6d8bf8e implemented FileDev as production-capable. Prior to that the
+    // builder rejected file-dev with VaultBuildError::FileDevUnsupported; it
+    // now returns a usable FileDevVault for local-dev profiles and (when root
+    // exists) for production. Cover the local-dev case here; production root
+    // presence is exercised by `production_rejects_missing_root`.
     let temp = tempfile::tempdir().unwrap();
     let mut p = baseline(ProfileMode::LocalDev, temp.path().to_path_buf());
     p.vault.backend = VaultBackend::FileDev;
-    let err = build_vault(&p)
-        .map(|_| ())
-        .expect_err("file-dev must be rejected until implemented");
-    assert!(
-        matches!(err, VaultBuildError::FileDevUnsupported),
-        "got {err:?}"
-    );
+    let vault = build_vault(&p).expect("file-dev must build successfully in local-dev");
+    drop(vault);
 }
 
 #[tokio::test]
