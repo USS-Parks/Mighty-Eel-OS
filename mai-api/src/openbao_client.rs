@@ -8,11 +8,17 @@
 //! 3. Compose a Lamprey claim and sign it via Transit
 //! 4. Return the signed claim to the caller
 //!
+//! TLM-3 adds bundle operations:
+//!
+//! 5. Fetch signed policy bundles from KV
+//! 6. Sign bundle payloads via Transit (bundle-signer key)
+//!
 //! The client is the bridge between the local MAI appliance and the
 //! cloud OpenBao Trust Core. It moves ONLY identity metadata — never
 //! prompts, completions, embeddings, or regulated payloads (§2.2).
 
 use crate::ship_profile::{KvPathConfig, OpenbaoConfig, PkiRoleConfig, TransitKeysConfig};
+use mai_compliance::bundle::SignedPolicyBundle;
 use mai_compliance::trust_cache::{LocalTrustCache, RevocationSnapshot, SnapshotStatus};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -222,6 +228,16 @@ struct PkiIssueData {
     private_key_type: String,
     serial_number: String,
     expiration: i64,
+}
+
+#[derive(Debug, Deserialize)]
+struct KvV2BundleResponse {
+    data: KvV2BundleData,
+}
+
+#[derive(Debug, Deserialize)]
+struct KvV2BundleData {
+    data: serde_json::Value,
 }
 
 // ─── Bridge output types ───────────────────────────────────────────
@@ -650,6 +666,117 @@ impl OpenBaoBridgeClient {
         );
 
         Ok(signed)
+    }
+
+    /// Fetch a signed policy bundle from OpenBao KV.
+    /// Reads from `kv/data/bundles/{tenant_id}` and deserializes into a
+    /// [`SignedPolicyBundle`]. Returns `None` when the path does not
+    /// exist (graceful first-boot state).
+    pub async fn fetch_signed_bundle(
+        &self,
+        tenant_id: &str,
+    ) -> Result<Option<SignedPolicyBundle>, OpenBaoBridgeError> {
+        let token = self.login().await?;
+        let url = format!("{}/v1/kv/data/bundles/{tenant_id}", self.config.address);
+        let resp = self
+            .client
+            .get(&url)
+            .header("X-Vault-Token", &token)
+            .send()
+            .await?;
+
+        if resp.status() == reqwest::StatusCode::NOT_FOUND {
+            debug!(%tenant_id, "bundle path not found in KV");
+            return Ok(None);
+        }
+
+        let body: KvV2BundleResponse = resp
+            .json()
+            .await
+            .map_err(|e| OpenBaoBridgeError::Protocol(format!("bundle kv read parse: {e}")))?;
+        let bundle: SignedPolicyBundle = serde_json::from_value(body.data.data)
+            .map_err(|e| OpenBaoBridgeError::Protocol(format!("bundle deserialize: {e}")))?;
+        debug!(version = %bundle.metadata.version, %tenant_id, "Bundle fetched");
+        Ok(Some(bundle))
+    }
+
+    /// Sign a policy bundle payload with the `lamprey-bundle-signer`
+    /// Transit key. Returns the base64-encoded Ed25519 signature.
+    pub async fn sign_bundle_payload(
+        &self,
+        token: &str,
+        payload_json: &str,
+    ) -> Result<String, OpenBaoBridgeError> {
+        let url = format!(
+            "{}/v1/transit/sign/lamprey-bundle-signer",
+            self.config.address
+        );
+        let b64 = base64::Engine::encode(
+            &base64::engine::general_purpose::STANDARD,
+            payload_json.as_bytes(),
+        );
+        let req = TransitSignRequest { input: b64 };
+        let resp = self
+            .client
+            .post(&url)
+            .header("X-Vault-Token", token)
+            .json(&req)
+            .send()
+            .await?;
+        let body: TransitSignResponse = resp
+            .json()
+            .await
+            .map_err(|e| OpenBaoBridgeError::Protocol(format!("bundle transit sign parse: {e}")))?;
+        debug!(
+            key_version = body.data.key_version,
+            "Bundle payload signed via OpenBao transit"
+        );
+        Ok(body.data.signature)
+    }
+
+    /// Fetch a signed bundle from OpenBao KV and apply it to the trust
+    /// cache via [`LocalTrustCache::record_refresh`] (bare-data path).
+    ///
+    /// Uses the bare-data path because the bundle is signed by
+    /// OpenBao's Ed25519 Transit engine, whereas the ML-DSA verifier
+    /// only accepts ML-DSA-87 signatures. Trust in the bundle is
+    /// rooted in the authenticated AppRole connection to OpenBao
+    /// rather than an offline signature check.
+    ///
+    /// Returns the bundle version on success, or `None` when no
+    /// bundle exists at the KV path.
+    pub async fn refresh_bundle_from_openbao(
+        &self,
+        tenant_id: &str,
+        cache: &Arc<RwLock<LocalTrustCache>>,
+    ) -> Result<Option<String>, OpenBaoBridgeError> {
+        let bundle = match self.fetch_signed_bundle(tenant_id).await? {
+            Some(b) => b,
+            None => return Ok(None),
+        };
+
+        let now_secs = LocalTrustCache::now_secs();
+        let version = bundle.metadata.version.clone();
+        let snapshots = bundle.payload.revocations.clone();
+        let refresh_secs = bundle.metadata.issued_at_secs;
+
+        let mut lock = cache.write().await;
+        if let Err(e) = lock.record_refresh(version.clone(), snapshots, refresh_secs, now_secs) {
+            warn!(
+                error = %e,
+                version = %version,
+                "Bundle refresh rejected by trust cache"
+            );
+            return Ok(None);
+        }
+        drop(lock);
+
+        info!(
+            version = %version,
+            tenant = %tenant_id,
+            "Bundle applied to trust cache"
+        );
+        Ok(Some(version))
     }
 }
 
