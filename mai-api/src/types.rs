@@ -220,7 +220,7 @@ pub struct ToolDefinition {
     #[validate(custom(function = "validate_tool_type_function"))]
     pub tool_type: String,
     /// Function definition
-    #[validate]
+    #[validate(nested)]
     pub function: FunctionDefinition,
 }
 
