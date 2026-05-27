@@ -34,14 +34,39 @@ pub struct OpenBaoBridgeConfig {
 }
 
 impl OpenBaoBridgeConfig {
-    /// Staging config pointing at the Docker OpenBao instance.
+    /// Staging config. Reads secrets from environment variables — never
+    /// hardcoded in source.
+    ///
+    /// Environment variables:
+    /// - `MAI_OPENBAO_ADDR` — OpenBao address (default: `http://localhost:8200`)
+    /// - `MAI_OPENBAO_ROLE_ID` — AppRole role_id (default: staging role)
+    /// - `MAI_OPENBAO_SECRET_ID` — plain AppRole secret_id (preferred)
+    /// - `MAI_OPENBAO_WRAPPED_SECRET_ID` — response-wrapped secret_id token
+    ///
+    /// At least one of `MAI_OPENBAO_SECRET_ID` or
+    /// `MAI_OPENBAO_WRAPPED_SECRET_ID` must be set. Without a
+    /// credential the client fails closed on first use.
     #[must_use]
     pub fn staging() -> Self {
+        let address =
+            std::env::var("MAI_OPENBAO_ADDR").unwrap_or_else(|_| "http://localhost:8200".into());
+        let role_id = std::env::var("MAI_OPENBAO_ROLE_ID")
+            .unwrap_or_else(|_| "8053c291-8f60-381f-e283-5e645e5907f4".into());
+        let secret_id = std::env::var("MAI_OPENBAO_SECRET_ID").ok();
+        let wrapped_secret_id = std::env::var("MAI_OPENBAO_WRAPPED_SECRET_ID").ok();
+
+        if secret_id.is_none() && wrapped_secret_id.is_none() {
+            warn!(
+                "MAI_OPENBAO_SECRET_ID and MAI_OPENBAO_WRAPPED_SECRET_ID are both unset; \
+                 bridge client will fail closed on first use"
+            );
+        }
+
         Self {
-            address: "http://localhost:8200".into(),
-            role_id: "8053c291-8f60-381f-e283-5e645e5907f4".into(),
-            secret_id: Some("6d5213b7-3e34-bf22-138e-70f7957c064f".into()),
-            wrapped_secret_id: None,
+            address,
+            role_id,
+            secret_id,
+            wrapped_secret_id,
             timeout: Duration::from_secs(10),
         }
     }
