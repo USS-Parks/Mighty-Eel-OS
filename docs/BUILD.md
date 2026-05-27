@@ -3,7 +3,9 @@
 ## Prerequisites
 
 - Rust 1.78+ (stable toolchain)
-- Python 3.11+
+- Python 3.11+ with `pip >= 26.1` (run `python -m pip install --upgrade pip`
+  on a fresh checkout — pip 26.0.1 carries CVE-2026-3219 and
+  CVE-2026-6357, fixed in 26.1)
 - protoc (Protocol Buffers compiler, for gRPC)
 - pkg-config + OpenSSL dev headers (Linux: `libssl-dev`)
 
