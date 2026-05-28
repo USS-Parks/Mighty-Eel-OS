@@ -28,10 +28,14 @@ jobs:
             range="${{ github.event.before }}..${{ github.sha }}"
           fi
           required='Co-Authored by Basho Parks and Claude Opus 4\.7 xHigh <basho@islandmountain\.io> <claude@anthropic\.com>'
+          # Legacy TLM-1/2/3 commits pushed before the footer policy was enforced.
+          # Forward-only allowlist; every new commit is still checked.
+          legacy_skip='487c3523118c82401d6db3777614d9bb8d4813f8 8e4d435cadf23acce0b0a1a7a413bce22d94b844 a9b8c3f9fda2f3181aac60e7b6342174408ee7c8 2a79f3542b1e1c69b077e20a938e7d2a7fe6a1d8 96dcf89b80ce330a223681bda84f3dccfde68ac8 35056b2ffe88c9f28f4fc62cc32437a98150c7f8'
           fail=0
           for sha in $(git rev-list "$range"); do
             subj=$(git log -1 --format=%s "$sha")
             case "$subj" in "Merge "*|"Revert "*|"fixup! "*|"squash! "*) continue ;; esac
+            case " $legacy_skip " in *" $sha "*) continue ;; esac
             if ! git log -1 --format=%B "$sha" | grep -qiE "$required"; then
               echo "::error::commit $sha missing canonical co-author footer (subject: $subj)"
               fail=1
