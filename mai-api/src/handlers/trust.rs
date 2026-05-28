@@ -16,6 +16,7 @@
 //! - `GET  /v1/trust/claims`            — list every cached claim
 //! - `GET  /v1/trust/bundle_status`     — bundle version + freshness
 //! - `GET  /v1/trust/revocation_status` — single-claim lookup
+//! - `GET  /v1/trust/openbao_health`    — OpenBao bridge health probe
 //! - `POST /v1/auth/exchange_token`     — local-dev token stub
 
 use axum::Json;
@@ -120,6 +121,18 @@ pub struct ExchangeTokenResponse {
     pub mode: String,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RotateCredentialsRequest {
+    pub secret_id: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct RotateCredentialsResponse {
+    pub rotated: bool,
+    pub message: String,
+}
+
 // ─── Handlers ──────────────────────────────────────────────────────
 
 /// `GET /v1/trust/status`
@@ -209,6 +222,71 @@ pub async fn revocation_status(
     }))
 }
 
+/// `GET /v1/trust/openbao_health`
+///
+/// Probes the OpenBao bridge and returns mount/auth/key health.
+/// Returns a reachable=false report when no bridge client is wired.
+pub async fn openbao_health(
+    State(state): State<AppState>,
+    _profile: ProfileInfo,
+) -> Result<impl IntoResponse, ApiError> {
+    let guard = state.openbao_bridge.read().await;
+    let bridge = match guard.as_ref() {
+        Some(b) => b,
+        None => {
+            return Ok(Json(serde_json::json!({
+                "reachable": false,
+                "sealed": true,
+                "kv_mounted": false,
+                "transit_mounted": false,
+                "pki_mounted": false,
+                "approle_enabled": false,
+                "demo_tenant_exists": false,
+                "claim_signer_key_exists": false,
+                "latency_ms": 0,
+                "error": "no bridge client wired",
+            })));
+        }
+    };
+
+    let health = bridge.health_check().await;
+    Ok(Json(serde_json::to_value(&health).unwrap_or_else(|e| {
+        tracing::error!(error = %e, "health serialize failed");
+        serde_json::json!({"error": "serialization failed"})
+    })))
+}
+
+/// `POST /v1/admin/rotate-credentials`
+///
+/// Hot-swap the OpenBao bridge client with a new secret_id without
+/// restarting the process. The caller must be authenticated with an
+/// admin-scoped API key. The new secret_id should be generated
+/// out-of-band (e.g. `ir-respond.ps1 rotate-appliance`) and submitted
+/// here.
+pub async fn rotate_credentials(
+    State(state): State<AppState>,
+    profile: ProfileInfo,
+    Json(req): Json<RotateCredentialsRequest>,
+) -> Result<impl IntoResponse, ApiError> {
+    check_permission(&profile, "admin")?;
+
+    let guard = state.openbao_bridge.read().await;
+    let bridge = guard.as_ref().ok_or(ApiError::ServiceUnavailable)?;
+
+    bridge
+        .rotate_credential(&state.openbao_bridge, &req.secret_id)
+        .await
+        .map_err(|e| {
+            tracing::error!(error = %e, "credential rotation failed");
+            ApiError::ServiceUnavailable
+        })?;
+
+    Ok(Json(RotateCredentialsResponse {
+        rotated: true,
+        message: "bridge client credential rotated".into(),
+    }))
+}
+
 /// `POST /v1/auth/exchange_token`
 ///
 /// Profile-aware token exchange (SHIP-07 Slice B). Behaviour switches
@@ -240,12 +318,8 @@ pub async fn exchange_token(
     match state.trust_exchange_mode {
         TrustExchangeMode::LocalDevSynthetic => mint_local_dev_synthetic(profile, req),
         TrustExchangeMode::OpenBaoBridge => {
-            let bridge = state.openbao_bridge.as_ref().ok_or_else(|| {
-                tracing::error!(
-                    "exchange_token: OpenBaoBridge mode selected but no bridge client wired"
-                );
-                ApiError::ServiceUnavailable
-            })?;
+            let guard = state.openbao_bridge.read().await;
+            let bridge = guard.as_ref().ok_or(ApiError::ServiceUnavailable)?;
 
             let tenant_id = req.tenant_id.as_deref().unwrap_or("tribal-health-demo");
 

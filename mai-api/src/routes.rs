@@ -204,6 +204,14 @@ pub fn build_router(state: AppState) -> Router {
             get(handlers::trust::revocation_status),
         )
         .route(
+            "/v1/trust/openbao_health",
+            get(handlers::trust::openbao_health),
+        )
+        .route(
+            "/v1/admin/rotate-credentials",
+            post(handlers::trust::rotate_credentials),
+        )
+        .route(
             "/v1/auth/exchange_token",
             post(handlers::trust::exchange_token),
         );

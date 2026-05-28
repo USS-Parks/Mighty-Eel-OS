@@ -105,9 +105,10 @@ pub struct AppState {
     pub rate_limiter: Option<Arc<RateLimiter>>,
     /// OpenBao bridge client for claim issuance and trust cache refresh.
     /// `None` when the server booted without a ship profile or when
-    /// `TrustExchangeMode` is not `OpenBaoBridge`. Production startup
-    /// constructs one from the staging config.
-    pub openbao_bridge: Option<OpenBaoBridgeClient>,
+    /// `TrustExchangeMode` is not `OpenBaoBridge`. Wrapped in
+    /// `Arc<RwLock<...>>` so credential rotation can hot-swap the
+    /// client without a process restart.
+    pub openbao_bridge: Arc<RwLock<Option<OpenBaoBridgeClient>>>,
 }
 
 /// SHIP-07 Slice B: captured ship-profile + runtime introspection.
@@ -174,7 +175,7 @@ impl AppState {
             // no-profile bring-up path are unchanged. Production wires
             // a limiter via [`AppState::with_rate_limiter`].
             rate_limiter: None,
-            openbao_bridge: None,
+            openbao_bridge: Arc::new(RwLock::new(None)),
         }
     }
 
@@ -245,8 +246,8 @@ impl AppState {
     /// cache refresh. Production startup calls this when
     /// [`TrustExchangeMode::OpenBaoBridge`] is selected.
     #[must_use]
-    pub fn with_openbao_bridge(mut self, bridge: OpenBaoBridgeClient) -> Self {
-        self.openbao_bridge = Some(bridge);
+    pub fn with_openbao_bridge(self, bridge: OpenBaoBridgeClient) -> Self {
+        *self.openbao_bridge.blocking_write() = Some(bridge);
         self
     }
 
