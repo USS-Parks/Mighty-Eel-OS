@@ -1,4 +1,4 @@
-# OpenBao Trust Core — Staging Environment Setup
+﻿# OpenBao Trust Core — Staging Environment Setup
 # =============================================
 #
 # Starts a dev-mode OpenBao container with file audit enabled from boot,
@@ -6,13 +6,15 @@
 # AppRole auth, ACL policies, and demo tenant.
 #
 # Usage:
-#   pwsh deploy/openbao-staging/start-openbao.ps1
+#   .\start-openbao.ps1                    # plain HTTP
+#   .\start-openbao.ps1 -TlsEnabled        # HTTPS with self-signed certs
 #
 # Outputs:
 #   - MAI_OPENBAO_SECRET_ID  (env var for mai-api staging)
 #   - Audit log at openbao-audit\audit.log on host
 #
 # Prerequisites: Docker Desktop running
+#                Git for Windows (for OpenSSL when -TlsEnabled)
 
 param(
     [string]$Port = "8200",
@@ -26,115 +28,88 @@ $containerName = "openbao-trust-core"
 
 # ── Stop existing container if requested ─────────────────────────────
 if (-not $KeepExisting) {
+    $savedEAP = $ErrorActionPreference; $ErrorActionPreference = "Continue"
     docker rm -f $containerName 2>$null
+    $ErrorActionPreference = $savedEAP
 }
 
 # ── Create audit directory on host ───────────────────────────────────
 New-Item -ItemType Directory -Path $AuditDir -Force | Out-Null
 
-# ── Generate TLS certificates for OpenBao listener ────────────────────
-$tlsDir = "$PSScriptRoot\openbao-tls"
+# ── Determine protocol and optional TLS setup ────────────────────────
 $proto = "http"
+$tlsDir = "$PSScriptRoot\openbao-tls"
+$configFile = "$PSScriptRoot\bao-local.json"
+$caCertPath = "$tlsDir\ca.pem"
+
 if ($TlsEnabled) {
-    New-Item -ItemType Directory -Path $tlsDir -Force | Out-Null
-    $caCertPath = "$tlsDir\ca.pem"
-    $caKeyPath  = "$tlsDir\ca-key.pem"
-    $srvCertPath = "$tlsDir\server.pem"
-    $srvKeyPath  = "$tlsDir\server-key.pem"
-    $openssl = "C:\Program Files\Git\usr\bin\openssl.exe"
-
-    if (-not (Test-Path $openssl)) {
-        Write-Error "OpenSSL not found at $openssl (required for TLS). Install Git for Windows."
-        exit 1
-    }
-
-    if (-not (Test-Path $caCertPath)) {
-        Write-Host "Generating staging CA..." -ForegroundColor Cyan
-        & $openssl req -x509 -newkey rsa:2048 -keyout $caKeyPath -out $caCertPath `
-            -days 365 -nodes -subj "/CN=OpenBao Staging CA" 2>&1 | Out-Null
-    }
-
-    if (-not (Test-Path $srvCertPath)) {
-        Write-Host "Generating server certificate..." -ForegroundColor Cyan
-        # Create server key + CSR
-        & $openssl req -newkey rsa:2048 -keyout $srvKeyPath -out "$tlsDir\server.csr" `
-            -nodes -subj "/CN=localhost" 2>&1 | Out-Null
-        # Sign with CA (SAN for localhost)
-        $extConfig = @"
-[req]
-distinguished_name=req
-[ v3_ca ]
-subjectAltName=DNS:localhost,DNS:host.docker.internal,IP:127.0.0.1
-"@
-        $extConfigPath = "$tlsDir\ext.cnf"
-        Set-Content -Path $extConfigPath -Value $extConfig
-        & $openssl x509 -req -in "$tlsDir\server.csr" -CA $caCertPath -CAkey $caKeyPath `
-            -CAcreateserial -out $srvCertPath -days 365 `
-            -extfile $extConfigPath -extensions v3_ca 2>&1 | Out-Null
-        Remove-Item "$tlsDir\server.csr", $extConfigPath -ErrorAction SilentlyContinue
-    }
-
     $proto = "https"
-    Write-Host "TLS certificates ready in $tlsDir" -ForegroundColor Green
+    New-Item -ItemType Directory -Path $tlsDir -Force | Out-Null
+
+    Write-Host "TLS enabled — using OpenBao dev-tls mode" -ForegroundColor Cyan
+    Write-Host "Certs will be generated in $tlsDir" -ForegroundColor Cyan
+
+    # Audit-only config; TLS listener is handled by -dev-tls flag
+    $configJson = '{
+  "audit": [{
+    "type": "file",
+    "path": "/var/log/openbao/audit.log",
+    "options": {
+      "file_path": "/var/log/openbao/audit.log",
+      "log_raw": "true"
+    }
+  }]
+}'
+} else {
+    # Write config JSON with audit only to temp file
+    $configJson = '{
+  "audit": [{
+    "type": "file",
+    "path": "/var/log/openbao/audit.log",
+    "options": {
+      "file_path": "/var/log/openbao/audit.log",
+      "log_raw": "true"
+    }
+  }]
+}'
 }
+
+# Write config to temp file that we mount into the container
+$configJson | Set-Content -Path $configFile
 
 # ── Start OpenBao ─────────────────────────────────────────────────
-Write-Host "Starting OpenBao..." -ForegroundColor Cyan
-$config = if ($TlsEnabled) {
-    @"
-{
-    "listener": [{
-        "tcp": {
-            "address": "0.0.0.0:8200",
-            "tls_cert_file": "/vault/certs/server.pem",
-            "tls_key_file": "/vault/certs/server-key.pem"
-        }
-    }],
-    "audit": [{
-        "type": "file",
-        "options": {
-            "file_path": "/var/log/openbao/audit.log",
-            "log_raw": "true"
-        }
-    }]
-}
-"@
-} else {
-    @'
-{
-    "audit": [{
-        "type": "file",
-        "options": {
-            "file_path": "/var/log/openbao/audit.log",
-            "log_raw": "true"
-        }
-    }]
-}
-'@
-}
-
+Write-Host "Starting OpenBao (${proto})..." -ForegroundColor Cyan
 $dockerArgs = @(
     "run", "-d",
     "--name", $containerName,
     "--cap-add=IPC_LOCK",
     "-p", "${Port}:8200",
     "-v", "${AuditDir}:/var/log/openbao",
-    "-e", "BAO_DEV_ROOT_TOKEN_ID=root",
-    "-e", "BAO_DEV_LISTEN_ADDRESS=0.0.0.0:8200"
+    "-v", "${configFile}:/openbao/config/local.json",
+    "-e", "BAO_DEV_ROOT_TOKEN_ID=root"
 )
+if (-not $TlsEnabled) {
+    $dockerArgs += "-e"
+    $dockerArgs += "BAO_DEV_LISTEN_ADDRESS=0.0.0.0:8200"
+}
 if ($TlsEnabled) {
     $dockerArgs += "-v"
     $dockerArgs += "${tlsDir}:/vault/certs"
 }
-$dockerArgs += "-e"
-$dockerArgs += "BAO_LOCAL_CONFIG=$config"
 $dockerArgs += "openbao/openbao:latest"
 $dockerArgs += "server"; $dockerArgs += "-dev"; $dockerArgs += "-dev-root-token-id=root"
-
-docker @dockerArgs
+if ($TlsEnabled) {
+    $dockerArgs += "-dev-tls"
+    $dockerArgs += "-dev-tls-cert-dir=/vault/certs"
+}
+& docker @dockerArgs
+Remove-Item $configFile -ErrorAction SilentlyContinue
 
 # ── Wait for OpenBao to be ready ────────────────────────────────────
 Write-Host "Waiting for OpenBao to unseal..." -ForegroundColor Yellow
+if ($TlsEnabled) {
+    [System.Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }
+}
 for ($i = 0; $i -lt 30; $i++) {
     try {
         $status = Invoke-RestMethod -Uri "${proto}://localhost:${Port}/v1/sys/seal-status" -TimeoutSec 2
@@ -144,7 +119,7 @@ for ($i = 0; $i -lt 30; $i++) {
 }
 Write-Host "OpenBao ready (version $($status.version))" -ForegroundColor Green
 
-# ── Helper: bao CLI via docker exec ──────────────────────────────────
+# ── Helper: bao API ──────────────────────────────────────────────────
 $baoToken = @{"X-Vault-Token"="root"}
 function Invoke-Bao {
     param([string]$Method="GET", [string]$Path, $Body, [switch]$NoBody)
@@ -189,15 +164,12 @@ path "kv/data/tenants/*" {
   capabilities = ["read"]
 }
 path "kv/metadata/tenants/*" {
-  capabilities = ["read"]
+  capabilities = ["list","read"]
 }
 path "kv/data/revocations/*" {
   capabilities = ["read"]
 }
 path "kv/metadata/revocations/*" {
-  capabilities = ["read"]
-}
-path "kv/metadata/tenants/*" {
   capabilities = ["list","read"]
 }
 path "transit/sign/lamprey-claim-signer" {
@@ -215,7 +187,7 @@ path "pki/issue/mai-appliance" {
 '@
 Invoke-Bao -Method Put -Path "sys/policies/acl/mai-appliance" -Body @{policy=$policy} | Out-Null
 
-# ── 6. Demo tenant ───────────────────────────────────────────────────
+# ── 6. Demo tenant + revocation path ─────────────────────────────────
 Write-Host "Writing demo tenant..." -ForegroundColor Cyan
 $tenantAttrs = @{
     tenant_id = "tribal-health-demo"
@@ -228,10 +200,10 @@ $tenantAttrs = @{
 $wrapper = @{data=@{attributes=($tenantAttrs | ConvertTo-Json -Compress)}}
 Invoke-Bao -Method Post -Path "kv/data/tenants/tribal-health-demo" -Body $wrapper | Out-Null
 
-# ── 6.5. Revocation path ──────────────────────────────────────────────
-Write-Host "Writing initial revocation list..." -ForegroundColor Cyan
-$revocationsEntry = @{data=@{snapshots=@()}}
-Invoke-Bao -Method Post -Path "kv/data/revocations/tribal-health-demo" -Body $revocationsEntry | Out-Null
+# Seed empty revocation list
+$revEntry = @{data=@{snapshots=@()}}
+Invoke-Bao -Method Post -Path "kv/data/revocations/tribal-health-demo" -Body $revEntry | Out-Null
+Write-Host "Revocation path seeded" -ForegroundColor Cyan
 
 # ── 7. Generate appliance secret_id ──────────────────────────────────
 Write-Host "Generating appliance secret_id..." -ForegroundColor Cyan
@@ -245,18 +217,18 @@ Write-Host "==============================================" -ForegroundColor Gre
 Write-Host "  OpenBao Trust Core — Ready"                  -ForegroundColor Green
 Write-Host "==============================================" -ForegroundColor Green
 Write-Host "  Address:        ${proto}://localhost:${Port}"  -ForegroundColor White
-Write-Host "  TLS:            $(&{if($TlsEnabled){"enabled"}else{"disabled"}})" -ForegroundColor White
+Write-Host "  TLS:            $(if($TlsEnabled){'enabled'}else{'disabled'})" -ForegroundColor White
 Write-Host "  Root token:     root (dev mode)"              -ForegroundColor White
 Write-Host "  Audit log:      ${AuditDir}\audit.log"        -ForegroundColor White
 Write-Host "  Role ID:        8053c291-8f60-381f-e283-5e645e5907f4" -ForegroundColor White
 Write-Host "  Secret ID:      ${freshSecret}"               -ForegroundColor Yellow
 if ($TlsEnabled) {
-    Write-Host "  CA cert:        ${caCertPath}"            -ForegroundColor White
-    Write-Host "  Server cert:    ${srvCertPath}"           -ForegroundColor White
+    Write-Host "  CA cert:        ${tlsDir}\ca.pem"           -ForegroundColor White
 }
 Write-Host "==============================================" -ForegroundColor Green
 Write-Host ""
 Write-Host "Set for mai-api:" -ForegroundColor Cyan
+Write-Host "`$env:MAI_OPENBAO_ADDR = '${proto}://localhost:${Port}'" -ForegroundColor Yellow
 Write-Host "`$env:MAI_OPENBAO_SECRET_ID = '${freshSecret}'" -ForegroundColor Yellow
 Write-Host ""
 Write-Host "Audit log interrogation:" -ForegroundColor Cyan
