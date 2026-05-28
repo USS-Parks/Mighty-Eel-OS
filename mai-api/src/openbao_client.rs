@@ -292,6 +292,21 @@ pub struct IssuedCertificate {
     pub expiration: i64,
 }
 
+/// Result of an OpenBao bridge health probe.
+#[derive(Debug, Clone, Serialize)]
+pub struct OpenbaoHealth {
+    pub reachable: bool,
+    pub sealed: bool,
+    pub kv_mounted: bool,
+    pub transit_mounted: bool,
+    pub pki_mounted: bool,
+    pub approle_enabled: bool,
+    pub demo_tenant_exists: bool,
+    pub claim_signer_key_exists: bool,
+    pub latency_ms: u64,
+    pub error: Option<String>,
+}
+
 // ─── Bridge client ─────────────────────────────────────────────────
 
 /// OpenBao HTTP bridge client.
@@ -777,6 +792,94 @@ impl OpenBaoBridgeClient {
             "Bundle applied to trust cache"
         );
         Ok(Some(version))
+    }
+
+    /// Rotate the bridge client's credential in-place by atomically
+    /// swapping the inner `Arc<RwLock<Option<...>>>`. The caller must
+    /// have already obtained the new secret_id from OpenBao (e.g. via
+    /// `ir-respond.ps1 rotate-appliance`).
+    pub async fn rotate_credential(
+        &self,
+        bridge_lock: &Arc<RwLock<Option<OpenBaoBridgeClient>>>,
+        new_secret_id: &str,
+    ) -> Result<(), OpenBaoBridgeError> {
+        let new_config = OpenBaoBridgeConfig {
+            secret_id: Some(new_secret_id.to_string()),
+            ..self.config.as_ref().clone()
+        };
+        let new_bridge = OpenBaoBridgeClient::new(new_config);
+        *bridge_lock.write().await = Some(new_bridge);
+        info!("OpenBao bridge credential rotated");
+        Ok(())
+    }
+
+    /// Probe OpenBao health and return a structured status report.
+    pub async fn health_check(&self) -> OpenbaoHealth {
+        let start = std::time::Instant::now();
+        let client = self.client.clone();
+        let addr = self.config.address.clone();
+
+        let (reachable, sealed) = match client
+            .get(format!("{addr}/v1/sys/seal-status"))
+            .send()
+            .await
+        {
+            Ok(resp) => {
+                if let Ok(body) = resp.json::<serde_json::Value>().await {
+                    let sealed = body.get("sealed").and_then(|v| v.as_bool()).unwrap_or(true);
+                    (true, sealed)
+                } else {
+                    (true, true)
+                }
+            }
+            Err(e) => {
+                let latency = start.elapsed().as_millis() as u64;
+                return OpenbaoHealth {
+                    reachable: false,
+                    sealed: true,
+                    kv_mounted: false,
+                    transit_mounted: false,
+                    pki_mounted: false,
+                    approle_enabled: false,
+                    demo_tenant_exists: false,
+                    claim_signer_key_exists: false,
+                    latency_ms: latency,
+                    error: Some(format!("{e}")),
+                };
+            }
+        };
+
+        let probe = |path: &str| {
+            let c = client.clone();
+            let url = format!("{addr}{path}");
+            async move {
+                c.get(&url)
+                    .send()
+                    .await
+                    .is_ok_and(|r| r.status().is_success())
+            }
+        };
+
+        let kv_mounted = probe("/v1/sys/mounts/kv").await;
+        let transit_mounted = probe("/v1/sys/mounts/transit").await;
+        let pki_mounted = probe("/v1/sys/mounts/pki").await;
+        let approle_enabled = probe("/v1/sys/auth/approle").await;
+        let demo_tenant_exists = probe("/v1/kv/data/tenants/tribal-health-demo").await;
+        let claim_signer_key_exists = probe("/v1/transit/keys/lamprey-claim-signer").await;
+        let latency = start.elapsed().as_millis() as u64;
+
+        OpenbaoHealth {
+            reachable,
+            sealed,
+            kv_mounted,
+            transit_mounted,
+            pki_mounted,
+            approle_enabled,
+            demo_tenant_exists,
+            claim_signer_key_exists,
+            latency_ms: latency,
+            error: None,
+        }
     }
 }
 
