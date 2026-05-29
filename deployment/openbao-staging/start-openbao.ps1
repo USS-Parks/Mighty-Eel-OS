@@ -156,6 +156,9 @@ Invoke-Bao -Method Post -Path "pki/roles/mai-appliance" -Body @{allow_localhost=
 Write-Host "Configuring AppRole auth..." -ForegroundColor Cyan
 Invoke-Bao -Method Post -Path "sys/auth/approle" -Body @{type="approle"} | Out-Null
 Invoke-Bao -Method Post -Path "auth/approle/role/mai-appliance" -Body @{token_policies="default,mai-appliance"; token_ttl="15m"; token_max_ttl="1h"} | Out-Null
+# Pin the role_id so the staging config default stays valid across container rebuilds
+$pinnedRoleId = "8053c291-8f60-381f-e283-5e645e5907f4"
+Invoke-Bao -Method Post -Path "auth/approle/role/mai-appliance/role-id" -Body @{role_id=$pinnedRoleId} | Out-Null
 
 # ── 5. ACL policy ─────────────────────────────────────────────────────
 Write-Host "Creating ACL policy..." -ForegroundColor Cyan
