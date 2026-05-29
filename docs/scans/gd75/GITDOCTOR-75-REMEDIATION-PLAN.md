@@ -1,7 +1,7 @@
-# GitDoctor 75 Remediation Plan
+﻿# GitDoctor 75 Remediation Plan
 
 > **STATUS as of 2026-05-26 — IN-FLIGHT**
-> Sessions landed on `origin/main`: GD75-07 (`24a6700` adapter health-check timeouts + pooling), GD75-08 (`a121d4a` pooled HTTP client lifecycle), GD75-09/10 (`28f0386` local load-balancing + batching matrix), GD75-14/15 (`23b876c` caching policy + evidence pack). Remaining: GD75-01..06, GD75-11..13, GD75-16. DOUGHERTY (predecessor) closed 2026-05-25. Next milestone is GD75-16 (external rescan + RC2 handoff). Latest local scan: [`LOCAL-GITDOCTOR-EVIDENCE-2026-05-26.md`](LOCAL-GITDOCTOR-EVIDENCE-2026-05-26.md).
+> Sessions landed on `origin/main`: GD75-07 (`24a6700` adapter health-check timeouts + pooling), GD75-08 (`a121d4a` pooled HTTP client lifecycle), GD75-09/10 (`28f0386` local load-balancing + batching matrix), GD75-14/15 (`23b876c` caching policy + evidence pack). Remaining: GD75-01..06, GD75-11..13, GD75-16. DOUGHERTY (predecessor) closed 2026-05-25. Next milestone is GD75-16 (external rescan + RC2 handoff). Latest local scan: [`LOCAL-GITDOCTOR-EVIDENCE-2026-05-26.md`](../LOCAL-GITDOCTOR-EVIDENCE-2026-05-26.md).
 
 **Project:** Island Mountain Model Abstraction Interface (MAI)
 **Lane:** GITDOCTOR-75, sessions `GD75-01` through `GD75-16`

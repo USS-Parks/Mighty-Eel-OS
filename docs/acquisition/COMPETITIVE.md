@@ -1,4 +1,4 @@
-# Competitive Analysis
+﻿# Competitive Analysis
 
 **Project:** Island Mountain Model Abstraction Interface (MAI) +
 Lamprey
@@ -13,7 +13,7 @@ differentiation claim cites a specific module or test in this
 repository — the point of this analysis is to be defensible under
 diligence, not to win a marketing argument.
 
-For positioning, see [`../ACQUISITION-PACKAGE.md`](../ACQUISITION-PACKAGE.md).
+For positioning, see [`../ACQUISITION-PACKAGE.md`](../product/ACQUISITION-PACKAGE.md).
 For IP defensibility, see [`IP.md`](IP.md).
 
 ---

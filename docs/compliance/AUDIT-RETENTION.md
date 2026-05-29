@@ -1,4 +1,4 @@
-# Audit Retention
+﻿# Audit Retention
 
 What the appliance retains, for how long, where it lives, and
 the operator's responsibilities around archival and counsel-
@@ -170,5 +170,5 @@ attestation.
 - Runbook [12-audit-wal-tamper](runbooks/12-audit-wal-tamper.md).
 - [AUDIT-CORRELATION.md](AUDIT-CORRELATION.md) — correlating
   API and compliance audit events.
-- [BACKUP-RESTORE.md](BACKUP-RESTORE.md) — retention vs.
+- [BACKUP-RESTORE.md](../operations/BACKUP-RESTORE.md) — retention vs.
   backup boundary.

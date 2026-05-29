@@ -1,16 +1,16 @@
-# Day-2 Operations
+﻿# Day-2 Operations
 
 Routine operating cadence for a `ship` appliance. This is the
 "what does the operator actually do, day to day" doc; for
 specific procedures, follow the runbook links inline. For
 incident-class events see
-[INCIDENT-RESPONSE.md](INCIDENT-RESPONSE.md).
+[INCIDENT-RESPONSE.md](../compliance/INCIDENT-RESPONSE.md).
 
 ## Routine cadence
 
 | Cadence | Action | Procedure |
 |---|---|---|
-| Per boot | Verify ship validator passes | [RELEASE-GATES.md](RELEASE-GATES.md) |
+| Per boot | Verify ship validator passes | [RELEASE-GATES.md](../releases/RELEASE-GATES.md) |
 | Per boot | Confirm health endpoints reachable | `curl /v1/health/{live,ready}` |
 | Daily | Healthcheck timer runs (automatic) | unit `mai-healthcheck.timer` |
 | Daily | Nightly backup runs (automatic) | [07-back-up-node](runbooks/07-back-up-node.md) |
@@ -74,7 +74,7 @@ full restart and a fresh `mai-ship-validate`.
 
 ## Endpoint cheat sheet
 
-The full API surface is in [API-REFERENCE.md](API-REFERENCE.md);
+The full API surface is in [API-REFERENCE.md](../api/API-REFERENCE.md);
 day-to-day operator endpoints:
 
 ```bash
@@ -137,5 +137,5 @@ Watch:
 Day-2 operations stop at policy. Policy bundle authoring,
 compliance module changes, and signing-key custody are not
 operator activities; they happen upstream of the appliance.
-See [TRUST-BRIDGE-PRODUCTION.md](TRUST-BRIDGE-PRODUCTION.md)
+See [TRUST-BRIDGE-PRODUCTION.md](../compliance/TRUST-BRIDGE-PRODUCTION.md)
 for the boundary.

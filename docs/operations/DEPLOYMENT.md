@@ -1,8 +1,8 @@
-# MAI Deployment Guide
+﻿# MAI Deployment Guide
 
 Operator-facing guide for launching, validating, and running the MAI API
 server. For build prerequisites and developer workflows, see
-[`BUILD.md`](BUILD.md).
+[`BUILD.md`](../BUILD.md).
 
 ## Quick Start
 
@@ -34,7 +34,7 @@ key to stdout -- **save it before the log noise starts.**
 ```
 
 Persist the hash to `config/auth_keys.toml` as documented in
-[`SECURITY.md`](SECURITY.md), then restart.
+[`SECURITY.md`](../compliance/SECURITY.md), then restart.
 
 ## Configuration
 
@@ -42,7 +42,7 @@ The server reads TOML configs from `config/` and `configs/`:
 
 | File | Purpose | Reference |
 |------|---------|-----------|
-| `config/auth_keys.toml` | API keys + rate limits | [SECURITY.md](SECURITY.md) |
+| `config/auth_keys.toml` | API keys + rate limits | [SECURITY.md](../compliance/SECURITY.md) |
 | `config/kv.toml` | KV cache budget + eviction weights | inline comments |
 | `config/scoring.toml` | Multi-factor scorer weights | inline comments |
 | `config/metrics.toml` | Telemetry windows + anomaly thresholds | inline comments |
@@ -111,7 +111,7 @@ Outputs land in a timestamped directory under `results/`:
 - `phase1-deferred.txt` -- explicit list of hardware-dependent criteria
   that this burn-in does not execute
 
-See [`INTEGRATION-COVERAGE.md`](INTEGRATION-COVERAGE.md) for the full
+See [`INTEGRATION-COVERAGE.md`](../contributing/INTEGRATION-COVERAGE.md) for the full
 coverage map.
 
 ## Operator Lifecycle
@@ -152,7 +152,7 @@ process.
 
 The server is in strict auth mode but `MAI_API_KEY` was not set, or the
 key in the environment does not match any entry in
-`config/auth_keys.toml`. See [SECURITY.md](SECURITY.md) for key
+`config/auth_keys.toml`. See [SECURITY.md](../compliance/SECURITY.md) for key
 generation and rotation.
 
 ### Burn-in policy comparison says no input trace

@@ -27,8 +27,8 @@ in `ship` profile. Every runbook follows the same shape:
 
 Runbooks are intended for the operator on call at 2 AM. They
 are not architecture docs and do not explain *why*; for that,
-follow the cross-links into [SHIP-PROFILE.md](../SHIP-PROFILE.md),
-[SECURITY.md](../SECURITY.md), or the relevant
+follow the cross-links into [SHIP-PROFILE.md](../operations/SHIP-PROFILE.md),
+[SECURITY.md](../compliance/SECURITY.md), or the relevant
 [architecture/](../architecture/) chapter.
 
 ## Index
@@ -52,27 +52,27 @@ follow the cross-links into [SHIP-PROFILE.md](../SHIP-PROFILE.md),
 
 ## Cross-cutting docs
 
-- [INSTALL.md](../INSTALL.md) — full install + first-boot flow.
-- [BACKUP-RESTORE.md](../BACKUP-RESTORE.md) — backup/restore
+- [INSTALL.md](../operations/INSTALL.md) — full install + first-boot flow.
+- [BACKUP-RESTORE.md](../operations/BACKUP-RESTORE.md) — backup/restore
   contract, retention, DR drill matrix.
-- [UPGRADE-ROLLBACK.md](../UPGRADE-ROLLBACK.md) — upgrade
+- [UPGRADE-ROLLBACK.md](../operations/UPGRADE-ROLLBACK.md) — upgrade
   protocol; runbook 09 is the failure path.
-- [INCIDENT-RESPONSE.md](../INCIDENT-RESPONSE.md) — severity
+- [INCIDENT-RESPONSE.md](../compliance/INCIDENT-RESPONSE.md) — severity
   classification, communications, post-mortem template.
-- [OBSERVABILITY.md](../OBSERVABILITY.md) — metrics, health
+- [OBSERVABILITY.md](../operations/OBSERVABILITY.md) — metrics, health
   endpoints, alert rules feeding these runbooks.
-- [SECURITY-PRODUCTION.md](../SECURITY-PRODUCTION.md) — key
+- [SECURITY-PRODUCTION.md](../compliance/SECURITY-PRODUCTION.md) — key
   rotation, key storage, anchor hygiene.
-- [TRUST-BRIDGE-PRODUCTION.md](../TRUST-BRIDGE-PRODUCTION.md) —
+- [TRUST-BRIDGE-PRODUCTION.md](../compliance/TRUST-BRIDGE-PRODUCTION.md) —
   bundle delivery, signing key custody.
-- [AUDIT-RETENTION.md](../AUDIT-RETENTION.md) — retention
+- [AUDIT-RETENTION.md](../compliance/AUDIT-RETENTION.md) — retention
   policy and operator-side archival.
-- [RELEASE-GATES.md](../RELEASE-GATES.md) — what the validator
+- [RELEASE-GATES.md](../releases/RELEASE-GATES.md) — what the validator
   checks; how runbooks restore each gate.
 
 ## Profile boundary
 
 Every runbook above is for `profile.mode = "production"` only.
 For `local-dev`, `airgap-demo`, `local-mai-node`, or
-`cloud-trust-core` see [SHIP-PROFILE.md](../SHIP-PROFILE.md);
+`cloud-trust-core` see [SHIP-PROFILE.md](../operations/SHIP-PROFILE.md);
 this directory does not document non-ship behavior.

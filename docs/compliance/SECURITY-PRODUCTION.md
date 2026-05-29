@@ -1,10 +1,10 @@
-# Production Security Posture
+﻿# Production Security Posture
 
 Operator-facing security contract for a `ship` appliance. For
 the cryptographic primitives and trust-bundle internals see
 [SECURITY.md](SECURITY.md) and
 [TRUST-BUNDLE-SPEC.md](TRUST-BUNDLE-SPEC.md). For non-production
-posture see [SHIP-PROFILE.md](SHIP-PROFILE.md).
+posture see [SHIP-PROFILE.md](../operations/SHIP-PROFILE.md).
 
 ## What ship promises
 
@@ -130,7 +130,7 @@ enforce — the rest is operator discipline.
 
 ## See also
 
-- [SHIP-PROFILE.md](SHIP-PROFILE.md) — per-section profile
+- [SHIP-PROFILE.md](../operations/SHIP-PROFILE.md) — per-section profile
   contract.
 - [SECURITY.md](SECURITY.md) — cryptographic primitives,
   trust model, threat surface.

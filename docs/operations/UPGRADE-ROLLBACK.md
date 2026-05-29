@@ -1,4 +1,4 @@
-# Upgrade and Rollback
+﻿# Upgrade and Rollback
 
 How a `ship` appliance moves from one MAI release to the next,
 and how to back out if the upgrade fails. For the failure path
@@ -155,5 +155,5 @@ operator chooses *when*.
   makes rollback possible.
 - Runbook [07-back-up-node](runbooks/07-back-up-node.md).
 - Runbook [09-recover-from-failed-upgrade](runbooks/09-recover-from-failed-upgrade.md).
-- [RELEASE-GATES.md](RELEASE-GATES.md) — what the validator
+- [RELEASE-GATES.md](../releases/RELEASE-GATES.md) — what the validator
   checks after the upgrade.

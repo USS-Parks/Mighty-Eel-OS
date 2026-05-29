@@ -1,8 +1,8 @@
-# Independent Evidence Deferrals
+﻿# Independent Evidence Deferrals
 
 **Session:** J-10b (DOUGHERTY lane, W5)
 **Date:** 2026-05-24
-**Companion:** [docs/LOCAL-GITDOCTOR-EVIDENCE.md](LOCAL-GITDOCTOR-EVIDENCE.md), [.cargo/audit.toml](../.cargo/audit.toml), [deny.toml](../deny.toml), [.gitleaks.toml](../.gitleaks.toml), [pyproject.toml](../pyproject.toml) `[tool.bandit]` and `[tool.ruff.lint.per-file-ignores]`
+**Companion:** [docs/LOCAL-GITDOCTOR-EVIDENCE.md](../scans/LOCAL-GITDOCTOR-EVIDENCE.md), [.cargo/audit.toml](../.cargo/audit.toml), [deny.toml](../deny.toml), [.gitleaks.toml](../.gitleaks.toml), [pyproject.toml](../pyproject.toml) `[tool.bandit]` and `[tool.ruff.lint.per-file-ignores]`
 
 This document records every advisory or finding that the local
 independent-evidence layer (Layer 2 of `tools/local_gitdoctor_evidence.py`)

@@ -1,15 +1,15 @@
-# MAI Installation Guide
+﻿# MAI Installation Guide
 
 Operator-facing install procedure for a `ship`-profile appliance.
 For developer builds and `local-dev` workflows see
-[BUILD.md](BUILD.md); for the package internals see
+[BUILD.md](../BUILD.md); for the package internals see
 [../packaging/README.md](../packaging/README.md).
 
 ## Audience
 
 This document is for the operator who installs the appliance.
 Engineering and security-architecture reviewers should start at
-[ACQUISITION-PACKAGE.md](ACQUISITION-PACKAGE.md).
+[ACQUISITION-PACKAGE.md](../product/ACQUISITION-PACKAGE.md).
 
 ## Hardware prerequisites
 
@@ -90,7 +90,7 @@ sudo mai-ship-validate --profile /etc/mai/profile.toml
 Exit `0` is required. Any non-zero exit prints the failing
 `PROD-*` check ID; fix the underlying issue and re-run. The
 validator is the only gate; never bypass it. See
-[RELEASE-GATES.md](RELEASE-GATES.md) for the full check matrix.
+[RELEASE-GATES.md](../releases/RELEASE-GATES.md) for the full check matrix.
 
 ### 5. First boot and key capture
 
@@ -148,7 +148,7 @@ without first preserving the backups offsite.
   runbook 01.
 - [SHIP-PROFILE.md](SHIP-PROFILE.md) — per-section profile
   contract.
-- [SECURITY-PRODUCTION.md](SECURITY-PRODUCTION.md) — key store,
+- [SECURITY-PRODUCTION.md](../compliance/SECURITY-PRODUCTION.md) — key store,
   rotation cadence, anchor custody.
 - [DEPLOYMENT.md](DEPLOYMENT.md) — local-dev quick start (not
   for production).

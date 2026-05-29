@@ -1,11 +1,11 @@
-# Acquisition Production Readiness — Lamprey MAI
+﻿# Acquisition Production Readiness — Lamprey MAI
 
 **Date:** 2026-05-23
 **Tag:** Session 46 closes Gate D (Acquisition-Ready Release)
 **Audience:** Acquirer technical and compliance reviewers
-**Companion docs:** [`ACQUISITION-PACKAGE.md`](ACQUISITION-PACKAGE.md),
-[`BUYER-INTEGRATION-GUIDE.md`](BUYER-INTEGRATION-GUIDE.md),
-[`DEMO-SUITE.md`](../DEMO-SUITE.md)
+**Companion docs:** [`ACQUISITION-PACKAGE.md`](../product/ACQUISITION-PACKAGE.md),
+[`BUYER-INTEGRATION-GUIDE.md`](../product/BUYER-INTEGRATION-GUIDE.md),
+[`DEMO-SUITE.md`](../product/DEMO-SUITE.md)
 
 This document is the evidence summary an acquirer needs to verify
 that the Lamprey compliance governance stack (Sessions 36–46) and
@@ -113,22 +113,22 @@ lives under `mai/docs/`:
 
 | Layer | Document |
 |---|---|
-| Top-level architecture | [`MAI-MASTER-ARCHITECTURE.md`](MAI-MASTER-ARCHITECTURE.md) |
-| Inference scheduler | [`SCHEDULER-BRIEF.md`](SCHEDULER-BRIEF.md) |
-| Compliance governance | [`LAMPREY-BRIEF.md`](LAMPREY-BRIEF.md) |
-| Air-gap / connectivity | [`AIR-GAP-BRIEF.md`](AIR-GAP-BRIEF.md) |
-| HTTP surface | [`API-REFERENCE.md`](API-REFERENCE.md) |
-| Python SDK | [`SDK-REFERENCE.md`](SDK-REFERENCE.md) |
-| Trust Manifold | [`TRUST-MANIFOLD.md`](TRUST-MANIFOLD.md), [`TRUST-BUNDLE-SPEC.md`](TRUST-BUNDLE-SPEC.md) |
-| Audit correlation | [`AUDIT-CORRELATION.md`](AUDIT-CORRELATION.md) |
-| Acquirer narrative | [`ACQUISITION-PACKAGE.md`](ACQUISITION-PACKAGE.md), [`BUYER-INTEGRATION-GUIDE.md`](BUYER-INTEGRATION-GUIDE.md) |
+| Top-level architecture | [`MAI-MASTER-ARCHITECTURE.md`](../architecture/MAI-MASTER-ARCHITECTURE.md) |
+| Inference scheduler | [`SCHEDULER-BRIEF.md`](../architecture/SCHEDULER-BRIEF.md) |
+| Compliance governance | [`LAMPREY-BRIEF.md`](../product/LAMPREY-BRIEF.md) |
+| Air-gap / connectivity | [`AIR-GAP-BRIEF.md`](../product/AIR-GAP-BRIEF.md) |
+| HTTP surface | [`API-REFERENCE.md`](../api/API-REFERENCE.md) |
+| Python SDK | [`SDK-REFERENCE.md`](../api/SDK-REFERENCE.md) |
+| Trust Manifold | [`TRUST-MANIFOLD.md`](../compliance/TRUST-MANIFOLD.md), [`TRUST-BUNDLE-SPEC.md`](../compliance/TRUST-BUNDLE-SPEC.md) |
+| Audit correlation | [`AUDIT-CORRELATION.md`](../compliance/AUDIT-CORRELATION.md) |
+| Acquirer narrative | [`ACQUISITION-PACKAGE.md`](../product/ACQUISITION-PACKAGE.md), [`BUYER-INTEGRATION-GUIDE.md`](../product/BUYER-INTEGRATION-GUIDE.md) |
 | Acquirer technical pack | [`acquisition/ARCHITECTURE.md`](acquisition/ARCHITECTURE.md), [`acquisition/COMPETITIVE.md`](acquisition/COMPETITIVE.md), [`acquisition/IP.md`](acquisition/IP.md), [`acquisition/INTEGRATION.md`](acquisition/INTEGRATION.md) |
 | Demo scripts | [`acquisition/demos/`](acquisition/demos/) (4 scripts) |
-| S46 plan | [`SESSION-46-PLAN.md`](SESSION-46-PLAN.md) |
-| Session history | [`SESSION-LOG.md`](SESSION-LOG.md) |
+| S46 plan | [`SESSION-46-PLAN.md`](../sessions/SESSION-46-PLAN.md) |
+| Session history | [`SESSION-LOG.md`](../sessions/SESSION-LOG.md) |
 
 The full index — including legacy and reference documents — is in
-[`INDEX.md`](INDEX.md).
+[`INDEX.md`](../INDEX.md).
 
 ---
 

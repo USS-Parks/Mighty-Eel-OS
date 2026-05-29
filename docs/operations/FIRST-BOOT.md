@@ -1,4 +1,4 @@
-# First Boot
+﻿# First Boot
 
 The first boot of a `ship` appliance is the only one that prints
 an admin API key in plaintext. Everything that comes after
@@ -118,7 +118,7 @@ circumstance.
 ## See also
 
 - Runbook [01-first-boot-and-key-capture](runbooks/01-first-boot-and-key-capture.md)
-- [SECURITY-PRODUCTION.md](SECURITY-PRODUCTION.md) — key storage
+- [SECURITY-PRODUCTION.md](../compliance/SECURITY-PRODUCTION.md) — key storage
   policy, rotation cadence.
-- [INCIDENT-RESPONSE.md](INCIDENT-RESPONSE.md) — when a lost
+- [INCIDENT-RESPONSE.md](../compliance/INCIDENT-RESPONSE.md) — when a lost
   key becomes an incident.

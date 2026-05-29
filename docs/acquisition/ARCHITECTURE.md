@@ -1,4 +1,4 @@
-# Acquisition Architecture Documentation
+﻿# Acquisition Architecture Documentation
 
 **Project:** Island Mountain Model Abstraction Interface (MAI)
 **Audience:** Acquirer technical diligence team, architecture review
@@ -9,11 +9,11 @@ boards, platform-team principals
 This document is a top-down architectural reference for an acquirer
 evaluating MAI + Lamprey for technology purchase, joint venture, or
 strategic embed. It is intentionally narrower than
-[`../MAI-MASTER-ARCHITECTURE.md`](../MAI-MASTER-ARCHITECTURE.md),
+[`../MAI-MASTER-ARCHITECTURE.md`](../architecture/MAI-MASTER-ARCHITECTURE.md),
 which is the engineering specification. This document focuses on
 *what an acquirer needs to evaluate buy-vs-build*.
 
-For positioning, see [`../ACQUISITION-PACKAGE.md`](../ACQUISITION-PACKAGE.md).
+For positioning, see [`../ACQUISITION-PACKAGE.md`](../product/ACQUISITION-PACKAGE.md).
 For competitive analysis, see [`COMPETITIVE.md`](COMPETITIVE.md).
 
 ---
@@ -327,22 +327,22 @@ each layer.
 ## What this document is not
 
 - It is not a hardware guide — see `configs/{scout,ranger,pack-leader}.toml`.
-- It is not a deployment runbook — see [`../DEPLOYMENT.md`](../DEPLOYMENT.md).
-- It is not a security audit — see [`../SECURITY.md`](../SECURITY.md).
-- It is not the original spec — see [`../MAI-MASTER-ARCHITECTURE.md`](../MAI-MASTER-ARCHITECTURE.md).
+- It is not a deployment runbook — see [`../DEPLOYMENT.md`](../operations/DEPLOYMENT.md).
+- It is not a security audit — see [`../SECURITY.md`](../compliance/SECURITY.md).
+- It is not the original spec — see [`../MAI-MASTER-ARCHITECTURE.md`](../architecture/MAI-MASTER-ARCHITECTURE.md).
 
 This document is the architecture overlay an acquirer reads first to
 decide which parts of MAI/Lamprey they want to acquire, and then
 fans out into the layer-specific briefs:
 
-- [`../SCHEDULER-BRIEF.md`](../SCHEDULER-BRIEF.md)
-- [`../LAMPREY-BRIEF.md`](../LAMPREY-BRIEF.md)
-- [`../AIR-GAP-BRIEF.md`](../AIR-GAP-BRIEF.md)
-- [`../API-REFERENCE.md`](../API-REFERENCE.md)
-- [`../SDK-REFERENCE.md`](../SDK-REFERENCE.md)
-- [`../TRUST-MANIFOLD.md`](../TRUST-MANIFOLD.md)
-- [`../LOCAL-TRUST-CACHE.md`](../LOCAL-TRUST-CACHE.md)
-- [`../AUDIT-CORRELATION.md`](../AUDIT-CORRELATION.md)
+- [`../SCHEDULER-BRIEF.md`](../architecture/SCHEDULER-BRIEF.md)
+- [`../LAMPREY-BRIEF.md`](../product/LAMPREY-BRIEF.md)
+- [`../AIR-GAP-BRIEF.md`](../product/AIR-GAP-BRIEF.md)
+- [`../API-REFERENCE.md`](../api/API-REFERENCE.md)
+- [`../SDK-REFERENCE.md`](../api/SDK-REFERENCE.md)
+- [`../TRUST-MANIFOLD.md`](../compliance/TRUST-MANIFOLD.md)
+- [`../LOCAL-TRUST-CACHE.md`](../compliance/LOCAL-TRUST-CACHE.md)
+- [`../AUDIT-CORRELATION.md`](../compliance/AUDIT-CORRELATION.md)
 - [`COMPETITIVE.md`](COMPETITIVE.md)
 - [`IP.md`](IP.md)
 - [`INTEGRATION.md`](INTEGRATION.md)

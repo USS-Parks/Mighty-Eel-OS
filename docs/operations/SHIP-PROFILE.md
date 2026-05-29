@@ -1,8 +1,8 @@
-# MAI Profile Modes
+﻿# MAI Profile Modes
 
 This document is the operator-facing reference for the four MAI
 deployment profiles. It lives next to the execution plan
-([SHIP-HARDENING-PLAN.md](SHIP-HARDENING-PLAN.md)) and the code that
+([SHIP-HARDENING-PLAN.md](../sessions/SHIP-HARDENING-PLAN.md)) and the code that
 parses the new `ship` profile (`mai-api/src/ship_profile.rs`,
 introduced in SHIP-01).
 
@@ -44,7 +44,7 @@ version is:
 
 The full contract — including the runtime check IDs the production
 guard will emit — is in
-[SHIP-HARDENING-PLAN.md §1.1](SHIP-HARDENING-PLAN.md) and §3.
+[SHIP-HARDENING-PLAN.md §1.1](../sessions/SHIP-HARDENING-PLAN.md) and §3.
 
 ## SHIP-01 scope
 
@@ -137,7 +137,7 @@ If any flips to `Fail` (e.g. missing trust anchor), `MaiServer::run()` returns `
 
 ## Related docs
 
-- [SHIP-HARDENING-PLAN.md](SHIP-HARDENING-PLAN.md) — the full execution plan.
+- [SHIP-HARDENING-PLAN.md](../sessions/SHIP-HARDENING-PLAN.md) — the full execution plan.
 - [`mai/deployment/README.md`](../deployment/README.md) — top-level profile index.
 - [`mai/deployment/ship/README.md`](../deployment/ship/README.md) — ship profile operator notes.
 - `mai/docs/KNOWN-ISSUES.md` — current production-path caveats; SHIP-02..SHIP-17 closed the ship-hardening items.
