@@ -1,4 +1,4 @@
-# Observability
+﻿# Observability
 
 What the appliance exports, how to consume it, and which signals
 should page someone. For routine operator cadence see
@@ -73,8 +73,8 @@ Each rule maps to exactly one runbook:
 | `mai_airgap_violation` | any `airgap.violation` audit entry | [13-air-gap-violation](runbooks/13-air-gap-violation.md) |
 | `mai_disk_low` | any monitored partition > 85% used | [14-disk-almost-full](runbooks/14-disk-almost-full.md) |
 | `mai_backup_failed` | nightly `backup create` or `backup verify` non-zero | [07-back-up-node](runbooks/07-back-up-node.md) |
-| `mai_readiness_failed` | `/v1/health/ready` non-200 for > 60s | [INCIDENT-RESPONSE.md](INCIDENT-RESPONSE.md) |
-| `mai_policy_decision_error_rate` | `policy_decision_total{outcome="error"}` rate above baseline | [INCIDENT-RESPONSE.md](INCIDENT-RESPONSE.md) |
+| `mai_readiness_failed` | `/v1/health/ready` non-200 for > 60s | [INCIDENT-RESPONSE.md](../compliance/INCIDENT-RESPONSE.md) |
+| `mai_policy_decision_error_rate` | `policy_decision_total{outcome="error"}` rate above baseline | [INCIDENT-RESPONSE.md](../compliance/INCIDENT-RESPONSE.md) |
 
 Every alert above should page; none of them are "review in the
 morning" signals.

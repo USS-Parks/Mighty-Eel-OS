@@ -1,10 +1,10 @@
-# Release Gates
+﻿# Release Gates
 
 The list of checks that must pass before an appliance is
 considered shippable, the commands that exercise them, and the
 exit semantics. This is the operator-facing companion to
-[SHIP-HARDENING-PLAN.md §13](SHIP-HARDENING-PLAN.md) and
-[SHIP-PROFILE.md](SHIP-PROFILE.md).
+[SHIP-HARDENING-PLAN.md §13](../sessions/SHIP-HARDENING-PLAN.md) and
+[SHIP-PROFILE.md](../operations/SHIP-PROFILE.md).
 
 ## Single source of truth
 
@@ -58,7 +58,7 @@ Check IDs use the form `PROD-<FAMILY>-<NNN>`. Families:
 | `PROD-POLICY-*` | Standard Lamprey policy modules loaded |
 
 The full table of check IDs lives in
-[SHIP-HARDENING-PLAN.md §3](SHIP-HARDENING-PLAN.md). Each ID
+[SHIP-HARDENING-PLAN.md §3](../sessions/SHIP-HARDENING-PLAN.md). Each ID
 names the rule it enforces; the validator output prints both
 the ID and the rule.
 

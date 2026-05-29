@@ -1,9 +1,9 @@
-# MAI Founding Engineer Handoff
+﻿# MAI Founding Engineer Handoff
 
 **Project:** Island Mountain Model Abstraction Interface (MAI)
 **Source:** MAI-BUILD-PROMPT-ROSTER-v2.md (46 sessions with Lamprey compliance governance) + `BUILD-EXECUTION-PLAN-V2-UPDATED.md` Appendix A (Trust Manifold backfill BF-1..BF-7).
 **Status:** Sessions 1-30 and 32-46 complete; **Gate C closed**; **Trust Manifold backfill lane closed** (2026-05-22); **Gate D closed** (Session 46); **Ship hardening lane SHIP-01..SHIP-17 closed** (2026-05-23); **RC1 lane RC-01..RC-10 closed** with an outside-tester bundle shipped 2026-05-24. Active work is the DOUGHERTY remediation lane (J-01..J-26) before RC-11 re-bundle/re-ship; see `docs/INDEX.md`, `docs/COGENT-DEPLOYMENT-ROADMAP.md`, and `docs/dougherty/JOHN-REMEDIATION-PLAN.md`.
-**Archive:** Sessions 01-10 archived to `SESSION-LOG-ARCHIVE-01.md`; Sessions 11-25 archived to [SESSION-LOG-ARCHIVE-02.md](SESSION-LOG-ARCHIVE-02.md) on 2026-05-23.
+**Archive:** Sessions 01-10 archived to `SESSION-LOG-ARCHIVE-01.md`; Sessions 11-25 archived to [SESSION-LOG-ARCHIVE-02.md](sessions/SESSION-LOG-ARCHIVE-02.md) on 2026-05-23.
 
 ---
 
@@ -21,13 +21,13 @@ This handoff is intentionally half orientation and half guardrail. It tells an i
 
 Four roles, four paths. Find yours and follow it before reading anything else.
 
-**Incoming engineer (60 min):** Read this document top to bottom. Then read [ARCHITECTURE.md](../ARCHITECTURE.md) for the trust model and component catalog, [CONVENTIONS.md](../CONVENTIONS.md) for quality gates and monorepo layout, and [SESSION-RULES.md](../SESSION-RULES.md) for session governance. Open [SESSION-LOG.md](SESSION-LOG.md) to see the active work items. The "Five Things That Will Bite You" section below is the most important part of this document -- read it twice.
+**Incoming engineer (60 min):** Read this document top to bottom. Then read [ARCHITECTURE.md](../ARCHITECTURE.md) for the trust model and component catalog, [CONVENTIONS.md](../CONVENTIONS.md) for quality gates and monorepo layout, and [SESSION-RULES.md](../SESSION-RULES.md) for session governance. Open [SESSION-LOG.md](sessions/SESSION-LOG.md) to see the active work items. The "Five Things That Will Bite You" section below is the most important part of this document -- read it twice.
 
-**Acquirer technical reviewer (30 min):** Read "What You Are Picking Up" and the component table in "Current State." Then go directly to [ACQUISITION-PACKAGE.md](ACQUISITION-PACKAGE.md) for the five defensible points with code citations, [BUYER-INTEGRATION-GUIDE.md](BUYER-INTEGRATION-GUIDE.md) for the security architect review path, and [DEMO-SUITE.md](DEMO-SUITE.md) to run the Trust Manifold scenario. You do not need the detailed session history unless you are auditing provenance.
+**Acquirer technical reviewer (30 min):** Read "What You Are Picking Up" and the component table in "Current State." Then go directly to [ACQUISITION-PACKAGE.md](product/ACQUISITION-PACKAGE.md) for the five defensible points with code citations, [BUYER-INTEGRATION-GUIDE.md](product/BUYER-INTEGRATION-GUIDE.md) for the security architect review path, and [DEMO-SUITE.md](product/DEMO-SUITE.md) to run the Trust Manifold scenario. You do not need the detailed session history unless you are auditing provenance.
 
-**Security architect (45 min):** Start with the trust boundary section of [BUYER-INTEGRATION-GUIDE.md](BUYER-INTEGRATION-GUIDE.md). Work through its review checklist. Then run `pytest apps/openbao-trust-demo/tests/` to confirm the live trust loop. The policy composer (`mai-compliance/src/policy/composer.rs`) and audit store (`mai-compliance/src/audit/store.rs`) are the two modules most worth reading in full.
+**Security architect (45 min):** Start with the trust boundary section of [BUYER-INTEGRATION-GUIDE.md](product/BUYER-INTEGRATION-GUIDE.md). Work through its review checklist. Then run `pytest apps/openbao-trust-demo/tests/` to confirm the live trust loop. The policy composer (`mai-compliance/src/policy/composer.rs`) and audit store (`mai-compliance/src/audit/store.rs`) are the two modules most worth reading in full.
 
-**Executive or sales reviewer (15 min):** Read [ACQUISITION-PACKAGE.md](ACQUISITION-PACKAGE.md) only. If the five defensible points land, ask for the combined acquisition demo in [DEMO-SUITE.md](DEMO-SUITE.md).
+**Executive or sales reviewer (15 min):** Read [ACQUISITION-PACKAGE.md](product/ACQUISITION-PACKAGE.md) only. If the five defensible points land, ask for the combined acquisition demo in [DEMO-SUITE.md](product/DEMO-SUITE.md).
 
 ---
 
@@ -41,18 +41,18 @@ Four roles, four paths. Find yours and follow it before reading anything else.
 | `BUILD-EXECUTION-PLAN-V2-UPDATED.md` (repo root) | Governing execution plan including Appendix A Trust Manifold backfill. |
 | [ARCHITECTURE.md](../ARCHITECTURE.md) | Trust model, component catalog, data flows. |
 | [CONVENTIONS.md](../CONVENTIONS.md) | Code quality gates, monorepo layout, testing rules. |
-| [SESSION-LOG.md](SESSION-LOG.md) | Active progress tracker. |
+| [SESSION-LOG.md](sessions/SESSION-LOG.md) | Active progress tracker. |
 | [SESSION-LOG-ARCHIVE-01.md](../SESSION-LOG-ARCHIVE-01.md) | Completed sessions 01-10. |
-| [SESSION-LOG-ARCHIVE-02.md](SESSION-LOG-ARCHIVE-02.md) | Completed sessions 11-25, archived 2026-05-23. |
+| [SESSION-LOG-ARCHIVE-02.md](sessions/SESSION-LOG-ARCHIVE-02.md) | Completed sessions 11-25, archived 2026-05-23. |
 | [SESSION-RULES.md](../SESSION-RULES.md) | Dependency enforcement, acceptance criteria, quality gates. |
 | [KNOWN-ISSUES.md](KNOWN-ISSUES.md) | Deferred work, limitations, open questions. |
 | [INDEX.md](INDEX.md) | Master file index. |
-| [ACQUISITION-PACKAGE.md](ACQUISITION-PACKAGE.md) | Five-point buyer thesis with code/test citations. |
-| [BUYER-INTEGRATION-GUIDE.md](BUYER-INTEGRATION-GUIDE.md) | OpenBao-backed trust boundary and integration sequence. |
-| [DEMO-SUITE.md](DEMO-SUITE.md) | Trust Manifold scenario and supporting demos. |
-| [SHIP-HARDENING-PLAN.md](SHIP-HARDENING-PLAN.md) | Closed SHIP-01..SHIP-17 hardening sequence; the lane on top of S1..S46 that removed demo-safe defaults. |
-| [SHIP-PROFILE.md](SHIP-PROFILE.md) | Production-profile contract; status table tracks per-SHIP enforcement. |
-| [COGENT-DEPLOYMENT-ROADMAP.md](COGENT-DEPLOYMENT-ROADMAP.md) | RC1 → RC2 → appliance release ladder bridging Gate D to a shippable installer. |
+| [ACQUISITION-PACKAGE.md](product/ACQUISITION-PACKAGE.md) | Five-point buyer thesis with code/test citations. |
+| [BUYER-INTEGRATION-GUIDE.md](product/BUYER-INTEGRATION-GUIDE.md) | OpenBao-backed trust boundary and integration sequence. |
+| [DEMO-SUITE.md](product/DEMO-SUITE.md) | Trust Manifold scenario and supporting demos. |
+| [SHIP-HARDENING-PLAN.md](sessions/SHIP-HARDENING-PLAN.md) | Closed SHIP-01..SHIP-17 hardening sequence; the lane on top of S1..S46 that removed demo-safe defaults. |
+| [SHIP-PROFILE.md](operations/SHIP-PROFILE.md) | Production-profile contract; status table tracks per-SHIP enforcement. |
+| [COGENT-DEPLOYMENT-ROADMAP.md](product/COGENT-DEPLOYMENT-ROADMAP.md) | RC1 → RC2 → appliance release ladder bridging Gate D to a shippable installer. |
 
 ### Codebase Baseline
 
@@ -72,7 +72,7 @@ The workspace contains the full MAI crate family: `mai-core`, `mai-vault`, `mai-
 
 **Current test posture:** Rust workspace lib tests exceed 1196; Python tests exceed 114; SDK, dashboard, and scaffold tests are green in their respective suites. SHIP-07 convergence adds 4 integration + 5 unit tests in mai-api; SHIP-04 fixup adds 7 audit_wal integration tests. Hardware-dependent Phase 1 exit criteria remain explicit deferrals rather than hidden gaps.
 
-The full session-by-session build history -- deliverables, acceptance criteria, and deviation notes -- lives in [SESSION-LOG.md](SESSION-LOG.md) and the archive files above. That history is reference material. Use it when you need provenance; do not make new reviewers start there.
+The full session-by-session build history -- deliverables, acceptance criteria, and deviation notes -- lives in [SESSION-LOG.md](sessions/SESSION-LOG.md) and the archive files above. That history is reference material. Use it when you need provenance; do not make new reviewers start there.
 
 ---
 
@@ -106,7 +106,7 @@ Parallel tracks:
 - Track SHIP (hardening): complete through SHIP-17. Production-readiness endpoint, standalone `mai-ship-validate`, packaging, backup/restore, observability, release gates, burn-in tooling, operator docs, final audit pass, and auth-bypass consistency guard have landed.
 - Track RC / DOUGHERTY: RC1 tester bundle shipped; John Dougherty's outside-tester review opened the active DOUGHERTY remediation lane. Finish remaining J sessions, then RC-11 re-bundle/re-ship. Roadmap in `docs/COGENT-DEPLOYMENT-ROADMAP.md`.
 
-See `BUILD-EXECUTION-PLAN-V2-UPDATED.md` for the governing execution plan, [MAI-BUILD-PROMPT-ROSTER-v2.md](../MAI-BUILD-PROMPT-ROSTER-v2.md) for per-session deliverables, and [SHIP-HARDENING-PLAN.md](SHIP-HARDENING-PLAN.md) for the hardening sequence.
+See `BUILD-EXECUTION-PLAN-V2-UPDATED.md` for the governing execution plan, [MAI-BUILD-PROMPT-ROSTER-v2.md](../MAI-BUILD-PROMPT-ROSTER-v2.md) for per-session deliverables, and [SHIP-HARDENING-PLAN.md](sessions/SHIP-HARDENING-PLAN.md) for the hardening sequence.
 
 ---
 
@@ -261,7 +261,7 @@ Every item must pass before MAI ships on hardware:
 - [CONVENTIONS.md](../CONVENTIONS.md): Coding standards and naming rules.
 - [PROJECT.md](../PROJECT.md): Scope, phases, timeline.
 - [SESSION-RULES.md](../SESSION-RULES.md): Session governance and quality gates.
-- [SESSION-LOG.md](SESSION-LOG.md): Session progress tracking.
+- [SESSION-LOG.md](sessions/SESSION-LOG.md): Session progress tracking.
 - [KNOWN-ISSUES.md](KNOWN-ISSUES.md): Limitations and deferred items.
 - [INDEX.md](INDEX.md): Master file index.
 - [MAI-BUILD-PROMPT-ROSTER-v2.md](../MAI-BUILD-PROMPT-ROSTER-v2.md): Complete session prompts and deliverables.

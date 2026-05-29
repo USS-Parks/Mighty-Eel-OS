@@ -1,4 +1,4 @@
-# Backup and Restore
+﻿# Backup and Restore
 
 The MAI backup/restore contract is implemented by the
 `mai-admin` Cargo binary
@@ -48,7 +48,7 @@ which is distinct from:
 - the policy bundle signing key.
 
 Three keys, three custody chains. See
-[SECURITY-PRODUCTION.md](SECURITY-PRODUCTION.md) for the
+[SECURITY-PRODUCTION.md](../compliance/SECURITY-PRODUCTION.md) for the
 custody matrix.
 
 ## Backup directory layout
@@ -154,15 +154,15 @@ re-backup).
 | Symptom | Likely cause | Where to look |
 |---|---|---|
 | `vault_snapshot_failed` | ZFS dataset misconfigured | `vault.zfs.dataset` in profile.toml; `zfs list` |
-| `signature_failed` (manifest) | Manifest signing key rotated; disk corruption | Cross-reference signer fingerprint in [SECURITY-PRODUCTION.md](SECURITY-PRODUCTION.md) |
+| `signature_failed` (manifest) | Manifest signing key rotated; disk corruption | Cross-reference signer fingerprint in [SECURITY-PRODUCTION.md](../compliance/SECURITY-PRODUCTION.md) |
 | `chain_replay_failed` | Backup captured during a tampered window | Run `audit verify` against the source; investigate before discarding |
 | `target_not_empty` on apply | Target dir already has content | Move the existing tree aside; do not `--force` reflexively |
 
 ## See also
 
-- [SECURITY-PRODUCTION.md](SECURITY-PRODUCTION.md) — signing
+- [SECURITY-PRODUCTION.md](../compliance/SECURITY-PRODUCTION.md) — signing
   key custody.
 - [UPGRADE-ROLLBACK.md](UPGRADE-ROLLBACK.md) — backups as the
   rollback floor.
-- [INCIDENT-RESPONSE.md](INCIDENT-RESPONSE.md) — when a backup
+- [INCIDENT-RESPONSE.md](../compliance/INCIDENT-RESPONSE.md) — when a backup
   failure becomes an incident.

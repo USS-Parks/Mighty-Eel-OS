@@ -1,4 +1,4 @@
-# Trust Bundle Specification (BF-3)
+﻿# Trust Bundle Specification (BF-3)
 
 **Status:** Backfill BF-3 of the Trust Manifold lane (BUILD-EXECUTION-PLAN
 Appendix A §A.7). Gates Session 41.
@@ -8,7 +8,7 @@ signed policy bundles and signed claims, so the policy runtime (Session 41)
 can reject unsigned or invalid material without ambiguity.
 
 This document is the wire-format companion to [TRUST-MANIFOLD.md](TRUST-MANIFOLD.md)
-(architecture), [OPENBAO-INTEGRATION.md](OPENBAO-INTEGRATION.md) (issuer side),
+(architecture), [OPENBAO-INTEGRATION.md](../operations/OPENBAO-INTEGRATION.md) (issuer side),
 and [LOCAL-TRUST-CACHE.md](LOCAL-TRUST-CACHE.md) (cache state machine).
 
 ---

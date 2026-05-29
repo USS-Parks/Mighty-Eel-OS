@@ -1,4 +1,4 @@
-# Air-Gap Enforcement Brief
+﻿# Air-Gap Enforcement Brief
 
 **Project:** Island Mountain Model Abstraction Interface (MAI)
 **Audience:** Acquirer security architects, regulated-deployment
@@ -13,9 +13,9 @@ refusal with policy version and credential correlation. This brief
 explains the contract and how to verify it from source.
 
 For broader system context, see
-[`MAI-MASTER-ARCHITECTURE.md`](MAI-MASTER-ARCHITECTURE.md) §16. For
+[`MAI-MASTER-ARCHITECTURE.md`](../architecture/MAI-MASTER-ARCHITECTURE.md) §16. For
 the trust-cache interaction, see
-[`LOCAL-TRUST-CACHE.md`](LOCAL-TRUST-CACHE.md).
+[`LOCAL-TRUST-CACHE.md`](../compliance/LOCAL-TRUST-CACHE.md).
 
 ---
 

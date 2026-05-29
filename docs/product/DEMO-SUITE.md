@@ -1,4 +1,4 @@
-# Demo Suite
+﻿# Demo Suite
 
 **Project:** Island Mountain Model Abstraction Interface (MAI)
 **Audience:** Acquirer technical reviewers, sales engineers, internal QA
@@ -414,7 +414,7 @@ pytest apps/openbao-trust-demo/tests/test_degraded_bundle_marks_signature_unveri
 A reviewer who has never seen this codebase should be able to walk
 the full path in under 30 minutes. Each step below has a deterministic
 expected output. If a step fails, the gap is documented in
-[`KNOWN-ISSUES.md`](KNOWN-ISSUES.md).
+[`KNOWN-ISSUES.md`](../KNOWN-ISSUES.md).
 
 - [ ] Clone the repo
 - [ ] `cargo test -p mai-compliance --lib` -- expect 326+ green

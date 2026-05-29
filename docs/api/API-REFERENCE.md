@@ -1,4 +1,4 @@
-# MAI HTTP API Reference
+﻿# MAI HTTP API Reference
 
 **Project:** Island Mountain Model Abstraction Interface (MAI)
 **Audience:** Integration engineers, SDK authors, acquirer evaluators
@@ -9,7 +9,7 @@ the live router)
 
 This is the live shape of the MAI REST surface as of Session 44 + BF-6.
 All routes are mounted under `/v1` and protected by the auth
-middleware described in [`SECURITY.md`](SECURITY.md) unless
+middleware described in [`SECURITY.md`](../compliance/SECURITY.md) unless
 explicitly noted.
 
 For SDK-level access, see [`SDK-REFERENCE.md`](SDK-REFERENCE.md).
@@ -211,7 +211,7 @@ path for the adapter rollup).
 
 ### `GET /v1/system/airgap`
 
-Air-gap status. See [`AIR-GAP-BRIEF.md`](AIR-GAP-BRIEF.md).
+Air-gap status. See [`AIR-GAP-BRIEF.md`](../product/AIR-GAP-BRIEF.md).
 
 ### `GET /v1/power`, `GET /v1/power/state`
 

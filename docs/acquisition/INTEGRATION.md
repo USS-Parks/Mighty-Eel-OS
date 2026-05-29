@@ -1,4 +1,4 @@
-# Acquirer Integration Guide
+﻿# Acquirer Integration Guide
 
 **Project:** Island Mountain Model Abstraction Interface (MAI) +
 Lamprey
@@ -9,9 +9,9 @@ feasibility, platform-architecture leads
 
 This guide is for the acquirer's engineering team. It assumes the
 diligence team has already read
-[`../ACQUISITION-PACKAGE.md`](../ACQUISITION-PACKAGE.md) (positioning),
+[`../ACQUISITION-PACKAGE.md`](../product/ACQUISITION-PACKAGE.md) (positioning),
 [`ARCHITECTURE.md`](ARCHITECTURE.md) (system shape), and
-[`../BUYER-INTEGRATION-GUIDE.md`](../BUYER-INTEGRATION-GUIDE.md) (the
+[`../BUYER-INTEGRATION-GUIDE.md`](../product/BUYER-INTEGRATION-GUIDE.md) (the
 seven-step buyer onboarding). What follows is the deeper "how do we
 embed this into our own product" reference — custom policy module
 development, audit-export shapes, configuration semantics, and the
@@ -167,7 +167,7 @@ pub enum ModuleDecision {
 ```
 
 The composer normalises these per the deny-wins / most-restrictive-
-route fold described in [`../LAMPREY-BRIEF.md`](../LAMPREY-BRIEF.md).
+route fold described in [`../LAMPREY-BRIEF.md`](../product/LAMPREY-BRIEF.md).
 
 ### Registering a custom module
 
@@ -269,7 +269,7 @@ do not edit code defaults to express deployment differences.
 ## Boundary contract checklist
 
 The buyer integration guide ships a
-[`../BUYER-INTEGRATION-GUIDE.md`](../BUYER-INTEGRATION-GUIDE.md)
+[`../BUYER-INTEGRATION-GUIDE.md`](../product/BUYER-INTEGRATION-GUIDE.md)
 "Boundary contract review checklist." For an acquirer's embed
 review, add these acquirer-specific items:
 

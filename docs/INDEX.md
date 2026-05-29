@@ -1,19 +1,19 @@
-# MAI Document Index
+﻿# MAI Document Index
 
 **Project:** Island Mountain Model Abstraction Interface (MAI)
-**Last Updated:** 2026-05-26 (post-RC1.2 governance sweep, see [LOCAL-GITDOCTOR-EVIDENCE-2026-05-26.md](LOCAL-GITDOCTOR-EVIDENCE-2026-05-26.md))
+**Last Updated:** 2026-05-26 (post-RC1.2 governance sweep, see [LOCAL-GITDOCTOR-EVIDENCE-2026-05-26.md](scans/LOCAL-GITDOCTOR-EVIDENCE-2026-05-26.md))
 
 > **Current build state (2026-05-26)**
 > - **Mainline (Sessions 1-46 + BF-1..BF-7): CLOSED** — Gate D shipped at commit `22f0f66`.
 > - **Ship hardening (SHIP-01..SHIP-17): CLOSED 2026-05-23** — final hotfix at `dceaabc`.
 > - **RC1 release (RC-01..RC-10): CLOSED 2026-05-24** — RC1.0 to John Dougherty (`e2d9ea6`).
-> - **DOUGHERTY remediation lane (J-01..J-26): CLOSED 2026-05-25** — J-23..J-26 landed under `a072634`; closure doc at [`dougherty/J-15-DOUGHERTY-CLOSURE.md`](dougherty/J-15-DOUGHERTY-CLOSURE.md). All 26 sessions complete.
+> - **DOUGHERTY remediation lane (J-01..J-26): CLOSED 2026-05-25** — J-23..J-26 landed under `a072634`; closure doc at [`dougherty/J-15-DOUGHERTY-CLOSURE.md`](scans/dougherty/J-15-DOUGHERTY-CLOSURE.md). All 26 sessions complete.
 > - **RC1.2 re-ship (RC-11): COMPLETE 2026-05-25** — freeze `e55c1ff`, local GitDoctor score **93/100** at freeze; bundle assembled, ready for tester re-scan.
-> - **GITDOCTOR-75 lane (GD75-01..GD75-16): IN-FLIGHT** — GD75-07/08/09/10/14/15 landed (`24a6700`, `a121d4a`, `28f0386`, `23b876c`); target external rescan ≥95/100. See [`GITDOCTOR-75-REMEDIATION-PLAN.md`](GITDOCTOR-75-REMEDIATION-PLAN.md).
+> - **GITDOCTOR-75 lane (GD75-01..GD75-16): IN-FLIGHT** — GD75-07/08/09/10/14/15 landed (`24a6700`, `a121d4a`, `28f0386`, `23b876c`); target external rescan ≥95/100. See [`GITDOCTOR-75-REMEDIATION-PLAN.md`](scans/gd75/GITDOCTOR-75-REMEDIATION-PLAN.md).
 > - **IGD lane (internal-scan follow-up, loose): IN-FLIGHT** — IGD-01/04/05/08 merged today (`ae30614`, `ad8420a`, `330185a`, `a6f3ffc`); fixes gitleaks allowlist + deployment-staging gitignore, clippy collapsible_if, commit-msg hook + CI co-author enforcement, trailing newlines + .editorconfig. No formal plan doc; traceable via `git log --grep IGD-`.
 > - **Recent today (2026-05-26):** SEC-1 (GitHub secret-scan alert #1 — Vault token leak — closed/revoked; superseded by parallel commits `c75e95f`+`c8055ea`); HF-2 (`c108ea0`, re-add tracing::warn import); WARN-1, CLIP-1, GOV-1 (this sweep).
-> - **Latest local scan (2026-05-26, GOV-1):** [LOCAL-GITDOCTOR-EVIDENCE-2026-05-26.md](LOCAL-GITDOCTOR-EVIDENCE-2026-05-26.md). Layer 1 mapped: **90/100** (52/58 — down 3 points vs Memorial Day 93/100 because the SEC-1 env-var refactor introduced CFG-001 hardcoded-localhost fallback in `openbao_client.rs` and REV-005 HIGH `.unwrap_or_default()` at `openbao_client.rs:340`). Layer 2 independent tools: 5 FAIL (cargo test workspace, cargo audit `pyo3 0.22.6` advisory + `proc-macro-error` unmaintained, cargo deny `idna 0.5`, pip-audit pip 26.0.1 CVE-2026-3219/6357, detect-secrets keyword in `mai-sdk-python/docs/authentication.md`). Layer 3 adversarial: PASS. Address these in the GITDOCTOR-75 / IGD lanes.
-> - **Next gate:** RC2 deployment rehearsal (RC2-01..RC2-08). Production-validation evidence already committed at `ee6eb13`. See [`RC2-SESSION-PLAN.md`](RC2-SESSION-PLAN.md).
+> - **Latest local scan (2026-05-26, GOV-1):** [LOCAL-GITDOCTOR-EVIDENCE-2026-05-26.md](scans/LOCAL-GITDOCTOR-EVIDENCE-2026-05-26.md). Layer 1 mapped: **90/100** (52/58 — down 3 points vs Memorial Day 93/100 because the SEC-1 env-var refactor introduced CFG-001 hardcoded-localhost fallback in `openbao_client.rs` and REV-005 HIGH `.unwrap_or_default()` at `openbao_client.rs:340`). Layer 2 independent tools: 5 FAIL (cargo test workspace, cargo audit `pyo3 0.22.6` advisory + `proc-macro-error` unmaintained, cargo deny `idna 0.5`, pip-audit pip 26.0.1 CVE-2026-3219/6357, detect-secrets keyword in `mai-sdk-python/docs/authentication.md`). Layer 3 adversarial: PASS. Address these in the GITDOCTOR-75 / IGD lanes.
+> - **Next gate:** RC2 deployment rehearsal (RC2-01..RC2-08). Production-validation evidence already committed at `ee6eb13`. See [`RC2-SESSION-PLAN.md`](releases/rc2/RC2-SESSION-PLAN.md).
 >
 > Docs marked **STATUS — CLOSED** / **STATUS — SUPERSEDED** at the top are kept for historical reference and do not drive active work.
 
@@ -23,23 +23,23 @@
 
 | If you are... | Go to |
 |---|---|
-| Reviewing the product thesis | [ACQUISITION-PACKAGE.md](ACQUISITION-PACKAGE.md) |
-| Running the demo suite | [DEMO-SUITE.md](DEMO-SUITE.md) |
-| Reviewing integration architecture | [BUYER-INTEGRATION-GUIDE.md](BUYER-INTEGRATION-GUIDE.md) |
-| Reviewing the scheduler design | [SCHEDULER-BRIEF.md](SCHEDULER-BRIEF.md) |
-| Reviewing the compliance governance stack | [LAMPREY-BRIEF.md](LAMPREY-BRIEF.md) |
-| Reviewing the air-gap security model | [AIR-GAP-BRIEF.md](AIR-GAP-BRIEF.md) |
+| Reviewing the product thesis | [ACQUISITION-PACKAGE.md](product/ACQUISITION-PACKAGE.md) |
+| Running the demo suite | [DEMO-SUITE.md](product/DEMO-SUITE.md) |
+| Reviewing integration architecture | [BUYER-INTEGRATION-GUIDE.md](product/BUYER-INTEGRATION-GUIDE.md) |
+| Reviewing the scheduler design | [SCHEDULER-BRIEF.md](architecture/SCHEDULER-BRIEF.md) |
+| Reviewing the compliance governance stack | [LAMPREY-BRIEF.md](product/LAMPREY-BRIEF.md) |
+| Reviewing the air-gap security model | [AIR-GAP-BRIEF.md](product/AIR-GAP-BRIEF.md) |
 | Running the acquisition demo scenarios | [acquisition/demos/](acquisition/demos/) |
-| Building against the Python SDK | [SDK-REFERENCE.md](SDK-REFERENCE.md) |
-| Calling the REST API directly | [API-REFERENCE.md](API-REFERENCE.md) |
-| Operating a local node | [DEPLOYMENT.md](DEPLOYMENT.md) |
-| Installing a production appliance | [INSTALL.md](INSTALL.md) |
-| Running an installed appliance day-to-day | [OPERATIONS.md](OPERATIONS.md) |
-| Handling an outage or alert at 2 AM | [runbooks/](runbooks/) and [INCIDENT-RESPONSE.md](INCIDENT-RESPONSE.md) |
-| Upgrading or rolling back a release | [UPGRADE-ROLLBACK.md](UPGRADE-ROLLBACK.md) |
-| Backing up or restoring a node | [BACKUP-RESTORE.md](BACKUP-RESTORE.md) |
-| Planning tester packaging and production shipping | [COGENT-DEPLOYMENT-ROADMAP.md](COGENT-DEPLOYMENT-ROADMAP.md) |
-| Planning copyright, patent, and IP protection | [IP-COPYRIGHT-PATENT-ROADMAP.md](IP-COPYRIGHT-PATENT-ROADMAP.md) |
+| Building against the Python SDK | [SDK-REFERENCE.md](api/SDK-REFERENCE.md) |
+| Calling the REST API directly | [API-REFERENCE.md](api/API-REFERENCE.md) |
+| Operating a local node | [DEPLOYMENT.md](operations/DEPLOYMENT.md) |
+| Installing a production appliance | [INSTALL.md](operations/INSTALL.md) |
+| Running an installed appliance day-to-day | [OPERATIONS.md](operations/OPERATIONS.md) |
+| Handling an outage or alert at 2 AM | [runbooks/](runbooks/) and [INCIDENT-RESPONSE.md](compliance/INCIDENT-RESPONSE.md) |
+| Upgrading or rolling back a release | [UPGRADE-ROLLBACK.md](operations/UPGRADE-ROLLBACK.md) |
+| Backing up or restoring a node | [BACKUP-RESTORE.md](operations/BACKUP-RESTORE.md) |
+| Planning tester packaging and production shipping | [COGENT-DEPLOYMENT-ROADMAP.md](product/COGENT-DEPLOYMENT-ROADMAP.md) |
+| Planning copyright, patent, and IP protection | [IP-COPYRIGHT-PATENT-ROADMAP.md](product/IP-COPYRIGHT-PATENT-ROADMAP.md) |
 | Starting as a new engineer | [HANDOFF.md](HANDOFF.md) |
 | Troubleshooting a first-run error | [KNOWN-ISSUES.md](KNOWN-ISSUES.md) |
 
@@ -53,14 +53,14 @@ build team.
 
 | File | Purpose | Read When |
 |---|---|---|
-| [ACQUISITION-PACKAGE.md](ACQUISITION-PACKAGE.md) | Five-point buyer thesis with code and test citations | Acquirer diligence; investor narrative |
-| [BUYER-INTEGRATION-GUIDE.md](BUYER-INTEGRATION-GUIDE.md) | OpenBao-backed trust boundary, 7-step integration sequence, boundary-review checklist | Acquirer integration engineering; security architecture review |
-| [DEMO-SUITE.md](DEMO-SUITE.md) | Trust Manifold 8-step scenario, supporting demos, reproducibility checklist | Acquirer technical review; sales engineering |
-| [SCHEDULER-BRIEF.md](SCHEDULER-BRIEF.md) | Scheduler technical brief: topology, KV, batching, scoring, balancer, decision cache, power, trace replay | Scheduling-architect diligence |
-| [LAMPREY-BRIEF.md](LAMPREY-BRIEF.md) | Lamprey three-layer governance stack: router, policy, audit; module and composer reference | Compliance and governance diligence |
-| [AIR-GAP-BRIEF.md](AIR-GAP-BRIEF.md) | Air-gap as routing input: ConnectivityState, loopback bind, trust-cache interaction, audit coverage | Security and network policy reviewers |
-| [API-REFERENCE.md](API-REFERENCE.md) | Live REST surface: inference, models, health, system, scheduler telemetry, trust, compliance | Integration engineers, SDK authors |
-| [SDK-REFERENCE.md](SDK-REFERENCE.md) | Python SDK namespace reference: client.models / chat / scheduler / trust / compliance / auth, errors, CLI | Application developers, embed teams |
+| [ACQUISITION-PACKAGE.md](product/ACQUISITION-PACKAGE.md) | Five-point buyer thesis with code and test citations | Acquirer diligence; investor narrative |
+| [BUYER-INTEGRATION-GUIDE.md](product/BUYER-INTEGRATION-GUIDE.md) | OpenBao-backed trust boundary, 7-step integration sequence, boundary-review checklist | Acquirer integration engineering; security architecture review |
+| [DEMO-SUITE.md](product/DEMO-SUITE.md) | Trust Manifold 8-step scenario, supporting demos, reproducibility checklist | Acquirer technical review; sales engineering |
+| [SCHEDULER-BRIEF.md](architecture/SCHEDULER-BRIEF.md) | Scheduler technical brief: topology, KV, batching, scoring, balancer, decision cache, power, trace replay | Scheduling-architect diligence |
+| [LAMPREY-BRIEF.md](product/LAMPREY-BRIEF.md) | Lamprey three-layer governance stack: router, policy, audit; module and composer reference | Compliance and governance diligence |
+| [AIR-GAP-BRIEF.md](product/AIR-GAP-BRIEF.md) | Air-gap as routing input: ConnectivityState, loopback bind, trust-cache interaction, audit coverage | Security and network policy reviewers |
+| [API-REFERENCE.md](api/API-REFERENCE.md) | Live REST surface: inference, models, health, system, scheduler telemetry, trust, compliance | Integration engineers, SDK authors |
+| [SDK-REFERENCE.md](api/SDK-REFERENCE.md) | Python SDK namespace reference: client.models / chat / scheduler / trust / compliance / auth, errors, CLI | Application developers, embed teams |
 | [acquisition/ARCHITECTURE.md](acquisition/ARCHITECTURE.md) | Top-down architecture overlay: three-layer Lamprey, MAI, Trust Manifold; integration shapes A/B/C | Acquirer architecture review |
 | [acquisition/COMPETITIVE.md](acquisition/COMPETITIVE.md) | Competitive analysis vs Guardrails AI, NeMo Guardrails, Minder, Cloudflare AI Gateway, AWS Bedrock, Azure | M&A analysts, product strategy |
 | [acquisition/IP.md](acquisition/IP.md) | IP position memo: 4 patent candidates, trade secrets, open-source boundary recommendations (not legal advice) | IP counsel, corp dev |
@@ -83,17 +83,17 @@ class to a specific named-failure procedure.
 
 | File | Purpose | Read When |
 |---|---|---|
-| [INSTALL.md](INSTALL.md) | Operator install procedure: hardware/software prereqs, package install, validator gate, first-backup floor | Bringing up a new appliance |
-| [FIRST-BOOT.md](FIRST-BOOT.md) | The privileged first-boot key-mint contract; why there is no recovery for a lost first-boot key | Reading before runbook 01 |
-| [OPERATIONS.md](OPERATIONS.md) | Day-2 cadence: daily/weekly/quarterly/annual operator tasks; endpoint cheat sheet; config touchpoints | After install completes |
-| [BACKUP-RESTORE.md](BACKUP-RESTORE.md) | Backup component manifest, signing key custody, retention contract, restore plan/apply, DR drill matrix | Building backup policy or restoring a node |
-| [OBSERVABILITY.md](OBSERVABILITY.md) | Health surfaces, Prometheus metrics, alert rule map, dashboard scope, payload boundary | Wiring monitoring or paging |
-| [RELEASE-GATES.md](RELEASE-GATES.md) | `mai-ship-validate` exit codes, check families, pre-release sequence (dev/package/installed/recovery/burn-in) | Declaring a build shippable |
-| [SECURITY-PRODUCTION.md](SECURITY-PRODUCTION.md) | What ship promises, four-key custody matrix, rotation cadence, reverse-proxy contract, in-process egress | Reviewing production security posture |
-| [TRUST-BRIDGE-PRODUCTION.md](TRUST-BRIDGE-PRODUCTION.md) | Roles for bundle authoring/signing/delivery; why the bridge is procedural; anchor distribution; revocation | Setting up signed-bundle delivery |
-| [AUDIT-RETENTION.md](AUDIT-RETENTION.md) | Two-chain WAL contract, default retention tiers, export procedure for counsel, cold-storage archival | Building retention policy or handling counsel requests |
-| [UPGRADE-ROLLBACK.md](UPGRADE-ROLLBACK.md) | Pre-upgrade checklist, upgrade procedure, multi-release rolling, rollback to verified backup | Planning or executing an upgrade |
-| [INCIDENT-RESPONSE.md](INCIDENT-RESPONSE.md) | Severity classes, first-five-minutes, investigation flow, post-mortem template, specific incident shapes | At 2 AM, when something is wrong |
+| [INSTALL.md](operations/INSTALL.md) | Operator install procedure: hardware/software prereqs, package install, validator gate, first-backup floor | Bringing up a new appliance |
+| [FIRST-BOOT.md](operations/FIRST-BOOT.md) | The privileged first-boot key-mint contract; why there is no recovery for a lost first-boot key | Reading before runbook 01 |
+| [OPERATIONS.md](operations/OPERATIONS.md) | Day-2 cadence: daily/weekly/quarterly/annual operator tasks; endpoint cheat sheet; config touchpoints | After install completes |
+| [BACKUP-RESTORE.md](operations/BACKUP-RESTORE.md) | Backup component manifest, signing key custody, retention contract, restore plan/apply, DR drill matrix | Building backup policy or restoring a node |
+| [OBSERVABILITY.md](operations/OBSERVABILITY.md) | Health surfaces, Prometheus metrics, alert rule map, dashboard scope, payload boundary | Wiring monitoring or paging |
+| [RELEASE-GATES.md](releases/RELEASE-GATES.md) | `mai-ship-validate` exit codes, check families, pre-release sequence (dev/package/installed/recovery/burn-in) | Declaring a build shippable |
+| [SECURITY-PRODUCTION.md](compliance/SECURITY-PRODUCTION.md) | What ship promises, four-key custody matrix, rotation cadence, reverse-proxy contract, in-process egress | Reviewing production security posture |
+| [TRUST-BRIDGE-PRODUCTION.md](compliance/TRUST-BRIDGE-PRODUCTION.md) | Roles for bundle authoring/signing/delivery; why the bridge is procedural; anchor distribution; revocation | Setting up signed-bundle delivery |
+| [AUDIT-RETENTION.md](compliance/AUDIT-RETENTION.md) | Two-chain WAL contract, default retention tiers, export procedure for counsel, cold-storage archival | Building retention policy or handling counsel requests |
+| [UPGRADE-ROLLBACK.md](operations/UPGRADE-ROLLBACK.md) | Pre-upgrade checklist, upgrade procedure, multi-release rolling, rollback to verified backup | Planning or executing an upgrade |
+| [INCIDENT-RESPONSE.md](compliance/INCIDENT-RESPONSE.md) | Severity classes, first-five-minutes, investigation flow, post-mortem template, specific incident shapes | At 2 AM, when something is wrong |
 | [runbooks/README.md](runbooks/README.md) | Index of 14 named-failure runbooks (key rotation, anchor rotation, bundle import, audit verify, compliance report, backup, restore, upgrade rollback, adapter crash loop, trust bundle expired, audit WAL tamper, air-gap violation, disk almost full) | When an alert fires |
 
 ---
@@ -106,20 +106,20 @@ on the project. Read them before writing code.
 | File | Purpose | Read When |
 |---|---|---|
 | [HANDOFF.md](HANDOFF.md) | Founding engineer orientation, critical warnings, current state, what will bite you | First day on the project |
-| [ARCHITECTURE.md](ARCHITECTURE.md) | Tock-to-MAI architecture map, trust boundaries, component catalog, data flows, power state machine | Understanding system structure |
+| [ARCHITECTURE.md](acquisition/ARCHITECTURE.md) | Tock-to-MAI architecture map, trust boundaries, component catalog, data flows, power state machine | Understanding system structure |
 | [CONVENTIONS.md](CONVENTIONS.md) | Language assignments, code quality gates, monorepo layout, testing rules, git conventions | Writing any code |
 | [SESSION-RULES.md](SESSION-RULES.md) | Dependency enforcement, acceptance criteria protocol, quality gates, session workflow | Conducting any session |
-| [IPC-PROTOCOL.md](IPC-PROTOCOL.md) | NDJSON IPC wire format spec for Rust-Python adapter communication | Working on adapter IPC |
-| [SESSION-LOG.md](SESSION-LOG.md) | Session progress for Phase H through Gate D scope (Sessions 26-46 + BF-1..BF-7) | Before and after each session |
-| [SESSION-LOG-ARCHIVE-01.md](SESSION-LOG-ARCHIVE-01.md) | Completed sessions 01-10 (Phases A+B) | Reviewing past session details |
-| [SESSION-LOG-ARCHIVE-02.md](SESSION-LOG-ARCHIVE-02.md) | Completed sessions 11-25 (Phases C through G), archived 2026-05-23 | Reviewing past session details |
-| [SESSION-LOG-ARCHIVE-03.md](SESSION-LOG-ARCHIVE-03.md) | Completed sessions 26-46 plus BF-1..BF-7 (Security through Gate D), archived 2026-05-23 | Reviewing Gate D build history |
-| [HANDOFF-ARCHIVE-01.md](HANDOFF-ARCHIVE-01.md) | Archived onboarding walkthrough and Phase A+B code inventory | Reference only |
+| [IPC-PROTOCOL.md](architecture/IPC-PROTOCOL.md) | NDJSON IPC wire format spec for Rust-Python adapter communication | Working on adapter IPC |
+| [SESSION-LOG.md](sessions/SESSION-LOG.md) | Session progress for Phase H through Gate D scope (Sessions 26-46 + BF-1..BF-7) | Before and after each session |
+| [SESSION-LOG-ARCHIVE-01.md](sessions/SESSION-LOG-ARCHIVE-01.md) | Completed sessions 01-10 (Phases A+B) | Reviewing past session details |
+| [SESSION-LOG-ARCHIVE-02.md](sessions/SESSION-LOG-ARCHIVE-02.md) | Completed sessions 11-25 (Phases C through G), archived 2026-05-23 | Reviewing past session details |
+| [SESSION-LOG-ARCHIVE-03.md](sessions/SESSION-LOG-ARCHIVE-03.md) | Completed sessions 26-46 plus BF-1..BF-7 (Security through Gate D), archived 2026-05-23 | Reviewing Gate D build history |
+| [HANDOFF-ARCHIVE-01.md](sessions/HANDOFF-ARCHIVE-01.md) | Archived onboarding walkthrough and Phase A+B code inventory | Reference only |
 | [MAI-BUILD-PROMPT-ROSTER-v2.md](MAI-BUILD-PROMPT-ROSTER-v2.md) | Complete session prompts, deliverables, and acceptance criteria for all 46 sessions | Starting any session |
 | [PROJECT.md](PROJECT.md) | Original scope, 5-phase plan, 18-session timeline, effort estimates, coverage matrix | Historical scope reference |
-| [SESSION-46-PLAN.md](SESSION-46-PLAN.md) | Session 46 plan: scope, file layout, test inventory, perf targets, Gate D checklist | Session 46 implementer |
-| [COGENT-DEPLOYMENT-ROADMAP.md](COGENT-DEPLOYMENT-ROADMAP.md) | Session-by-session roadmap from Gate D codebase to RC1 tester bundle, hardened release candidate, and production appliance | Release planning; deployment hardening |
-| [IP-COPYRIGHT-PATENT-ROADMAP.md](IP-COPYRIGHT-PATENT-ROADMAP.md) | Step-by-step owner-side process for copyright, patent, trade secret, licensing, disclosure, and release gates | IP planning; external release preparation |
+| [SESSION-46-PLAN.md](sessions/SESSION-46-PLAN.md) | Session 46 plan: scope, file layout, test inventory, perf targets, Gate D checklist | Session 46 implementer |
+| [COGENT-DEPLOYMENT-ROADMAP.md](product/COGENT-DEPLOYMENT-ROADMAP.md) | Session-by-session roadmap from Gate D codebase to RC1 tester bundle, hardened release candidate, and production appliance | Release planning; deployment hardening |
+| [IP-COPYRIGHT-PATENT-ROADMAP.md](product/IP-COPYRIGHT-PATENT-ROADMAP.md) | Step-by-step owner-side process for copyright, patent, trade secret, licensing, disclosure, and release gates | IP planning; external release preparation |
 | [INDEX.md](INDEX.md) | This file | Finding anything |
 
 ---
@@ -203,7 +203,7 @@ to their primary output types.
 | 22 | Power State Machine | mai-core power refactor, scheduler-facing power controller, config/power.toml |
 | 23 | Sentinel Mode | Sentinel estimator/runtime/promotion/warmup modules, config/sentinel.toml |
 | 24 | Model Install/Remove Seams | Install/remove pipeline refactor, route conflict fix, required_vram_bytes propagation |
-| 25 | OTA Update Pipeline + Model Lifecycle | update/lifecycle/preload modules, benchmark/update REST routes, docs/UPDATE-PROTOCOL.md |
+| 25 | OTA Update Pipeline + Model Lifecycle | update/lifecycle/preload modules, benchmark/update REST routes, docs/operations/UPDATE-PROTOCOL.md |
 
 ### Phase L: Compliance Governance (Sessions 36-46)
 
@@ -255,7 +255,7 @@ to their primary output types.
 | `mai-core/src/models/lifecycle.rs` | Installed model listing, load/unload, benchmark, export, affinity tracking | 25 |
 | `mai-core/src/models/preload.rs` | Sentinel-first and affinity-based preload planning | 25 |
 | `mai-api/src/handlers/updates.rs` | REST update check, background download start, and status endpoints | 25 |
-| `docs/UPDATE-PROTOCOL.md` | Privacy-preserving update server and mirror protocol | 25 |
+| `docs/operations/UPDATE-PROTOCOL.md` | Privacy-preserving update server and mirror protocol | 25 |
 
 ---
 

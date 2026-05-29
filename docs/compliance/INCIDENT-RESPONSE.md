@@ -1,4 +1,4 @@
-# Incident Response
+﻿# Incident Response
 
 The operator-facing process for handling MAI incidents. The
 runbooks under [runbooks/](runbooks/) handle specific named
@@ -69,7 +69,7 @@ time, not reconstructed after the fact.
 Once stabilized:
 
 1. **Triage** — which subsystem? Use the alert -> runbook map
-   in [OBSERVABILITY.md](OBSERVABILITY.md). If the symptom does
+   in [OBSERVABILITY.md](../operations/OBSERVABILITY.md). If the symptom does
    not match a runbook, the incident is genuinely novel; treat
    it as such.
 2. **Hypothesize, then test, then change.** Do not change
@@ -151,9 +151,9 @@ operator acts.
 
 ## See also
 
-- [OBSERVABILITY.md](OBSERVABILITY.md) — signals and alerts.
+- [OBSERVABILITY.md](../operations/OBSERVABILITY.md) — signals and alerts.
 - [SECURITY-PRODUCTION.md](SECURITY-PRODUCTION.md) — posture
   the appliance enforces.
-- [BACKUP-RESTORE.md](BACKUP-RESTORE.md) — recovery
+- [BACKUP-RESTORE.md](../operations/BACKUP-RESTORE.md) — recovery
   primitives.
 - [runbooks/](runbooks/) — named-failure procedures.
