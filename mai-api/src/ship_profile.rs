@@ -278,10 +278,10 @@ impl Default for KvPathConfig {
 }
 
 fn default_tenant_path() -> String {
-    "kv/tenants".into()
+    "kv/data/tenants".into()
 }
 fn default_revocation_path() -> String {
-    "kv/revocations".into()
+    "kv/data/revocations".into()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -794,8 +794,8 @@ role_id = "8053c291-8f60-381f-e283-5e645e5907f4"
             ob.transit.revocation_signer_key,
             "lamprey-revocation-signer"
         );
-        assert_eq!(ob.kv.tenant_path, "kv/tenants");
-        assert_eq!(ob.kv.revocation_path, "kv/revocations");
+        assert_eq!(ob.kv.tenant_path, "kv/data/tenants");
+        assert_eq!(ob.kv.revocation_path, "kv/data/revocations");
         assert_eq!(ob.pki.role, "mai-appliance");
         assert!(ob.trust_refresh.enabled);
         assert_eq!(ob.trust_refresh.interval_secs, 300);

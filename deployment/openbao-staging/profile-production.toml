@@ -75,8 +75,8 @@ bundle_signer_key     = "lamprey-bundle-signer"
 revocation_signer_key = "lamprey-revocation-signer"
 
 [openbao.kv]
-tenant_path     = "kv/tenants"
-revocation_path = "kv/revocations"
+tenant_path     = "kv/data/tenants"
+revocation_path = "kv/data/revocations"
 
 [openbao.pki]
 role = "mai-appliance"
