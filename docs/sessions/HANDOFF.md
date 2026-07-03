@@ -15,19 +15,21 @@
 - **Mode:** STS (stem to stern). The user wants **relentless, continuous execution** — commit each
   prompt, verify each, **do NOT stop to ask permission**, **push only at the very end** after the full
   test suite/CI validate. The user is explicitly impatient with checkpoint-and-ask behavior.
-- **DONE:** **Phase 0** (foundation + contracts + crypto + advisories + CI gate), **Phase F** (all 8
-  fabric primitive crates), and **Phase W: W1 + W2** — 16 commits total. Both W-prompts were
-  **genuinely live-verified** (real OpenBao Docker + real Moto STS), not mock-only.
-  - **W1 `wsf-bridge`** (commit `4ef11a5`): OpenBao AppRole auth event + KV tenant read → ML-DSA-signed
-    `fabric-token`; also policy-bundle + revocation signing + metadata-only audit correlation. Signs
-    with **pure-Rust ML-DSA-87** (off-host/air-gap verifiable), NOT OpenBao Transit. Focused ~150-line
-    OpenBao client adapted from `mai-api` (no mai-api dep → dodges the axum 0.7/0.8 conflict).
-  - **W2 `wsf-broker`** (commit `5ee41db`): verify token → read broker root creds from OpenBao kv →
-    STS `AssumeRole` with an inline session policy scoped to the token's `ResourcePrefix` caveats →
-    scoped temp creds, duration = token TTL. **Hand-rolled AWS SigV4** over hmac/sha2 (no aws-sdk →
-    no aws-lc-rs Windows-build risk), pinned to AWS's `aws4_testsuite` get-vanilla vector.
-- **NEXT:** **Phase W, W3** (`wsf-seal`), then W4–W10 → G (AOG gateway) → T (tool governance) →
-  C (console) → D (deploy/proof) → Z (ship/Bucket).
+- **DONE:** **Phase 0** (foundation + contracts + crypto + advisories + CI gate), **Phase F** (8 fabric
+  primitive crates), and **ALL of Phase W (W1–W10)** — the whole WSF trust plane. 8 new `wsf-*` crates,
+  **every trust-touching path live-verified** (real OpenBao Docker + real Moto STS; mock-emulators for
+  GCP/Azure since no free emulator exists). `cargo test --workspace` = **1721 passed / 0 failed**.
+  - W1 `wsf-bridge` (OpenBao auth → ML-DSA token) · W2 `wsf-broker` (AWS STS, hand-rolled SigV4) ·
+    W3 `wsf-seal` (envelope over live Transit, axum 0.8) · W4 `wsf-ledger` (receipt chain + signed
+    evidence packs) · W5 `wsf-cache` (Ring-3 offline decisions, air-gap) · W6 `wsf-api` (unified REST +
+    Rust SDK + OpenAPI) · W7 GCP broker · W8 Azure broker · W9 `wsf-tenants` (per-tenant HMAC +
+    revoke-everywhere deprovision) · W10 `wsf-hardening` (zero-downtime key rotation + production guard + HA compose).
+  - Signatures are **pure-Rust ML-DSA-87 end-to-end** (off-host + air-gap verifiable); OpenBao gives
+    identity (AppRole) + custody (KV, Transit-wrapped data keys) but never the signature. The `wsf-live`
+    CI job runs all nine live gates against Dockerized OpenBao + Moto on every push.
+- **NEXT:** **Phase G** (AOG gateway — the inference-edge control plane; reuse `mai-router` + `mai-compliance`,
+  build the cloud provider clients MAI never had), then T (tool governance) → C (console) → D (deploy/proof)
+  → Z (ship/Bucket). See the plan's Phase G section.
 
 ---
 
@@ -36,7 +38,7 @@
 ```
 Worktree (do ALL work here):
   C:\Users\17076\Documents\Claude\Island Mountain\Island Mountain Mighty Eel OS\mai-worktrees\mai-SOV-1
-Branch:  session/SOV-1   (HEAD = 540bfe4, SOV-W5)   — NOT pushed; push only at the very end
+Branch:  session/SOV-1   (HEAD = 84646a4, SOV-W10 — Phase W complete)   — NOT pushed; push only at the very end
 Toolchain: cargo 1.95.0 / rustc 1.95.0 present; node 24; Docker v29.4 up. Disk fine.
 ```
 
@@ -170,16 +172,21 @@ The stale VS-Code clone (`Documents/VS Code Lamprey Repo Clone/...`) was **delet
 
 ---
 
-## 5. What's NEXT — Phase W (WSF services)
+## 5. What's NEXT — Phase G (AOG gateway). **Phase W is COMPLETE.**
 
-Per the plan (Phase W, W1–W10). These are **services** (async, will use axum/tonic 0.14 + the OpenBao
-client), and they hit **live OpenBao** — the **no-mock-only-closure gate applies**: token issuance /
-envelope seal / receipts / cred brokering / policy must have ≥1 test against a **live OpenBao Docker
-service** (Docker is available; there's no `scripts/start-openbao.ps1` in-tree yet — create a compose
-or `docker run openbao/openbao` bring-up and wire it into CI as a service container per `SOV-0.7`'s
-deferral note in `ci.yml`).
+**Phase W (W1–W10) is fully done + live-verified** (see §0 + `docs/sessions/SOVEREIGNTY-DEVLOG.md`
+"Phase W COMPLETE"). Resume at **Phase G** — the AOG gateway (the estate model gateway: one
+OpenAI/Anthropic-compatible endpoint, policy-routed, metered, receipted). Per the plan's Phase G:
+- **G1** `aog-gateway` skeleton + virtual keys (virtual key → WSF trust token; over-budget rejected pre-flight).
+- **G2** provider adapters (NEW cloud clients: local vLLM/Ollama via MAI adapters, Anthropic, OpenAI — the code MAI never had).
+- **G3/G4** OpenAI- + Anthropic-compatible surfaces (`/v1/chat/completions`, `/v1/messages`, SSE streaming).
+- **G5** classify + route (reuse `mai-router` + mai-compliance classifiers; if the payload is a WSF envelope, read the F5 label instead of re-classifying — the flagship integration).
+- **G6** policy decision + modes (reuse mai-compliance deny-wins composer; shadow/report/enforce).
+- **G7** metering + receipts (WSF receipts → `wsf-ledger`; `aog-meter` aggregates). **G8** egress tokenization. **G9** budget enforce + kill switch (revoke token → gateway refuses). **G10** ROI recommender.
+- **Reuse map:** `mai-router/src/*` (routing), `mai-compliance/src/policy/composer.rs` + engines (policy), `mai-compliance::{deid,phi,itar}` (egress redaction), `wsf-api`/`wsf-broker`/`wsf-ledger`/`fabric-token` (identity/token/cred/receipts). Read `docs/architecture/SOVEREIGNTY-REUSE-MAP.md` §"AOG services".
 
-Recommended order — **W1 + W2 are DONE** (see §0). **Resume at W3.**
+The Phase-W working notes below (shared OpenBaoAuth, env-gated live-test pattern, the wsf-live CI job,
+the Signer-trait-in-scope gotcha) all still apply to Phase G.
 - ~~W1 `wsf-bridge`~~ DONE (`4ef11a5`). ~~W2 `wsf-broker`~~ DONE (`5ee41db`).
 - **W3 `wsf-seal` (NEXT):** network service over `fabric-envelope`; the F4 `data_key_wrapped` becomes
   a **real OpenBao-Transit wrap** (`transit/encrypt|decrypt/<key>` — Transit *does* symmetric AEAD,
@@ -229,11 +236,11 @@ console — new `console/`, Vite+React 19+Tailwind, panels aesthetic; replaces t
 ```bash
 cd "C:\Users\17076\Documents\Claude\Island Mountain\Island Mountain Mighty Eel OS\mai-worktrees\mai-SOV-1"
 git branch --show-current            # session/SOV-1
-git log --oneline 7a19c7b..HEAD      # 21 SOV commits, HEAD 540bfe4 (SOV-W5)
+git log --oneline 7a19c7b..HEAD      # 26 SOV commits, HEAD 84646a4 (SOV-W10, Phase W complete)
 ls crates/                           # 8 fabric-* + wsf-bridge + wsf-broker
 cargo test -p wsf-bridge -p wsf-broker   # offline suites green (live tests env-skip)
 cargo check --workspace              # exit 0
 cargo audit                          # exit 0, 0 vulnerabilities (1 accepted proc-macro-error2 warning)
 ```
 
-**Nothing is uncommitted; nothing is pushed.** Pick up at **Phase W, W3** (`wsf-seal`).
+**Nothing is uncommitted; nothing is pushed.** **Phase W is complete.** Pick up at **Phase G, G1** (`aog-gateway`).
