@@ -14,6 +14,7 @@ members = [
     "crates/fabric-contracts",
     "crates/fabric-crypto",
     "crates/fabric-proof",
+    "crates/fabric-token",
     "tools/pkg-builder",
     "tools/rule-tester",
     "tools/mai-admin",

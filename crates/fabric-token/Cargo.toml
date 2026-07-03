@@ -1,0 +1,20 @@
+[package]
+name = "fabric-token"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "The WSF trust-token primitive: issue, verify, attenuate, and meter budget-carrying capability tokens"
+
+[dependencies]
+fabric-contracts = { path = "../fabric-contracts" }
+fabric-crypto = { path = "../fabric-crypto" }
+fabric-proof = { path = "../fabric-proof" }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+chrono = { workspace = true }
+hex = "0.4"
+
+[lints]
+workspace = true
