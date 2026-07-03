@@ -68,6 +68,37 @@ jobs:
           fi
           echo "OK: no unsafe in mai-core"
 
+  advisories:
+    name: Supply-Chain & Advisories (cargo-audit + cargo-deny)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install cargo-audit + cargo-deny
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit,cargo-deny
+
+      # Reads the ignore list in .cargo/audit.toml, kept in sync with deny.toml
+      # + docs/compliance/INDEPENDENT-EVIDENCE-DEFERRALS.md. SOV-0.2c cleared all
+      # vulnerabilities (exit 0); this job keeps it that way on every push/PR.
+      - name: cargo audit
+        run: cargo audit
+
+      # advisories + bans + licenses, per deny.toml.
+      - name: cargo deny check
+        run: cargo deny check advisories bans licenses
+
+  # SOV-0.7 deferrals (test surfaces that do not exist yet):
+  #   * live OpenBao service container + LocalStack (AWS STS) -> Phase W, when the
+  #     first live-trust / cred-broker tests land (the no-mock-only gate).
+  #   * tsc + vitest job -> Phase C, when the React console exists.
+  #   * SBOM (syft) generation + image signing -> D3 (signed supply chain).
+
   python-check:
     name: Python Quality Gates
     runs-on: ubuntu-latest
