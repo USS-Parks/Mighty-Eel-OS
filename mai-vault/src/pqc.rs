@@ -5,18 +5,21 @@
 //! encrypted with AES-256-GCM under a key derived from the KEM shared secret
 //! via HKDF-SHA3-256.
 //!
-//! # Feature-gated backends
+//! # Cryptographic backend
 //!
-//! Two cryptographic backends are available, selected by Cargo feature:
+//! Pure-Rust RustCrypto `ml-kem` (FIPS 203) + `ml-dsa` (FIPS 204), enabled by
+//! the default `pqc-dev` feature. No C dependencies; builds on every platform
+//! and runs offline / air-gapped. The `ml-dsa` crate is pre-1.0 but functionally
+//! correct and not flagged by `cargo audit`; it is also fronted by the
+//! `fabric-crypto` signer abstraction for the Sovereignty Stack.
 //!
-//!   * `pqc-dev` (default) — RustCrypto `ml-kem` + `ml-dsa`. Pure Rust, no C
-//!     dependencies, builds on every platform. The `ml-dsa` crate is pre-1.0
-//!     but functionally correct; suitable for development and CI.
-//!   * `pqc-prod` — `pqcrypto-mlkem` + `pqcrypto-mldsa`, which wrap liboqs.
-//!     Required for FIPS-validated production deployments.
+//! The former `pqc-prod` liboqs backend (via the now-archived `pqcrypto-*`
+//! crates) was removed in SOV-0.2b — nothing in any ship profile selected it. A
+//! FIPS-validated liboqs path can return later behind a new feature using the
+//! maintained `oqs` crate, if an ITAR/defense deployment requires it.
 //!
-//! Exactly one backend must be enabled. The trait surface exposes only
-//! `Vec<u8>` blobs, so callers do not depend on either backend.
+//! The trait surface exposes only `Vec<u8>` blobs, so callers never depend on
+//! the backend.
 //!
 //! # Key Hierarchy
 //!
@@ -82,7 +85,7 @@ const AES_KEY_LEN: usize = 32;
 // Feature-gated KEM backend
 // ---------------------------------------------------------------------------
 
-#[cfg(all(feature = "pqc-dev", not(feature = "pqc-prod")))]
+#[cfg(feature = "pqc-dev")]
 mod kem_backend {
     use super::{MLKEM1024_PK_LEN, MLKEM1024_SK_LEN, VaultError};
     use ml_kem::kem::{Decapsulate, Encapsulate};
@@ -122,39 +125,11 @@ mod kem_backend {
     }
 }
 
-#[cfg(feature = "pqc-prod")]
-mod kem_backend {
-    use super::VaultError;
-    use pqcrypto_mlkem::mlkem1024;
-    use pqcrypto_traits::kem::{Ciphertext, PublicKey, SecretKey, SharedSecret};
-
-    pub fn keypair() -> Result<(Vec<u8>, Vec<u8>), VaultError> {
-        let (pk, sk) = mlkem1024::keypair();
-        Ok((pk.as_bytes().to_vec(), sk.as_bytes().to_vec()))
-    }
-
-    pub fn encapsulate(public_key: &[u8]) -> Result<(Vec<u8>, Vec<u8>), VaultError> {
-        let pk = mlkem1024::PublicKey::from_bytes(public_key)
-            .map_err(|e| VaultError::PqcError(format!("ML-KEM-1024 pk decode: {e}")))?;
-        let (ss, ct) = mlkem1024::encapsulate(&pk);
-        Ok((ct.as_bytes().to_vec(), ss.as_bytes().to_vec()))
-    }
-
-    pub fn decapsulate(ciphertext: &[u8], secret_key: &[u8]) -> Result<Vec<u8>, VaultError> {
-        let sk = mlkem1024::SecretKey::from_bytes(secret_key)
-            .map_err(|e| VaultError::PqcError(format!("ML-KEM-1024 sk decode: {e}")))?;
-        let ct = mlkem1024::Ciphertext::from_bytes(ciphertext)
-            .map_err(|e| VaultError::PqcError(format!("ML-KEM-1024 ct decode: {e}")))?;
-        let ss = mlkem1024::decapsulate(&ct, &sk);
-        Ok(ss.as_bytes().to_vec())
-    }
-}
-
 // ---------------------------------------------------------------------------
-// Feature-gated DSA backend
+// DSA backend (pure-Rust ML-DSA-87)
 // ---------------------------------------------------------------------------
 
-#[cfg(all(feature = "pqc-dev", not(feature = "pqc-prod")))]
+#[cfg(feature = "pqc-dev")]
 mod dsa_backend {
     use super::{MLDSA87_PK_LEN, MLDSA87_SIG_LEN, MLDSA87_SK_LEN, VaultError};
     use ml_dsa::signature::{Signer, Verifier};
@@ -205,38 +180,10 @@ mod dsa_backend {
     }
 }
 
-#[cfg(feature = "pqc-prod")]
-mod dsa_backend {
-    use super::VaultError;
-    use pqcrypto_mldsa::mldsa87;
-    use pqcrypto_traits::sign::{DetachedSignature, PublicKey, SecretKey};
-
-    pub fn keypair() -> Result<(Vec<u8>, Vec<u8>), VaultError> {
-        let (pk, sk) = mldsa87::keypair();
-        Ok((pk.as_bytes().to_vec(), sk.as_bytes().to_vec()))
-    }
-
-    pub fn sign(data: &[u8], signing_key: &[u8]) -> Result<Vec<u8>, VaultError> {
-        let sk = mldsa87::SecretKey::from_bytes(signing_key)
-            .map_err(|e| VaultError::PqcError(format!("ML-DSA-87 sk decode: {e}")))?;
-        let sig = mldsa87::detached_sign(data, &sk);
-        Ok(sig.as_bytes().to_vec())
-    }
-
-    pub fn verify(data: &[u8], signature: &[u8], public_key: &[u8]) -> Result<bool, VaultError> {
-        let pk = mldsa87::PublicKey::from_bytes(public_key)
-            .map_err(|e| VaultError::PqcError(format!("ML-DSA-87 pk decode: {e}")))?;
-        let sig = match mldsa87::DetachedSignature::from_bytes(signature) {
-            Ok(s) => s,
-            Err(_) => return Ok(false),
-        };
-        Ok(mldsa87::verify_detached_signature(&sig, data, &pk).is_ok())
-    }
-}
-
-// Compile-time guard: exactly one PQC backend must be selected.
-#[cfg(not(any(feature = "pqc-dev", feature = "pqc-prod")))]
-compile_error!("mai-vault requires one of the PQC backend features: `pqc-dev` or `pqc-prod`.");
+// Compile-time guard: the pure-Rust PQC backend must be selected. The former
+// `pqc-prod` liboqs backend (archived `pqcrypto-*`) was removed in SOV-0.2b.
+#[cfg(not(feature = "pqc-dev"))]
+compile_error!("mai-vault requires the `pqc-dev` PQC backend feature.");
 
 // ---------------------------------------------------------------------------
 // PqcEngine

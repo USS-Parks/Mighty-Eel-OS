@@ -11,8 +11,9 @@ description = "L2 vault implementation: ZFS storage, PQC encryption, TPM, profil
 #
 #  * `pqc-dev`   — RustCrypto-only, no C deps. Default for cross-platform dev/test.
 #                  KEM: `ml-kem` (FIPS 203). DSA: `ml-dsa` (FIPS 204, pre-1.0).
-#  * `pqc-prod`  — liboqs-backed FIPS path via the `pqcrypto-*` crate family.
-#                  Required for FIPS-validated production builds.
+#  * `pqc-prod`  — REMOVED (SOV-0.2b). Used the now-archived `pqcrypto-*` liboqs
+#                  crates; nothing selected it. Re-add later behind a new feature
+#                  using the maintained `oqs` crate if ITAR/FIPS requires it.
 #  * `tpm-hardware` — enable real TPM 2.0 via `tss-esapi` (Linux only).
 #                    Default off; the software TPM uses XChaCha20-Poly1305
 #                    sealed with a PCR-derived key.
@@ -21,7 +22,6 @@ description = "L2 vault implementation: ZFS storage, PQC encryption, TPM, profil
 #                   file-tree under the configured mount point.
 default = ["pqc-dev"]
 pqc-dev = ["dep:ml-kem", "dep:ml-dsa", "dep:rand_core"]
-pqc-prod = ["dep:pqcrypto-mlkem", "dep:pqcrypto-mldsa", "dep:pqcrypto-traits"]
 tpm-hardware = ["dep:tss-esapi"]
 zfs-storage = []
 
@@ -55,11 +55,6 @@ rand = "0.8"
 ml-kem = { version = "0.2", optional = true }
 ml-dsa = { version = "0.0.4", optional = true }
 rand_core = { version = "0.6", optional = true, features = ["getrandom"] }
-
-# liboqs-backed PQC stack (pqc-prod feature).
-pqcrypto-mlkem = { version = "0.1", optional = true }
-pqcrypto-mldsa = { version = "0.1", optional = true }
-pqcrypto-traits = { version = "0.3", optional = true }
 
 # Hardware TPM (Linux only, optional).
 [target.'cfg(target_os = "linux")'.dependencies]

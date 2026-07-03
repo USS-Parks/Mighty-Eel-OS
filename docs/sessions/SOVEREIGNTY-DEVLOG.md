@@ -36,7 +36,7 @@ The confirmed decision (trait + pure-Rust default + Transit custody seam), in co
 - **Commit:** `SOV-0.2a`.
 
 ### Remaining in Phase 0 (0.2 sub-steps + 0.7)
-- **0.2b** — drop the archived `pqc-prod` deps (`pqcrypto-mlkem/mldsa/traits`) from mai-vault so the pure-Rust `pqc-dev` is the sole backend (removes the advisory from the lock); re-add a **maintained** liboqs binding (`oqs`) later behind the same feature if FIPS validation needs it. Grep `pqc-prod` usage (ship profiles / CI) first.
+- **0.2b** — DONE. Dropped the `pqc-prod` feature + archived `pqcrypto-mlkem/mldsa/traits` deps from mai-vault; pure-Rust `pqc-dev` is now the sole backend (cfg gates simplified `pqc-dev`/`not(pqc-prod)` → `pqc-dev`, compile-guard + module docs updated). Confirmed nothing selected `pqc-prod` (grep: only its own feature def + docs + one historical test-run line — no ship profile / CI / production_guard). User decision (2026-07-03): drop FIPS-liboqs for now, re-add via maintained `oqs` behind a new feature if ITAR needs it. **Verify:** `cargo test -p mai-vault` = **63 passed**; `cargo check --workspace` green; `cargo audit` unmaintained warnings **6→2** (all four `pqcrypto-*` gone). **Commit:** `SOV-0.2b`.
 - **0.2c** — bump pyo3→0.29 (adapter FFI; may need code changes — waiver-with-rationale if it cascades, since adapters are parked off the trust path), quinn-proto→0.11.15, anyhow.
 - **0.2d** — tonic 0.12→0.13 to align on axum 0.8, retiring the dual-`Handler` `post_service` workaround.
 
