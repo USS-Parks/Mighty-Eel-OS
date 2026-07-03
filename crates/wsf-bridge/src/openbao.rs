@@ -280,6 +280,89 @@ impl OpenBaoAuth {
         Ok(body.data.data)
     }
 
+    /// Transit-encrypt `plaintext` under `key` (`transit/encrypt/<key>`),
+    /// returning the opaque `vault:v1:...` wrapped ciphertext. This is how the
+    /// seal service wraps a per-envelope data key (the F4 seal seam) — Transit
+    /// does symmetric AEAD even though OSS Transit has no ML-DSA *signing*.
+    ///
+    /// # Errors
+    /// [`OpenBaoError::Protocol`] on a non-2xx or a malformed response, or a
+    /// transport error.
+    pub async fn transit_encrypt(
+        &self,
+        token: &str,
+        key: &str,
+        plaintext: &[u8],
+    ) -> Result<String, OpenBaoError> {
+        let url = format!("{}/v1/transit/encrypt/{key}", self.config.address);
+        let b64 = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, plaintext);
+        let resp = self
+            .client
+            .post(&url)
+            .header("X-Vault-Token", token)
+            .json(&serde_json::json!({ "plaintext": b64 }))
+            .send()
+            .await?;
+        let status = resp.status();
+        if !status.is_success() {
+            let body = resp.text().await.unwrap_or_default();
+            return Err(OpenBaoError::Protocol(format!(
+                "transit encrypt {status}: {}",
+                body.trim()
+            )));
+        }
+        let v: serde_json::Value = resp
+            .json()
+            .await
+            .map_err(|e| OpenBaoError::Protocol(format!("transit encrypt parse: {e}")))?;
+        v.get("data")
+            .and_then(|d| d.get("ciphertext"))
+            .and_then(serde_json::Value::as_str)
+            .map(String::from)
+            .ok_or_else(|| OpenBaoError::Protocol("transit encrypt: missing ciphertext".into()))
+    }
+
+    /// Transit-decrypt a `vault:v1:...` ciphertext under `key`, returning the
+    /// recovered plaintext bytes.
+    ///
+    /// # Errors
+    /// [`OpenBaoError::Protocol`] on a non-2xx or a malformed response, or a
+    /// transport error.
+    pub async fn transit_decrypt(
+        &self,
+        token: &str,
+        key: &str,
+        ciphertext: &str,
+    ) -> Result<Vec<u8>, OpenBaoError> {
+        let url = format!("{}/v1/transit/decrypt/{key}", self.config.address);
+        let resp = self
+            .client
+            .post(&url)
+            .header("X-Vault-Token", token)
+            .json(&serde_json::json!({ "ciphertext": ciphertext }))
+            .send()
+            .await?;
+        let status = resp.status();
+        if !status.is_success() {
+            let body = resp.text().await.unwrap_or_default();
+            return Err(OpenBaoError::Protocol(format!(
+                "transit decrypt {status}: {}",
+                body.trim()
+            )));
+        }
+        let v: serde_json::Value = resp
+            .json()
+            .await
+            .map_err(|e| OpenBaoError::Protocol(format!("transit decrypt parse: {e}")))?;
+        let b64 = v
+            .get("data")
+            .and_then(|d| d.get("plaintext"))
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(|| OpenBaoError::Protocol("transit decrypt: missing plaintext".into()))?;
+        base64::Engine::decode(&base64::engine::general_purpose::STANDARD, b64)
+            .map_err(|e| OpenBaoError::Protocol(format!("transit decrypt b64: {e}")))
+    }
+
     /// Probe reachability + unseal status (`sys/seal-status`). `true` only when
     /// OpenBao is reachable and unsealed.
     pub async fn health(&self) -> bool {

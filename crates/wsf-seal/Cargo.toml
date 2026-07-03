@@ -1,29 +1,31 @@
 [package]
-name = "wsf-bridge"
+name = "wsf-seal"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "WSF Trust Bridge (Ring 2): OpenBao auth event -> ML-DSA-signed trust token, plus policy-bundle and revocation signing"
+description = "WSF seal service: fabric-envelope over OpenBao Transit — seal on ingress, token-authorized unseal, every op receipted"
 
 [dependencies]
 fabric-contracts = { path = "../fabric-contracts" }
 fabric-crypto = { path = "../fabric-crypto" }
 fabric-token = { path = "../fabric-token" }
 fabric-proof = { path = "../fabric-proof" }
-fabric-revocation = { path = "../fabric-revocation" }
+fabric-envelope = { path = "../fabric-envelope" }
+wsf-bridge = { path = "../wsf-bridge" }
+axum = { workspace = true }
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 chrono = { workspace = true }
-tracing = { workspace = true }
-uuid = { workspace = true }
-blake3 = { workspace = true }
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+rand = "0.8"
 hex = "0.4"
 base64 = "0.22"
+
+[dev-dependencies]
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 
 [lints]
 workspace = true

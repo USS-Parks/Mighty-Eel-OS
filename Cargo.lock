@@ -4601,6 +4601,7 @@ checksum = "1ffae5123b2d3fc086436f8834ae3ab053a283cfac8fe0a0b8eaae044768a4c4"
 name = "wsf-bridge"
 version = "0.1.0"
 dependencies = [
+ "base64",
  "blake3",
  "chrono",
  "fabric-contracts",
@@ -4632,6 +4633,28 @@ dependencies = [
  "reqwest",
  "serde_json",
  "sha2",
+ "thiserror 2.0.18",
+ "tokio",
+ "wsf-bridge",
+]
+
+[[package]]
+name = "wsf-seal"
+version = "0.1.0"
+dependencies = [
+ "axum 0.8.9",
+ "base64",
+ "chrono",
+ "fabric-contracts",
+ "fabric-crypto",
+ "fabric-envelope",
+ "fabric-proof",
+ "fabric-token",
+ "hex",
+ "rand 0.8.6",
+ "reqwest",
+ "serde",
+ "serde_json",
  "thiserror 2.0.18",
  "tokio",
  "wsf-bridge",
