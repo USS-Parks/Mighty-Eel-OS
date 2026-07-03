@@ -801,6 +801,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "fabric-envelope"
+version = "0.1.0"
+dependencies = [
+ "aes-gcm",
+ "blake3",
+ "fabric-contracts",
+ "fabric-crypto",
+ "fabric-proof",
+ "hex",
+ "rand 0.8.6",
+ "serde_json",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "fabric-identity"
 version = "0.1.0"
 dependencies = [

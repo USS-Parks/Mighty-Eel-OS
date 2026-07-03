@@ -1,0 +1,22 @@
+[package]
+name = "fabric-envelope"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "WSF sealed envelope: seal (AES-256-GCM) + label (readable un-sealed) + provenance thread (ML-DSA-signed, chain-linked)"
+
+[dependencies]
+fabric-contracts = { path = "../fabric-contracts" }
+fabric-crypto = { path = "../fabric-crypto" }
+fabric-proof = { path = "../fabric-proof" }
+serde_json = { workspace = true }
+blake3 = { workspace = true }
+thiserror = { workspace = true }
+aes-gcm = "0.10"
+rand = "0.8"
+hex = "0.4"
+
+[lints]
+workspace = true

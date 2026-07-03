@@ -13,6 +13,7 @@ members = [
     "mai-compliance",
     "crates/fabric-contracts",
     "crates/fabric-crypto",
+    "crates/fabric-envelope",
     "crates/fabric-identity",
     "crates/fabric-proof",
     "crates/fabric-token",
