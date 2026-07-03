@@ -4639,6 +4639,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "wsf-ledger"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "fabric-contracts",
+ "fabric-crypto",
+ "fabric-proof",
+ "fabric-token",
+ "hex",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "wsf-bridge",
+ "wsf-seal",
+]
+
+[[package]]
 name = "wsf-seal"
 version = "0.1.0"
 dependencies = [

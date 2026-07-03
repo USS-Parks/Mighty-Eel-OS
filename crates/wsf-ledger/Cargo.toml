@@ -1,0 +1,28 @@
+[package]
+name = "wsf-ledger"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "WSF append-only receipt ledger: ingest cross-service receipts, verify the chain, export ML-DSA-signed evidence packs"
+
+[dependencies]
+fabric-contracts = { path = "../fabric-contracts" }
+fabric-crypto = { path = "../fabric-crypto" }
+fabric-proof = { path = "../fabric-proof" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+hex = "0.4"
+
+[dev-dependencies]
+wsf-bridge = { path = "../wsf-bridge" }
+wsf-seal = { path = "../wsf-seal" }
+fabric-token = { path = "../fabric-token" }
+tokio = { workspace = true }
+chrono = { workspace = true }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+
+[lints]
+workspace = true
