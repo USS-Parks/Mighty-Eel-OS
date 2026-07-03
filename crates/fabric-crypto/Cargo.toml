@@ -1,0 +1,18 @@
+[package]
+name = "fabric-crypto"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Signer/verifier abstraction for the Sovereignty Stack: pure-Rust ML-DSA-87 default + OpenBao Transit custody seam"
+
+[dependencies]
+thiserror = { workspace = true }
+# RustCrypto ML-DSA (FIPS 204). Pure Rust, no C deps — the offline/air-gap
+# default provider. Same version mai-vault's proven pqc-dev backend uses.
+ml-dsa = "0.0.4"
+rand = "0.8"
+
+[lints]
+workspace = true

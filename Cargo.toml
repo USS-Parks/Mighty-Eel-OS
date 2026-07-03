@@ -12,6 +12,7 @@ members = [
     "mai-router",
     "mai-compliance",
     "crates/fabric-contracts",
+    "crates/fabric-crypto",
     "tools/pkg-builder",
     "tools/rule-tester",
     "tools/mai-admin",
