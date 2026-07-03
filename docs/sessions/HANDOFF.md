@@ -15,9 +15,18 @@
 - **Mode:** STS (stem to stern). The user wants **relentless, continuous execution** — commit each
   prompt, verify each, **do NOT stop to ask permission**, **push only at the very end** after the full
   test suite/CI validate. The user is explicitly impatient with checkpoint-and-ask behavior.
-- **DONE:** **Phase 0 (foundation + contracts + crypto + advisories + CI gate) and Phase F (all 8
-  fabric primitive crates)** — 14 commits, `cargo test --workspace` = **1668 passed / 0 failed**.
-- **NEXT:** **Phase W** (WSF services on live OpenBao), then G (AOG gateway) → T (tool governance) →
+- **DONE:** **Phase 0** (foundation + contracts + crypto + advisories + CI gate), **Phase F** (all 8
+  fabric primitive crates), and **Phase W: W1 + W2** — 16 commits total. Both W-prompts were
+  **genuinely live-verified** (real OpenBao Docker + real Moto STS), not mock-only.
+  - **W1 `wsf-bridge`** (commit `3ead250`): OpenBao AppRole auth event + KV tenant read → ML-DSA-signed
+    `fabric-token`; also policy-bundle + revocation signing + metadata-only audit correlation. Signs
+    with **pure-Rust ML-DSA-87** (off-host/air-gap verifiable), NOT OpenBao Transit. Focused ~150-line
+    OpenBao client adapted from `mai-api` (no mai-api dep → dodges the axum 0.7/0.8 conflict).
+  - **W2 `wsf-broker`** (commit `f3e589f`): verify token → read broker root creds from OpenBao kv →
+    STS `AssumeRole` with an inline session policy scoped to the token's `ResourcePrefix` caveats →
+    scoped temp creds, duration = token TTL. **Hand-rolled AWS SigV4** over hmac/sha2 (no aws-sdk →
+    no aws-lc-rs Windows-build risk), pinned to AWS's `aws4_testsuite` get-vanilla vector.
+- **NEXT:** **Phase W, W3** (`wsf-seal`), then W4–W10 → G (AOG gateway) → T (tool governance) →
   C (console) → D (deploy/proof) → Z (ship/Bucket).
 
 ---
@@ -27,8 +36,24 @@
 ```
 Worktree (do ALL work here):
   C:\Users\17076\Documents\Claude\Island Mountain\Island Mountain Mighty Eel OS\mai-worktrees\mai-SOV-1
-Branch:  session/SOV-1   (HEAD = edcfb8c)   — NOT pushed; push only at the very end
-Toolchain: cargo 1.95.0 / rustc 1.95.0 present; node 24; Docker v29.4 up (for OpenBao). Disk fine.
+Branch:  session/SOV-1   (HEAD = f3e589f)   — NOT pushed; push only at the very end
+Toolchain: cargo 1.95.0 / rustc 1.95.0 present; node 24; Docker v29.4 up. Disk fine.
+```
+
+**Live-service bring-up (the no-mock gate needs these; both were left RUNNING at handoff on
+8250/5566, but they are dev/in-mem so recreate freely):**
+```bash
+# OpenBao dev (AppRole/KV/Transit/PKI) — W1/W3/W4/W5 self-provision what they need:
+docker run -d --name wsf-openbao-w1 --cap-add=IPC_LOCK -p 8250:8200 \
+  -e BAO_DEV_ROOT_TOKEN_ID=root -e BAO_DEV_LISTEN_ADDRESS=0.0.0.0:8200 \
+  openbao/openbao:latest server -dev -dev-root-token-id=root
+# Moto (free AWS STS mock — LocalStack :latest now demands a paid license, exit 55):
+docker run -d --name wsf-moto -p 5566:5000 motoserver/moto:latest
+# Then run the live gates:
+WSF_OPENBAO_ADDR=http://127.0.0.1:8250 WSF_OPENBAO_TOKEN=root \
+  cargo test -p wsf-bridge --test live_openbao -- --nocapture
+WSF_OPENBAO_ADDR=http://127.0.0.1:8250 WSF_OPENBAO_TOKEN=root WSF_AWS_ENDPOINT=http://127.0.0.1:5566 \
+  cargo test -p wsf-broker --test live_localstack -- --nocapture
 ```
 
 - **safe-edit skill:** the repo has a MANDATORY `safe-edit` skill for the CoWork Linux-mount
@@ -152,17 +177,40 @@ service** (Docker is available; there's no `scripts/start-openbao.ps1` in-tree y
 or `docker run openbao/openbao` bring-up and wire it into CI as a service container per `SOV-0.7`'s
 deferral note in `ci.yml`).
 
-Recommended order:
-- **W1 `wsf-bridge` (Ring 2):** productize the TLM Trust Bridge. **Extract/adapt
-  `mai-api/src/openbao_client.rs`** (AppRole auth, Transit sign, PKI issuance) into a form the bridge
-  uses. Issue a `fabric-token` end-to-end against a live OpenBao; bundle signature verifies off-host.
-- **W2 `wsf-broker` (STS, NEW):** exchange a verified trust token for **ephemeral cloud creds** —
-  AWS STS `AssumeRole` + inline session policy first (test against **LocalStack**), then GCP/Azure
-  (W7/W8). Root creds custodied in OpenBao `kv`.
-- **W3 `wsf-seal`:** network service over `fabric-envelope`; the `data_key_wrapped` is now a real
-  OpenBao-Transit wrap. **W4 `wsf-ledger`:** append-only receipt ledger over `fabric-proof` +
-  signed evidence-pack export (reuse `mai-compliance/src/reports/*`). **W5** Ring-3 cache daemon over
-  `fabric-cache`+`fabric-revocation`. **W6** WSF REST/gRPC + SDK. **W9** tenant provisioning. **W10** HA/hardening.
+Recommended order — **W1 + W2 are DONE** (see §0). **Resume at W3.**
+- ~~W1 `wsf-bridge`~~ DONE (`3ead250`). ~~W2 `wsf-broker`~~ DONE (`f3e589f`).
+- **W3 `wsf-seal` (NEXT):** network service over `fabric-envelope`; the F4 `data_key_wrapped` becomes
+  a **real OpenBao-Transit wrap** (`transit/encrypt|decrypt/<key>` — Transit *does* symmetric AEAD,
+  it just lacks ML-DSA *sign*, so the seal seam lights up here without touching the signing decision).
+  Seal on ingress; unseal only for a **token-authorized** op; **every op emits a receipt** (fabric-proof
+  chain). Gate says "seal/unseal **over HTTP**" → this is the **first axum 0.8 service** (per 0.2d pin
+  `axum 0.8` directly; tonic not needed until W6). Suggested shape: a `SealService` library
+  (seal / unseal / token-auth / transit-wrap / receipt) + a thin axum app (`POST /seal`, `POST /unseal`);
+  the live test spins the app on a port and drives it against live OpenBao Transit. Unauthorized unseal
+  → deny + receipt.
+- **W4 `wsf-ledger`:** append-only receipt ledger over `fabric-proof` + signed evidence-pack export
+  (reuse `mai-compliance/src/reports/*`). **W5** Ring-3 cache daemon over `fabric-cache`+`fabric-revocation`.
+  **W6** WSF REST/gRPC + SDK — **first tonic 0.14 crate** (verify the 0.2d pin here; extend `mai-sdk-rs`).
+  **W7** GCP broker + **W8** Azure broker (same `wsf-broker` shape; add provider modules — the SigV4/STS
+  code is AWS-specific, GCP/Azure use their own signing). **W9** tenant provisioning. **W10** HA/hardening.
+
+### W-phase working notes (learned in W1/W2 — reuse these)
+- **Shared OpenBao client:** `wsf_bridge::OpenBaoAuth` (`login` / `get_tenant` / `get_kv_data` /
+  `health`). W3+ depend on `wsf-bridge` for it (or factor a `crates/wsf-openbao` + re-export if the
+  peer-dep smell grows — deferred to avoid churn).
+- **Live-test pattern:** env-gated (`WSF_OPENBAO_ADDR` [+ `WSF_AWS_ENDPOINT`]), **no `#[ignore]`**,
+  `#![allow(clippy::print_stdout, clippy::print_stderr)]` at the top of the test file so the SKIP/PASS
+  `eprintln!` doesn't trip the workspace `print_*` deny. Self-bootstrap OpenBao from the root token.
+  Parse OpenBao responses via `.text()` + `serde_json::from_str` so reqwest's `json` feature isn't needed.
+- **Trait-method gotcha (bit us again):** `signer.public_key()` in a test needs `use fabric_crypto::Signer;`.
+- **CI:** the `wsf-live` job (`ci.yml`) brings up OpenBao + Moto via `docker run` and runs both live
+  tests — add each new W-service's live test to that job's run block.
+- **⚠ PUSH-BLOCKER for Basho (decide before the end-of-STS push):** `.github/workflows/commit-msg-check.yml`
+  requires every commit footer to contain `Co-Authored by Basho Parks and Claude Opus 4.7 xHigh …`, but
+  **every SOV commit** (Phase 0/F/W, per the handoff convention) uses `… Claude Fable 5 …`. None match →
+  the check FAILS the whole branch on push. Reconcile: either update the CI regex to be model-agnostic
+  (recommended — the model has changed twice) or rewrite footers. This session kept `Fable 5` for
+  branch consistency; flagging, not silently switching.
 
 Then: **Phase G** (AOG gateway: reuse `mai-router` + `mai-compliance` composer; NEW cloud provider
 clients + metering; OpenAI/Anthropic-compatible surfaces; shadow/enforce), **Phase T** (MCP tool proxy,
@@ -178,10 +226,11 @@ console — new `console/`, Vite+React 19+Tailwind, panels aesthetic; replaces t
 ```bash
 cd "C:\Users\17076\Documents\Claude\Island Mountain\Island Mountain Mighty Eel OS\mai-worktrees\mai-SOV-1"
 git branch --show-current            # session/SOV-1
-git log --oneline 7a19c7b..HEAD      # 14 SOV commits, HEAD edcfb8c
-ls crates/                           # 8 fabric-* crates
-cargo test --workspace 2>&1 | grep "test result:" | awk '{s+=$? } END{}'   # expect 1668 passed / 0 failed
+git log --oneline 7a19c7b..HEAD      # 16 SOV commits, HEAD f3e589f
+ls crates/                           # 8 fabric-* + wsf-bridge + wsf-broker
+cargo test -p wsf-bridge -p wsf-broker   # offline suites green (live tests env-skip)
+cargo check --workspace              # exit 0
 cargo audit                          # exit 0, 0 vulnerabilities (1 accepted proc-macro-error2 warning)
 ```
 
-**Nothing is uncommitted; nothing is pushed.** Pick up at Phase W, W1.
+**Nothing is uncommitted; nothing is pushed.** Pick up at **Phase W, W3** (`wsf-seal`).
