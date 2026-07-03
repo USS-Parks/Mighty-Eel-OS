@@ -12,10 +12,12 @@
 //! brokers a deny-all session policy (no standing access).
 
 pub mod error;
+pub mod gcp;
 mod sigv4;
 mod sts;
 
 pub use error::BrokerError;
+pub use gcp::{GcpBroker, GcpBrokerConfig, GcpCredentials};
 pub use sts::{RootCredentials, TemporaryCredentials};
 
 use chrono::{DateTime, Utc};
@@ -93,13 +95,7 @@ impl AwsStsBroker {
         now: DateTime<Utc>,
     ) -> Result<TemporaryCredentials, BrokerError> {
         // 1. Fail closed on trust before touching AWS.
-        fabric_token::verify(token, verifier, public_key)
-            .map_err(|e| BrokerError::TokenRejected(e.to_string()))?;
-        if fabric_token::is_expired(token, now)
-            .map_err(|e| BrokerError::TokenRejected(e.to_string()))?
-        {
-            return Err(BrokerError::TokenExpired);
-        }
+        verify_token(token, verifier, public_key, now)?;
 
         // 2. Fetch the broker's root credentials from OpenBao (never exposed).
         let root = self.fetch_root_credentials().await?;
@@ -180,9 +176,27 @@ pub fn build_session_policy(token: &TrustToken) -> String {
     )
 }
 
-/// Compute the AssumeRole duration: the token's remaining lifetime, clamped to
+/// Verify a presented trust token — fail closed on a bad signature / revocation
+/// or on expiry, before any cloud call. Shared by the AWS and GCP brokers.
+pub(crate) fn verify_token(
+    token: &TrustToken,
+    verifier: &dyn Verifier,
+    public_key: &[u8],
+    now: DateTime<Utc>,
+) -> Result<(), BrokerError> {
+    fabric_token::verify(token, verifier, public_key)
+        .map_err(|e| BrokerError::TokenRejected(e.to_string()))?;
+    if fabric_token::is_expired(token, now)
+        .map_err(|e| BrokerError::TokenRejected(e.to_string()))?
+    {
+        return Err(BrokerError::TokenExpired);
+    }
+    Ok(())
+}
+
+/// Compute a cloud-cred duration: the token's remaining lifetime, clamped to
 /// `[min, max]`. Errors only on a malformed `expires_at`.
-fn clamp_duration(
+pub(crate) fn clamp_duration(
     min: i64,
     max: i64,
     expires_at: &str,

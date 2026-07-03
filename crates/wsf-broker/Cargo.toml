@@ -22,5 +22,8 @@ sha2 = "0.10"
 hex = "0.4"
 percent-encoding = "2"
 
+[dev-dependencies]
+axum = { workspace = true }
+
 [lints]
 workspace = true
