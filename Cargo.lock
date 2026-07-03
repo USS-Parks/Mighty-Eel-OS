@@ -4619,6 +4619,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "wsf-broker"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "fabric-contracts",
+ "fabric-crypto",
+ "fabric-token",
+ "hex",
+ "hmac",
+ "percent-encoding",
+ "reqwest",
+ "serde_json",
+ "sha2",
+ "thiserror 2.0.18",
+ "tokio",
+ "wsf-bridge",
+]
+
+[[package]]
 name = "yoke"
 version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"

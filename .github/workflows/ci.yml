@@ -120,14 +120,29 @@ jobs:
             sleep 1
           done
           echo "OpenBao did not unseal in time"; docker logs openbao; exit 1
-      - name: WSF live-trust tests (issue+verify against live OpenBao)
+      - name: Start Moto (AWS STS mock)
+        # Moto, not LocalStack: LocalStack :latest (2026.x) now fails closed
+        # without a paid license token (exit 55). Moto is the free, purpose-built
+        # AWS mock and implements STS AssumeRole identically. See SOV-W2.
+        run: |
+          docker run -d --name moto -p 5566:5000 motoserver/moto:latest
+          for i in $(seq 1 20); do
+            if curl -sf --max-time 3 http://127.0.0.1:5566/ >/dev/null 2>&1; then
+              echo "Moto ready"; exit 0
+            fi
+            sleep 1
+          done
+          echo "Moto did not become ready"; docker logs moto; exit 1
+      - name: WSF live-trust tests (OpenBao bridge + Moto STS broker)
         env:
           WSF_OPENBAO_ADDR: http://127.0.0.1:8200
           WSF_OPENBAO_TOKEN: root
-        run: cargo test -p wsf-bridge --test live_openbao -- --nocapture
+          WSF_AWS_ENDPOINT: http://127.0.0.1:5566
+        run: |
+          cargo test -p wsf-bridge --test live_openbao -- --nocapture
+          cargo test -p wsf-broker --test live_localstack -- --nocapture
 
   # SOV-0.7 deferrals still open:
-  #   * LocalStack (AWS STS) service -> Phase W2, when the cred-broker lands.
   #   * tsc + vitest job -> Phase C, when the React console exists.
   #   * SBOM (syft) generation + image signing -> D3 (signed supply chain).
 

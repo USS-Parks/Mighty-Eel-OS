@@ -1,0 +1,26 @@
+[package]
+name = "wsf-broker"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "WSF sovereign STS broker: exchange a verified trust token for ephemeral, scoped cloud credentials (AWS AssumeRole first)"
+
+[dependencies]
+fabric-contracts = { path = "../fabric-contracts" }
+fabric-crypto = { path = "../fabric-crypto" }
+fabric-token = { path = "../fabric-token" }
+wsf-bridge = { path = "../wsf-bridge" }
+tokio = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+chrono = { workspace = true }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+hmac = "0.12"
+sha2 = "0.10"
+hex = "0.4"
+percent-encoding = "2"
+
+[lints]
+workspace = true

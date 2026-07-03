@@ -100,6 +100,9 @@ pub enum OpenBaoError {
     /// The requested tenant does not exist.
     #[error("tenant not found: {0}")]
     TenantNotFound(String),
+    /// A requested KV path does not exist.
+    #[error("kv path not found: {0}")]
+    NotFound(String),
 }
 
 // ── OpenBao wire types ─────────────────────────────────────────────────
@@ -239,6 +242,42 @@ impl OpenBaoAuth {
         };
         debug!(tenant = %attrs.tenant_id, "tenant attributes loaded");
         Ok(attrs)
+    }
+
+    /// Read a KV-v2 record's inner `data.data` object at a full API `path`
+    /// (e.g. `kv/data/broker/aws-root`). Used by downstream trust-plane services
+    /// — the STS broker fetches its custodied cloud root credentials this way.
+    ///
+    /// # Errors
+    /// [`OpenBaoError::NotFound`] on 404, or a transport / protocol error.
+    pub async fn get_kv_data(
+        &self,
+        token: &str,
+        path: &str,
+    ) -> Result<serde_json::Value, OpenBaoError> {
+        let url = format!("{}/v1/{path}", self.config.address);
+        let resp = self
+            .client
+            .get(&url)
+            .header("X-Vault-Token", token)
+            .send()
+            .await?;
+        let status = resp.status();
+        if status == StatusCode::NOT_FOUND {
+            return Err(OpenBaoError::NotFound(path.to_string()));
+        }
+        if !status.is_success() {
+            let body = resp.text().await.unwrap_or_default();
+            return Err(OpenBaoError::Protocol(format!(
+                "kv read {status}: {}",
+                body.trim()
+            )));
+        }
+        let body: KvV2Response = resp
+            .json()
+            .await
+            .map_err(|e| OpenBaoError::Protocol(format!("kv parse: {e}")))?;
+        Ok(body.data.data)
     }
 
     /// Probe reachability + unseal status (`sys/seal-status`). `true` only when

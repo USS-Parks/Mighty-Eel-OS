@@ -20,6 +20,7 @@ members = [
     "crates/fabric-revocation",
     "crates/fabric-token",
     "crates/wsf-bridge",
+    "crates/wsf-broker",
     "tools/pkg-builder",
     "tools/rule-tester",
     "tools/mai-admin",
