@@ -31,7 +31,7 @@ dependency tree; they are deferred, not fixed.
 |:--|:--|
 | Crate | `ml-dsa 0.0.4` |
 | Severity | 6.4 (medium) |
-| Path | `mai-vault`, `mai-compliance`, `mai-admin`, `mai-api` → `ml-dsa` |
+| Path | `mai-vault`, `mai-compliance`, `mai-admin`, `mai-api`, `fabric-crypto` → `ml-dsa` |
 | Vulnerable range | `<0.1.0-rc.3` |
 | Suggested fix | Upgrade to `0.1.0-rc.3` |
 | Suppression | [.cargo/audit.toml](../.cargo/audit.toml), [deny.toml](../deny.toml) (both reference this entry) |
@@ -54,7 +54,10 @@ gate that ships with the RC.
 
 **Revisit trigger.** Either the `0.1.0` stable release lands and we open
 a dependency-refresh lane, or someone demonstrates a practical exploit
-against an air-gapped MAI deployment.
+against an air-gapped MAI deployment. **Note (SOV-0.2a):** the new
+`fabric-crypto` `Signer`/`Verifier` abstraction now fronts ML-DSA, so the
+eventual fix (constant-time `ml-dsa` 0.1.0+ or a `fips204` provider) is a
+single provider swap behind the trait rather than a 15-file edit.
 
 ### 1.2 RUSTSEC-2024-0384 — `instant` is unmaintained
 
@@ -79,27 +82,39 @@ post-RC1 dependency-refresh lane.
 **Revisit trigger.** `notify` ships a version with the `instant`
 dependency dropped, OR we decide to vendor a thin watcher.
 
-### 1.3 RUSTSEC-2024-0436 — `paste` is no longer maintained
+### 1.3 RUSTSEC-2024-0436 — `paste` unmaintained — RESOLVED (SOV-0.2b)
+
+`paste` was transitive via `pqcrypto-mldsa`. SOV-0.2b dropped the
+`pqc-prod` / `pqcrypto-*` backend from `mai-vault` (pure-Rust `pqc-dev`
+is now the sole PQC backend), so `paste` is no longer in the dependency
+tree (`grep 'name = "paste"' Cargo.lock` → 0). The `RUSTSEC-2024-0436`
+ignore was removed from `.cargo/audit.toml`. No further action.
+
+### 1.4 RUSTSEC-2026-0176 / RUSTSEC-2026-0177 — `pyo3` 0.24.2
 
 | Field | Value |
 |:--|:--|
-| Crate | `paste 1.0.15` |
-| Severity | unmaintained (no CVSS) |
-| Path | `mai-api` → `mai-vault` → `pqcrypto-mldsa 0.1.2` → `paste` |
-| Vulnerable range | all (no maintained fork) |
-| Suggested fix | Wait on `pqcrypto-mldsa` to drop `paste`, OR fork |
-| Suppression | [.cargo/audit.toml](../.cargo/audit.toml) (cargo-audit only — cargo-deny does not currently match this advisory against this lockfile) |
+| Crate | `pyo3 0.24.2` |
+| Severity | 0176: OOB read (`PyList`/`PyTuple` `nth`); 0177: missing `Sync` bound (`PyCFunction::new_closure`) |
+| Path | `mai-adapters` → `pyo3` (the only user in the workspace) |
+| Vulnerable range | `<0.29.0` |
+| Suggested fix | Upgrade to `>=0.29.0` |
+| Suppression | [.cargo/audit.toml](../.cargo/audit.toml), [deny.toml](../deny.toml) |
 | Owner | Basho Parks |
-| Revisit lane | post-RC1 dependency-refresh |
+| Revisit lane | `mai-adapters` revival (Summit era) |
 
-**Why deferred.** `paste` is a compile-time macro crate used by
-`pqcrypto-mldsa` for trait expansion. It has no runtime presence in the
-built binaries (it expands to direct code at compile time, then drops
-out). Upstream `pqcrypto-mldsa` has not yet shipped a version without
-it. Same shape as the `instant` advisory: transitive, no semver upgrade
-available without changing the parent dependency.
+**Why deferred.** Neither vulnerable API is used anywhere in the
+workspace — `grep -rE "new_closure|PyCFunction|PyList|PyTuple|\.nth\("`
+over all `*.rs` returns zero hits. `pyo3` is consumed only by
+`mai-adapters` (the Python inference-adapter FFI bridge, via
+`python_embed.rs`), which is parked and off the WSF/AOG trust path. Both
+advisories are therefore non-reachable in any built artifact. The fix is
+a five-minor major bump (`0.24 → 0.29`) with breaking FFI API changes;
+doing that migration now — into a parked layer, for a non-reachable
+advisory — is pure churn risk. It rides the `mai-adapters` revival.
 
-**Revisit trigger.** `pqcrypto-mldsa` releases a `paste`-free version.
+**Revisit trigger.** `mai-adapters` is revived for Summit inference, at
+which point the pyo3 bump is done as part of that layer's work.
 
 ---
 

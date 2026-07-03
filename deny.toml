@@ -53,11 +53,20 @@ ignore = [
     # post-RC1 refresh lane.
     { id = "RUSTSEC-2024-0384", reason = "instant 0.1.13 unmaintained; transitive via notify-types. No semver upgrade available; deferred to post-RC1 dependency-refresh lane." },
 
-    # NB: RUSTSEC-2024-0436 (paste unmaintained) is flagged by
-    # `cargo audit` but NOT by `cargo deny` against this lockfile
-    # (deny's "advisory was not encountered" check rejects unused
-    # ignores). Keep the audit-side deferral documented in
-    # INDEPENDENT-EVIDENCE-DEFERRALS.md without an ignore line here.
+    # ───────────────────────────────────────────────────────────────
+    # RUSTSEC-2026-0176 / RUSTSEC-2026-0177 - pyo3 0.24.2
+    # ───────────────────────────────────────────────────────────────
+    # OOB read in PyList/PyTuple `nth`/`nth_back`; missing `Sync` bound
+    # on `PyCFunction::new_closure`. Neither API is used anywhere in the
+    # workspace (grep-verified). pyo3 is used only by mai-adapters
+    # (parked, off the WSF/AOG trust path) via the safe bridge surface.
+    # Fix is a 0.24 → 0.29 major bump into the parked FFI layer; deferred
+    # to the mai-adapters revival. See INDEPENDENT-EVIDENCE-DEFERRALS §1.4.
+    { id = "RUSTSEC-2026-0176", reason = "pyo3 0.24 OOB read in PyList/PyTuple nth iterators; API not used anywhere in the workspace (grep-verified). pyo3 is mai-adapters-only (parked, off trust path). Fix is a 0.24->0.29 major bump deferred to adapter revival. See INDEPENDENT-EVIDENCE-DEFERRALS.md §1.4." },
+    { id = "RUSTSEC-2026-0177", reason = "pyo3 0.24 missing Sync bound on PyCFunction::new_closure; API not used anywhere in the workspace (grep-verified). pyo3 is mai-adapters-only (parked, off trust path). Fix is a 0.24->0.29 major bump deferred to adapter revival. See INDEPENDENT-EVIDENCE-DEFERRALS.md §1.4." },
+
+    # NB: RUSTSEC-2024-0436 (paste) was fully removed from the tree in
+    # SOV-0.2b (dropping pqcrypto-mldsa); no ignore needed.
 ]
 
 [bans]
