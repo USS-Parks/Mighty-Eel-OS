@@ -83,6 +83,11 @@ pub struct TenantAttributes {
     pub default_allowed_routes: Vec<String>,
     /// Maximum data classification (wire name, e.g. `restricted`).
     pub max_data_classification: String,
+    /// Per-tenant subject-pseudonymization HMAC key (hex). When present, the
+    /// bridge uses it instead of its config-wide key (W9 tenant provisioning).
+    /// Optional for backwards compatibility.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub subject_hmac_key: Option<String>,
 }
 
 /// Failures from the focused OpenBao client.
@@ -278,6 +283,61 @@ impl OpenBaoAuth {
             .await
             .map_err(|e| OpenBaoError::Protocol(format!("kv parse: {e}")))?;
         Ok(body.data.data)
+    }
+
+    /// Write a KV-v2 record at a full API `path` (e.g. `kv/data/tenants/<id>`),
+    /// wrapping `data` in the KV-v2 `{ "data": … }` envelope. Admin use (tenant
+    /// provisioning).
+    ///
+    /// # Errors
+    /// [`OpenBaoError::Protocol`] on a non-2xx, or a transport error.
+    pub async fn put_kv_data(
+        &self,
+        token: &str,
+        path: &str,
+        data: serde_json::Value,
+    ) -> Result<(), OpenBaoError> {
+        let url = format!("{}/v1/{path}", self.config.address);
+        let resp = self
+            .client
+            .post(&url)
+            .header("X-Vault-Token", token)
+            .json(&serde_json::json!({ "data": data }))
+            .send()
+            .await?;
+        let status = resp.status();
+        if !status.is_success() {
+            let body = resp.text().await.unwrap_or_default();
+            return Err(OpenBaoError::Protocol(format!(
+                "kv write {status}: {}",
+                body.trim()
+            )));
+        }
+        Ok(())
+    }
+
+    /// Delete a KV path (e.g. `kv/metadata/tenants/<id>` for a full delete). A
+    /// 404 is treated as success (already gone). Admin use (tenant deprovision).
+    ///
+    /// # Errors
+    /// [`OpenBaoError::Protocol`] on a non-2xx (other than 404), or a transport error.
+    pub async fn delete_kv(&self, token: &str, path: &str) -> Result<(), OpenBaoError> {
+        let url = format!("{}/v1/{path}", self.config.address);
+        let resp = self
+            .client
+            .delete(&url)
+            .header("X-Vault-Token", token)
+            .send()
+            .await?;
+        let status = resp.status();
+        if !status.is_success() && status != StatusCode::NOT_FOUND {
+            let body = resp.text().await.unwrap_or_default();
+            return Err(OpenBaoError::Protocol(format!(
+                "kv delete {status}: {}",
+                body.trim()
+            )));
+        }
+        Ok(())
     }
 
     /// Transit-encrypt `plaintext` under `key` (`transit/encrypt/<key>`),

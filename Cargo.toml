@@ -25,6 +25,7 @@ members = [
     "crates/wsf-cache",
     "crates/wsf-ledger",
     "crates/wsf-seal",
+    "crates/wsf-tenants",
     "tools/pkg-builder",
     "tools/rule-tester",
     "tools/mai-admin",

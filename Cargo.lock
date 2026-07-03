@@ -4720,6 +4720,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "wsf-tenants"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "fabric-cache",
+ "fabric-crypto",
+ "fabric-proof",
+ "fabric-revocation",
+ "hex",
+ "rand 0.8.6",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "wsf-bridge",
+ "wsf-cache",
+]
+
+[[package]]
 name = "yoke"
 version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"

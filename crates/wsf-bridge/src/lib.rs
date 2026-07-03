@@ -221,8 +221,13 @@ impl TrustBridge {
             .await?;
         let now = Utc::now();
         let token_id = format!("tok_{}", uuid::Uuid::new_v4());
-        let subject_hash =
-            fabric_proof::hmac_subject(&self.config.subject_hmac_key, &req.subject_id)?;
+        // Per-tenant HMAC key (W9) when the record carries one, else the bridge-wide key.
+        let hmac_key = tenant
+            .subject_hmac_key
+            .as_ref()
+            .and_then(|h| hex::decode(h).ok())
+            .unwrap_or_else(|| self.config.subject_hmac_key.clone());
+        let subject_hash = fabric_proof::hmac_subject(&hmac_key, &req.subject_id)?;
         let token = compose_token(&self.config, &tenant, req, token_id, subject_hash, now)?;
         Ok(fabric_token::issue(token, self.signer.as_ref())?)
     }
@@ -359,6 +364,7 @@ mod tests {
             compliance_scopes: vec!["hipaa".to_string(), "ocap".to_string()],
             default_allowed_routes: vec!["local_only".to_string()],
             max_data_classification: "restricted".to_string(),
+            subject_hmac_key: None,
         }
     }
 
