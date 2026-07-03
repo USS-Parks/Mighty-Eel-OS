@@ -1,0 +1,19 @@
+[package]
+name = "fabric-identity"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "WSF workload/session/task identity: mint, verify, derive child identities, and subject pseudonymization"
+
+[dependencies]
+fabric-contracts = { path = "../fabric-contracts" }
+fabric-crypto = { path = "../fabric-crypto" }
+fabric-proof = { path = "../fabric-proof" }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+hex = "0.4"
+
+[lints]
+workspace = true

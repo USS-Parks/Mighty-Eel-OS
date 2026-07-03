@@ -801,6 +801,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "fabric-identity"
+version = "0.1.0"
+dependencies = [
+ "fabric-contracts",
+ "fabric-crypto",
+ "fabric-proof",
+ "hex",
+ "serde_json",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "fabric-proof"
 version = "0.1.0"
 dependencies = [
