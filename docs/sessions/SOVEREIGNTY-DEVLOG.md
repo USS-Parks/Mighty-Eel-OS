@@ -69,6 +69,15 @@ All items done: 0.1, 0.2a–d, 0.3–0.6, 0.7, 0.8 + tag `contracts-v1`. **Nine 
 `crates/fabric-envelope`: the three-wrap sealed envelope. **seal** (F4) = AES-256-GCM under a per-envelope data key (the `data_key_wrapped` reference is the Phase-W OpenBao-transit seam); **label** (F5) = classification/handling, readable **without** unsealing AND **AAD-bound** to the ciphertext so altering it breaks decryption (the AOG DSPM-routing hook); **thread** (F6) = ML-DSA signature (fabric-crypto) over seal + label + authorizing-token + chain-link, tamper-evident. API: `seal`/`unseal`/`seal_envelope`/`open_envelope`/`read_label`/`verify_thread`.
 - **Verify:** `cargo test -p fabric-envelope` = **5 passed** (seal/unseal round-trip + wrong-key + AAD-mismatch; envelope seal→open + label readable without the key; tamper label → thread breaks; tamper ciphertext → thread breaks; wrong public key → fails); clippy clean. **Commit:** `SOV-F4-F6`.
 
+### F7 — `fabric-cache` — DONE
+`crates/fabric-cache`: the Ring-3 connectivity state machine (TRUST-MANIFOLD §5), pure logic. `evaluate(Freshness, TtlPolicy) -> ConnectivityState` (Connected/Degraded/Stale/Expired/AirGapped — air-gap wins, then expiry, then staleness, then reachability); `route_ceiling(state)` (Expired/AirGapped → `LocalOnly`, so a stale/offline appliance can never egress); `allows_new_sessions(state)`. **Verify:** 5 tests; clippy clean.
+
+### F8 — `fabric-revocation` — DONE
+`crates/fabric-revocation`: ML-DSA-signed `RevocationSnapshot` (revoked tokens/subjects/keys/bundle-versions + emergency flag), `sign`/`verify` via fabric-crypto/fabric-proof, offline queries (`is_token_revoked`, …). Applicable offline (air-gap removable media). **Verify:** 4 tests (sign→verify + queries; tamper-after-sign rejected; emergency round-trip; wrong-key rejected); clippy clean. **Commit (F7+F8):** `SOV-F7-F8`.
+
+## ✅ Phase F COMPLETE — all fabric crates built (2026-07-03)
+Eight crates: `fabric-contracts` (0.8) · `fabric-crypto` (0.2a) · `fabric-proof` (F1) · `fabric-token` (F3) · `fabric-identity` (F2) · `fabric-envelope` (F4–F6) · `fabric-cache` (F7) · `fabric-revocation` (F8). All unit-tested (~32 fabric tests), clippy-clean, workspace green; mai-compliance's 331+ tests still pass (F1 delegation held). The WSF **primitive layer** is done. **Next: Phase W** — the WSF services (`wsf-bridge` / `wsf-broker` / `wsf-seal` / `wsf-ledger`) wire these primitives to **live OpenBao** (the no-mock-only gate + the CI OpenBao service container land here).
+
 ### 0.2 decision record (historical)
 - **0.2 crypto** — DECISION (2026-07-03): the plan's RUSTSEC-2025-0144 premise was corrected — the real issue was the archived pqcrypto PQClean family (+ pyo3/quinn-proto/anyhow). Chosen path: `Signer`/`Verifier` abstraction + pure-Rust ML-DSA default + OpenBao Transit as a pluggable custody seam (OSS Transit lacks GA ML-DSA; only Vault Enterprise 1.19, experimental; air-gap needs local signing). Shipped by **0.2a** (fabric-crypto) + **0.2b** (drop pqc-prod) + **0.2c** (advisory cleanup).
 - **axum 0.7/0.8 dual-`Handler`** — resolved by **0.2d** (isolation: new crates on tonic 0.14/axum 0.8; mai-api migration deferred).

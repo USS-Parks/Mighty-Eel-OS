@@ -784,6 +784,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "fabric-cache"
+version = "0.1.0"
+dependencies = [
+ "fabric-contracts",
+]
+
+[[package]]
 name = "fabric-contracts"
 version = "0.1.0"
 dependencies = [
@@ -838,6 +845,19 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "fabric-revocation"
+version = "0.1.0"
+dependencies = [
+ "fabric-contracts",
+ "fabric-crypto",
+ "fabric-proof",
+ "hex",
+ "serde",
+ "serde_json",
  "thiserror 2.0.18",
 ]
 

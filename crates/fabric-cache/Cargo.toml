@@ -1,0 +1,14 @@
+[package]
+name = "fabric-cache"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "WSF Ring-3 connectivity state machine: offline-safe trust posture derived from bundle/revocation freshness"
+
+[dependencies]
+fabric-contracts = { path = "../fabric-contracts" }
+
+[lints]
+workspace = true
