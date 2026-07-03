@@ -1,0 +1,28 @@
+[package]
+name = "aog-gateway"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "AOG estate model gateway: virtual key → WSF trust-token resolution, pre-flight budget check, provider dispatch, OpenAI/Anthropic-compatible surfaces, classify+route, metering + receipts"
+
+[dependencies]
+fabric-contracts = { path = "../fabric-contracts" }
+fabric-crypto = { path = "../fabric-crypto" }
+fabric-token = { path = "../fabric-token" }
+wsf-bridge = { path = "../wsf-bridge" }
+axum = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+chrono = { workspace = true }
+sha2 = "0.10"
+hex = "0.4"
+
+[dev-dependencies]
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+
+[lints]
+workspace = true

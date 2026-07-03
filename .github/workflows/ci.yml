@@ -133,7 +133,7 @@ jobs:
             sleep 1
           done
           echo "Moto did not become ready"; docker logs moto; exit 1
-      - name: WSF live-trust tests (OpenBao bridge + Moto STS broker)
+      - name: WSF/AOG live-trust tests (OpenBao bridge + Moto STS broker)
         env:
           WSF_OPENBAO_ADDR: http://127.0.0.1:8200
           WSF_OPENBAO_TOKEN: root
@@ -148,6 +148,7 @@ jobs:
           cargo test -p wsf-cache --test live_cache -- --nocapture
           cargo test -p wsf-tenants --test live_tenants -- --nocapture
           cargo test -p wsf-api --test live_api -- --nocapture
+          cargo test -p aog-gateway --test live_gateway -- --nocapture
 
   # SOV-0.7 deferrals still open:
   #   * tsc + vitest job -> Phase C, when the React console exists.
