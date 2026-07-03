@@ -144,6 +144,7 @@ jobs:
           cargo test -p wsf-seal --test live_seal -- --nocapture
           cargo test -p wsf-ledger --test live_ledger -- --nocapture
           cargo test -p wsf-cache --test live_cache -- --nocapture
+          cargo test -p wsf-api --test live_api -- --nocapture
 
   # SOV-0.7 deferrals still open:
   #   * tsc + vitest job -> Phase C, when the React console exists.

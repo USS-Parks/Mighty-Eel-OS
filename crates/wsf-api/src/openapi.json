@@ -1,0 +1,59 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "WSF API",
+    "description": "Woven Sovereignty Fabric trust-plane API: trust tokens, sealed envelopes, cloud-credential brokering, and the receipt ledger. All signatures are ML-DSA-87 and verify off-host.",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/v1/tokens/issue": {
+      "post": {
+        "summary": "Issue a signed trust token for a subject within a tenant.",
+        "responses": { "200": { "description": "The signed token." }, "502": { "description": "OpenBao unavailable." } }
+      }
+    },
+    "/v1/tokens/verify": {
+      "post": {
+        "summary": "Verify a token's signature, revocation status, and expiry.",
+        "responses": { "200": { "description": "Validity result." } }
+      }
+    },
+    "/v1/tokens/attenuate": {
+      "post": {
+        "summary": "Mint a narrower child token from a parent (fails closed on any widening).",
+        "responses": { "200": { "description": "The signed child token." }, "422": { "description": "Attenuation widens the parent." } }
+      }
+    },
+    "/v1/envelopes/seal": {
+      "post": {
+        "summary": "Seal a payload into an envelope (Transit-wrapped data key + provenance thread).",
+        "responses": { "200": { "description": "The sealed envelope." }, "403": { "description": "Token not authorized." } }
+      }
+    },
+    "/v1/envelopes/unseal": {
+      "post": {
+        "summary": "Unseal an envelope for a token-authorized op.",
+        "responses": { "200": { "description": "The recovered plaintext (base64)." }, "403": { "description": "Unauthorized (denied + receipted)." } }
+      }
+    },
+    "/v1/credentials/exchange": {
+      "post": {
+        "summary": "Exchange a verified token for ephemeral, scoped cloud credentials.",
+        "responses": { "200": { "description": "Temporary credentials." }, "403": { "description": "Token rejected or expired." } }
+      }
+    },
+    "/v1/receipts": {
+      "get": {
+        "summary": "Query the receipt ledger by correlation field/value.",
+        "parameters": [
+          { "name": "field", "in": "query", "required": false, "schema": { "type": "string" } },
+          { "name": "value", "in": "query", "required": false, "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Matching ledger entries." } }
+      }
+    },
+    "/healthz": {
+      "get": { "summary": "Liveness probe.", "responses": { "200": { "description": "ok" } } }
+    }
+  }
+}

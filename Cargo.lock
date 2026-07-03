@@ -4598,6 +4598,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1ffae5123b2d3fc086436f8834ae3ab053a283cfac8fe0a0b8eaae044768a4c4"
 
 [[package]]
+name = "wsf-api"
+version = "0.1.0"
+dependencies = [
+ "axum 0.8.9",
+ "base64",
+ "chrono",
+ "fabric-contracts",
+ "fabric-crypto",
+ "fabric-token",
+ "hex",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "wsf-bridge",
+ "wsf-broker",
+ "wsf-ledger",
+ "wsf-seal",
+]
+
+[[package]]
 name = "wsf-bridge"
 version = "0.1.0"
 dependencies = [
