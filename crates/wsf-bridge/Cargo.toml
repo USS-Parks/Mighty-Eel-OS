@@ -1,0 +1,28 @@
+[package]
+name = "wsf-bridge"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "WSF Trust Bridge (Ring 2): OpenBao auth event -> ML-DSA-signed trust token, plus policy-bundle and revocation signing"
+
+[dependencies]
+fabric-contracts = { path = "../fabric-contracts" }
+fabric-crypto = { path = "../fabric-crypto" }
+fabric-token = { path = "../fabric-token" }
+fabric-proof = { path = "../fabric-proof" }
+fabric-revocation = { path = "../fabric-revocation" }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+chrono = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+blake3 = { workspace = true }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+hex = "0.4"
+
+[lints]
+workspace = true

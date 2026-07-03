@@ -93,9 +93,41 @@ jobs:
       - name: cargo deny check
         run: cargo deny check advisories bans licenses
 
-  # SOV-0.7 deferrals (test surfaces that do not exist yet):
-  #   * live OpenBao service container + LocalStack (AWS STS) -> Phase W, when the
-  #     first live-trust / cred-broker tests land (the no-mock-only gate).
+  # SOV-W1: live-OpenBao gate — the no-mock-only closure rule (plan §0.3.5) for
+  # the first live-trust path. Brings up a dev OpenBao via `docker run` (Actions
+  # service containers cannot override the image command to pass `-dev`), then
+  # runs the env-gated wsf-bridge live test (self-bootstraps AppRole/KV/tenant
+  # from the dev root token, issues + verifies a token, signs a bundle).
+  wsf-live:
+    name: WSF Live-OpenBao Gate (no-mock closure)
+    runs-on: ubuntu-latest
+    needs: [rust-check]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install protobuf compiler
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+      - name: Start OpenBao (dev mode)
+        run: |
+          docker run -d --name openbao --cap-add=IPC_LOCK -p 8200:8200 \
+            -e BAO_DEV_ROOT_TOKEN_ID=root -e BAO_DEV_LISTEN_ADDRESS=0.0.0.0:8200 \
+            openbao/openbao:latest server -dev -dev-root-token-id=root
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:8200/v1/sys/seal-status | grep -q '"sealed":false'; then
+              echo "OpenBao ready"; exit 0
+            fi
+            sleep 1
+          done
+          echo "OpenBao did not unseal in time"; docker logs openbao; exit 1
+      - name: WSF live-trust tests (issue+verify against live OpenBao)
+        env:
+          WSF_OPENBAO_ADDR: http://127.0.0.1:8200
+          WSF_OPENBAO_TOKEN: root
+        run: cargo test -p wsf-bridge --test live_openbao -- --nocapture
+
+  # SOV-0.7 deferrals still open:
+  #   * LocalStack (AWS STS) service -> Phase W2, when the cred-broker lands.
   #   * tsc + vitest job -> Phase C, when the React console exists.
   #   * SBOM (syft) generation + image signing -> D3 (signed supply chain).
 
