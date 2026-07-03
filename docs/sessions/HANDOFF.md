@@ -18,11 +18,11 @@
 - **DONE:** **Phase 0** (foundation + contracts + crypto + advisories + CI gate), **Phase F** (all 8
   fabric primitive crates), and **Phase W: W1 + W2** — 16 commits total. Both W-prompts were
   **genuinely live-verified** (real OpenBao Docker + real Moto STS), not mock-only.
-  - **W1 `wsf-bridge`** (commit `3ead250`): OpenBao AppRole auth event + KV tenant read → ML-DSA-signed
+  - **W1 `wsf-bridge`** (commit `4ef11a5`): OpenBao AppRole auth event + KV tenant read → ML-DSA-signed
     `fabric-token`; also policy-bundle + revocation signing + metadata-only audit correlation. Signs
     with **pure-Rust ML-DSA-87** (off-host/air-gap verifiable), NOT OpenBao Transit. Focused ~150-line
     OpenBao client adapted from `mai-api` (no mai-api dep → dodges the axum 0.7/0.8 conflict).
-  - **W2 `wsf-broker`** (commit `f3e589f`): verify token → read broker root creds from OpenBao kv →
+  - **W2 `wsf-broker`** (commit `5ee41db`): verify token → read broker root creds from OpenBao kv →
     STS `AssumeRole` with an inline session policy scoped to the token's `ResourcePrefix` caveats →
     scoped temp creds, duration = token TTL. **Hand-rolled AWS SigV4** over hmac/sha2 (no aws-sdk →
     no aws-lc-rs Windows-build risk), pinned to AWS's `aws4_testsuite` get-vanilla vector.
@@ -36,7 +36,7 @@
 ```
 Worktree (do ALL work here):
   C:\Users\17076\Documents\Claude\Island Mountain\Island Mountain Mighty Eel OS\mai-worktrees\mai-SOV-1
-Branch:  session/SOV-1   (HEAD = f3e589f)   — NOT pushed; push only at the very end
+Branch:  session/SOV-1   (HEAD = 540bfe4, SOV-W5)   — NOT pushed; push only at the very end
 Toolchain: cargo 1.95.0 / rustc 1.95.0 present; node 24; Docker v29.4 up. Disk fine.
 ```
 
@@ -64,10 +64,12 @@ WSF_OPENBAO_ADDR=http://127.0.0.1:8250 WSF_OPENBAO_TOKEN=root WSF_AWS_ENDPOINT=h
 - **Pre-commit hook** (`.integrity/hooks/pre-commit`, auto via `core.hooksPath`): checks null-bytes,
   >50% truncation, brace balance (.rs/.py/.js/.ts), and `cargo fmt --check` if any `.rs` staged.
   Markdown/toml commits pass clean. Run `cargo fmt` before committing Rust.
-- **Commit footer (this repo's convention — use verbatim):**
+- **Commit footer (Basho's convention — use verbatim; NEVER credit an AI co-author):**
   ```
-  Copyright 2026 - Co-Authored by Basho Parks and Claude Fable 5 <basho@islandmountain.io> <claude@anthropic.com>
+  Authored and reviewed by Basho Parks, Copyright 2026
   ```
+  (A prior handoff wrongly instructed a "Co-Authored by … Claude Fable 5" footer; Basho corrected this
+  on 2026-07-03 and the W1–W5 commit footers were rewritten. Do not reintroduce any AI-co-author line.)
 - **Per-prompt verify gate:** `cargo fmt -p <crate>` → `cargo test -p <crate>` →
   `cargo clippy -p <crate> -- -D warnings -A clippy::pedantic`. For extraction/reuse prompts also run
   `cargo test -p mai-compliance` (its 331+ tests are the regression guard) and `cargo check --workspace`.
@@ -178,7 +180,7 @@ or `docker run openbao/openbao` bring-up and wire it into CI as a service contai
 deferral note in `ci.yml`).
 
 Recommended order — **W1 + W2 are DONE** (see §0). **Resume at W3.**
-- ~~W1 `wsf-bridge`~~ DONE (`3ead250`). ~~W2 `wsf-broker`~~ DONE (`f3e589f`).
+- ~~W1 `wsf-bridge`~~ DONE (`4ef11a5`). ~~W2 `wsf-broker`~~ DONE (`5ee41db`).
 - **W3 `wsf-seal` (NEXT):** network service over `fabric-envelope`; the F4 `data_key_wrapped` becomes
   a **real OpenBao-Transit wrap** (`transit/encrypt|decrypt/<key>` — Transit *does* symmetric AEAD,
   it just lacks ML-DSA *sign*, so the seal seam lights up here without touching the signing decision).
@@ -205,12 +207,13 @@ Recommended order — **W1 + W2 are DONE** (see §0). **Resume at W3.**
 - **Trait-method gotcha (bit us again):** `signer.public_key()` in a test needs `use fabric_crypto::Signer;`.
 - **CI:** the `wsf-live` job (`ci.yml`) brings up OpenBao + Moto via `docker run` and runs both live
   tests — add each new W-service's live test to that job's run block.
-- **⚠ PUSH-BLOCKER for Basho (decide before the end-of-STS push):** `.github/workflows/commit-msg-check.yml`
-  requires every commit footer to contain `Co-Authored by Basho Parks and Claude Opus 4.7 xHigh …`, but
-  **every SOV commit** (Phase 0/F/W, per the handoff convention) uses `… Claude Fable 5 …`. None match →
-  the check FAILS the whole branch on push. Reconcile: either update the CI regex to be model-agnostic
-  (recommended — the model has changed twice) or rewrite footers. This session kept `Fable 5` for
-  branch consistency; flagging, not silently switching.
+- **⚠ PUSH-BLOCKER for Basho (fix before the end-of-STS push):** `.github/workflows/commit-msg-check.yml`
+  requires every commit footer to contain `Co-Authored by Basho Parks and Claude Opus 4.7 xHigh …` — an
+  **AI-co-author** line. Basho's actual convention (2026-07-03) is `Authored and reviewed by Basho Parks,
+  Copyright 2026` with **NO AI co-author**, so the CI check contradicts it and will fail the branch on
+  push. **Action: update (or delete) `commit-msg-check.yml` to match Basho's footer** — the W1–W5 SOV
+  commits already use the correct footer; the earlier Phase 0/F commits still carry the old AI-co-author
+  line and are Basho's call to rewrite (they cite SHAs in the DEVLOG, so a rewrite means re-anchoring those).
 
 Then: **Phase G** (AOG gateway: reuse `mai-router` + `mai-compliance` composer; NEW cloud provider
 clients + metering; OpenAI/Anthropic-compatible surfaces; shadow/enforce), **Phase T** (MCP tool proxy,
@@ -226,7 +229,7 @@ console — new `console/`, Vite+React 19+Tailwind, panels aesthetic; replaces t
 ```bash
 cd "C:\Users\17076\Documents\Claude\Island Mountain\Island Mountain Mighty Eel OS\mai-worktrees\mai-SOV-1"
 git branch --show-current            # session/SOV-1
-git log --oneline 7a19c7b..HEAD      # 16 SOV commits, HEAD f3e589f
+git log --oneline 7a19c7b..HEAD      # 21 SOV commits, HEAD 540bfe4 (SOV-W5)
 ls crates/                           # 8 fabric-* + wsf-bridge + wsf-broker
 cargo test -p wsf-bridge -p wsf-broker   # offline suites green (live tests env-skip)
 cargo check --workspace              # exit 0
