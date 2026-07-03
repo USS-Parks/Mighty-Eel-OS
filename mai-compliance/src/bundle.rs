@@ -151,43 +151,10 @@ pub enum BundleError {
 /// Object keys are emitted in lexicographic order. Arrays preserve their
 /// order. Numbers and strings use the default `serde_json` encoding.
 fn write_canonical(out: &mut Vec<u8>, value: &serde_json::Value) {
-    match value {
-        serde_json::Value::Null => out.extend_from_slice(b"null"),
-        serde_json::Value::Bool(true) => out.extend_from_slice(b"true"),
-        serde_json::Value::Bool(false) => out.extend_from_slice(b"false"),
-        serde_json::Value::Number(n) => out.extend_from_slice(n.to_string().as_bytes()),
-        serde_json::Value::String(s) => {
-            let encoded =
-                serde_json::to_string(s).expect("serde_json never fails to encode a string");
-            out.extend_from_slice(encoded.as_bytes());
-        }
-        serde_json::Value::Array(arr) => {
-            out.push(b'[');
-            for (i, v) in arr.iter().enumerate() {
-                if i > 0 {
-                    out.push(b',');
-                }
-                write_canonical(out, v);
-            }
-            out.push(b']');
-        }
-        serde_json::Value::Object(map) => {
-            out.push(b'{');
-            let mut keys: Vec<&String> = map.keys().collect();
-            keys.sort();
-            for (i, k) in keys.iter().enumerate() {
-                if i > 0 {
-                    out.push(b',');
-                }
-                let key_encoded =
-                    serde_json::to_string(k).expect("serde_json never fails to encode a string");
-                out.extend_from_slice(key_encoded.as_bytes());
-                out.push(b':');
-                write_canonical(out, &map[*k]);
-            }
-            out.push(b'}');
-        }
-    }
+    // SOV-F1: the canonical-JSON encoding is owned by `fabric-proof` and is
+    // byte-identical to the implementation this replaced, so bundles hash the
+    // same in mai-compliance and WSF.
+    fabric_proof::write_canonical(out, value);
 }
 
 /// Compute the 32-byte BLAKE3 hash of the canonical-JSON encoding of

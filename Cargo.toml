@@ -13,6 +13,7 @@ members = [
     "mai-compliance",
     "crates/fabric-contracts",
     "crates/fabric-crypto",
+    "crates/fabric-proof",
     "tools/pkg-builder",
     "tools/rule-tester",
     "tools/mai-admin",

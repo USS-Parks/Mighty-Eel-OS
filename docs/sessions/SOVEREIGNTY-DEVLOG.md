@@ -48,6 +48,15 @@ Basho introduced **"The Agentic Orchestration & Security Map"** (July 2026 — h
 ## ✅ Phase 0 COMPLETE (2026-07-03)
 All items done: 0.1, 0.2a–d, 0.3–0.6, 0.7, 0.8 + tag `contracts-v1`. **Nine commits** on `session/SOV-1` (`7a19c7b..` HEAD). Deliverables: reuse map + Agentic Security Map (canonical spec); four frozen wire contracts (`fabric-contracts`, 5 tests); signer abstraction (`fabric-crypto`, 4 tests — pure-Rust ML-DSA default + OpenBao Transit seam); archived pqcrypto removed (pure-Rust sole backend); every advisory cleared (`cargo audit` exit 0) + CI advisories gate. Baseline held green (full `cargo test --workspace` 1627+). **Next: F1 — extract `fabric-proof` (audit chain + canonical bundle verify + subject-hash from mai-compliance) on top of `fabric-crypto`; mai-compliance re-exports so its 326+ tests stay green.**
 
+---
+
+## Phase F — Fabric crates
+
+### F1 — `fabric-proof` extracted — DONE
+`crates/fabric-proof`: the shared audit-proof primitives on top of `fabric-crypto`. Modules: `canonical` (`write_canonical` + `canonical_bytes`/`canonical_hash` + `combined_hash` — **byte-identical** to mai-compliance BF-3), `subject_hash` (HMAC-SHA256 string-core), `bundle` (`BundleVerifier` trait + `MlDsaBundleVerifier` over fabric-crypto's ML-DSA-87 verifier + anchor registry), `chain` (BLAKE3 hash-chain primitive for WSF's receipt ledger — `GENESIS_HASH`/`chain_link`/`ChainLink`/`verify_chain`). Dep-light: blake3/hmac/sha2/serde/serde_json/hex/fabric-crypto.
+- **Extraction (real, in-place):** mai-compliance now **delegates** to fabric-proof — `subject_hash::hmac_subject` wraps `fabric_proof::hmac_subject` (its `SubjectId`/`SubjectHash` newtypes + `SubjectHashError` preserved), and `bundle::write_canonical` routes through `fabric_proof::write_canonical` (so `payload_hash` + the canonical encoding are single-sourced). Deeper audit-chain + `MlDsaBundleVerifier` migration in mai-compliance is **staged** (deeply integrated across ~23 files; fabric-proof is the single source for new WSF/AOG code and is proven wire-compatible).
+- **Verify:** `cargo test -p fabric-proof` = **5 passed** (canonical byte-parity with mai-compliance; subject-hash spec; sign-with-fabric-crypto → verify-with-fabric-proof round-trip + tamper + unknown-anchor; chain link + break-at-index detection); `cargo test -p mai-compliance` = **331 lib + 10 integration passed, 0 failed** (regression guard GREEN through the delegation); clippy clean; `cargo check --workspace` green. **Commit:** `SOV-F1`.
+
 ### 0.2 decision record (historical)
 - **0.2 crypto** — DECISION (2026-07-03): the plan's RUSTSEC-2025-0144 premise was corrected — the real issue was the archived pqcrypto PQClean family (+ pyo3/quinn-proto/anyhow). Chosen path: `Signer`/`Verifier` abstraction + pure-Rust ML-DSA default + OpenBao Transit as a pluggable custody seam (OSS Transit lacks GA ML-DSA; only Vault Enterprise 1.19, experimental; air-gap needs local signing). Shipped by **0.2a** (fabric-crypto) + **0.2b** (drop pqc-prod) + **0.2c** (advisory cleanup).
 - **axum 0.7/0.8 dual-`Handler`** — resolved by **0.2d** (isolation: new crates on tonic 0.14/axum 0.8; mai-api migration deferred).

@@ -1,0 +1,21 @@
+[package]
+name = "fabric-proof"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Shared audit-proof primitives: canonical-JSON, BLAKE3 hash chains, HMAC subject pseudonymization, ML-DSA-87 bundle verification"
+
+[dependencies]
+fabric-crypto = { path = "../fabric-crypto" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+blake3 = { workspace = true }
+thiserror = { workspace = true }
+hmac = "0.12"
+sha2 = "0.10"
+hex = "0.4"
+
+[lints]
+workspace = true

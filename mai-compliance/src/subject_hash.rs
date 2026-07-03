@@ -20,23 +20,18 @@
 //! Cross-tenant correlation is intentionally impossible: a different
 //! tenant key produces a different hash for the same subject id.
 
-use hmac::{Hmac, Mac};
-use sha2::Sha256;
 use thiserror::Error;
 
 use crate::trust::{SubjectHash, SubjectId};
 
-/// Required minimum length of the per-tenant HMAC key, in bytes.
-///
-/// HMAC accepts any key length but a key shorter than the hash output
-/// gives no security benefit. SHA-256 outputs 32 bytes, so that is the
-/// floor we enforce.
-pub const MIN_TENANT_KEY_LEN: usize = 32;
+/// Required minimum length of the per-tenant HMAC key, in bytes. Single-sourced
+/// from `fabric-proof`, which owns the HMAC construction (SOV-F1).
+pub const MIN_TENANT_KEY_LEN: usize = fabric_proof::MIN_TENANT_KEY_LEN;
 
-/// The prefix every HMAC-pseudonymized identifier begins with. The
-/// presence of this prefix is how audit consumers distinguish a
-/// pseudonymized identifier from a raw one.
-pub const HMAC_PREFIX: &str = "hmac:";
+/// The prefix every HMAC-pseudonymized identifier begins with. The presence of
+/// this prefix is how audit consumers distinguish a pseudonymized identifier
+/// from a raw one.
+pub const HMAC_PREFIX: &str = fabric_proof::HMAC_PREFIX;
 
 /// Errors produced when constructing a [`SubjectHash`].
 #[derive(Debug, Error, PartialEq, Eq)]
@@ -48,9 +43,9 @@ pub enum SubjectHashError {
 
 /// Compute the HMAC-SHA256 pseudonym of `subject_id` under `tenant_key`.
 ///
-/// Returns a [`SubjectHash`] whose inner string begins with the
-/// [`HMAC_PREFIX`] marker followed by a lowercase-hex encoding of the
-/// 32-byte MAC.
+/// Delegates the construction to [`fabric_proof::hmac_subject`] (SOV-F1) and
+/// wraps the result in the crate-local [`SubjectHash`] newtype. Returns a hash
+/// whose inner string begins with the [`HMAC_PREFIX`] marker.
 ///
 /// # Errors
 ///
@@ -60,20 +55,13 @@ pub fn hmac_subject(
     tenant_key: &[u8],
     subject_id: &SubjectId,
 ) -> Result<SubjectHash, SubjectHashError> {
-    if tenant_key.len() < MIN_TENANT_KEY_LEN {
-        return Err(SubjectHashError::TenantKeyTooShort {
-            got: tenant_key.len(),
-            min: MIN_TENANT_KEY_LEN,
-        });
+    match fabric_proof::hmac_subject(tenant_key, subject_id.as_str()) {
+        Ok(s) => Ok(SubjectHash::new(s)),
+        Err(fabric_proof::ProofError::TenantKeyTooShort { got, min }) => {
+            Err(SubjectHashError::TenantKeyTooShort { got, min })
+        }
+        Err(_) => unreachable!("fabric_proof::hmac_subject only returns TenantKeyTooShort"),
     }
-    let mut mac =
-        <Hmac<Sha256> as Mac>::new_from_slice(tenant_key).expect("HMAC accepts any key length");
-    mac.update(subject_id.as_str().as_bytes());
-    let bytes = mac.finalize().into_bytes();
-    let mut out = String::with_capacity(HMAC_PREFIX.len() + bytes.len() * 2);
-    out.push_str(HMAC_PREFIX);
-    out.push_str(&hex::encode(bytes));
-    Ok(SubjectHash::new(out))
 }
 
 #[cfg(test)]
