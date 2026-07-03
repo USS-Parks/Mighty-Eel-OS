@@ -11,6 +11,7 @@ members = [
     "mai-scheduler",
     "mai-router",
     "mai-compliance",
+    "crates/fabric-contracts",
     "tools/pkg-builder",
     "tools/rule-tester",
     "tools/mai-admin",
