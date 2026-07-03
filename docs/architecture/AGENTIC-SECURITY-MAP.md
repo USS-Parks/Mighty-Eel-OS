@@ -56,6 +56,13 @@ These were under-specified in the original PSPR. The map makes them first-class:
 - **E-F OWASP LLM Top 10 alignment** — add as an evidence-pack framework alongside HIPAA / ITAR /
   OCAP / SOC 2 / NIST AI RMF / EU AI Act. The threat→control table becomes an audit artifact.
 
+## AOG scope (decided 2026-07-03)
+**Govern-from-outside first.** AOG sits at the hops (gateway + MCP tool proxy + identity/policy/
+receipt) and governs whatever agent framework the customer already runs — Claude/OpenAI Agent SDKs,
+LangGraph, CrewAI, AutoGen, Google ADK, Temporal. This is the anti-lock-in landing play: adopt AOG
+without rewriting your agents. **AOG also ships its own orchestration runtime** (later) as a
+first-party convenience — both are in scope; govern-external leads.
+
 ## The lethal trifecta (design principle for egress)
 Exfiltration needs all three: **private data + untrusted content + outbound channel**. The stack is
 designed to **break at least one leg on every path** — restrict private data (envelopes + tokenized
