@@ -142,6 +142,7 @@ jobs:
           cargo test -p wsf-bridge --test live_openbao -- --nocapture
           cargo test -p wsf-broker --test live_localstack -- --nocapture
           cargo test -p wsf-broker --test live_gcp -- --nocapture
+          cargo test -p wsf-broker --test live_azure -- --nocapture
           cargo test -p wsf-seal --test live_seal -- --nocapture
           cargo test -p wsf-ledger --test live_ledger -- --nocapture
           cargo test -p wsf-cache --test live_cache -- --nocapture

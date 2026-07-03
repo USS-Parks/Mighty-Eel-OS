@@ -11,11 +11,13 @@
 //! is refused **before** any AWS call. A token that carries no resource scope
 //! brokers a deny-all session policy (no standing access).
 
+pub mod azure;
 pub mod error;
 pub mod gcp;
 mod sigv4;
 mod sts;
 
+pub use azure::{AzureBroker, AzureBrokerConfig, AzureCredentials};
 pub use error::BrokerError;
 pub use gcp::{GcpBroker, GcpBrokerConfig, GcpCredentials};
 pub use sts::{RootCredentials, TemporaryCredentials};
