@@ -4639,6 +4639,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "wsf-cache"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "fabric-cache",
+ "fabric-contracts",
+ "fabric-crypto",
+ "fabric-revocation",
+ "fabric-token",
+ "reqwest",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "wsf-bridge",
+]
+
+[[package]]
 name = "wsf-ledger"
 version = "0.1.0"
 dependencies = [

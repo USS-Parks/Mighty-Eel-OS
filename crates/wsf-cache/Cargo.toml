@@ -1,0 +1,26 @@
+[package]
+name = "wsf-cache"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "WSF Ring-3 appliance trust cache: offline token verify + connectivity-driven route ceiling (air-gap sticky, cloud narrowed when stale)"
+
+[dependencies]
+fabric-cache = { path = "../fabric-cache" }
+fabric-contracts = { path = "../fabric-contracts" }
+fabric-crypto = { path = "../fabric-crypto" }
+fabric-token = { path = "../fabric-token" }
+fabric-revocation = { path = "../fabric-revocation" }
+chrono = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+wsf-bridge = { path = "../wsf-bridge" }
+tokio = { workspace = true }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+serde_json = { workspace = true }
+
+[lints]
+workspace = true

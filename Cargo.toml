@@ -21,6 +21,7 @@ members = [
     "crates/fabric-token",
     "crates/wsf-bridge",
     "crates/wsf-broker",
+    "crates/wsf-cache",
     "crates/wsf-ledger",
     "crates/wsf-seal",
     "tools/pkg-builder",
