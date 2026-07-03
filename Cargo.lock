@@ -4679,6 +4679,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "wsf-hardening"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "fabric-contracts",
+ "fabric-crypto",
+ "fabric-token",
+ "rand 0.8.6",
+]
+
+[[package]]
 name = "wsf-ledger"
 version = "0.1.0"
 dependencies = [

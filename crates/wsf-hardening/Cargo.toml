@@ -1,0 +1,20 @@
+[package]
+name = "wsf-hardening"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "WSF production readiness: zero-downtime signing-key rotation ring + a production guard that rejects dev fixtures"
+
+[dependencies]
+fabric-contracts = { path = "../fabric-contracts" }
+fabric-crypto = { path = "../fabric-crypto" }
+fabric-token = { path = "../fabric-token" }
+
+[dev-dependencies]
+chrono = { workspace = true }
+rand = "0.8"
+
+[lints]
+workspace = true

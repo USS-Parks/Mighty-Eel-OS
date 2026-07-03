@@ -1,0 +1,80 @@
+# WSF HA topology (reference) — SOV-W10.
+#
+# The trust core (OpenBao) runs HA on integrated Raft storage; WSF services are
+# stateless (each does its own AppRole login) so they scale horizontally behind
+# a load balancer. Service state lives in Postgres; sealed envelopes + evidence
+# packs live in an S3-compatible object store (MinIO on-prem).
+#
+# This file is a topology reference: it shows one OpenBao node + the data stores
+# + one bridge/api replica. For production, run >=3 openbao nodes joined into one
+# Raft cluster with auto-unseal, and scale `wsf-bridge` / `wsf-api` to N replicas.
+# Images are produced by the D-phase build (deployment/appliance).
+
+services:
+  openbao:
+    image: openbao/openbao:latest
+    cap_add: [IPC_LOCK]
+    command: server
+    environment:
+      # Raft integrated storage; in production add retry_join stanzas for peers
+      # and an auto-unseal seal stanza (transit/awskms/…). Never dev mode here.
+      BAO_LOCAL_CONFIG: >-
+        {"storage":{"raft":{"path":"/openbao/data","node_id":"openbao-1"}},
+         "listener":{"tcp":{"address":"0.0.0.0:8200","tls_disable":false,
+           "tls_cert_file":"/openbao/tls/cert.pem","tls_key_file":"/openbao/tls/key.pem"}},
+         "api_addr":"https://openbao:8200","cluster_addr":"https://openbao:8201",
+         "ui":false}
+    volumes:
+      - openbao-data:/openbao/data
+      - ./tls:/openbao/tls:ro
+    ports: ["8200:8200"]
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: wsf
+      POSTGRES_USER: wsf
+      POSTGRES_PASSWORD_FILE: /run/secrets/pg_password
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    secrets: [pg_password]
+    restart: unless-stopped
+
+  objectstore:
+    image: minio/minio:latest
+    command: server /data
+    environment:
+      MINIO_ROOT_USER_FILE: /run/secrets/minio_user
+      MINIO_ROOT_PASSWORD_FILE: /run/secrets/minio_password
+    volumes:
+      - minio-data:/data
+    secrets: [minio_user, minio_password]
+    restart: unless-stopped
+
+  # Stateless — scale with `deploy.replicas` / `docker compose up --scale`.
+  wsf-api:
+    image: islandmountain/wsf-api:latest
+    environment:
+      WSF_OPENBAO_ADDR: https://openbao:8200
+      WSF_MODE: production
+      WSF_PG_URL: postgres://wsf@postgres/wsf
+      WSF_OBJECTSTORE_URL: http://objectstore:9000
+    depends_on: [openbao, postgres, objectstore]
+    ports: ["8300:8300"]
+    deploy:
+      replicas: 2
+    restart: unless-stopped
+
+volumes:
+  openbao-data:
+  pg-data:
+  minio-data:
+
+secrets:
+  pg_password:
+    file: ./secrets/pg_password
+  minio_user:
+    file: ./secrets/minio_user
+  minio_password:
+    file: ./secrets/minio_password

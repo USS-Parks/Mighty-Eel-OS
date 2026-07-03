@@ -23,6 +23,7 @@ members = [
     "crates/wsf-bridge",
     "crates/wsf-broker",
     "crates/wsf-cache",
+    "crates/wsf-hardening",
     "crates/wsf-ledger",
     "crates/wsf-seal",
     "crates/wsf-tenants",
