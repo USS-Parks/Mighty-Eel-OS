@@ -1,0 +1,84 @@
+name: Supply Chain (D3)
+
+# Signed, attested, phone-home-free images. The static phone-home check runs on
+# every relevant PR; the build + SBOM + keyless-sign lane runs on release tags and
+# manual dispatch (it is heavy and needs registry + OIDC).
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch: {}
+  pull_request:
+    branches: [main]
+    paths:
+      - 'deployment/**'
+      - 'Dockerfile*'
+      - '.dockerignore'
+      - 'crates/**'
+
+permissions:
+  contents: read
+
+jobs:
+  phone-home:
+    name: Zero phone-home (static)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: No hardcoded external hosts in the services
+        run: bash deployment/supply-chain/no-phone-home.sh .
+
+  sbom-sign:
+    name: Build · SBOM · Sign · Verify
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
+    permissions:
+      contents: read
+      packages: write
+      id-token: write # cosign keyless (OIDC)
+    env:
+      REGISTRY: ghcr.io
+      IMAGE: ghcr.io/${{ github.repository }}/im-appliance
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Build context = the workspace root (the appliance Dockerfile header notes
+      # this — the Cargo workspace + Cargo.lock resolve there). The console image
+      # follows the same pattern via deployment/appliance/Dockerfile.console.
+      - name: Build + push appliance image
+        run: |
+          docker build -f deployment/appliance/Dockerfile -t "$IMAGE:${GITHUB_SHA}" .
+          docker push "$IMAGE:${GITHUB_SHA}"
+
+      - name: Install syft
+        uses: anchore/sbom-action/download-syft@v0
+
+      - name: SBOM (SPDX + CycloneDX)
+        run: bash deployment/supply-chain/sbom.sh "$IMAGE:${GITHUB_SHA}"
+
+      - name: Upload SBOMs
+        uses: actions/upload-artifact@v4
+        with:
+          name: sboms
+          path: deployment/supply-chain/sbom/
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign + verify (keyless OIDC)
+        env:
+          CI: 'true'
+        run: bash deployment/supply-chain/sign.sh "$IMAGE:${GITHUB_SHA}"
+
+      - name: Attach SBOM attestation
+        run: |
+          for f in deployment/supply-chain/sbom/*.spdx.json; do
+            COSIGN_EXPERIMENTAL=1 cosign attest --yes --predicate "$f" --type spdxjson "$IMAGE:${GITHUB_SHA}"
+          done

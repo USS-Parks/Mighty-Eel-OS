@@ -440,3 +440,17 @@ T7 agent sessions rendered as **replayable traces** (the reasoning-trace-viewer 
 
 ## ✅ Phase C (M2) COMPLETE — approval inbox + policy studio + session replay (2026-07-04)
 Three views on the Sovereignty Console: the T3 approval inbox with diff previews + approve/deny chips (C5), the policy studio with plain-language policy-as-code + shadow/report/enforce toggles + rule-cited denial explanations (C6), and T7 session replay as step-by-step traces (C7). **23 vitest + tsc + vite build green.** The gateway HTTP endpoints these call (`/v1/approvals`, `/v1/policy`, `/v1/sessions`) are wired with the appliance stack in the D-phase. **Next: D3 (signed supply chain), D4 (HIPAA pack), D5 (live integration suite).**
+
+---
+
+## Phase D (M2) — deployment, evidence & proof
+
+### D3 — Signed supply chain — DONE (pipeline + static gate green; live signing owner-gated)
+The appliance's supply-chain posture: **cosign-signed** images, an **SBOM** (syft) per image, a **minimal non-root** base, and **zero phone-home** — scripted pipeline + CI lane + a consumer-facing verify path. New `deployment/supply-chain/`:
+- **`SUPPLY-CHAIN.md`** — the posture + how-to-verify (signatures, SBOM, distroless option, egress). Leads with the D3 gate.
+- **`sbom.sh`** — syft SBOM per image (SPDX + CycloneDX JSON).
+- **`sign.sh`** — cosign sign + verify; keyless OIDC in CI, key-based (`COSIGN_KEY`) owner-gated locally (the key is Tier-0, doctrine I-7).
+- **`no-phone-home.sh`** — the static egress gate: fails on any vendor call-home / telemetry SDK, and asserts every external host in shipped `src/` is a known, config-overridable provider/STS endpoint. **Runs clean today** (the provider/STS URLs are all `env_or` defaults + OAuth scopes, air-gap-guarded by W5). *Correction:* a naive "no hostnames" first cut false-flagged the legitimate overridable defaults (and my initial ripgrep-lookahead pre-check silently no-matched without PCRE2 — a false "clean"); the enforced check is the honest allowlist above.
+- **CI:** `.github/workflows/supply-chain.yml` — `phone-home` (static, runs on PR) + `sbom-sign` (build → push GHCR → syft SBOM artifact → cosign keyless sign+verify → SBOM attestation; tag/dispatch-gated, needs registry + OIDC).
+- **Base / `.dockerignore`:** already `debian:bookworm-slim` (non-root uid 10001) + `nginx:1.27-alpine`; `.dockerignore` excludes `target/`/`node_modules/`/`.env`/`.git`/`docs/`. Distroless (`distroless/cc-debian12:nonroot`) documented as the owner-gated further-hardening (§5); default stays the D1b-proven slim base.
+- **Verify:** `bash -n` all scripts clean; **`no-phone-home.sh` PASSES** (the enforceable gate, run here); `supply-chain.yml` valid YAML. The live cosign-sign + syft-SBOM + registry push are owner-gated (need the signing key + a registry), run per `SUPPLY-CHAIN.md §3`. **Gate:** signatures verify (script + CI keyless) ✓ pipeline; SBOM present (syft script + CI artifact) ✓ pipeline; egress shows no telemetry — **static check green** ✓, runtime monitor owner-gated. **Commit:** `SOV-D3`.
