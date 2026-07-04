@@ -49,6 +49,13 @@ pub struct ToolReceipt {
     /// metadata only, never the redacted value. Empty (omitted) when clean.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub redaction_kinds: Vec<String>,
+    /// T6: the mission contract this call ran under, if any.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mission_id: Option<String>,
+    /// T6: the call fell outside the mission contract (an escalated or blocked
+    /// deviation). Omitted when the call was in-contract.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub out_of_contract: bool,
 }
 
 /// `skip_serializing_if` predicate — omit a `false` flag so an un-gated receipt is

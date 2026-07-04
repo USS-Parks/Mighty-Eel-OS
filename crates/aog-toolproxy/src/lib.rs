@@ -12,6 +12,7 @@
 //! gates a side-effecting call on human approval, T4 tags tool results untrusted so
 //! injected instructions can't auto-trigger a mutating call.
 
+pub mod mission;
 pub mod receipt;
 pub mod scan;
 
@@ -22,6 +23,7 @@ use async_trait::async_trait;
 use mai_agent::ToolRegistry;
 use mai_agent::types::{AgentError, ToolAccessRole, ToolCall, ToolDefinition, ToolResult};
 
+use crate::mission::{Mission, MissionContract};
 use crate::receipt::{ToolReceipt, ToolReceiptChain};
 use crate::scan::EgressScanner;
 
@@ -133,6 +135,12 @@ pub struct InvokeContext {
     /// acting on content that re-entered from a prior tool result). A side-effecting
     /// call so tainted cannot auto-execute — it is forced through approval.
     pub untrusted: bool,
+    /// T6: the target system this call touches, matched against the mission
+    /// contract's `allowed_systems`. `None` = the call declares no system.
+    pub system: Option<String>,
+    /// T6: the caller's declared cost for this call in cents, for mission spend
+    /// ceilings. `0` when unpriced.
+    pub estimated_cost_cents: u64,
 }
 
 /// The governed tool proxy. Cheap to share behind an `Arc` — registration and
@@ -143,6 +151,21 @@ pub struct ToolProxy {
     minter: Option<Box<dyn CredentialMinter>>,
     approvals: Option<Box<dyn ApprovalGate>>,
     scanner: EgressScanner,
+    /// The active mission contract (T6), if any — the declared scope this proxy
+    /// holds calls to. `None` = unconstrained (T1–T5 behaviour).
+    mission: Option<Mutex<Mission>>,
+}
+
+/// The governance outcome of a brokered call, recorded on its receipt. Bundled so
+/// the receipt writer stays one small call as governance gains dimensions.
+#[derive(Default)]
+struct Governance {
+    approval_required: bool,
+    approved_by: Option<String>,
+    redacted_spans: u32,
+    redaction_kinds: Vec<String>,
+    mission_id: Option<String>,
+    out_of_contract: bool,
 }
 
 impl Default for ToolProxy {
@@ -160,6 +183,7 @@ impl ToolProxy {
             minter: None,
             approvals: None,
             scanner: EgressScanner::baseline(),
+            mission: None,
         }
     }
 
@@ -186,6 +210,15 @@ impl ToolProxy {
     #[must_use]
     pub fn with_scanner(mut self, scanner: EgressScanner) -> Self {
         self.scanner = scanner;
+        self
+    }
+
+    /// Attach a mission contract (T6). Every brokered call is then held to the
+    /// declared envelope — a deviation is escalated to the approval inbox when one
+    /// is configured, or blocked (fail-closed) when none is.
+    #[must_use]
+    pub fn with_mission(mut self, contract: MissionContract) -> Self {
+        self.mission = Some(Mutex::new(Mission::new(contract)));
         self
     }
 
@@ -227,18 +260,33 @@ impl ToolProxy {
             reg.validate_tool_call(call, &ctx.role)?.clone()
         };
 
-        // Approval gate (T3) + provenance rule (T4). A side-effecting call is gated
-        // when an inbox is configured; additionally, a side-effecting call arising
-        // from UNTRUSTED context (T4 — e.g. the model acting on injected instructions
-        // in a prior tool result) must never auto-execute. With an inbox it routes
-        // there; without one, a tainted mutation is blocked (fail-closed).
+        // Mission-contract enforcement (T6). A call outside the declared envelope
+        // (an un-listed tool/system, or one that would breach a call/spend ceiling)
+        // is a deviation, decided below alongside the approval gate.
+        let (mission_deviation, mission_id) = match &self.mission {
+            Some(m) => {
+                let mission = m.lock().expect("mission lock");
+                (
+                    mission.check(call, ctx),
+                    Some(mission.mission_id().to_string()),
+                )
+            }
+            None => (None, None),
+        };
+        let out_of_contract = mission_deviation.is_some();
+
+        // A call is routed to a human when it is side-effecting (T3) OR it deviates
+        // from the mission contract (T6). Without an inbox, a tainted mutation (T4)
+        // or any mission deviation (T6) is blocked (fail-closed); a plain trusted
+        // side-effect still executes.
+        let needs_review = tool.has_side_effects || mission_deviation.is_some();
         let mut approval_required = false;
         let mut approved_by = None;
-        if tool.has_side_effects {
+        if needs_review {
             match &self.approvals {
                 Some(gate) => {
                     approval_required = true;
-                    let preview = diff_preview(&tool, call);
+                    let preview = review_preview(&tool, call, mission_deviation.as_deref());
                     match gate.review(&tool, call, ctx, &preview).await {
                         Ok(actor) => approved_by = Some(actor),
                         Err(reason) => {
@@ -249,37 +297,47 @@ impl ToolProxy {
                                 &tool,
                                 &blocked,
                                 None,
-                                true,
-                                None,
-                                0,
-                                Vec::new(),
+                                Governance {
+                                    approval_required: true,
+                                    mission_id,
+                                    out_of_contract,
+                                    ..Governance::default()
+                                },
                             );
                             return Ok(blocked);
                         }
                     }
                 }
-                None if ctx.untrusted => {
-                    // T4 fail-closed: an untrusted-triggered mutation with no inbox
-                    // configured cannot auto-execute.
-                    let blocked = blocked_result(
-                        call,
-                        "untrusted-triggered mutation requires approval (no inbox configured)",
-                    );
-                    self.append_receipt(
-                        call,
-                        ctx,
-                        &tool,
-                        &blocked,
-                        None,
-                        true,
-                        None,
-                        0,
-                        Vec::new(),
-                    );
-                    return Ok(blocked);
+                None => {
+                    if ctx.untrusted || mission_deviation.is_some() {
+                        let reason = mission_deviation.clone().unwrap_or_else(|| {
+                            "untrusted-triggered mutation requires approval (no inbox configured)"
+                                .to_string()
+                        });
+                        let blocked = blocked_result(call, &reason);
+                        self.append_receipt(
+                            call,
+                            ctx,
+                            &tool,
+                            &blocked,
+                            None,
+                            Governance {
+                                approval_required: true,
+                                mission_id,
+                                out_of_contract,
+                                ..Governance::default()
+                            },
+                        );
+                        return Ok(blocked);
+                    }
                 }
-                None => {}
             }
+        }
+
+        // Record the admitted call against the mission tally (T6) — it consumed a
+        // call (and any declared spend) whether it ultimately succeeds or fails.
+        if let Some(m) = &self.mission {
+            m.lock().expect("mission lock").record(ctx);
         }
 
         // Mint the per-call credential (T2), if a minter is configured. It lives only
@@ -310,15 +368,18 @@ impl ToolProxy {
             &tool,
             &result,
             cred.as_ref(),
-            approval_required,
-            approved_by,
-            redacted_spans,
-            redaction_kinds,
+            Governance {
+                approval_required,
+                approved_by,
+                redacted_spans,
+                redaction_kinds,
+                mission_id,
+                out_of_contract,
+            },
         );
         Ok(result)
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn append_receipt(
         &self,
         call: &ToolCall,
@@ -326,10 +387,7 @@ impl ToolProxy {
         tool: &ToolDefinition,
         result: &ToolResult,
         cred: Option<&MintedCredential>,
-        approval_required: bool,
-        approved_by: Option<String>,
-        redacted_spans: u32,
-        redaction_kinds: Vec<String>,
+        gov: Governance,
     ) {
         let (cred_lease, cred_ttl_ms) = cred.map_or((None, None), |c| {
             (Some(c.lease_id.clone()), Some(ms(c.ttl)))
@@ -350,11 +408,13 @@ impl ToolProxy {
                 error: result.error.clone(),
                 cred_lease,
                 cred_ttl_ms,
-                approval_required,
-                approved_by,
+                approval_required: gov.approval_required,
+                approved_by: gov.approved_by,
                 untrusted_context: ctx.untrusted,
-                redacted_spans,
-                redaction_kinds,
+                redacted_spans: gov.redacted_spans,
+                redaction_kinds: gov.redaction_kinds,
+                mission_id: gov.mission_id,
+                out_of_contract: gov.out_of_contract,
             });
     }
 
@@ -397,6 +457,15 @@ fn ms(d: Duration) -> u64 {
 /// arguments so the approver sees the concrete call.
 fn diff_preview(tool: &ToolDefinition, call: &ToolCall) -> String {
     format!("{} {}", tool.id, call.arguments)
+}
+
+/// The preview shown to the approver, annotated with the mission-deviation reason
+/// (T6) when the call is being escalated because it fell outside the contract.
+fn review_preview(tool: &ToolDefinition, call: &ToolCall, deviation: Option<&str>) -> String {
+    match deviation {
+        Some(reason) => format!("{} [mission deviation: {reason}]", diff_preview(tool, call)),
+        None => diff_preview(tool, call),
+    }
 }
 
 /// The result returned for a call the approval gate blocked — it never executed.
@@ -472,6 +541,8 @@ mod tests {
             profile_id: "tok_1".to_string(),
             role,
             untrusted: false,
+            system: None,
+            estimated_cost_cents: 0,
         }
     }
 
@@ -1045,5 +1116,144 @@ mod tests {
         let json = serde_json::to_string(rec).unwrap();
         assert!(!json.contains("redacted_spans"));
         assert!(!json.contains("redaction_kinds"));
+    }
+
+    // ── T6: mission contracts ────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn in_contract_call_passes() {
+        let proxy = ToolProxy::new().with_mission(
+            MissionContract::new("m1")
+                .allow_tool("read.file")
+                .with_max_calls(5),
+        );
+        proxy
+            .register(tool("read.file", false, ToolAccessRole::Guest))
+            .unwrap();
+        let r = proxy
+            .invoke(
+                &call("c1", "read.file"),
+                &ctx(ToolAccessRole::Guest),
+                &EchoExecutor,
+            )
+            .await
+            .unwrap();
+        assert!(r.success, "an in-contract call executes");
+        let rec = &proxy.receipts()[0];
+        assert!(!rec.out_of_contract);
+        assert_eq!(rec.mission_id.as_deref(), Some("m1"));
+    }
+
+    #[tokio::test]
+    async fn out_of_contract_tool_is_blocked_without_an_inbox() {
+        let proxy = ToolProxy::new().with_mission(
+            MissionContract::new("m1")
+                .allow_tool("read.file")
+                .with_max_calls(5),
+        );
+        proxy
+            .register(tool("read.file", false, ToolAccessRole::Guest))
+            .unwrap();
+        proxy
+            .register(tool("delete.all", true, ToolAccessRole::Guest))
+            .unwrap();
+        // delete.all is not listed in the mission → out of contract → blocked.
+        let r = proxy
+            .invoke(
+                &call("c1", "delete.all"),
+                &ctx(ToolAccessRole::Guest),
+                &EchoExecutor,
+            )
+            .await
+            .unwrap();
+        assert!(!r.success, "an out-of-contract call does not execute");
+        assert!(r.error.unwrap().contains("not in mission"));
+        let rec = &proxy.receipts()[0];
+        assert!(rec.out_of_contract);
+        assert!(rec.approval_required);
+        assert_eq!(rec.approved_by, None);
+    }
+
+    #[tokio::test]
+    async fn out_of_contract_call_escalates_to_the_inbox_when_configured() {
+        let proxy = ToolProxy::new()
+            .with_approvals(Box::new(AlwaysGate {
+                approve: true,
+                actor: "alice".to_string(),
+            }))
+            .with_mission(
+                MissionContract::new("m1")
+                    .allow_tool("read.file")
+                    .with_max_calls(5),
+            );
+        proxy
+            .register(tool("web.read", false, ToolAccessRole::Guest))
+            .unwrap();
+        // web.read (read-only) is not in the mission → deviation → escalates, and
+        // the human approves it, so it executes.
+        let r = proxy
+            .invoke(
+                &call("c1", "web.read"),
+                &ctx(ToolAccessRole::Guest),
+                &EchoExecutor,
+            )
+            .await
+            .unwrap();
+        assert!(r.success, "the approved deviation executes");
+        let rec = &proxy.receipts()[0];
+        assert!(rec.out_of_contract);
+        assert!(rec.approval_required);
+        assert_eq!(rec.approved_by.as_deref(), Some("alice"));
+    }
+
+    #[tokio::test]
+    async fn call_ceiling_blocks_further_calls_mid_mission() {
+        let proxy = ToolProxy::new().with_mission(
+            MissionContract::new("m1")
+                .allow_tool("read.file")
+                .with_max_calls(1),
+        );
+        proxy
+            .register(tool("read.file", false, ToolAccessRole::Guest))
+            .unwrap();
+        let r1 = proxy
+            .invoke(
+                &call("c1", "read.file"),
+                &ctx(ToolAccessRole::Guest),
+                &EchoExecutor,
+            )
+            .await
+            .unwrap();
+        assert!(r1.success, "the first call is within the ceiling");
+        // The second call exceeds the 1-call ceiling → blocked.
+        let r2 = proxy
+            .invoke(
+                &call("c2", "read.file"),
+                &ctx(ToolAccessRole::Guest),
+                &EchoExecutor,
+            )
+            .await
+            .unwrap();
+        assert!(!r2.success, "the ceiling blocks the second call");
+        assert!(r2.error.unwrap().contains("ceiling"));
+    }
+
+    #[tokio::test]
+    async fn no_mission_means_no_contract_constraint() {
+        // Without a mission attached, behaviour is unchanged from T1–T5.
+        let proxy = ToolProxy::new();
+        proxy
+            .register(tool("anything", false, ToolAccessRole::Guest))
+            .unwrap();
+        let r = proxy
+            .invoke(
+                &call("c1", "anything"),
+                &ctx(ToolAccessRole::Guest),
+                &EchoExecutor,
+            )
+            .await
+            .unwrap();
+        assert!(r.success);
+        assert!(proxy.receipts()[0].mission_id.is_none());
     }
 }

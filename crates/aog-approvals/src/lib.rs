@@ -427,6 +427,8 @@ mod tests {
                 profile_id: "tok_1".to_string(),
                 role: ToolAccessRole::Parent,
                 untrusted: false,
+                system: None,
+                estimated_cost_cents: 0,
             };
             p.invoke(&call, &ctx, &Exec).await
         });
