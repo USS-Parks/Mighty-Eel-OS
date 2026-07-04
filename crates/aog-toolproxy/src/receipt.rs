@@ -41,12 +41,26 @@ pub struct ToolReceipt {
     /// side-effecting such call is forced through approval, never auto-executed.
     #[serde(default, skip_serializing_if = "is_false")]
     pub untrusted_context: bool,
+    /// T5: number of secret/PHI/ITAR spans redacted from this call's result before
+    /// it re-entered the model context. Zero (omitted) when the result was clean.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub redacted_spans: u32,
+    /// T5: the kind label of each redacted span (e.g. `secret_aws_key`, `phi_ssn`) —
+    /// metadata only, never the redacted value. Empty (omitted) when clean.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub redaction_kinds: Vec<String>,
 }
 
 /// `skip_serializing_if` predicate — omit a `false` flag so an un-gated receipt is
 /// unchanged.
 fn is_false(b: &bool) -> bool {
     !*b
+}
+
+/// `skip_serializing_if` predicate — omit a zero count so a clean-result receipt is
+/// byte-identical to its pre-T5 shape (the chain hash is undisturbed).
+fn is_zero(n: &u32) -> bool {
+    *n == 0
 }
 
 /// Append-only tool-call receipt ledger: a BLAKE3 chain over [`ToolReceipt`]s.

@@ -13,6 +13,7 @@
 //! injected instructions can't auto-trigger a mutating call.
 
 pub mod receipt;
+pub mod scan;
 
 use std::sync::{Mutex, RwLock};
 use std::time::Duration;
@@ -22,6 +23,7 @@ use mai_agent::ToolRegistry;
 use mai_agent::types::{AgentError, ToolAccessRole, ToolCall, ToolDefinition, ToolResult};
 
 use crate::receipt::{ToolReceipt, ToolReceiptChain};
+use crate::scan::EgressScanner;
 
 /// A tool call the proxy refused to broker.
 #[derive(Debug, thiserror::Error)]
@@ -140,6 +142,7 @@ pub struct ToolProxy {
     receipts: Mutex<ToolReceiptChain>,
     minter: Option<Box<dyn CredentialMinter>>,
     approvals: Option<Box<dyn ApprovalGate>>,
+    scanner: EgressScanner,
 }
 
 impl Default for ToolProxy {
@@ -156,6 +159,7 @@ impl ToolProxy {
             receipts: Mutex::new(ToolReceiptChain::new()),
             minter: None,
             approvals: None,
+            scanner: EgressScanner::baseline(),
         }
     }
 
@@ -173,6 +177,15 @@ impl ToolProxy {
     #[must_use]
     pub fn with_approvals(mut self, approvals: Box<dyn ApprovalGate>) -> Self {
         self.approvals = Some(approvals);
+        self
+    }
+
+    /// Override the egress scanner (T5). By default every proxy carries
+    /// [`EgressScanner::baseline`]; a deployment can widen or narrow the detector
+    /// set here. Egress scanning is always on — there is no path that disables it.
+    #[must_use]
+    pub fn with_scanner(mut self, scanner: EgressScanner) -> Self {
+        self.scanner = scanner;
         self
     }
 
@@ -230,7 +243,17 @@ impl ToolProxy {
                         Ok(actor) => approved_by = Some(actor),
                         Err(reason) => {
                             let blocked = blocked_result(call, &reason);
-                            self.append_receipt(call, ctx, &tool, &blocked, None, true, None);
+                            self.append_receipt(
+                                call,
+                                ctx,
+                                &tool,
+                                &blocked,
+                                None,
+                                true,
+                                None,
+                                0,
+                                Vec::new(),
+                            );
                             return Ok(blocked);
                         }
                     }
@@ -242,7 +265,17 @@ impl ToolProxy {
                         call,
                         "untrusted-triggered mutation requires approval (no inbox configured)",
                     );
-                    self.append_receipt(call, ctx, &tool, &blocked, None, true, None);
+                    self.append_receipt(
+                        call,
+                        ctx,
+                        &tool,
+                        &blocked,
+                        None,
+                        true,
+                        None,
+                        0,
+                        Vec::new(),
+                    );
                     return Ok(blocked);
                 }
                 None => {}
@@ -256,12 +289,20 @@ impl ToolProxy {
             None => None,
         };
 
-        let result = executor.execute(&tool, call, cred.as_ref()).await;
+        let mut result = executor.execute(&tool, call, cred.as_ref()).await;
 
         // End the lease at call end (its TTL also bounds it).
         if let (Some(m), Some(c)) = (&self.minter, &cred) {
             m.revoke(&c.lease_id).await;
         }
+
+        // Egress scanning (T5): redact any secret / PHI / ITAR span in the result
+        // BEFORE it re-enters the model context, and receipt the redaction count +
+        // kinds (metadata only — never the redacted values).
+        let scan = self.scanner.scan_result(&result.output);
+        let redacted_spans = scan.count();
+        let redaction_kinds = scan.redactions;
+        result.output = scan.output;
 
         self.append_receipt(
             call,
@@ -271,6 +312,8 @@ impl ToolProxy {
             cred.as_ref(),
             approval_required,
             approved_by,
+            redacted_spans,
+            redaction_kinds,
         );
         Ok(result)
     }
@@ -285,6 +328,8 @@ impl ToolProxy {
         cred: Option<&MintedCredential>,
         approval_required: bool,
         approved_by: Option<String>,
+        redacted_spans: u32,
+        redaction_kinds: Vec<String>,
     ) {
         let (cred_lease, cred_ttl_ms) = cred.map_or((None, None), |c| {
             (Some(c.lease_id.clone()), Some(ms(c.ttl)))
@@ -308,6 +353,8 @@ impl ToolProxy {
                 approval_required,
                 approved_by,
                 untrusted_context: ctx.untrusted,
+                redacted_spans,
+                redaction_kinds,
             });
     }
 
@@ -905,5 +952,98 @@ mod tests {
             "a trusted mutation with no inbox executes (T3 behaviour)"
         );
         assert!(!proxy.receipts()[0].untrusted_context);
+    }
+
+    // ── T5: egress scanning of tool results ──────────────────────────────
+
+    /// An executor whose result carries a leaked AWS key and PHI — the exact
+    /// content T5 must scrub before it re-enters the model context.
+    struct LeakyExecutor;
+
+    #[async_trait]
+    impl ToolExecutor for LeakyExecutor {
+        async fn execute(
+            &self,
+            _tool: &ToolDefinition,
+            call: &ToolCall,
+            _cred: Option<&MintedCredential>,
+        ) -> ToolResult {
+            ToolResult {
+                call_id: call.call_id.clone(),
+                tool_id: call.tool_id.clone(),
+                success: true,
+                output: serde_json::json!("creds AKIAIOSFODNN7EXAMPLE and patient SSN 123-45-6789"),
+                error: None,
+                duration_ms: 1,
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn tool_result_is_scanned_before_the_model_sees_it() {
+        let proxy = ToolProxy::new();
+        proxy
+            .register(tool("db.query", false, ToolAccessRole::Guest))
+            .unwrap();
+        let r = proxy
+            .invoke(
+                &call("c1", "db.query"),
+                &ctx(ToolAccessRole::Guest),
+                &LeakyExecutor,
+            )
+            .await
+            .unwrap();
+
+        // The model-facing result no longer carries the raw secret or PHI.
+        let seen = r.output.as_str().unwrap();
+        assert!(
+            !seen.contains("AKIAIOSFODNN7EXAMPLE"),
+            "AWS key redacted: {seen}"
+        );
+        assert!(!seen.contains("123-45-6789"), "SSN redacted: {seen}");
+        assert!(
+            seen.contains("[REDACTED:"),
+            "redaction markers present: {seen}"
+        );
+
+        // The redaction is receipted (metadata only) and the chain verifies.
+        let rec = &proxy.receipts()[0];
+        assert!(
+            rec.redacted_spans >= 2,
+            "both spans receipted: {}",
+            rec.redacted_spans
+        );
+        assert!(rec.redaction_kinds.iter().any(|k| k == "secret_aws_key"));
+        assert!(rec.redaction_kinds.iter().any(|k| k.starts_with("phi_")));
+        assert!(
+            !serde_json::to_string(rec)
+                .unwrap()
+                .contains("AKIAIOSFODNN7EXAMPLE"),
+            "the raw secret is never receipted"
+        );
+        assert!(proxy.verify_receipts());
+    }
+
+    #[tokio::test]
+    async fn benign_tool_result_is_not_redacted() {
+        let proxy = ToolProxy::new();
+        proxy
+            .register(tool("read.file", false, ToolAccessRole::Guest))
+            .unwrap();
+        proxy
+            .invoke(
+                &call("c1", "read.file"),
+                &ctx(ToolAccessRole::Guest),
+                &EchoExecutor,
+            )
+            .await
+            .unwrap();
+        let rec = &proxy.receipts()[0];
+        assert_eq!(rec.redacted_spans, 0);
+        assert!(rec.redaction_kinds.is_empty());
+        // A clean receipt omits the T5 fields entirely (byte-identical to pre-T5).
+        let json = serde_json::to_string(rec).unwrap();
+        assert!(!json.contains("redacted_spans"));
+        assert!(!json.contains("redaction_kinds"));
     }
 }

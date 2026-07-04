@@ -10,6 +10,7 @@ description = "AOG tool-governance proxy: agents register tools, calls execute T
 [dependencies]
 fabric-proof = { path = "../fabric-proof" }
 mai-agent = { path = "../../mai-agent" }
+mai-compliance = { path = "../../mai-compliance" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
