@@ -10,17 +10,22 @@ repository.workspace = true
 aog-apiserver = { path = "../aog-apiserver" }
 aog-estate = { path = "../aog-estate" }
 aog-store = { path = "../aog-store" }
+chrono = { workspace = true }
+serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
+wsf-bridge = { path = "../wsf-bridge" }
+wsf-tenants = { path = "../wsf-tenants" }
 
 [dev-dependencies]
 axum = { workspace = true }
 base64 = "0.22"
-chrono = { workspace = true }
 fabric-contracts = { path = "../fabric-contracts" }
 fabric-crypto = { path = "../fabric-crypto" }
+fabric-revocation = { path = "../fabric-revocation" }
 fabric-token = { path = "../fabric-token" }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 
 [lints]
 workspace = true

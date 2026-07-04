@@ -189,10 +189,15 @@ dependencies = [
  "chrono",
  "fabric-contracts",
  "fabric-crypto",
+ "fabric-revocation",
  "fabric-token",
+ "reqwest",
+ "serde",
  "serde_json",
  "thiserror 2.0.18",
  "tokio",
+ "wsf-bridge",
+ "wsf-tenants",
 ]
 
 [[package]]

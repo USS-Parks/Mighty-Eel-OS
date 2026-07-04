@@ -331,3 +331,30 @@ async fn requeue_actions_run_the_key_again() {
     assert_eq!(calls.get("Tenant/immediate"), Some(&2));
     assert_eq!(calls.get("Tenant/delayed"), Some(&2));
 }
+
+#[tokio::test]
+async fn resync_heartbeat_reconciles_without_a_change() {
+    let node = estate("loom-r1-resync").await;
+    put(&node, "Tenant/a", "v1").await;
+
+    let recorder = Recorder::new(Arc::clone(&node));
+    let mut controller = Controller::new(
+        "resync",
+        node.informer("Tenant/"),
+        recorder.clone(),
+        Arc::new(AlwaysLeader),
+    )
+    .with_resync(Duration::from_millis(1));
+
+    let first = controller.sync(Instant::now()).await.unwrap();
+    assert!(first.processed > 0);
+    let after_first = recorder.calls();
+    assert!(after_first > 0);
+
+    // No store change at all — the heartbeat alone re-reconciles the key
+    // (what drives time-based work like HMAC-rotation windows, R3).
+    tokio::time::sleep(Duration::from_millis(5)).await;
+    let stats = controller.sync(Instant::now()).await.unwrap();
+    assert!(stats.processed > 0, "heartbeat re-enqueued known keys");
+    assert!(recorder.calls() > after_first);
+}

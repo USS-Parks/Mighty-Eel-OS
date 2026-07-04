@@ -437,3 +437,42 @@ deleted tenant's tokens die at the front door.
 - **Gate:** deleting a Tenant revokes its tokens everywhere (kernel leg; R9
   extends estate-wide) + GCs children ✓; no dangling capability ✓.
   **Commits:** `LOOM-R2a`, `LOOM-R2b`.
+
+### R3 — Tenant controller (live OpenBao) — DONE
+A declared `Tenant` becomes a live OpenBao tenant record and stays converged
+with it. New `provision.rs`: `TenantProvisioner` reconciles `Tenant` against
+`kv/data/tenants/<id>` through the **M1 `wsf-tenants::TenantAdmin`** (reused,
+not rebuilt), guarding every tenant with its own `loom.aog/tenant-openbao`
+finalizer (composing with R2's teardown finalizer — the estate object cannot
+vanish before OpenBao is deprovisioned).
+- **Provision:** record missing (a *genuine* 404 only — any other OpenBao
+  failure retries with backoff, never "assume missing and overwrite", which
+  would silently rotate the key; I-4) → write scopes + classification ceiling +
+  a fresh per-tenant subject-HMAC key; status → `Ready` + `openbao_path`
+  (written only on change).
+- **Rotate:** past the spec's rotation window (0 → 90-day default) the
+  subject-HMAC key is re-minted. Driver: new R1 `Controller::with_resync` —
+  a periodic full re-enqueue heartbeat for time-based reconciliation (+1 unit
+  test: heartbeat re-reconciles with zero store changes).
+- **Deprovision:** terminating tenant → record deleted **and** an
+  anchor-signed revocation snapshot (revoking every control-plane token id
+  enumerable from the tenant's estate objects) persisted to
+  `kv/data/revocations/<id>` — the path the Ring-3 caches poll — before the
+  finalizer is released. (Tenant-wide front-door kill is the R2 intent leg;
+  R9 fans intents estate-wide.)
+- **Files:** `crates/aog-controller/{Cargo.toml (+wsf-tenants, +wsf-bridge,
+  +chrono, +serde; dev +reqwest, +fabric-revocation), src/{provision.rs (new),
+  runtime.rs (with_resync), lib.rs}, tests/{live_tenant.rs (new), replay.rs}}`.
+- **Verify:** clippy `--all-targets --no-deps -D warnings` clean; **14 passed**
+  with `WSF_OPENBAO_ADDR` set — the R3 live gate ran against a **live OpenBao
+  2.5.4** (`openbao/openbao` dev container): provision (record live, scopes
+  `["hipaa"]`, ceiling `restricted`, 32-byte hex HMAC key; both finalizers on
+  the estate object) → **issue** (real ML-DSA token minted through
+  `wsf-bridge::TrustBridge` from the live record) → **rotate** (rotation stamp
+  doctored to 2020 via root; heartbeat wake re-mints the key) → **deprovision**
+  (record gone; post-deprovision issuance fails; snapshot on the poll path
+  verifies off-host against the anchor and revokes the enumerated token ids;
+  front door refuses the tenant's token, bystander tenant unaffected); fmt +
+  `check --workspace` clean.
+- **Gate:** provision→issue→deprovision→revoked-everywhere (live OpenBao) ✓.
+  **Commit:** `LOOM-R3`.

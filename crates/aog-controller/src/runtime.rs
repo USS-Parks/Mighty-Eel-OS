@@ -119,6 +119,8 @@ pub struct Controller<R: Reconciler> {
     known: BTreeMap<String, Revision>,
     budget: usize,
     started: bool,
+    resync_interval: Option<Duration>,
+    last_resync: Option<Instant>,
 }
 
 impl<R: Reconciler> Controller<R> {
@@ -138,7 +140,18 @@ impl<R: Reconciler> Controller<R> {
             known: BTreeMap::new(),
             budget: 64,
             started: false,
+            resync_interval: None,
+            last_resync: None,
         }
+    }
+
+    /// Periodically re-enqueue every known key even without a change — the
+    /// heartbeat that drives time-based reconciliation (HMAC-rotation windows,
+    /// health re-checks) and heals any divergence a missed edge left behind.
+    #[must_use]
+    pub fn with_resync(mut self, interval: Duration) -> Self {
+        self.resync_interval = Some(interval);
+        self
     }
 
     /// Replace the retry backoff policy.
@@ -199,6 +212,21 @@ impl<R: Reconciler> Controller<R> {
             self.started = true;
         }
         stats.enqueued = self.observe();
+
+        // Periodic full re-enqueue (level-triggered heartbeat).
+        if let Some(interval) = self.resync_interval {
+            let due = self
+                .last_resync
+                .is_none_or(|last| now.duration_since(last) >= interval);
+            if due {
+                let keys: Vec<String> = self.known.keys().cloned().collect();
+                for key in &keys {
+                    self.queue.add(key);
+                }
+                stats.enqueued += keys.len();
+                self.last_resync = Some(now);
+            }
+        }
 
         // Act — leaders only.
         if !stats.leader {
