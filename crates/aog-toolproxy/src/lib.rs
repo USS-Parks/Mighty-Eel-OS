@@ -12,11 +12,13 @@
 //! gates a side-effecting call on human approval, T4 tags tool results untrusted so
 //! injected instructions can't auto-trigger a mutating call.
 
+pub mod guard;
 pub mod mission;
 pub mod receipt;
 pub mod scan;
 pub mod session;
 
+use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::Duration;
 
@@ -24,6 +26,7 @@ use async_trait::async_trait;
 use mai_agent::ToolRegistry;
 use mai_agent::types::{AgentError, ToolAccessRole, ToolCall, ToolDefinition, ToolResult};
 
+use crate::guard::{Guardrails, TaskUsage};
 use crate::mission::{Mission, MissionContract};
 use crate::receipt::{ToolReceipt, ToolReceiptChain};
 use crate::scan::EgressScanner;
@@ -159,6 +162,10 @@ pub struct ToolProxy {
     /// The session transcript (T7), if attached — the full agent-loop ledger this
     /// proxy mirrors every brokered call into.
     session: Option<Arc<Mutex<SessionRecord>>>,
+    /// Operator guardrails (T8) — hard limits applied to every call.
+    guardrails: Guardrails,
+    /// Per-task (session) usage the T8 blast-radius caps are measured against.
+    task_usage: Mutex<BTreeMap<String, TaskUsage>>,
 }
 
 /// The governance outcome of a brokered call, recorded on its receipt. Bundled so
@@ -171,6 +178,7 @@ struct Governance {
     redaction_kinds: Vec<String>,
     mission_id: Option<String>,
     out_of_contract: bool,
+    guardrail_tripped: bool,
 }
 
 impl Default for ToolProxy {
@@ -190,6 +198,8 @@ impl ToolProxy {
             scanner: EgressScanner::baseline(),
             mission: None,
             session: None,
+            guardrails: Guardrails::new(),
+            task_usage: Mutex::new(BTreeMap::new()),
         }
     }
 
@@ -238,6 +248,14 @@ impl ToolProxy {
         self
     }
 
+    /// Set operator guardrails (T8) — hard per-token tool allowlists + per-task
+    /// blast-radius caps applied to every call, beneath any mission contract.
+    #[must_use]
+    pub fn with_guardrails(mut self, guardrails: Guardrails) -> Self {
+        self.guardrails = guardrails;
+        self
+    }
+
     /// Register a tool the proxy will broker.
     ///
     /// # Errors
@@ -275,6 +293,32 @@ impl ToolProxy {
             let reg = self.registry.read().expect("registry lock");
             reg.validate_tool_call(call, &ctx.role)?.clone()
         };
+
+        // T8 hardening: operator guardrails (per-token allowlist + per-task
+        // blast-radius) — hard limits applied before any mission / approval logic.
+        // A trip blocks outright (no escalation) and is receipted.
+        let guardrail_trip = if self.guardrails.is_active() {
+            let mut usage = self.task_usage.lock().expect("task usage lock");
+            let entry = usage.entry(ctx.session_id.clone()).or_default();
+            self.guardrails.check(call, ctx, entry)
+        } else {
+            None
+        };
+        if let Some(reason) = guardrail_trip {
+            let blocked = blocked_result(call, &reason);
+            self.append_receipt(
+                call,
+                ctx,
+                &tool,
+                &blocked,
+                None,
+                Governance {
+                    guardrail_tripped: true,
+                    ..Governance::default()
+                },
+            );
+            return Ok(blocked);
+        }
 
         // Mission-contract enforcement (T6). A call outside the declared envelope
         // (an un-listed tool/system, or one that would breach a call/spend ceiling)
@@ -356,6 +400,16 @@ impl ToolProxy {
             m.lock().expect("mission lock").record(ctx);
         }
 
+        // Record the admitted call against the task's blast-radius usage (T8).
+        if self.guardrails.is_active() {
+            self.task_usage
+                .lock()
+                .expect("task usage lock")
+                .entry(ctx.session_id.clone())
+                .or_default()
+                .record(ctx);
+        }
+
         // Mint the per-call credential (T2), if a minter is configured. It lives only
         // for this call — dropped when `invoke` returns; the agent never holds it.
         let cred = match &self.minter {
@@ -391,6 +445,7 @@ impl ToolProxy {
                 redaction_kinds,
                 mission_id,
                 out_of_contract,
+                guardrail_tripped: false,
             },
         );
         Ok(result)
@@ -472,6 +527,7 @@ impl ToolProxy {
                 redaction_kinds: gov.redaction_kinds,
                 mission_id: gov.mission_id,
                 out_of_contract: gov.out_of_contract,
+                guardrail_tripped: gov.guardrail_tripped,
             });
     }
 
@@ -1367,5 +1423,99 @@ mod tests {
             transcript_digest(&b),
             "the recorded session replays to a stable transcript"
         );
+    }
+
+    // ── T8: tool-governance hardening ─────────────────────────────────────
+
+    #[tokio::test]
+    async fn unknown_tool_is_denied_fail_closed() {
+        // The registry denies an unregistered tool before anything executes — the
+        // fail-closed default T8 preserves.
+        let proxy = ToolProxy::new();
+        let err = proxy
+            .invoke(
+                &call("c1", "ghost.tool"),
+                &ctx(ToolAccessRole::Admin),
+                &EchoExecutor,
+            )
+            .await
+            .unwrap_err();
+        assert!(matches!(err, ProxyError::Rejected(_)));
+        assert_eq!(proxy.receipt_count(), 0, "an unknown tool never executes");
+    }
+
+    #[tokio::test]
+    async fn blast_radius_call_cap_trips() {
+        let proxy = ToolProxy::new().with_guardrails(Guardrails::new().with_max_calls_per_task(1));
+        proxy
+            .register(tool("read.file", false, ToolAccessRole::Guest))
+            .unwrap();
+        let r1 = proxy
+            .invoke(
+                &call("c1", "read.file"),
+                &ctx(ToolAccessRole::Guest),
+                &EchoExecutor,
+            )
+            .await
+            .unwrap();
+        assert!(r1.success, "the first call is within the cap");
+        // The second call trips the blast-radius cap → blocked + receipted.
+        let r2 = proxy
+            .invoke(
+                &call("c2", "read.file"),
+                &ctx(ToolAccessRole::Guest),
+                &EchoExecutor,
+            )
+            .await
+            .unwrap();
+        assert!(!r2.success, "the blast-radius cap blocks the second call");
+        assert!(r2.error.unwrap().contains("call cap 1"));
+        let rec = proxy
+            .receipts()
+            .into_iter()
+            .find(|r| r.call_id == "c2")
+            .unwrap();
+        assert!(rec.guardrail_tripped);
+    }
+
+    #[tokio::test]
+    async fn per_token_allowlist_blocks_an_unlisted_tool() {
+        // ctx() authorises as profile_id "tok_1"; read.file is allowed, write.db not.
+        let proxy = ToolProxy::new()
+            .with_guardrails(Guardrails::new().allow_token_tool("tok_1", "read.file"));
+        proxy
+            .register(tool("read.file", false, ToolAccessRole::Guest))
+            .unwrap();
+        proxy
+            .register(tool("write.db", true, ToolAccessRole::Guest))
+            .unwrap();
+        let ok = proxy
+            .invoke(
+                &call("c1", "read.file"),
+                &ctx(ToolAccessRole::Guest),
+                &EchoExecutor,
+            )
+            .await
+            .unwrap();
+        assert!(ok.success, "the allowlisted tool passes");
+        let denied = proxy
+            .invoke(
+                &call("c2", "write.db"),
+                &ctx(ToolAccessRole::Guest),
+                &EchoExecutor,
+            )
+            .await
+            .unwrap();
+        assert!(
+            !denied.success,
+            "a tool not on the token's allowlist is blocked"
+        );
+        assert!(
+            denied
+                .error
+                .unwrap()
+                .contains("not allowed tool 'write.db'")
+        );
+        assert!(proxy.receipts().iter().any(|r| r.guardrail_tripped));
     }
 }

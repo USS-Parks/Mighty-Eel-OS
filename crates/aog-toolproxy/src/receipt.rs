@@ -56,6 +56,10 @@ pub struct ToolReceipt {
     /// deviation). Omitted when the call was in-contract.
     #[serde(default, skip_serializing_if = "is_false")]
     pub out_of_contract: bool,
+    /// T8: the call was blocked by an operator guardrail (a per-token allowlist or a
+    /// blast-radius cap). Omitted when no guardrail tripped.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub guardrail_tripped: bool,
 }
 
 /// `skip_serializing_if` predicate — omit a `false` flag so an un-gated receipt is
