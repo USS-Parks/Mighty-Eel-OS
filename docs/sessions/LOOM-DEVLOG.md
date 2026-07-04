@@ -110,3 +110,26 @@ bootstrap now; multi-node election/replication is H1.
   stores); fmt clean; `check --workspace` clean (75 crates). **Gate:**
   linearizable-write test ✓; leader restart preserves committed state ✓.
   **Commit:** `LOOM-K3`.
+
+### K4 — Watch / informer — DONE
+The controller read path. The state machine now fans out a change-event stream as
+it applies mutations; an `Informer` keeps a prefix-scoped cache current from it
+and **re-lists authoritative state on lag or reconnect** — so it can never miss a
+final state (the K4 gate).
+- **`raft/watch.rs`** — `WatchEvent{revision,key,kind}` + `EventKind{Put,Delete}`;
+  `Informer` (local cache + a `broadcast::Receiver`): `resync` (re-subscribe then
+  re-list from the store — authoritative), `poll` (drain events; on `Lagged` →
+  `resync`), `snapshot`/`revision`. Correctness is resync, not buffering.
+- **`raft/state_machine.rs`** — a `broadcast::Sender<WatchEvent>` (buffer 64,
+  small on purpose); `apply` publishes a Put/Delete event per successful mutation
+  (a rejected CAS emits none); added `subscribe()` + `range()`.
+- **`raft/mod.rs`** — `RaftNode::informer(prefix)` + `range(prefix)`.
+- **Files:** `crates/aog-store/src/raft/{watch.rs, state_machine.rs, mod.rs}`;
+  `tests/watch.rs`. No new dependencies.
+- **Verify:** clippy `--all-targets -D warnings` clean; `cargo test -p aog-store`
+  = **7 passed** (K2×3 + K3×2 + K4: informer tracks writes/updates/deletes and
+  ignores out-of-prefix keys; after flooding 100 writes past the 64-event buffer,
+  `poll` detects `Lagged`, re-lists, and reconstructs all 105 keys ==
+  authoritative); fmt clean; `check --workspace` clean; deny ok. **Gate:**
+  informer reconstructs full state after a dropped connection ✓; no missed final
+  state ✓. **Commit:** `LOOM-K4`.

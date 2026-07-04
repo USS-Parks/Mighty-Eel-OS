@@ -7,6 +7,7 @@ pub mod log_store;
 pub mod network;
 pub mod state_machine;
 pub mod types;
+pub mod watch;
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -104,6 +105,24 @@ impl RaftNode {
     #[must_use]
     pub fn id(&self) -> NodeId {
         self.node_id
+    }
+
+    /// Range the committed state by key prefix.
+    ///
+    /// # Errors
+    /// [`NodeError::Storage`] on backend failure.
+    pub async fn range(&self, prefix: &str) -> Result<Vec<(String, Versioned)>, NodeError> {
+        self.sm
+            .range(prefix)
+            .await
+            .map_err(|e| NodeError::Storage(e.to_string()))
+    }
+
+    /// A prefix-scoped [`Informer`](crate::raft::watch::Informer) over this
+    /// node's committed state (K4 read path for controllers).
+    #[must_use]
+    pub fn informer(&self, prefix: impl Into<String>) -> crate::raft::watch::Informer {
+        crate::raft::watch::Informer::new(self.sm.clone(), prefix)
     }
 
     /// Linearizably replicate and apply one desired-state mutation. A failed

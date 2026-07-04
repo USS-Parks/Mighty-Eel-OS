@@ -26,14 +26,25 @@ use openraft::{
 use redb::{Database, TableDefinition};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use tokio::sync::RwLock;
+use tokio::sync::{RwLock, broadcast};
 
 use crate::raft::types::{NodeId, RaftResponse, TypeConfig};
-use crate::{Applied, RedbBackend, Store, Versioned};
+use crate::raft::watch::{EventKind, WatchEvent};
+use crate::{Applied, Op, RedbBackend, Store, Versioned};
 
 const SM_META: TableDefinition<&str, &[u8]> = TableDefinition::new("sm_meta");
 
 type StorageResult<T> = Result<T, StorageError<NodeId>>;
+
+/// Change-event fan-out buffer. Small on purpose: the informer recovers from
+/// overflow by re-listing, so its correctness is resync, not buffering.
+const WATCH_CAPACITY: usize = 64;
+
+fn op_key(op: &Op) -> String {
+    match op {
+        Op::Put { key, .. } | Op::Delete { key, .. } => key.clone(),
+    }
+}
 
 fn io_sm<E: std::error::Error + 'static>(verb: ErrorVerb, err: E) -> StorageError<NodeId> {
     StorageError::IO {
@@ -70,6 +81,7 @@ pub struct RedbStateMachine {
     data: Arc<RwLock<SmData>>,
     meta_db: Arc<Database>,
     snapshot_idx: Arc<AtomicU64>,
+    events: broadcast::Sender<WatchEvent>,
 }
 
 impl fmt::Debug for RedbStateMachine {
@@ -139,6 +151,8 @@ impl RedbStateMachine {
         let last_applied = sm_read(&meta_db, "last_applied")?;
         let last_membership = sm_read(&meta_db, "last_membership")?.unwrap_or_default();
 
+        let (events, _) = broadcast::channel(WATCH_CAPACITY);
+
         Ok(Self {
             data: Arc::new(RwLock::new(SmData {
                 store,
@@ -147,6 +161,7 @@ impl RedbStateMachine {
             })),
             meta_db,
             snapshot_idx: Arc::new(AtomicU64::new(0)),
+            events,
         })
     }
 
@@ -161,6 +176,20 @@ impl RedbStateMachine {
     /// The applied global revision.
     pub async fn revision(&self) -> crate::Revision {
         self.data.read().await.store.revision()
+    }
+
+    /// Range the applied state by key prefix (ascending).
+    ///
+    /// # Errors
+    /// Store backend failure.
+    pub async fn range(&self, prefix: &str) -> Result<Vec<(String, Versioned)>, crate::StoreError> {
+        self.data.read().await.store.range(prefix)
+    }
+
+    /// Subscribe to the change-event stream (K4 watch).
+    #[must_use]
+    pub fn subscribe(&self) -> broadcast::Receiver<WatchEvent> {
+        self.events.subscribe()
     }
 }
 
@@ -222,8 +251,10 @@ impl RaftStateMachine<TypeConfig> for RedbStateMachine {
         I::IntoIter: OptionalSend,
     {
         let meta_db = self.meta_db.clone();
+        let events_tx = self.events.clone();
         let mut data = self.data.write().await;
         let mut responses = Vec::new();
+        let mut pending: Vec<WatchEvent> = Vec::new();
 
         for entry in entries {
             data.last_applied = Some(entry.log_id);
@@ -231,9 +262,21 @@ impl RaftStateMachine<TypeConfig> for RedbStateMachine {
                 EntryPayload::Blank => RaftResponse::Noop,
                 EntryPayload::Normal(request) => match data.store.apply(&request.op) {
                     Ok(Applied::Put { revision, created }) => {
+                        pending.push(WatchEvent {
+                            revision,
+                            key: op_key(&request.op),
+                            kind: EventKind::Put,
+                        });
                         RaftResponse::Applied { revision, created }
                     }
-                    Ok(Applied::Deleted { revision }) => RaftResponse::Deleted { revision },
+                    Ok(Applied::Deleted { revision }) => {
+                        pending.push(WatchEvent {
+                            revision,
+                            key: op_key(&request.op),
+                            kind: EventKind::Delete,
+                        });
+                        RaftResponse::Deleted { revision }
+                    }
                     Err(err) => RaftResponse::Rejected {
                         reason: err.to_string(),
                     },
@@ -247,6 +290,11 @@ impl RaftStateMachine<TypeConfig> for RedbStateMachine {
         }
 
         persist_meta(&meta_db, &data)?;
+        drop(data);
+
+        for event in pending {
+            let _ = events_tx.send(event);
+        }
         Ok(responses)
     }
 
