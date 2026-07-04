@@ -13,6 +13,7 @@
 //! chain (`aog-apiserver`), so every controller action is validated, sealed,
 //! and receipted like any other caller's (A1.7, doctrine I-3/I-5).
 
+pub mod capability;
 pub mod gc;
 pub mod intents;
 pub mod objects;
@@ -23,6 +24,7 @@ pub mod runtime;
 pub mod teardown;
 pub mod transit;
 
+pub use capability::CapabilityController;
 pub use gc::GarbageCollector;
 pub use intents::RevocationIndexer;
 pub use objects::{EstateClient, is_terminating, parse_key};

@@ -163,7 +163,7 @@ pub(crate) async fn authorize(
         .gateway
         .resolve_and_check(key, Utc::now())
         .await
-        .map_err(crate::http::to_http)
+        .map_err(|e| crate::http::to_http(&e))
 }
 
 #[cfg(test)]

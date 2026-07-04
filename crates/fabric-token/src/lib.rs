@@ -9,6 +9,12 @@
 //!   * [`attenuate`] — mint a child that narrows the parent on every axis;
 //!     fails closed if it widens any.
 //!   * [`try_spend`] — atomically meter the budget strand.
+//!
+//! [`spend`] (X1) extends the metering contract across replicas: the ledger
+//! trait, the single-process ledger, and the lease-based shared ledger that
+//! keeps a budget true under horizontal scale.
+
+pub mod spend;
 
 use chrono::{DateTime, Utc};
 use fabric_contracts::{RevocationStatus, Signature, TrustToken};

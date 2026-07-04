@@ -52,19 +52,19 @@ fn base_token(expires_at: &str) -> TrustToken {
 #[test]
 fn issue_then_verify_round_trip() {
     let signer = RustCryptoMlDsa87::generate("bridge-q3").unwrap();
-    let signed = issue(base_token("2099-01-01T00:00:00Z"), &signer).unwrap();
-    assert_eq!(signed.signature.alg, "ml-dsa-87");
-    assert!(!signed.signature.value.is_empty());
-    verify(&signed, &MlDsa87Verifier, signer.public_key()).unwrap();
+    let minted = issue(base_token("2099-01-01T00:00:00Z"), &signer).unwrap();
+    assert_eq!(minted.signature.alg, "ml-dsa-87");
+    assert!(!minted.signature.value.is_empty());
+    verify(&minted, &MlDsa87Verifier, signer.public_key()).unwrap();
 }
 
 #[test]
 fn tampered_token_fails_verification() {
     let signer = RustCryptoMlDsa87::generate("k").unwrap();
-    let mut signed = issue(base_token("2099-01-01T00:00:00Z"), &signer).unwrap();
-    signed.tenant_id = "other-tenant".into(); // mutate a signed field
+    let mut minted = issue(base_token("2099-01-01T00:00:00Z"), &signer).unwrap();
+    minted.tenant_id = "other-tenant".into(); // mutate a minted field
     assert_eq!(
-        verify(&signed, &MlDsa87Verifier, signer.public_key()),
+        verify(&minted, &MlDsa87Verifier, signer.public_key()),
         Err(TokenError::InvalidSignature)
     );
 }
@@ -74,9 +74,9 @@ fn revoked_token_is_rejected() {
     let signer = RustCryptoMlDsa87::generate("k").unwrap();
     let mut t = base_token("2099-01-01T00:00:00Z");
     t.revocation_status = RevocationStatus::Revoked;
-    let signed = issue(t, &signer).unwrap();
+    let minted = issue(t, &signer).unwrap();
     assert_eq!(
-        verify(&signed, &MlDsa87Verifier, signer.public_key()),
+        verify(&minted, &MlDsa87Verifier, signer.public_key()),
         Err(TokenError::Revoked)
     );
 }
@@ -100,9 +100,9 @@ fn attenuate_narrows_and_binds_parent() {
         tool_calls_spent: 0,
     });
 
-    let signed_child = attenuate(&parent, child, &signer).unwrap();
-    assert_eq!(signed_child.attenuation.parent_id.as_deref(), Some("tok_1"));
-    verify(&signed_child, &MlDsa87Verifier, signer.public_key()).unwrap();
+    let minted_child = attenuate(&parent, child, &signer).unwrap();
+    assert_eq!(minted_child.attenuation.parent_id.as_deref(), Some("tok_1"));
+    verify(&minted_child, &MlDsa87Verifier, signer.public_key()).unwrap();
 }
 
 #[test]

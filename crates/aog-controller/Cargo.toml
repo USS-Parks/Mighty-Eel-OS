@@ -20,6 +20,7 @@ wsf-bridge = { path = "../wsf-bridge" }
 wsf-tenants = { path = "../wsf-tenants" }
 
 [dev-dependencies]
+aog-gateway = { path = "../aog-gateway" }
 axum = { workspace = true }
 base64 = "0.22"
 fabric-contracts = { path = "../fabric-contracts" }

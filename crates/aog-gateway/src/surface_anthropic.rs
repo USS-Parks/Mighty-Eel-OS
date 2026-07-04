@@ -181,7 +181,7 @@ async fn messages(
         }
     };
     let resp = crate::route::tag_route(resp, &decision);
-    let resp = crate::policy::tag_policy(resp, &policy_decision, state.mode, &outcome);
+    let resp = crate::policy::tag_policy(resp, &policy_decision, state.mode, outcome);
     crate::tokenize::tag(resp, tokenized_spans)
 }
 
@@ -201,6 +201,10 @@ fn message_json(model: &str, r: &CompletionResponse) -> Value {
     })
 }
 
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "SSE streams yield Result items; wrapping here keeps one typed annotation point"
+)]
 fn ev(name: &str, v: &Value) -> Result<Event, std::convert::Infallible> {
     Ok(Event::default().event(name).data(v.to_string()))
 }

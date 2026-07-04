@@ -117,6 +117,9 @@ pub enum ProviderError {
 #[async_trait]
 pub trait Provider: Send + Sync {
     /// The provider's stable id (`"openai"`, `"anthropic"`, `"local"`, …).
+    /// Borrowed, not `&'static`: a configured provider may carry a runtime name
+    /// ([`OpenAiProvider`] returns a field), so literal-returning impls carry a
+    /// local `unnecessary_literal_bound` allow rather than narrowing the trait.
     fn name(&self) -> &str;
 
     /// One-shot completion.
@@ -209,6 +212,7 @@ mod tests {
     struct Dummy;
     #[async_trait]
     impl Provider for Dummy {
+        #[allow(clippy::unnecessary_literal_bound)]
         fn name(&self) -> &str {
             "dummy"
         }

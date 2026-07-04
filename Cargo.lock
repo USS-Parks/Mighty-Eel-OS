@@ -183,6 +183,7 @@ version = "0.1.0"
 dependencies = [
  "aog-apiserver",
  "aog-estate",
+ "aog-gateway",
  "aog-store",
  "axum 0.8.9",
  "base64",
@@ -1135,6 +1136,7 @@ dependencies = [
  "hex",
  "serde_json",
  "thiserror 2.0.18",
+ "tokio",
 ]
 
 [[package]]

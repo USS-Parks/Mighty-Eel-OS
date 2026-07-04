@@ -198,7 +198,7 @@ fn set_headers(
     resp: &mut Response,
     decision: &PolicyDecision,
     mode: PolicyMode,
-    outcome: &ModeOutcome,
+    outcome: ModeOutcome,
 ) {
     let h = resp.headers_mut();
     h.insert("x-aog-policy-mode", HeaderValue::from_static(mode.header()));
@@ -225,7 +225,7 @@ pub(crate) fn tag_policy(
     mut resp: Response,
     decision: &PolicyDecision,
     mode: PolicyMode,
-    outcome: &ModeOutcome,
+    outcome: ModeOutcome,
 ) -> Response {
     set_headers(&mut resp, decision, mode, outcome);
     resp
@@ -251,7 +251,7 @@ fn blocked(decision: &PolicyDecision, mode: PolicyMode) -> Response {
         &mut resp,
         decision,
         mode,
-        &ModeOutcome {
+        ModeOutcome {
             block: true,
             report: true,
         },

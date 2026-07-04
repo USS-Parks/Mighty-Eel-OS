@@ -16,5 +16,8 @@ thiserror = { workspace = true }
 chrono = { workspace = true }
 hex = "0.4"
 
+[dev-dependencies]
+tokio = { workspace = true }
+
 [lints]
 workspace = true

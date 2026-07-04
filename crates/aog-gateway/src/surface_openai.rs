@@ -224,7 +224,7 @@ async fn chat_completions(
         }
     };
     let resp = crate::route::tag_route(resp, &decision);
-    let resp = crate::policy::tag_policy(resp, &policy_decision, state.mode, &outcome);
+    let resp = crate::policy::tag_policy(resp, &policy_decision, state.mode, outcome);
     crate::tokenize::tag(resp, tokenized_spans)
 }
 
@@ -287,20 +287,20 @@ async fn status(State(state): State<AppState>) -> Json<Value> {
     };
     Json(status_json(
         state.mode.header(),
-        state.registry.names(),
-        state.models.model_ids(),
+        &state.registry.names(),
+        &state.models.model_ids(),
         receipts,
-        head,
+        &head,
         verified,
     ))
 }
 
 fn status_json(
     mode: &str,
-    providers: Vec<String>,
-    models: Vec<String>,
+    providers: &[String],
+    models: &[String],
     receipts: usize,
-    chain_head: String,
+    chain_head: &str,
     chain_verified: bool,
 ) -> Value {
     json!({
@@ -333,7 +333,7 @@ fn chat_completion_json(model: &str, r: &CompletionResponse) -> Value {
     })
 }
 
-fn chunk_json(id: &str, ts: i64, model: &str, delta: Value, finish: Option<&str>) -> String {
+fn chunk_json(id: &str, ts: i64, model: &str, delta: &Value, finish: Option<&str>) -> String {
     json!({
         "id": id,
         "object": "chat.completion.chunk",
@@ -352,7 +352,7 @@ fn chat_sse(model: String, mut chunks: ChunkStream) -> Response {
     let ts = created();
     let stream = async_stream::stream! {
         yield Ok::<Event, std::convert::Infallible>(
-            Event::default().data(chunk_json(&id, ts, &model, json!({ "role": "assistant" }), None)),
+            Event::default().data(chunk_json(&id, ts, &model, &json!({ "role": "assistant" }), None)),
         );
         let mut closed = false;
         while let Some(frame) = chunks.next().await {
@@ -360,11 +360,11 @@ fn chat_sse(model: String, mut chunks: ChunkStream) -> Response {
                 Ok(c) => {
                     if !c.delta.is_empty() {
                         yield Ok(Event::default()
-                            .data(chunk_json(&id, ts, &model, json!({ "content": c.delta }), None)));
+                            .data(chunk_json(&id, ts, &model, &json!({ "content": c.delta }), None)));
                     }
                     if c.done {
                         yield Ok(Event::default()
-                            .data(chunk_json(&id, ts, &model, json!({}), Some("stop"))));
+                            .data(chunk_json(&id, ts, &model, &json!({}), Some("stop"))));
                         closed = true;
                     }
                 }
@@ -374,7 +374,7 @@ fn chat_sse(model: String, mut chunks: ChunkStream) -> Response {
             }
         }
         if !closed {
-            yield Ok(Event::default().data(chunk_json(&id, ts, &model, json!({}), Some("stop"))));
+            yield Ok(Event::default().data(chunk_json(&id, ts, &model, &json!({}), Some("stop"))));
         }
         yield Ok(Event::default().data("[DONE]"));
     };
@@ -471,10 +471,10 @@ mod tests {
     fn status_json_shape() {
         let v = status_json(
             "shadow",
-            vec!["anthropic".to_string(), "openai".to_string()],
-            vec!["gpt-4o".to_string()],
+            &["anthropic".to_string(), "openai".to_string()],
+            &["gpt-4o".to_string()],
             3,
-            "abcd".to_string(),
+            "abcd",
             true,
         );
         assert_eq!(v["mode"], "shadow");

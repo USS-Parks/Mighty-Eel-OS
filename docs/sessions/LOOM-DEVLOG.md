@@ -511,3 +511,47 @@ never needed; encrypt/decrypt stay on `wsf_bridge::OpenBaoAuth`) + `rings.rs`
 - **Gate:** disabling a ring key makes its envelopes unreadable ✓ (live
   crypto, not simulated) + halts ring workloads ✓ (estate leg).
   **Commit:** `LOOM-R4`.
+
+### X1 + R5 — Shared SpendLedger + Capability controller — DONE
+The Tier-2 A2 hazard closed: F3's "atomic budget" was per-process — N gateway
+replicas could bill a $100 cap ~$N×100. Now the ledger is shared.
+- **X1 — `fabric_token::spend` (new module).** `SpendLedger` trait +
+  `LocalSpendLedger` (G9a promoted verbatim — the gateway swaps onto it,
+  single-process behavior unchanged) + **`LeasedSpendLedger`**: each replica
+  leases a bounded slice of the shared budget from a `LeaseStore` (atomic,
+  CAS-backed) and decrements **locally** — no per-call shared-store
+  round-trip; the store never leases past the cap, so estate-wide spend
+  cannot exceed it; worst-case stranding = one slice per replica (**ε =
+  replicas × slice**, published). A dry axis is remembered — a fixed cap
+  never refills — so post-exhaustion denials are local too (live-caught: the
+  first live run made one probe per denied call). Fail-closed: store errors
+  deny. Production store: `aog_gateway::spend::OpenBaoLeaseStore` (KV-v2
+  `options.cas`; version-conflict → re-read + retry, bounded).
+- **R5 — `CapabilityController`.** Capability lifecycle → status `Ready`;
+  its budget is metered under the shared key `cap-<name>` by every replica's
+  leased ledger. (Token resolution against capabilities is R8.)
+- **Drive-by:** 8 pre-existing clippy-1.95 drift lints in aog-gateway
+  (untouched since M2) fixed — trivially-copy by-ref, needless pass-by-value,
+  float strict-eq, one scoped `#[expect]` on the SSE Result-wrap; plus
+  `signed`→`minted` renames in fabric-token's tests (similar_names).
+- **Files:** `crates/fabric-token/{Cargo.toml, src/{lib.rs, spend.rs (new)},
+  tests/token.rs}`; `crates/aog-gateway/src/{lib.rs, spend.rs (new), http.rs,
+  app.rs, policy.rs, recommend.rs, surface_openai.rs, surface_anthropic.rs,
+  provider.rs, provider/{openai,anthropic}.rs}`;
+  `crates/aog-controller/{Cargo.toml, src/{capability.rs (new), lib.rs},
+  tests/live_spend.rs (new)}`.
+- **Verify:** clippy `--all-targets --no-deps -D warnings` clean on all three
+  crates; **106 passed** across fabric-token / aog-gateway / aog-controller /
+  aog-apiserver with `WSF_OPENBAO_ADDR` set — including 4 new spend unit
+  tests (3-replica concurrency over a fake pool: ≤ cap, ≥ cap−ε, amortized;
+  dry-stays-dry with zero further store contact; unmetered axes free) and the
+  **X1/R5 live gate**: 3 `LeasedSpendLedger` replicas race one $100.00
+  capability cap through live OpenBao KV CAS ($5.00 slices, 180 × $1.00
+  attempts) — total approved ≤ cap, ≥ cap−ε ($15.00), the shared record never
+  leased past the cap, and store round-trips ≪ calls; fmt + `check
+  --workspace` clean.
+- **Gates:** budgets hold across ≥3 replicas under load (live) ✓; over-spend
+  ≤ ε ✓ (0 observed — leases are CAS-bounded); no per-call shared-store
+  round-trip ✓; single-process behavior unchanged ✓ (gateway suite green);
+  concurrent decrement across 3 clients never over-spends a cap (live) ✓.
+  **Commit:** `LOOM-X1-R5`.
