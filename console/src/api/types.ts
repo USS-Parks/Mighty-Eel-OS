@@ -228,3 +228,41 @@ export interface DenialExplanation {
   cited_line: string;
   plain_language: string;
 }
+
+// ── aog session replay (T7) ────────────────────────────────────────────────
+
+/** The kind of a captured agent-loop step (serde `snake_case`, mirrors T7). */
+export type SessionStepKind =
+  | 'prompt'
+  | 'model_output'
+  | 'tool_call'
+  | 'approval'
+  | 'tool_result'
+  | 'note';
+
+/** One replay step — the console projection of a T7 `SessionEvent`. */
+export interface ReplayStep {
+  seq: number;
+  kind: SessionStepKind;
+  at: string;
+  actor?: string | null;
+  summary: string;
+}
+
+/** A recorded session in the list (GET /v1/sessions). */
+export interface SessionSummary {
+  session_id: string;
+  steps: number;
+  chain_verified: boolean;
+}
+
+export interface SessionsResp {
+  sessions: SessionSummary[];
+}
+
+/** GET /v1/sessions/{id} — the full, deterministically-replayable transcript. */
+export interface SessionResp {
+  session_id: string;
+  chain_verified: boolean;
+  steps: ReplayStep[];
+}

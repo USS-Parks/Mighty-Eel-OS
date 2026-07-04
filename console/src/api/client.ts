@@ -14,6 +14,8 @@ import type {
   PolicyResp,
   PolicyRule,
   ReceiptsResp,
+  SessionResp,
+  SessionsResp,
   StatusResp,
   TokenResp,
   TrustToken,
@@ -179,6 +181,20 @@ export class AogClient {
       `${this.base}/v1/policy/explain?decision=${encodeURIComponent(decision)}`,
       { headers: this.authHeaders() },
     );
+  }
+
+  /** The list of recorded agent sessions (T7). */
+  sessions(): Promise<SessionsResp> {
+    return jsonFetch<SessionsResp>(`${this.base}/v1/sessions`, {
+      headers: this.authHeaders(),
+    });
+  }
+
+  /** One session's full, deterministically-replayable transcript. */
+  session(id: string): Promise<SessionResp> {
+    return jsonFetch<SessionResp>(`${this.base}/v1/sessions/${encodeURIComponent(id)}`, {
+      headers: this.authHeaders(),
+    });
   }
 
   /** Metering aggregates + live receipt-chain integrity (`GET /v1/usage`). */

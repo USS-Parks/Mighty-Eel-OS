@@ -9,6 +9,7 @@ const NAV = [
   { to: '/audit', label: 'Audit', end: false },
   { to: '/approvals', label: 'Approvals', end: false },
   { to: '/policy', label: 'Policy studio', end: false },
+  { to: '/sessions', label: 'Session replay', end: false },
 ];
 
 function shortId(id: string): string {
