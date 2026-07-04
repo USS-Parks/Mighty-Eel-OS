@@ -150,6 +150,7 @@ dependencies = [
  "fabric-crypto",
  "fabric-revocation",
  "fabric-token",
+ "mai-compliance",
  "serde_json",
  "thiserror 2.0.18",
  "tokio",

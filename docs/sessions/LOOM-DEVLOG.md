@@ -219,3 +219,30 @@ rejected pre-admission). New `crate::auth`.
   propagation proof stays owned by R9 / H2 / V5 / V10 (RC-KILL).
 - **Gate:** unauth / over-budget / revoked request rejected pre-admission ✓.
   **Commit:** `LOOM-K6`.
+
+### K7 — Admission: validate (deny-wins) — DONE
+The admission `validate` stage now runs real policy after structural validation:
+a mutation that asserts authority the caller's token lacks is refused with a
+specific reason. New `crate::policy::AdmissionPolicy`.
+- **Two fail-closed checks (D7).** (1) **Per-kind resource authority** — a
+  resource whose declared classification ceiling
+  (`Tenant`/`Workload`/`Node`/`Capability`) exceeds the token's
+  `max_data_classification` is denied; you cannot govern data above your own
+  authority. (2) **Compliance, deny-wins** — for each regime a resource declares
+  in `compliance_scopes`, the token must hold that scope; the per-regime verdicts
+  are folded by the **mai-compliance `PolicyComposer`** (the same deny-wins engine
+  the data-path gateway uses), so control plane and data plane share one
+  composition contract. Any deny → `ApiError::Forbidden(reason)` (403).
+- **Local, no OpenBao.** Evaluated from the token the front door (K6) already
+  verified. `Admission` gained a baseline `AdmissionPolicy` (OCAP > ITAR > HIPAA,
+  all enabled); `validate` is now `&self` + principal and calls it.
+- **Files:** `crates/aog-apiserver/{Cargo.toml (+mai-compliance), src/{policy.rs
+  (new), admission.rs, lib.rs}, tests/policy.rs (new)}`.
+- **Verify:** clippy `--all-targets --no-deps -D warnings` clean; `cargo test -p
+  aog-apiserver` = **19 passed** (+5 K7: unheld-scope → 403 with reason; deny-wins
+  across HIPAA + ITAR when the token holds only one; classification
+  over-authority → 403; compliant tenant → 201; a no-facts kind is a policy
+  no-op); fmt + `check --workspace` clean.
+- **Gate:** a policy-violating mutation denied with a specific reason ✓; deny-wins
+  holds across composed rules (an ITAR deny wins over a HIPAA allow) ✓.
+  **Commit:** `LOOM-K7`.

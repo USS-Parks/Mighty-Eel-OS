@@ -17,6 +17,7 @@ pub mod auth;
 pub mod codec;
 pub mod error;
 pub mod handlers;
+pub mod policy;
 pub mod reader;
 
 use std::path::Path;

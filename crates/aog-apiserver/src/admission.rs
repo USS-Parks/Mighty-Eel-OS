@@ -9,14 +9,14 @@
 //!
 //! Chain order mirrors addendum A1.7:
 //!   1. authenticate  (K6 — the front-door `crate::auth` middleware hands `admit` an already-verified Principal)
-//!   2. validate      (structural now, fail-closed; policy deny-wins is K7)
+//!   2. validate      (structural, fail-closed + K7 policy deny-wins over HIPAA/ITAR/OCAP)
 //!   3. mutate        (metadata stamp now; envelope-seal + token attenuation are K8)
 //!   4. commit        (the sole `aog-store` write, guarded by a CAS precondition)
 //!   5. receipt       (K9 — hash-chained `fabric-proof` receipt to `wsf-ledger`)
 //!
-//! Stages 1–4 do real work today; stage 5 (receipt) and the seal/policy parts of
-//! 2/3 are wired in the named later prompts. The choke point itself is complete
-//! now — every mutation traverses this one method.
+//! Stages 1–4 do real work today; stage 5 (receipt, K9) and the envelope-seal +
+//! token-attenuation of stage 3 (K8) are the remaining seams. The choke point is
+//! complete — every mutation traverses this one method.
 
 use std::sync::Arc;
 
@@ -28,6 +28,7 @@ use fabric_contracts::TrustToken;
 
 use crate::codec::{decode, encode, store_key};
 use crate::error::ApiError;
+use crate::policy::AdmissionPolicy;
 
 /// The mutation a request asks admission to perform.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -100,12 +101,16 @@ pub struct AdmissionOutcome {
 /// docs for the type invariant this enforces.
 pub struct Admission {
     raft: Arc<RaftNode>,
+    policy: AdmissionPolicy,
 }
 
 impl Admission {
     #[must_use]
     pub fn new(raft: Arc<RaftNode>) -> Self {
-        Self { raft }
+        Self {
+            raft,
+            policy: AdmissionPolicy::baseline(),
+        }
     }
 
     /// Run the admission chain and, only if every stage passes, commit exactly
@@ -124,19 +129,18 @@ impl Admission {
         // Stage 1 (authenticate) is the front-door middleware (`crate::auth`):
         // `principal` is already a verified token by the time admission runs (the
         // K6 gate). The chain here is validate -> mutate -> commit -> receipt.
-        Self::validate(&req)?;
+        self.validate(&req, principal)?;
         let staged = self.mutate(&req, principal).await?;
         let outcome = self.commit(&req, staged).await?;
         self.receipt(&req, principal, &outcome);
         Ok(outcome)
     }
 
-    // 2. validate — structural now (fail-closed); policy deny-wins is K7.
-    fn validate(req: &AdmissionRequest) -> Result<(), ApiError> {
+    // 2. validate — structural (fail-closed) + K7 policy (deny-wins over regimes).
+    fn validate(&self, req: &AdmissionRequest, principal: &Principal) -> Result<(), ApiError> {
         if let Some(object) = &req.object {
             object.validate()?;
-            // K7: run the mai-compliance deny-wins composer (HIPAA/ITAR/OCAP) +
-            // per-kind resource policy here; a single deny refuses the mutation.
+            self.policy.evaluate(object, principal)?;
         }
         Ok(())
     }
