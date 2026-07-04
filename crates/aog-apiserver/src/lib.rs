@@ -19,6 +19,7 @@ pub mod error;
 pub mod handlers;
 pub mod policy;
 pub mod reader;
+pub mod seal;
 
 use std::path::Path;
 use std::sync::Arc;
@@ -32,6 +33,7 @@ use aog_store::raft::{NodeError, RaftNode};
 use crate::admission::Admission;
 use crate::auth::Authenticator;
 use crate::reader::StoreReader;
+use crate::seal::Sealer;
 
 /// The API group + version every route is served under.
 pub const API_GROUP_VERSION: &str = "aog.islandmountain.io/v1";
@@ -57,9 +59,10 @@ impl AppState {
         node_id: NodeId,
         dir: impl AsRef<Path>,
         authenticator: Authenticator,
+        sealer: Sealer,
     ) -> Result<Self, NodeError> {
         let raft = Arc::new(RaftNode::bootstrap(node_id, dir).await?);
-        Ok(Self::from_node(raft, authenticator))
+        Ok(Self::from_node(raft, authenticator, sealer))
     }
 
     /// Recover an existing estate under `dir` (no cluster init).
@@ -70,14 +73,15 @@ impl AppState {
         node_id: NodeId,
         dir: impl AsRef<Path>,
         authenticator: Authenticator,
+        sealer: Sealer,
     ) -> Result<Self, NodeError> {
         let raft = Arc::new(RaftNode::start(node_id, dir).await?);
-        Ok(Self::from_node(raft, authenticator))
+        Ok(Self::from_node(raft, authenticator, sealer))
     }
 
-    fn from_node(raft: Arc<RaftNode>, authenticator: Authenticator) -> Self {
+    fn from_node(raft: Arc<RaftNode>, authenticator: Authenticator, sealer: Sealer) -> Self {
         Self {
-            admission: Arc::new(Admission::new(Arc::clone(&raft))),
+            admission: Arc::new(Admission::new(Arc::clone(&raft), sealer)),
             reader: StoreReader::new(raft),
             authenticator: Arc::new(authenticator),
         }

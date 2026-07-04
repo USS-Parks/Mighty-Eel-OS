@@ -246,3 +246,30 @@ specific reason. New `crate::policy::AdmissionPolicy`.
 - **Gate:** a policy-violating mutation denied with a specific reason ✓; deny-wins
   holds across composed rules (an ITAR deny wins over a HIPAA allow) ✓.
   **Commit:** `LOOM-K7`.
+
+### K8 — Admission: mutate + seal + attenuate — DONE
+The mutate stage now does two more things after stamping metadata, both needing
+control-plane keys. New `crate::seal::Sealer` (a fixed kernel data key + a signer;
+production custodies both in OpenBao, Phase W).
+- **Envelope-seal flagged spec fields (I-2).** A designated sensitive field
+  (`TrustRing.transit_key`, `ToolGrant.credential_ref`) is AES-256-GCM sealed via
+  `fabric-envelope`; the plaintext is replaced by a `sealed:wsf-envelope`
+  placeholder and the sealed blob stashed in a `wsf.io/sealed.<field>` metadata
+  annotation. The control-plane truth store never holds the plaintext (A1.3.8).
+- **Attenuate a child token (I-1/I-3).** `finish_mutation` mints a child that
+  narrows the caller's token to the action's scope (its classification ceiling)
+  via `fabric-token::attenuate` — a strict subset that fails closed on any widen —
+  and sets the object's `token_ref` to that child, so the object is authorized by
+  a capability scoped to its own creation, not the broad parent.
+- **Files:** `crates/aog-apiserver/{Cargo.toml (+fabric-envelope), src/{seal.rs
+  (new), admission.rs, lib.rs, policy.rs}, tests/{seal.rs (new), common/mod.rs,
+  crud.rs}}`. `AppState::bootstrap/start` take a `Sealer`.
+- **Verify:** clippy `--all-targets --no-deps -D warnings` clean; `cargo test -p
+  aog-apiserver` = **21 passed** (+2 K8: a TrustRing's `transit_key` is sealed at
+  rest — placeholder in the field, ciphertext in the annotation, plaintext never
+  surfaced by create or GET; a scoped child is bound to the parent, narrowed on
+  classification, budget ≤ parent remaining, and verifies); fmt + `check
+  --workspace` clean.
+- **Gate:** a sealed field is unreadable in the store (only the placeholder +
+  ciphertext appear) ✓; the child token is a strict subset of the parent
+  scope/budget ✓. **Commit:** `LOOM-K8`.

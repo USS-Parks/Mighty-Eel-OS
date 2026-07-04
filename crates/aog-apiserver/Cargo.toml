@@ -14,6 +14,7 @@ fabric-contracts = { path = "../fabric-contracts" }
 fabric-crypto = { path = "../fabric-crypto" }
 fabric-token = { path = "../fabric-token" }
 fabric-revocation = { path = "../fabric-revocation" }
+fabric-envelope = { path = "../fabric-envelope" }
 mai-compliance = { path = "../../mai-compliance" }
 axum = { workspace = true }
 tokio = { workspace = true }

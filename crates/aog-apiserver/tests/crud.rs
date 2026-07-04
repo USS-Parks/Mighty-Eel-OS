@@ -29,8 +29,15 @@ async fn crud_roundtrip() {
             .is_some_and(|u| !u.is_empty())
     );
     assert!(created["metadata"]["resource_version"].as_u64().unwrap() >= 1);
-    // K6: the object is stamped with the authenticating token's ref (provenance).
-    assert_eq!(created["metadata"]["token_ref"]["token_id"], "tok-loom");
+    // K8: the object is authorized by a child token scoped to this action, not
+    // the raw parent (attenuation).
+    assert!(
+        created["metadata"]["token_ref"]["token_id"]
+            .as_str()
+            .unwrap()
+            .starts_with("child:"),
+        "token_ref should be a scoped child: {created}"
+    );
 
     let (status, got) = send(&app, "GET", &format!("{BASE}/PolicyBundle/base"), t, None).await;
     assert_eq!(status, StatusCode::OK);

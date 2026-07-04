@@ -6,6 +6,7 @@
 use std::path::PathBuf;
 
 use aog_apiserver::auth::{Authenticator, TOKEN_HEADER};
+use aog_apiserver::seal::Sealer;
 use aog_apiserver::{AppState, router};
 use axum::Router;
 use axum::body::{Body, to_bytes};
@@ -88,7 +89,7 @@ pub async fn app_anchored(
     if let Some(snap) = revocation {
         auth = auth.with_revocation(snap).unwrap();
     }
-    let state = AppState::bootstrap(1, fresh_dir(dir_name), auth)
+    let state = AppState::bootstrap(1, fresh_dir(dir_name), auth, Sealer::generate().unwrap())
         .await
         .unwrap();
     router(state)

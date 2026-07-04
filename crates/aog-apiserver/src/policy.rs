@@ -128,6 +128,12 @@ fn policy_facts(object: &ResourceObject) -> PolicyFacts {
     }
 }
 
+/// The classification ceiling a resource asserts, if any. Used by K8 to scope a
+/// minted child token to the action.
+pub(crate) fn classification_ceiling(object: &ResourceObject) -> Option<Classification> {
+    policy_facts(object).classification_ceiling
+}
+
 fn module_of(scope: ComplianceScope) -> ModuleId {
     match scope {
         ComplianceScope::Hipaa => ModuleId::Hipaa,

@@ -10,13 +10,12 @@
 //! Chain order mirrors addendum A1.7:
 //!   1. authenticate  (K6 — the front-door `crate::auth` middleware hands `admit` an already-verified Principal)
 //!   2. validate      (structural, fail-closed + K7 policy deny-wins over HIPAA/ITAR/OCAP)
-//!   3. mutate        (metadata stamp now; envelope-seal + token attenuation are K8)
+//!   3. mutate        (metadata stamp + K8 envelope-seal flagged fields + child-token attenuation)
 //!   4. commit        (the sole `aog-store` write, guarded by a CAS precondition)
 //!   5. receipt       (K9 — hash-chained `fabric-proof` receipt to `wsf-ledger`)
 //!
-//! Stages 1–4 do real work today; stage 5 (receipt, K9) and the envelope-seal +
-//! token-attenuation of stage 3 (K8) are the remaining seams. The choke point is
-//! complete — every mutation traverses this one method.
+//! Stages 1–4 do real work today; only stage 5 (receipt, K9) remains a seam. The
+//! choke point is complete — every mutation traverses this one method.
 
 use std::sync::Arc;
 
@@ -29,6 +28,7 @@ use fabric_contracts::TrustToken;
 use crate::codec::{decode, encode, store_key};
 use crate::error::ApiError;
 use crate::policy::AdmissionPolicy;
+use crate::seal::Sealer;
 
 /// The mutation a request asks admission to perform.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -102,14 +102,16 @@ pub struct AdmissionOutcome {
 pub struct Admission {
     raft: Arc<RaftNode>,
     policy: AdmissionPolicy,
+    sealer: Sealer,
 }
 
 impl Admission {
     #[must_use]
-    pub fn new(raft: Arc<RaftNode>) -> Self {
+    pub fn new(raft: Arc<RaftNode>, sealer: Sealer) -> Self {
         Self {
             raft,
             policy: AdmissionPolicy::baseline(),
+            sealer,
         }
     }
 
@@ -145,7 +147,7 @@ impl Admission {
         Ok(())
     }
 
-    // 3. mutate — stamp metadata now; envelope-seal + token attenuation are K8.
+    // 3. mutate — stamp metadata, then finish_mutation attenuates + seals (K8).
     async fn mutate(
         &self,
         req: &AdmissionRequest,
@@ -159,8 +161,7 @@ impl Admission {
                     .clone()
                     .ok_or_else(|| ApiError::BadBody("create requires a body".to_owned()))?;
                 stamp_create(&mut object, principal);
-                // K8: envelope-seal flagged spec fields (F4/F6) and attenuate a
-                // child token scoped to exactly this action before the bytes land.
+                self.finish_mutation(&mut object, principal)?;
                 let value = encode(&object)?;
                 Ok(Staged {
                     op: Op::Put {
@@ -181,6 +182,7 @@ impl Admission {
                     .clone()
                     .ok_or_else(|| ApiError::BadBody("update requires a body".to_owned()))?;
                 stamp_update(&mut object, &current.object, principal);
+                self.finish_mutation(&mut object, principal)?;
                 let value = encode(&object)?;
                 Ok(Staged {
                     op: Op::Put {
@@ -205,6 +207,26 @@ impl Admission {
                 })
             }
         }
+    }
+
+    // 3b. finish the mutation — K8 attenuate + seal (metadata already stamped).
+    fn finish_mutation(
+        &self,
+        object: &mut ResourceObject,
+        principal: &Principal,
+    ) -> Result<(), ApiError> {
+        // Authorize the object by a child token scoped to this action, not the
+        // broad parent (attenuation; I-1/I-3). Fail closed if it cannot be minted.
+        if let Some(parent) = &principal.token {
+            let ceiling = crate::policy::classification_ceiling(object);
+            let action = format!("{}/{}", object.kind(), object.name());
+            let child = self.sealer.mint_child(parent, ceiling, &action)?;
+            object.metadata_mut().token_ref = Some(TokenRef {
+                token_id: child.token_id,
+            });
+        }
+        // Envelope-seal flagged sensitive spec fields at rest (I-2).
+        self.sealer.seal_fields(object)
     }
 
     // 4. commit — the sole store write.

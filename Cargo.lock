@@ -148,6 +148,7 @@ dependencies = [
  "chrono",
  "fabric-contracts",
  "fabric-crypto",
+ "fabric-envelope",
  "fabric-revocation",
  "fabric-token",
  "mai-compliance",
