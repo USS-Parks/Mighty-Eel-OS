@@ -157,6 +157,20 @@ pub struct ReceiptRef {
     pub chain: Option<String>,
 }
 
+/// Reference to the object that owns this one (R2). An object whose owner is
+/// gone — or exists under a different `uid` (a recreated namesake is a new
+/// owner) — is an orphan, collected by the GC controller. Owner references are
+/// set at create and frozen thereafter: ownership cannot be hijacked by update.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OwnerRef {
+    pub kind: Kind,
+    pub name: String,
+    /// The owner's `uid` at the time of reference; a mismatch means the owner
+    /// this object belonged to no longer exists.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub uid: String,
+}
+
 /// Identity + bookkeeping common to every resource.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ObjectMeta {
@@ -185,6 +199,8 @@ pub struct ObjectMeta {
     pub deletion_timestamp: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub finalizers: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub owner_refs: Vec<OwnerRef>,
 }
 
 impl ObjectMeta {

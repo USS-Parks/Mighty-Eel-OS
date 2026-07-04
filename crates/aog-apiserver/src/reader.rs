@@ -38,6 +38,13 @@ impl StoreReader {
         self
     }
 
+    /// A prefix-scoped informer over the committed estate (K4) — the wakeup
+    /// stream Phase-R controllers watch. Read-only, like everything here.
+    #[must_use]
+    pub fn informer(&self, prefix: impl Into<String>) -> aog_store::raft::watch::Informer {
+        self.raft.informer(prefix)
+    }
+
     /// Fetch one object by kind + name, served at the hub version.
     ///
     /// # Errors

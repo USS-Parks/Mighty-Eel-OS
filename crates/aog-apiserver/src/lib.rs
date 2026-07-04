@@ -120,6 +120,34 @@ impl AppState {
         self.reader = self.reader.with_conversions(conversions);
         self
     }
+
+    /// The admission choke point, for in-process controllers (Phase R). Handing
+    /// this out is safe by construction: `Admission::admit` *is* the full chain
+    /// (validate → mutate → commit → receipt) — there is no writable store
+    /// handle to leak (the K5 invariant).
+    #[must_use]
+    pub fn admission(&self) -> Arc<Admission> {
+        Arc::clone(&self.admission)
+    }
+
+    /// The read-only estate view, for controllers.
+    #[must_use]
+    pub fn reader(&self) -> StoreReader {
+        self.reader.clone()
+    }
+
+    /// The front-door authenticator (shared), for controllers that maintain its
+    /// live revocation view.
+    #[must_use]
+    pub fn authenticator(&self) -> Arc<Authenticator> {
+        Arc::clone(&self.authenticator)
+    }
+
+    /// A prefix-scoped estate informer (K4) — a controller's wakeup stream.
+    #[must_use]
+    pub fn informer(&self, prefix: impl Into<String>) -> aog_store::raft::watch::Informer {
+        self.reader.informer(prefix)
+    }
 }
 
 /// Build the control-plane router over shared [`AppState`]. The `/apis/**` routes

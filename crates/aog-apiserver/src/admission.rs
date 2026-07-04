@@ -154,8 +154,13 @@ impl Admission {
         self.validate(&req, principal)?;
         let staged = self.mutate(&req, principal).await?;
         let before_digest = staged.before_digest.clone();
+        let mutated = staged.op.is_some();
         let outcome = self.commit(&req, staged).await?;
-        self.receipt(&req, principal, before_digest.as_deref(), &outcome);
+        // Receipts are 1:1 with *mutations* (K9): an idempotent no-op (a repeat
+        // delete of an already-terminating object) changed nothing and writes none.
+        if mutated {
+            self.receipt(&req, principal, before_digest.as_deref(), &outcome);
+        }
         Ok(outcome)
     }
 
@@ -185,11 +190,11 @@ impl Admission {
                 self.finish_mutation(&mut object, principal)?;
                 let value = encode(&object)?;
                 Ok(Staged {
-                    op: Op::Put {
+                    op: Some(Op::Put {
                         key,
                         value,
                         expected: Precondition::Absent,
-                    },
+                    }),
                     object: Some(object),
                     before_digest: None,
                 })
@@ -203,16 +208,47 @@ impl Admission {
                     .object
                     .clone()
                     .ok_or_else(|| ApiError::BadBody("update requires a body".to_owned()))?;
+                // Client-side optimistic concurrency: a body carrying a non-zero
+                // resource_version asserts "I read this revision" — a stale one
+                // is refused rather than silently overwriting a newer write.
+                let asserted = object.metadata().resource_version;
+                if asserted != 0 && asserted != current.revision {
+                    return Err(ApiError::Conflict {
+                        kind: req.kind.to_string(),
+                        name: req.name.clone(),
+                        reason: format!(
+                            "stale resource_version {asserted}, current is {}",
+                            current.revision
+                        ),
+                    });
+                }
+                let terminating = current.object.metadata().deletion_timestamp.is_some();
+                if terminating {
+                    Self::check_terminating_update(req, &object, &current.object)?;
+                }
                 let before_digest = digest(&current.object);
                 stamp_update(&mut object, &current.object, principal);
+                // Finalization: removing the last finalizer from a terminating
+                // object completes its two-phase delete — the update commits as
+                // the hard delete the earlier soft delete promised (R2).
+                if terminating && object.metadata().finalizers.is_empty() {
+                    return Ok(Staged {
+                        op: Some(Op::Delete {
+                            key,
+                            expected: Precondition::Revision(current.revision),
+                        }),
+                        object: None,
+                        before_digest,
+                    });
+                }
                 self.finish_mutation(&mut object, principal)?;
                 let value = encode(&object)?;
                 Ok(Staged {
-                    op: Op::Put {
+                    op: Some(Op::Put {
                         key,
                         value,
                         expected: Precondition::Revision(current.revision),
-                    },
+                    }),
                     object: Some(object),
                     before_digest,
                 })
@@ -222,17 +258,80 @@ impl Admission {
                     kind: req.kind.to_string(),
                     name: req.name.clone(),
                 })?;
+                let meta = current.object.metadata();
                 let before_digest = digest(&current.object);
-                Ok(Staged {
-                    op: Op::Delete {
-                        key,
-                        expected: Precondition::Revision(current.revision),
-                    },
-                    object: None,
-                    before_digest,
-                })
+                // Two-phase delete (R2). No finalizers: remove now. Finalizers
+                // present: stamp deletion_timestamp (soft delete) and let the
+                // finalizing controllers tear down, then finalize via update.
+                if meta.finalizers.is_empty() {
+                    Ok(Staged {
+                        op: Some(Op::Delete {
+                            key,
+                            expected: Precondition::Revision(current.revision),
+                        }),
+                        object: None,
+                        before_digest,
+                    })
+                } else if meta.deletion_timestamp.is_some() {
+                    // Already terminating — a repeat delete is idempotent: no
+                    // mutation, no receipt, the terminating object returned.
+                    Ok(Staged {
+                        op: None,
+                        object: Some(current.object.clone()),
+                        before_digest: None,
+                    })
+                } else {
+                    let mut object = current.object.clone();
+                    let meta = object.metadata_mut();
+                    meta.deletion_timestamp = Some(now_rfc3339());
+                    // Provenance of who requested the deletion.
+                    if principal.token_ref.is_some() {
+                        meta.token_ref.clone_from(&principal.token_ref);
+                    }
+                    let value = encode(&object)?;
+                    Ok(Staged {
+                        op: Some(Op::Put {
+                            key,
+                            value,
+                            expected: Precondition::Revision(current.revision),
+                        }),
+                        object: Some(object),
+                        before_digest,
+                    })
+                }
             }
         }
+    }
+
+    // R2: while an object is terminating, its spec is frozen and its finalizer
+    // set may only shrink — teardown converges, it is never redirected. The
+    // deletion timestamp itself is carried forward by `stamp_update` (an update
+    // can never resurrect a terminating object).
+    fn check_terminating_update(
+        req: &AdmissionRequest,
+        object: &ResourceObject,
+        current: &ResourceObject,
+    ) -> Result<(), ApiError> {
+        let conflict = |reason: &str| ApiError::Conflict {
+            kind: req.kind.to_string(),
+            name: req.name.clone(),
+            reason: reason.to_owned(),
+        };
+        if spec_of(object) != spec_of(current) {
+            return Err(conflict("spec is frozen while the object is terminating"));
+        }
+        let prior = &current.metadata().finalizers;
+        if object
+            .metadata()
+            .finalizers
+            .iter()
+            .any(|f| !prior.contains(f))
+        {
+            return Err(conflict(
+                "finalizers may only be removed while the object is terminating",
+            ));
+        }
+        Ok(())
     }
 
     // 3b. finish the mutation — K8 attenuate + seal (metadata already stamped).
@@ -261,9 +360,21 @@ impl Admission {
         req: &AdmissionRequest,
         staged: Staged,
     ) -> Result<AdmissionOutcome, ApiError> {
+        // An idempotent no-op (repeat delete of a terminating object) commits
+        // nothing: the current object is returned at its stored revision.
+        let Some(op) = staged.op else {
+            let revision = staged
+                .object
+                .as_ref()
+                .map_or(0, |o| o.metadata().resource_version);
+            return Ok(AdmissionOutcome {
+                object: staged.object,
+                revision,
+            });
+        };
         let response = self
             .raft
-            .write(staged.op)
+            .write(op)
             .await
             .map_err(|e| ApiError::Store(e.to_string()))?;
         match response {
@@ -375,9 +486,10 @@ impl Admission {
     }
 }
 
-/// A staged, admitted mutation ready to commit.
+/// A staged, admitted mutation ready to commit. `op: None` is an admitted
+/// no-op — nothing to write, nothing to receipt.
 struct Staged {
-    op: Op,
+    op: Option<Op>,
     object: Option<ResourceObject>,
     before_digest: Option<String>,
 }
@@ -396,6 +508,9 @@ fn stamp_create(object: &mut ResourceObject, principal: &Principal) {
     meta.generation = 1;
     meta.resource_version = 0;
     meta.created_at = Some(now_rfc3339());
+    // Only a DELETE sets the deletion timestamp — a create body cannot smuggle
+    // a terminating state in.
+    meta.deletion_timestamp = None;
     meta.token_ref.clone_from(&principal.token_ref);
 }
 
@@ -408,10 +523,21 @@ fn stamp_update(object: &mut ResourceObject, current: &ResourceObject, principal
     meta.created_at.clone_from(&prior.created_at);
     meta.generation = prior.generation + 1;
     meta.resource_version = 0;
+    // Immutable-after-create / after-delete metadata: the deletion timestamp is
+    // carried forward (an update can never resurrect a terminating object) and
+    // owner references are frozen (ownership cannot be hijacked by update, R2).
+    meta.deletion_timestamp
+        .clone_from(&prior.deletion_timestamp);
+    meta.owner_refs.clone_from(&prior.owner_refs);
     meta.token_ref = principal
         .token_ref
         .clone()
         .or_else(|| prior.token_ref.clone());
+}
+
+/// The `spec` sub-value of an object, for the terminating spec-freeze check.
+fn spec_of(object: &ResourceObject) -> Option<serde_json::Value> {
+    object.to_value().ok().and_then(|v| v.get("spec").cloned())
 }
 
 /// The canonical digest of an object, for a receipt's before/after fields.

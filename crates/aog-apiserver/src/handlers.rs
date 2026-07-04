@@ -123,19 +123,28 @@ pub async fn update(
             AdmissionRequest {
                 verb: Verb::Update,
                 kind,
-                name,
+                name: name.clone(),
                 object: Some(object),
             },
             &principal,
         )
         .await?;
-    let stored = outcome
-        .object
-        .ok_or_else(|| ApiError::Store("update produced no object".to_owned()))?;
+    // An update that removed the last finalizer from a terminating object
+    // completed its two-phase delete (R2): there is no object left to return.
+    let Some(stored) = outcome.object else {
+        return Ok(Json(json!({
+            "kind": kind.to_string(),
+            "name": name,
+            "finalized": true,
+        }))
+        .into_response());
+    };
     Ok(Json(stored.to_value()?).into_response())
 }
 
-/// `DELETE .../{kind}/{name}` — remove a resource.
+/// `DELETE .../{kind}/{name}` — remove a resource. With finalizers present this
+/// is the first phase of a two-phase delete (R2): the object is stamped
+/// terminating and returned (200); without finalizers it is removed now (204).
 ///
 /// # Errors
 /// [`ApiError::UnknownKind`] (400) or [`ApiError::NotFound`] (404).
@@ -145,7 +154,7 @@ pub async fn delete(
     Extension(principal): Extension<Principal>,
 ) -> Result<Response, ApiError> {
     let kind = parse_kind(&kind_seg).ok_or(ApiError::UnknownKind(kind_seg))?;
-    state
+    let outcome = state
         .admission
         .admit(
             AdmissionRequest {
@@ -157,5 +166,8 @@ pub async fn delete(
             &principal,
         )
         .await?;
-    Ok(StatusCode::NO_CONTENT.into_response())
+    match outcome.object {
+        Some(terminating) => Ok(Json(terminating.to_value()?).into_response()),
+        None => Ok(StatusCode::NO_CONTENT.into_response()),
+    }
 }

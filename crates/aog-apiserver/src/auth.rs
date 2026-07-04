@@ -14,6 +14,9 @@
 //! the admission chain (its `mutate`/`receipt` stages stamp the token as
 //! provenance; K8 attenuates a child from it).
 
+use std::collections::HashSet;
+use std::sync::{Arc, RwLock};
+
 use axum::extract::{Request, State};
 use axum::http::HeaderMap;
 use axum::middleware::Next;
@@ -31,12 +34,37 @@ use crate::error::ApiError;
 /// Header carrying the base64-encoded JSON trust token.
 pub const TOKEN_HEADER: &str = "x-wsf-token";
 
+/// The estate-driven kill view (R2): what the declarative `RevocationIntent`
+/// objects currently revoke, folded in by the revocation-indexing controller
+/// and consulted by the front door on **every** request. This is the
+/// kernel-local leg of I-9; R9 fans the same intents out to signed
+/// `fabric-revocation` snapshots for other replicas and air-gapped nodes.
+#[derive(Debug, Default)]
+pub struct RevocationView {
+    pub tokens: HashSet<String>,
+    pub subjects: HashSet<String>,
+    pub tenants: HashSet<String>,
+}
+
+impl RevocationView {
+    /// Does this view revoke `token`?
+    #[must_use]
+    pub fn revokes(&self, token: &TrustToken) -> bool {
+        self.tokens.contains(&token.token_id)
+            || self.subjects.contains(&token.subject_hash)
+            || self.tenants.contains(&token.tenant_id)
+    }
+}
+
 /// The front-door authenticator: the WSF trust-anchor public key every presented
-/// token must verify under, plus an optional (already signature-verified)
-/// revocation snapshot — the kill switch consulted on every request.
+/// token must verify under, plus two kill switches consulted on every request —
+/// an optional (signature-verified) revocation snapshot, and the live
+/// [`RevocationView`] the revocation-indexing controller keeps current from
+/// declarative `RevocationIntent` objects.
 pub struct Authenticator {
     token_public_key: Vec<u8>,
     revocation: Option<RevocationSnapshot>,
+    live: Arc<RwLock<RevocationView>>,
 }
 
 impl Authenticator {
@@ -46,7 +74,16 @@ impl Authenticator {
         Self {
             token_public_key,
             revocation: None,
+            live: Arc::new(RwLock::new(RevocationView::default())),
         }
+    }
+
+    /// The shared live-revocation handle. The revocation-indexing controller
+    /// writes it; [`authenticate`](Authenticator::authenticate) reads it on
+    /// every request.
+    #[must_use]
+    pub fn live_revocation(&self) -> Arc<RwLock<RevocationView>> {
+        Arc::clone(&self.live)
     }
 
     /// Attach a revocation snapshot (the kill switch). The snapshot's own
@@ -93,11 +130,18 @@ impl Authenticator {
             return Err(ApiError::Unauthenticated);
         }
 
-        // Kill switch: a revoked token or subject halts the next call.
+        // Kill switch, snapshot leg: a revoked token or subject halts the next call.
         if let Some(snap) = &self.revocation
             && (snap.is_token_revoked(&token.token_id)
                 || snap.is_subject_revoked(&token.subject_hash))
         {
+            return Err(ApiError::Unauthenticated);
+        }
+
+        // Kill switch, estate leg (R2): the live RevocationIntent view. A
+        // poisoned lock is uncertainty — fail closed (doctrine I-4).
+        let revoked = self.live.read().map_or(true, |view| view.revokes(&token));
+        if revoked {
             return Err(ApiError::Unauthenticated);
         }
 
