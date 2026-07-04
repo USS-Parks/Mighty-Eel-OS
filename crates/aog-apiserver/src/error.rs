@@ -47,6 +47,9 @@ pub enum ApiError {
     /// Policy denied the mutation (K7 deny-wins seam).
     #[error("forbidden: {0}")]
     Forbidden(String),
+    /// The presented token's budget is exhausted — rejected pre-admission (K6).
+    #[error("budget exhausted")]
+    BudgetExhausted,
 }
 
 impl ApiError {
@@ -61,6 +64,7 @@ impl ApiError {
             ApiError::Conflict { .. } => StatusCode::CONFLICT,
             ApiError::Unauthenticated => StatusCode::UNAUTHORIZED,
             ApiError::Forbidden(_) => StatusCode::FORBIDDEN,
+            ApiError::BudgetExhausted => StatusCode::PAYMENT_REQUIRED,
             ApiError::Store(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }

@@ -1,67 +1,22 @@
-//! K5 CRUD surface: create -> get -> list -> update -> delete round-trips
-//! through the real router + admission + store, plus the conflict / not-found /
-//! bad-request edges. Driven in-process with `tower::ServiceExt::oneshot` (no
-//! socket bound).
+//! K5 CRUD surface, now behind K6 authentication: create -> get -> list ->
+//! update -> delete round-trips + conflict / not-found / bad-request edges, all
+//! carrying a valid trust token.
 
-use std::path::PathBuf;
+mod common;
 
-use aog_apiserver::{AppState, router};
-use axum::Router;
-use axum::body::{Body, to_bytes};
-use axum::http::{Request, StatusCode, header};
-use serde_json::{Value, json};
-use tower::ServiceExt;
-
-const BASE: &str = "/apis/aog.islandmountain.io/v1";
-
-fn fresh_dir(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(name);
-    let _ = std::fs::remove_dir_all(&dir);
-    dir
-}
-
-async fn app(dir_name: &str) -> Router {
-    let state = AppState::bootstrap(1, fresh_dir(dir_name)).await.unwrap();
-    router(state)
-}
-
-async fn send(app: &Router, method: &str, uri: &str, body: Option<Value>) -> (StatusCode, Value) {
-    let builder = Request::builder().method(method).uri(uri);
-    let request = match body {
-        Some(b) => builder
-            .header(header::CONTENT_TYPE, "application/json")
-            .body(Body::from(b.to_string()))
-            .unwrap(),
-        None => builder.body(Body::empty()).unwrap(),
-    };
-    let response = app.clone().oneshot(request).await.unwrap();
-    let status = response.status();
-    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
-    let value = if bytes.is_empty() {
-        Value::Null
-    } else {
-        serde_json::from_slice(&bytes).unwrap_or(Value::Null)
-    };
-    (status, value)
-}
-
-fn bundle(name: &str, version: u32) -> Value {
-    json!({
-        "api_version": "aog.islandmountain.io/v1",
-        "kind": "PolicyBundle",
-        "metadata": { "name": name },
-        "spec": { "version": version },
-    })
-}
+use axum::http::StatusCode;
+use common::{BASE, authed_app, bundle, send};
 
 #[tokio::test]
 async fn crud_roundtrip() {
-    let app = app("aog-apiserver-k5-crud").await;
+    let (app, tok) = authed_app("aog-apiserver-k5-crud").await;
+    let t = Some(tok.as_str());
 
     let (status, created) = send(
         &app,
         "POST",
         &format!("{BASE}/PolicyBundle"),
+        t,
         Some(bundle("base", 1)),
     )
     .await;
@@ -74,12 +29,14 @@ async fn crud_roundtrip() {
             .is_some_and(|u| !u.is_empty())
     );
     assert!(created["metadata"]["resource_version"].as_u64().unwrap() >= 1);
+    // K6: the object is stamped with the authenticating token's ref (provenance).
+    assert_eq!(created["metadata"]["token_ref"]["token_id"], "tok-loom");
 
-    let (status, got) = send(&app, "GET", &format!("{BASE}/PolicyBundle/base"), None).await;
+    let (status, got) = send(&app, "GET", &format!("{BASE}/PolicyBundle/base"), t, None).await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(got["spec"]["version"], 1);
 
-    let (status, listed) = send(&app, "GET", &format!("{BASE}/PolicyBundle"), None).await;
+    let (status, listed) = send(&app, "GET", &format!("{BASE}/PolicyBundle"), t, None).await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(listed["items"].as_array().unwrap().len(), 1);
 
@@ -87,6 +44,7 @@ async fn crud_roundtrip() {
         &app,
         "PUT",
         &format!("{BASE}/PolicyBundle/base"),
+        t,
         Some(bundle("base", 2)),
     )
     .await;
@@ -94,30 +52,39 @@ async fn crud_roundtrip() {
     assert_eq!(updated["spec"]["version"], 2);
     assert_eq!(updated["metadata"]["generation"], 2);
 
-    let (status, _) = send(&app, "DELETE", &format!("{BASE}/PolicyBundle/base"), None).await;
+    let (status, _) = send(
+        &app,
+        "DELETE",
+        &format!("{BASE}/PolicyBundle/base"),
+        t,
+        None,
+    )
+    .await;
     assert_eq!(status, StatusCode::NO_CONTENT);
 
-    let (status, _) = send(&app, "GET", &format!("{BASE}/PolicyBundle/base"), None).await;
+    let (status, _) = send(&app, "GET", &format!("{BASE}/PolicyBundle/base"), t, None).await;
     assert_eq!(status, StatusCode::NOT_FOUND);
 }
 
 #[tokio::test]
 async fn duplicate_create_conflicts() {
-    let app = app("aog-apiserver-k5-conflict").await;
+    let (app, tok) = authed_app("aog-apiserver-k5-conflict").await;
+    let t = Some(tok.as_str());
     let uri = format!("{BASE}/PolicyBundle");
-    let (s1, _) = send(&app, "POST", &uri, Some(bundle("dup", 1))).await;
+    let (s1, _) = send(&app, "POST", &uri, t, Some(bundle("dup", 1))).await;
     assert_eq!(s1, StatusCode::CREATED);
-    let (s2, _) = send(&app, "POST", &uri, Some(bundle("dup", 1))).await;
+    let (s2, _) = send(&app, "POST", &uri, t, Some(bundle("dup", 1))).await;
     assert_eq!(s2, StatusCode::CONFLICT);
 }
 
 #[tokio::test]
 async fn update_missing_is_not_found() {
-    let app = app("aog-apiserver-k5-updatemiss").await;
+    let (app, tok) = authed_app("aog-apiserver-k5-updatemiss").await;
     let (status, _) = send(
         &app,
         "PUT",
         &format!("{BASE}/PolicyBundle/ghost"),
+        Some(&tok),
         Some(bundle("ghost", 2)),
     )
     .await;
@@ -126,20 +93,27 @@ async fn update_missing_is_not_found() {
 
 #[tokio::test]
 async fn unknown_kind_is_bad_request() {
-    let app = app("aog-apiserver-k5-unknownkind").await;
-    let (status, _) = send(&app, "GET", &format!("{BASE}/Bogus"), None).await;
+    let (app, tok) = authed_app("aog-apiserver-k5-unknownkind").await;
+    let (status, _) = send(&app, "GET", &format!("{BASE}/Bogus"), Some(&tok), None).await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
 }
 
 #[tokio::test]
 async fn kind_mismatch_is_bad_request() {
-    let app = app("aog-apiserver-k5-kindmismatch").await;
-    let body = json!({
+    let (app, tok) = authed_app("aog-apiserver-k5-kindmismatch").await;
+    let body = serde_json::json!({
         "api_version": "aog.islandmountain.io/v1",
         "kind": "ToolGrant",
         "metadata": { "name": "x" },
         "spec": { "tool": "github" },
     });
-    let (status, _) = send(&app, "POST", &format!("{BASE}/PolicyBundle"), Some(body)).await;
+    let (status, _) = send(
+        &app,
+        "POST",
+        &format!("{BASE}/PolicyBundle"),
+        Some(&tok),
+        Some(body),
+    )
+    .await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
 }

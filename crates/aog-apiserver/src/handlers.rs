@@ -1,18 +1,19 @@
 //! Typed CRUD handlers. Every mutating route funnels through
-//! [`crate::admission::Admission::admit`]; the read routes use the read-only
-//! [`crate::reader::StoreReader`]. There is no handler path that writes the store
-//! directly (the K5 gate).
+//! [`crate::admission::Admission::admit`] with the verified [`Principal`] the
+//! front-door authenticator (K6) stashed in request extensions; the read routes
+//! use the read-only [`crate::reader::StoreReader`]. There is no handler path
+//! that writes the store directly (the K5 gate).
 
-use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
+use axum::{Extension, Json};
 use serde_json::{Value, json};
 
 use aog_estate::ResourceObject;
 
 use crate::AppState;
-use crate::admission::{AdmissionRequest, Verb};
+use crate::admission::{AdmissionRequest, Principal, Verb};
 use crate::codec::parse_kind;
 use crate::error::ApiError;
 
@@ -25,6 +26,7 @@ use crate::error::ApiError;
 pub async fn create(
     State(state): State<AppState>,
     Path(kind_seg): Path<String>,
+    Extension(principal): Extension<Principal>,
     Json(body): Json<Value>,
 ) -> Result<Response, ApiError> {
     let kind = parse_kind(&kind_seg).ok_or(ApiError::UnknownKind(kind_seg))?;
@@ -38,12 +40,15 @@ pub async fn create(
     let name = object.name().to_owned();
     let outcome = state
         .admission
-        .admit(AdmissionRequest {
-            verb: Verb::Create,
-            kind,
-            name,
-            object: Some(object),
-        })
+        .admit(
+            AdmissionRequest {
+                verb: Verb::Create,
+                kind,
+                name,
+                object: Some(object),
+            },
+            &principal,
+        )
         .await?;
     let stored = outcome
         .object
@@ -51,7 +56,8 @@ pub async fn create(
     Ok((StatusCode::CREATED, Json(stored.to_value()?)).into_response())
 }
 
-/// `GET .../{kind}/{name}` — fetch one resource.
+/// `GET .../{kind}/{name}` — fetch one resource. Authenticated by the front-door
+/// middleware; reads are not principal-scoped in the kernel.
 ///
 /// # Errors
 /// [`ApiError::UnknownKind`] (400) or [`ApiError::NotFound`] (404).
@@ -98,6 +104,7 @@ pub async fn list(
 pub async fn update(
     State(state): State<AppState>,
     Path((kind_seg, name)): Path<(String, String)>,
+    Extension(principal): Extension<Principal>,
     Json(body): Json<Value>,
 ) -> Result<Response, ApiError> {
     let kind = parse_kind(&kind_seg).ok_or(ApiError::UnknownKind(kind_seg))?;
@@ -116,12 +123,15 @@ pub async fn update(
     }
     let outcome = state
         .admission
-        .admit(AdmissionRequest {
-            verb: Verb::Update,
-            kind,
-            name,
-            object: Some(object),
-        })
+        .admit(
+            AdmissionRequest {
+                verb: Verb::Update,
+                kind,
+                name,
+                object: Some(object),
+            },
+            &principal,
+        )
         .await?;
     let stored = outcome
         .object
@@ -136,16 +146,20 @@ pub async fn update(
 pub async fn delete(
     State(state): State<AppState>,
     Path((kind_seg, name)): Path<(String, String)>,
+    Extension(principal): Extension<Principal>,
 ) -> Result<Response, ApiError> {
     let kind = parse_kind(&kind_seg).ok_or(ApiError::UnknownKind(kind_seg))?;
     state
         .admission
-        .admit(AdmissionRequest {
-            verb: Verb::Delete,
-            kind,
-            name,
-            object: None,
-        })
+        .admit(
+            AdmissionRequest {
+                verb: Verb::Delete,
+                kind,
+                name,
+                object: None,
+            },
+            &principal,
+        )
         .await?;
     Ok(StatusCode::NO_CONTENT.into_response())
 }

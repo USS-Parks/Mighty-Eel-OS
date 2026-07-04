@@ -8,15 +8,15 @@
 //! no handler can construct a store write that skips the chain.
 //!
 //! Chain order mirrors addendum A1.7:
-//!   1. authenticate  (K6 — front-door WSF token verify; system principal until then)
+//!   1. authenticate  (K6 — the front-door `crate::auth` middleware hands `admit` an already-verified Principal)
 //!   2. validate      (structural now, fail-closed; policy deny-wins is K7)
 //!   3. mutate        (metadata stamp now; envelope-seal + token attenuation are K8)
 //!   4. commit        (the sole `aog-store` write, guarded by a CAS precondition)
 //!   5. receipt       (K9 — hash-chained `fabric-proof` receipt to `wsf-ledger`)
 //!
-//! Stages 2/3/4 do real work today; stage 1, stage 5, and the seal/policy parts
-//! of 2/3 are wired in the named later prompts. The choke point itself is
-//! complete now — every mutation already traverses this one method.
+//! Stages 1–4 do real work today; stage 5 (receipt) and the seal/policy parts of
+//! 2/3 are wired in the named later prompts. The choke point itself is complete
+//! now — every mutation traverses this one method.
 
 use std::sync::Arc;
 
@@ -24,6 +24,7 @@ use aog_estate::{Kind, ResourceObject, TokenRef};
 use aog_store::raft::RaftNode;
 use aog_store::raft::types::RaftResponse;
 use aog_store::{Op, Precondition, Revision};
+use fabric_contracts::TrustToken;
 
 use crate::codec::{decode, encode, store_key};
 use crate::error::ApiError;
@@ -36,22 +37,44 @@ pub enum Verb {
     Delete,
 }
 
-/// The authenticated caller. K6 fills this from a verified WSF capability token;
-/// until then the front door runs as the system principal. Carried through the
-/// chain so mutate/receipt can stamp provenance (`token_ref`, receipt subject).
+/// The authenticated caller, produced by the front-door authenticator (K6) from
+/// a verified WSF trust token and carried through the chain so mutate/receipt can
+/// stamp provenance and K8 can attenuate a child from the parent token.
 #[derive(Debug, Clone)]
 pub struct Principal {
+    /// The token subject (`subject_hash`), or `system:apiserver`.
     pub subject: String,
+    /// The tenant the token belongs to, when authenticated.
+    pub tenant: Option<String>,
+    /// The authorizing capability reference stamped onto mutated objects.
     pub token_ref: Option<TokenRef>,
+    /// The verified trust token — carried for downstream stages (K8 attenuation).
+    pub token: Option<TrustToken>,
 }
 
 impl Principal {
-    /// The kernel's standing identity until front-door authN (K6) lands.
+    /// A verified caller from an authenticated WSF trust token (K6).
+    #[must_use]
+    pub fn authenticated(token: TrustToken) -> Self {
+        Self {
+            subject: token.subject_hash.clone(),
+            tenant: Some(token.tenant_id.clone()),
+            token_ref: Some(TokenRef {
+                token_id: token.token_id.clone(),
+            }),
+            token: Some(token),
+        }
+    }
+
+    /// The system principal — for internal callers with no external request
+    /// (later-phase controllers). Never minted from an inbound request.
     #[must_use]
     pub fn system() -> Self {
         Self {
             subject: "system:apiserver".to_owned(),
+            tenant: None,
             token_ref: None,
+            token: None,
         }
     }
 }
@@ -90,27 +113,22 @@ impl Admission {
     /// writes the store.
     ///
     /// # Errors
-    /// The first stage to refuse: [`ApiError::Invalid`] (structural), later
-    /// [`ApiError::Unauthenticated`]/[`ApiError::Forbidden`] (K6/K7),
-    /// [`ApiError::NotFound`]/[`ApiError::Conflict`] at commit, or
-    /// [`ApiError::Store`] on backend failure.
-    pub async fn admit(&self, req: AdmissionRequest) -> Result<AdmissionOutcome, ApiError> {
-        let principal = self.authenticate(&req)?;
+    /// The first stage to refuse: [`ApiError::Invalid`] (structural) or
+    /// [`ApiError::Forbidden`] (K7 policy); [`ApiError::NotFound`] /
+    /// [`ApiError::Conflict`] at commit; or [`ApiError::Store`] on backend failure.
+    pub async fn admit(
+        &self,
+        req: AdmissionRequest,
+        principal: &Principal,
+    ) -> Result<AdmissionOutcome, ApiError> {
+        // Stage 1 (authenticate) is the front-door middleware (`crate::auth`):
+        // `principal` is already a verified token by the time admission runs (the
+        // K6 gate). The chain here is validate -> mutate -> commit -> receipt.
         Self::validate(&req)?;
-        let staged = self.mutate(&req, &principal).await?;
+        let staged = self.mutate(&req, principal).await?;
         let outcome = self.commit(&req, staged).await?;
-        self.receipt(&req, &principal, &outcome);
+        self.receipt(&req, principal, &outcome);
         Ok(outcome)
-    }
-
-    // 1. authenticate — K6 seam.
-    #[allow(clippy::unused_self, clippy::unnecessary_wraps)]
-    fn authenticate(&self, _req: &AdmissionRequest) -> Result<Principal, ApiError> {
-        // K6: verify the WSF `fabric-token` at the front door — budget, caveats,
-        // revocation — and reject unauth / over-budget / revoked *before* the
-        // chain proceeds (fail-closed, doctrine I-3/I-4). Until K6 the kernel
-        // runs as the system principal.
-        Ok(Principal::system())
     }
 
     // 2. validate — structural now (fail-closed); policy deny-wins is K7.

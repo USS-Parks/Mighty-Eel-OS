@@ -183,3 +183,39 @@ reach a store write any other way — the K5 gate, enforced by type.
 - **Gate:** no write reaches `aog-store` bypassing admission — enforced by type
   (private node handle + read-only reader) ✓ and by test
   (reject-persists-nothing + admission-stamps) ✓. **Commit:** `LOOM-K5`.
+
+### K6 — WSF authN at the front door — DONE
+Every `/apis/**` request must present a valid, in-budget, unrevoked WSF trust
+token, verified **before** admission (the K6 gate: unauth / over-budget / revoked
+rejected pre-admission). New `crate::auth`.
+- **Local verify, no coasting (doctrine I-3/I-4).** `Authenticator` holds the WSF
+  trust-anchor public key + an optional revocation snapshot. A
+  `from_fn_with_state` middleware (`require_token`) runs on the API routes only
+  (health stays open): it reads `x-wsf-token: base64(json(TrustToken))`, then —
+  all local ML-DSA, no OpenBao round-trip — `fabric_token::verify` (signature +
+  on-token revocation), `is_expired`, revocation-snapshot membership
+  (`fabric_revocation`), and a budget pre-flight. Any failure fails closed
+  (401; over-budget → 402). The verified `Principal` (subject, tenant,
+  `token_ref`, and the token itself for K8) is stashed in request extensions.
+- **Admission takes the verified principal.** `Admission::admit` no longer
+  self-authenticates (the K5 stage-1 seam is deleted); it receives the front-door
+  `Principal`, and `stamp_create` now stamps the real `token_ref` as provenance.
+  `Principal` gained `tenant` + the verified `TrustToken`.
+- **Tests refactored + gate.** New `tests/common/mod.rs` mints ML-DSA tokens and
+  builds authenticated apps; `crud` / `admission_bypass` now carry a token. New
+  `tests/auth.rs` proves the gate: missing / wrong-anchor / expired / revoked →
+  401, over-budget → 402, valid → 201, `/healthz` open.
+- **Files:** `crates/aog-apiserver/{Cargo.toml, src/{auth.rs (new), lib.rs,
+  admission.rs, handlers.rs, error.rs}, tests/{common/mod.rs (new), auth.rs (new),
+  crud.rs, admission_bypass.rs}}`; deps `fabric-{contracts,crypto,token,revocation}`
+  + `base64`.
+- **Verify:** clippy `--all-targets --no-deps -D warnings` clean (own crate;
+  `--no-deps` because the new fabric-* dep edge surfaces a **pre-existing**
+  `manual_let_else` in `fabric-crypto` under clippy 1.95 — not K6's to fix, and
+  green on `main`); `cargo test -p aog-apiserver` = **14 passed** (5 CRUD + 2
+  bypass + 7 auth); fmt clean; `check --workspace` clean.
+- **Note (A3.2):** verification is local asymmetric crypto by design (I-3), so the
+  K6 gate needs no live OpenBao. The live-OpenBao + multi-node kill-switch /
+  propagation proof stays owned by R9 / H2 / V5 / V10 (RC-KILL).
+- **Gate:** unauth / over-budget / revoked request rejected pre-admission ✓.
+  **Commit:** `LOOM-K6`.
