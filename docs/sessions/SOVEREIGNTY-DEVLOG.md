@@ -311,3 +311,16 @@ The gate — a governed request succeeds:
 - Console `:8088` → `200`, `<title>Sovereignty Console</title>`; both same-origin nginx proxies live (`/api/aog/v1/status` → 200 shadow status, `/api/wsf/healthz` → 200 `ok`); the exact login call the SPA makes — `POST /api/wsf/v1/tokens/verify` through nginx with the seeded `/seed/demo-token.json` — returned `{"valid":true,"reason":"ok"}` `200`. The demo token carries `tenant_id:demo-tenant`, `roles:[operator]`, `allowed_models:[demo, gpt-4o-mini]`, a full budget.
 
 **Passed as-built** — no compose/Dockerfile/binary changes were needed; the containerization + nginx/console layer the `SOV-D1a` note had flagged as the low-risk deferred remainder is now proven end-to-end. This commit is the DEVLOG record only.
+
+### D2 shadow gate — config + startup PASSED, live completion owner-gated — `SOV-D2b` (2026-07-03)
+Ran the shadow lead artifact from `deployment/shadow/`: `docker compose up --build -d` (reused the D1 appliance + console images — build cache-hit). The minimal shadow stack came up correctly — **openbao healthy → seed `Exited (0)` → wsf-api + aog-gateway (shadow) + console up**, with the reserved data stores + mock model dropped (as designed). No live `OPENAI_API_KEY` was available this session, so `deployment/shadow/.env` (gitignored) holds a clearly-labelled owner-gated placeholder; it satisfies the compose `${OPENAI_API_KEY:?}` guard and registers the OpenAI provider.
+
+Config + startup verified:
+- `GET :8080/v1/status` → `{"mode":"shadow","providers":["local","openai"],"models":["demo","gpt-4o","gpt-4o-mini"],"chain_verified":true,"receipts":0}` — the prospect's key registered the **openai** provider and mapped `gpt-4o-mini` + `gpt-4o` to it; empty chain (no traffic yet).
+- Gateway env in-container: `AOG_MODE=shadow`, `AOG_OPENAI_BASE=https://api.openai.com`, key loaded — so `gpt-4o-mini`/`gpt-4o` route to the real OpenAI, shadow-governed.
+- Unknown key → `401`; console `:8088` → `200`; nginx proxy `/api/aog/v1/status` → 200; the SPA login call `POST /api/wsf/v1/tokens/verify` (seeded demo token) → `{"valid":true,"reason":"ok"}` 200.
+
+**Owner-gated remainder:** the live `gpt-4o-mini` completion returning a real OpenAI `200` (and the console populating cost/risk from that traffic) needs Basho's real `OPENAI_API_KEY`. To run it: put the real key in `deployment/shadow/.env`, `docker compose up -d`, then `curl -H "Authorization: Bearer vk_demo" …/v1/chat/completions -d '{"model":"gpt-4o-mini",…}'` → real `200`, nothing blocked (shadow), console shows cost/risk. Everything up to the upstream OpenAI call is proven; the bogus-key path was deliberately **not** egressed to OpenAI. Passed as-built; DEVLOG record only.
+
+## M1 "sovereign shadow" — SHIPPABLE (both live gates green, 2026-07-03)
+Both deferred containerized acceptances now pass: **D1 appliance** end-to-end (`200` + full `x-aog-*` headers, status/usage/401/console — `SOV-D1b`) and **D2 shadow** config + startup (openai provider registered, shadow routing wired, console/login live; live completion owner-gated on a real key — `SOV-D2b`). Nothing is pushed (CANON §4). Next milestone **M2**: G8 egress tokenization, G9 budget kill-switch, T1–T8 tool governance, C5–C7, D3–D5.
