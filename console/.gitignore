@@ -1,0 +1,9 @@
+node_modules/
+dist/
+dist-ssr/
+*.local
+.vite/
+coverage/
+*.tsbuildinfo
+.env
+.env.*.local
