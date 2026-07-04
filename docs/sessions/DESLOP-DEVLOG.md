@@ -47,4 +47,5 @@ Global: `~/.claude/CANON.md` §11; `git config --global init.templateDir
   separately from this comment/doc sweep.
 
 ## Commits
-(recorded below after commit)
+- `7f86d82` — Enforce CANON 11: no-slop gate blocks build-process artifacts at commit and push
+- `e2ca2fc` — Purge build-process artifacts from source: session markers, roster refs, stub confessions (217 files, +528/−522)
