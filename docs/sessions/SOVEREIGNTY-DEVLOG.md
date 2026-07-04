@@ -268,3 +268,11 @@ New top-level `console/` app (Vite + React 19 + TypeScript + Tailwind v4) — re
 - **Chart primitive:** `BarChart` — dependency-free horizontal bars (proportional widths + formatted value labels, tone-colored), so the console pulls in no charting library.
 - **Files:** `console/src/{components/BarChart.tsx, views/RoutingView.tsx, test/routing.test.tsx}`.
 - **Verify:** `tsc --noEmit` clean; `vitest run` = **13 passed** (routing: charts + table render from a live-meter fixture — `$0.45` cloud spend, `3 calls` local / `2 calls` cloud, `gpt-4o-mini` row; no-key → key prompt), `npm run build` green (19 kB CSS / 250 kB JS). Charts render from the live meter API — the gate. **Commit:** `SOV-C3`.
+
+### C4 — Audit search — DONE
+- **Audit view** over WSF `/v1/receipts` — the unified evidence ledger: a field/value search (token_id / envelope_id / subject_hash / decision / tenant_id; blank = all) + a results table (seq / source / token / envelope / op·decision) with a per-row raw-JSON expander and a live row count. Bridge issuance + seal/unseal receipts join here by correlation id — the "one evidence lake." In-UI note: AOG gateway request receipts are surfaced in C3 (Routing & Spend) and fold into this lake at D4.
+- **Files:** `console/src/{views/AuditView.tsx, test/audit.test.tsx}`.
+- **Verify:** `tsc --noEmit` clean; `vitest run` = **15 passed** (audit: three correlated rows across `wsf-bridge` + `wsf-seal` joined by `tok_1`, envelope + op·decision surfaced; search by `token_id=tok_1` fires `/v1/receipts?field=token_id&value=tok_1`), `npm run build` green. Query returns correct joined rows — the gate. **Commit:** `SOV-C4`.
+
+## ✅ Phase C COMPLETE — the console (C1–C4) (2026-07-03)
+Four prompts, one `console/` app (Vite + React 19 + TS + Tailwind v4): scaffold + TS client + WSF-identity login + shell (C1), Overview + trust status on a new `/v1/status` gateway endpoint (C2), Routing & Spend dashboards on the `/v1/usage` meter (C3), and Audit search on the WSF `/v1/receipts` ledger (C4). **15 vitest tests + tsc + vite build green**; one additive gateway endpoint (`/v1/status`, +unit test, gateway suite 31 green). Replaces the retired Jinja2 `compliance-dashboard/`. The console's live whole-stack render lands at **D1** (appliance compose). **Remaining for M1: D1 (appliance docker-compose) + D2 (shadow-mode lead artifact).**
