@@ -14,6 +14,7 @@ fabric-token = { path = "../fabric-token" }
 fabric-envelope = { path = "../fabric-envelope" }
 wsf-bridge = { path = "../wsf-bridge" }
 mai-router = { path = "../../mai-router" }
+mai-compliance = { path = "../../mai-compliance" }
 axum = { workspace = true }
 tokio = { workspace = true }
 serde = { workspace = true }

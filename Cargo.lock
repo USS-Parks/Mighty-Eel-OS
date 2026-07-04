@@ -131,6 +131,7 @@ dependencies = [
  "fabric-token",
  "futures",
  "hex",
+ "mai-compliance",
  "mai-router",
  "reqwest",
  "serde",

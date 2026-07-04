@@ -107,16 +107,24 @@ async fn messages(
         Ok(pair) => pair,
         Err(e) => return e.into_response(),
     };
+    let target_cloud = crate::policy::target_is_cloud(&target);
     let neutral = anthropic_neutral(&body, target.model);
+    let query = crate::route::query_text(&neutral.messages);
 
-    // Classify + route (G5, shadow mode — decide + log via x-aog-* headers).
+    // Classify + route (G5).
     let decision = crate::route::classify_and_route(
         state.router.as_ref(),
-        &crate::route::query_text(&neutral.messages),
-        neutral.max_tokens.unwrap_or(0),
+        &query,
+        crate::route::estimate_tokens(neutral.max_tokens, &query),
         &ctx.tenant_id,
         ctx.token.roles.first().map_or("user", String::as_str),
     );
+    // Policy + modes (G6): shadow logs, report-only flags, enforce blocks.
+    let (policy_decision, outcome) =
+        match crate::policy::gate(&state, target_cloud, &query, &decision) {
+            Ok(pair) => pair,
+            Err(blocked) => return blocked,
+        };
 
     let resp = if body.get("stream").and_then(Value::as_bool).unwrap_or(false) {
         match provider.stream(&neutral).await {
@@ -129,7 +137,8 @@ async fn messages(
             Err(e) => provider_http(&e).into_response(),
         }
     };
-    crate::route::tag_route(resp, &decision)
+    let resp = crate::route::tag_route(resp, &decision);
+    crate::policy::tag_policy(resp, &policy_decision, state.mode, &outcome)
 }
 
 fn message_json(model: &str, r: &CompletionResponse) -> Value {

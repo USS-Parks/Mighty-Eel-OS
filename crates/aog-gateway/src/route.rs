@@ -56,6 +56,16 @@ pub fn query_text(messages: &[ChatMessage]) -> String {
         .join("\n")
 }
 
+/// A token estimate for the router's cost input: the caller's `max_tokens` if
+/// given, else a ~4-chars-per-token estimate of the query (min 1 — a zero
+/// estimate makes `mai-router`'s cost stage over-restrict).
+#[must_use]
+pub fn estimate_tokens(max_tokens: Option<u32>, query: &str) -> u32 {
+    max_tokens
+        .unwrap_or_else(|| u32::try_from(query.len() / 4).unwrap_or(64))
+        .max(1)
+}
+
 /// Classify request text and pick a destination via `mai-router`. Fails **closed**
 /// to `LocalOnly` on any router error — an unclassifiable request never egresses.
 #[must_use]

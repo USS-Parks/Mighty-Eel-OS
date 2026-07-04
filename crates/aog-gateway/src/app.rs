@@ -15,6 +15,7 @@ use axum::http::{HeaderMap, StatusCode};
 use chrono::Utc;
 use mai_router::{DefaultRouter, Router};
 
+use crate::policy::{PolicyEngine, PolicyMode};
 use crate::provider::Registry;
 use crate::{Gateway, ResolvedContext};
 
@@ -89,10 +90,15 @@ pub struct AppState {
     pub models: Arc<ModelMap>,
     /// The G5 classify-and-route engine. Defaults to `mai-router`'s `DefaultRouter`.
     pub router: Arc<dyn Router + Send + Sync>,
+    /// The G6 deny-wins policy engine (mai-compliance).
+    pub policy: Arc<PolicyEngine>,
+    /// The G6 enforcement posture. Defaults to `Shadow` (never blocks) for M1.
+    pub mode: PolicyMode,
 }
 
 impl AppState {
-    /// Assemble state with the default `mai-router` classify-and-route engine.
+    /// Assemble state with the default `mai-router` engine, the baseline policy
+    /// engine, and `Shadow` mode (the safe M1 default — decide + log, never block).
     #[must_use]
     pub fn new(gateway: Arc<Gateway>, registry: Arc<Registry>, models: Arc<ModelMap>) -> Self {
         Self {
@@ -100,6 +106,8 @@ impl AppState {
             registry,
             models,
             router: Arc::new(DefaultRouter::with_defaults()),
+            policy: Arc::new(PolicyEngine::baseline()),
+            mode: PolicyMode::Shadow,
         }
     }
 
@@ -107,6 +115,13 @@ impl AppState {
     #[must_use]
     pub fn with_router(mut self, router: Arc<dyn Router + Send + Sync>) -> Self {
         self.router = router;
+        self
+    }
+
+    /// Set the enforcement posture (shadow / report-only / enforce).
+    #[must_use]
+    pub fn with_mode(mut self, mode: PolicyMode) -> Self {
+        self.mode = mode;
         self
     }
 }
