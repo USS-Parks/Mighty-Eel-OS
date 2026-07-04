@@ -178,6 +178,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "aog-controller"
+version = "0.1.0"
+dependencies = [
+ "aog-store",
+ "thiserror 2.0.18",
+ "tokio",
+]
+
+[[package]]
 name = "aog-estate"
 version = "0.1.0"
 dependencies = [

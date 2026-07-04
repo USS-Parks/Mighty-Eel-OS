@@ -355,3 +355,41 @@ front-door WSF token verify (K6), deny-wins compliance policy (K7), envelope-sea
 + child-token attenuation (K8), off-host-verifiable hash-chained receipts (K9);
 reads convert stored objects to the hub version (K10). Next: Phase R
 (reconciliation runtime + controllers), then the M3a wrap (X1–X2).
+
+---
+
+## Phase R — Reconciliation runtime + controllers
+
+### R1 — Controller runtime — DONE
+New crate `crates/aog-controller`: the level-triggered reconcile framework the
+Phase-R controllers run on. Read path = the K4 informer; write path = never the
+store — controllers mutate desired state only through the apiserver admission
+chain, like any other caller (A1.7, I-3/I-5).
+- **`queue.rs` — the workqueue.** Dedup (an already-queued key coalesces), dirty
+  re-add (a key changed *mid-reconcile* is re-queued on `done` — no lost update),
+  per-key exponential backoff `base·2^(n-1)` capped at `max` (`retry`/`forget`),
+  and delayed requeue (`requeue_after`/`drain_ready`). Time is always passed in
+  (`now: Instant`) — the queue never reads a clock, so tests are deterministic.
+- **`runtime.rs` — the loop.** `Reconciler` (async, key-only: observe current
+  state and converge; must be idempotent), `Action::{Done, Requeue,
+  RequeueAfter}`, `Controller::sync` = one pass: poll the informer (first pass
+  re-lists; a lagged watch re-lists inside K4), diff revisions against
+  last-observed, enqueue changed/deleted keys, then — leaders only — drain due
+  retries and reconcile up to a per-pass budget. `LeaderGate` ("singleton
+  controllers"): `AlwaysLeader` for the single-node kernel, `SharedGate` for
+  H1's Raft wiring; a non-leader observes (cache warm, queue accumulating) but
+  never acts — on takeover the queue is exactly the reconcile-everything a new
+  leader owes. `run` loops sync on an interval until a shutdown watch flips.
+- **Files:** `crates/aog-controller/{Cargo.toml, src/{lib.rs, queue.rs,
+  runtime.rs}, tests/replay.rs}`; workspace member added.
+- **Verify:** clippy `--all-targets --no-deps -D warnings` clean; `cargo test -p
+  aog-controller` = **10 passed** (6 queue unit tests + 4 replay integration:
+  the R1 gate proper — three controllers fed the same history clean, duplicated
+  (every key force-enqueued 3×), and dropped (83 writes overflow the 64-slot
+  watch buffer, so recovery runs the production lag re-list, not a simulation) —
+  record byte-identical end states equal to the store's authoritative state,
+  deletes included; failed reconciles retry with backoff and converge; a
+  non-leader observes but never acts, then converges on takeover; Requeue /
+  RequeueAfter run the key again); fmt + `check --workspace` clean.
+- **Gate:** duplicate/dropped events converge identically (replay test) ✓.
+  **Commit:** `LOOM-R1`.

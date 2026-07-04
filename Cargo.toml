@@ -13,6 +13,7 @@ members = [
     "mai-compliance",
     "crates/aog-apiserver",
     "crates/aog-approvals",
+    "crates/aog-controller",
     "crates/aog-estate",
     "crates/aog-gateway",
     "crates/aog-store",
