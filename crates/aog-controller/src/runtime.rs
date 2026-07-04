@@ -166,6 +166,12 @@ impl<R: Reconciler> Controller<R> {
         self.queue.len()
     }
 
+    /// Keys scheduled for a delayed re-add (retries / requeue-after).
+    #[must_use]
+    pub fn delayed_len(&self) -> usize {
+        self.queue.delayed_len()
+    }
+
     /// Force a key onto the queue (a manual kick; dedup applies).
     pub fn enqueue(&mut self, key: &str) {
         self.queue.add(key);

@@ -45,6 +45,25 @@ pub enum Kind {
     RevocationIntent,
 }
 
+impl Kind {
+    /// Every kind in the estate, for whole-estate sweeps (GC, conformance).
+    pub const ALL: [Kind; 13] = [
+        Kind::Tenant,
+        Kind::TrustRing,
+        Kind::VirtualKey,
+        Kind::Capability,
+        Kind::PolicyBundle,
+        Kind::ProviderPool,
+        Kind::Workload,
+        Kind::Placement,
+        Kind::Node,
+        Kind::MissionContract,
+        Kind::ToolGrant,
+        Kind::RolloutPlan,
+        Kind::RevocationIntent,
+    ];
+}
+
 impl fmt::Display for Kind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match self {

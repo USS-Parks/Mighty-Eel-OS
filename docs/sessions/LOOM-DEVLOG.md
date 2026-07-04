@@ -393,3 +393,47 @@ chain, like any other caller (A1.7, I-3/I-5).
   RequeueAfter run the key again); fmt + `check --workspace` clean.
 - **Gate:** duplicate/dropped events converge identically (replay test) ✓.
   **Commit:** `LOOM-R1`.
+
+### R2 — Finalizers + GC — DONE (two commits: R2a apiserver, R2b controllers)
+Deprovisioning as governed teardown: nothing is dropped on the floor, and a
+deleted tenant's tokens die at the front door.
+- **R2a — two-phase delete (apiserver).** DELETE on an object with finalizers
+  stamps `deletion_timestamp` and keeps it (soft delete, 200 + terminating
+  object); removing the last finalizer via update commits the promised hard
+  delete. While terminating: **spec frozen**, **finalizers only shrink**, the
+  deletion timestamp is **carried forward** (no resurrection). A repeat delete
+  is an admitted no-op — no mutation, no receipt (K9 stays 1:1). Updates
+  asserting a stale `resource_version` are refused (optimistic concurrency for
+  controllers). New `aog-estate` `OwnerRef` + `metadata.owner_refs` (frozen
+  after create — ownership cannot be hijacked); `Kind::ALL` for estate sweeps.
+  The authenticator gains the **estate-driven `RevocationView` kill leg**,
+  consulted on every request, fail-closed on lock poisoning. `AppState` exposes
+  `admission()/reader()/authenticator()/informer()` so in-process controllers
+  wire up with no writable store handle.
+- **R2b — the controllers** (on the R1 runtime, all writes through admission as
+  the system principal — validated, sealed, CAS-guarded, receipted):
+  `EstateClient` (typed reads + admitted writes; already-exists / not-found =
+  convergence); `GarbageCollector` (whole-estate informer: cascade — a
+  terminating/gone owner's dependents swept by owner-ref and, for tenants, by
+  `metadata.tenant` scope; orphans — missing/terminating/uid-mismatched owner —
+  collected); `TenantTeardown` (guards live tenants with
+  `loom.aog/tenant-teardown`; on terminate: declares a `RevocationIntent`
+  targeting the tenant — the kill record deliberately unscoped so it survives
+  its tenant — waits for the sweep, releases the finalizer);
+  `RevocationIndexer` (rebuilds the front door's `RevocationView` from the
+  full intent list — a pure function of desired state — then acks each
+  enforced intent `Ready`/propagated through admission; Ring targets stay
+  honestly `Pending` until R4 wires ring darkness).
+- **Files:** `crates/aog-estate/src/lib.rs`; `crates/aog-apiserver/{src/{admission,
+  auth, handlers, reader, lib}.rs, tests/finalizers.rs}`; `crates/aog-controller/
+  {Cargo.toml, src/{lib, objects, gc, teardown, intents}.rs, tests/gc.rs}`.
+- **Verify:** clippy `--all-targets --no-deps -D warnings` clean; **63 passed**
+  across aog-{estate, apiserver, controller} (+5 finalizer semantics, +2 R2
+  gate: full live in-process teardown — tenant finalizer-guarded → delete →
+  intent declared → children swept → finalizer released → tenant gone, its
+  token refused at the front door while an unrelated tenant's passes, ≥8
+  receipts; orphan/cascade by owner-ref incl. uid-mismatch incarnation check);
+  fmt + `check --workspace` clean.
+- **Gate:** deleting a Tenant revokes its tokens everywhere (kernel leg; R9
+  extends estate-wide) + GCs children ✓; no dangling capability ✓.
+  **Commits:** `LOOM-R2a`, `LOOM-R2b`.

@@ -7,9 +7,20 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+aog-apiserver = { path = "../aog-apiserver" }
+aog-estate = { path = "../aog-estate" }
 aog-store = { path = "../aog-store" }
+serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
+
+[dev-dependencies]
+axum = { workspace = true }
+base64 = "0.22"
+chrono = { workspace = true }
+fabric-contracts = { path = "../fabric-contracts" }
+fabric-crypto = { path = "../fabric-crypto" }
+fabric-token = { path = "../fabric-token" }
 
 [lints]
 workspace = true

@@ -181,7 +181,16 @@ dependencies = [
 name = "aog-controller"
 version = "0.1.0"
 dependencies = [
+ "aog-apiserver",
+ "aog-estate",
  "aog-store",
+ "axum 0.8.9",
+ "base64",
+ "chrono",
+ "fabric-contracts",
+ "fabric-crypto",
+ "fabric-token",
+ "serde_json",
  "thiserror 2.0.18",
  "tokio",
 ]
