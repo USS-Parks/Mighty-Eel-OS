@@ -15,8 +15,9 @@
 pub mod mission;
 pub mod receipt;
 pub mod scan;
+pub mod session;
 
-use std::sync::{Mutex, RwLock};
+use std::sync::{Arc, Mutex, RwLock};
 use std::time::Duration;
 
 use async_trait::async_trait;
@@ -26,6 +27,7 @@ use mai_agent::types::{AgentError, ToolAccessRole, ToolCall, ToolDefinition, Too
 use crate::mission::{Mission, MissionContract};
 use crate::receipt::{ToolReceipt, ToolReceiptChain};
 use crate::scan::EgressScanner;
+use crate::session::{SessionEventKind, SessionRecord};
 
 /// A tool call the proxy refused to broker.
 #[derive(Debug, thiserror::Error)]
@@ -154,6 +156,9 @@ pub struct ToolProxy {
     /// The active mission contract (T6), if any — the declared scope this proxy
     /// holds calls to. `None` = unconstrained (T1–T5 behaviour).
     mission: Option<Mutex<Mission>>,
+    /// The session transcript (T7), if attached — the full agent-loop ledger this
+    /// proxy mirrors every brokered call into.
+    session: Option<Arc<Mutex<SessionRecord>>>,
 }
 
 /// The governance outcome of a brokered call, recorded on its receipt. Bundled so
@@ -184,6 +189,7 @@ impl ToolProxy {
             approvals: None,
             scanner: EgressScanner::baseline(),
             mission: None,
+            session: None,
         }
     }
 
@@ -219,6 +225,16 @@ impl ToolProxy {
     #[must_use]
     pub fn with_mission(mut self, contract: MissionContract) -> Self {
         self.mission = Some(Mutex::new(Mission::new(contract)));
+        self
+    }
+
+    /// Attach a session transcript (T7). The proxy then mirrors every brokered call
+    /// — the call, any approval, and the result — into the shared record, so the
+    /// full agent loop (with the agent's own prompt / model-output steps) replays
+    /// deterministically from one ledger.
+    #[must_use]
+    pub fn with_session(mut self, session: Arc<Mutex<SessionRecord>>) -> Self {
+        self.session = Some(session);
         self
     }
 
@@ -389,6 +405,47 @@ impl ToolProxy {
         cred: Option<&MintedCredential>,
         gov: Governance,
     ) {
+        let at = chrono::Utc::now().to_rfc3339();
+        // T7: mirror the brokered call into the session transcript, if one is
+        // attached — the tool call, the approval (if any), and the result — so the
+        // full agent loop replays from one ledger. Metadata only.
+        if let Some(session) = &self.session {
+            let mut s = session.lock().expect("session lock");
+            s.record(
+                SessionEventKind::ToolCall,
+                Some(call.tool_id.clone()),
+                format!("{} call {}", call.tool_id, call.call_id),
+                serde_json::json!({
+                    "call_id": call.call_id,
+                    "has_side_effects": tool.has_side_effects,
+                    "out_of_contract": gov.out_of_contract,
+                }),
+                at.clone(),
+            );
+            if let Some(actor) = &gov.approved_by {
+                s.record(
+                    SessionEventKind::Approval,
+                    Some(actor.clone()),
+                    format!("approved {}", call.tool_id),
+                    serde_json::json!({ "decision": "approved" }),
+                    at.clone(),
+                );
+            }
+            s.record(
+                SessionEventKind::ToolResult,
+                Some(call.tool_id.clone()),
+                format!(
+                    "{} {}",
+                    call.tool_id,
+                    if result.success { "ok" } else { "blocked" }
+                ),
+                serde_json::json!({
+                    "success": result.success,
+                    "redacted_spans": gov.redacted_spans,
+                }),
+                at.clone(),
+            );
+        }
         let (cred_lease, cred_ttl_ms) = cred.map_or((None, None), |c| {
             (Some(c.lease_id.clone()), Some(ms(c.ttl)))
         });
@@ -404,7 +461,7 @@ impl ToolProxy {
                 success: result.success,
                 duration_ms: result.duration_ms,
                 chain_step: call.chain_step,
-                at: chrono::Utc::now().to_rfc3339(),
+                at,
                 error: result.error.clone(),
                 cred_lease,
                 cred_ttl_ms,
@@ -1255,5 +1312,60 @@ mod tests {
             .unwrap();
         assert!(r.success);
         assert!(proxy.receipts()[0].mission_id.is_none());
+    }
+
+    // ── T7: session record + replay ──────────────────────────────────────
+
+    #[tokio::test]
+    async fn proxy_calls_are_captured_in_the_session_and_replay_deterministically() {
+        use crate::session::{SessionEventKind, SessionRecord, transcript_digest};
+
+        let session = Arc::new(Mutex::new(SessionRecord::new("sess-x")));
+        let proxy = ToolProxy::new()
+            .with_approvals(Box::new(AlwaysGate {
+                approve: true,
+                actor: "alice".to_string(),
+            }))
+            .with_session(Arc::clone(&session));
+        proxy
+            .register(tool("write.record", true, ToolAccessRole::Parent))
+            .unwrap();
+
+        // The agent records the prompt + its plan directly on the shared session.
+        session.lock().unwrap().record(
+            SessionEventKind::Prompt,
+            Some("user".to_string()),
+            "do the thing",
+            serde_json::Value::Null,
+            "t0",
+        );
+        // The tool call goes through the proxy, which mirrors it into the session
+        // (a side-effecting call, so it also records the approval).
+        proxy
+            .invoke(
+                &call("c1", "write.record"),
+                &ctx(ToolAccessRole::Parent),
+                &EchoExecutor,
+            )
+            .await
+            .unwrap();
+
+        let rec = session.lock().unwrap();
+        // The full loop is captured: prompt, then tool-call + approval + result.
+        let kinds: Vec<_> = rec.events().iter().map(|e| e.kind).collect();
+        assert!(kinds.contains(&SessionEventKind::Prompt));
+        assert!(kinds.contains(&SessionEventKind::ToolCall));
+        assert!(kinds.contains(&SessionEventKind::Approval));
+        assert!(kinds.contains(&SessionEventKind::ToolResult));
+
+        // The session replays deterministically from the ledger.
+        let a = rec.replay().unwrap();
+        let b = rec.replay().unwrap();
+        assert_eq!(a, b);
+        assert_eq!(
+            transcript_digest(&a),
+            transcript_digest(&b),
+            "the recorded session replays to a stable transcript"
+        );
     }
 }
