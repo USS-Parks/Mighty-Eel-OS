@@ -154,10 +154,19 @@ export interface TaskUsage {
   spend_cents: number;
 }
 
-/** GET /v1/usage — the meter aggregate + live receipt-chain integrity.
- *  (Field names confirmed against the gateway handler in C3.) */
+/** GET /v1/usage — the meter aggregates + live receipt-chain integrity. */
 export interface UsageResp {
-  tasks: TaskUsage[];
+  aggregates: TaskUsage[];
+  chain_head: string;
+  chain_verified: boolean;
+}
+
+/** GET /v1/status — the gateway's live posture (open; no virtual key needed). */
+export interface StatusResp {
+  mode: 'shadow' | 'report_only' | 'enforce';
+  providers: string[];
+  models: string[];
+  receipts: number;
   chain_head: string;
   chain_verified: boolean;
 }

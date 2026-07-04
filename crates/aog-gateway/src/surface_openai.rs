@@ -31,6 +31,7 @@ pub fn router(state: AppState) -> Router {
         .route("/v1/embeddings", post(embeddings))
         .route("/v1/models", get(list_models))
         .route("/v1/usage", get(usage))
+        .route("/v1/status", get(status))
         .with_state(state)
 }
 
@@ -218,6 +219,43 @@ async fn usage(State(state): State<AppState>, headers: HeaderMap) -> Response {
     .into_response()
 }
 
+/// `GET /v1/status` — the gateway's live posture: enforcement mode, registered
+/// providers + routable models, and the receipt-chain head + integrity. Open
+/// (like `/v1/models`) so the console Overview renders trust status without a
+/// virtual key.
+async fn status(State(state): State<AppState>) -> Json<Value> {
+    let (receipts, head, verified) = {
+        let led = state.receipts.lock().expect("receipt ledger lock");
+        (led.receipts().len(), led.head_hex(), led.verify())
+    };
+    Json(status_json(
+        state.mode.header(),
+        state.registry.names(),
+        state.models.model_ids(),
+        receipts,
+        head,
+        verified,
+    ))
+}
+
+fn status_json(
+    mode: &str,
+    providers: Vec<String>,
+    models: Vec<String>,
+    receipts: usize,
+    chain_head: String,
+    chain_verified: bool,
+) -> Value {
+    json!({
+        "mode": mode,
+        "providers": providers,
+        "models": models,
+        "receipts": receipts,
+        "chain_head": chain_head,
+        "chain_verified": chain_verified,
+    })
+}
+
 fn chat_completion_json(model: &str, r: &CompletionResponse) -> Value {
     let total = u64::from(r.usage.input_tokens) + u64::from(r.usage.output_tokens);
     json!({
@@ -366,4 +404,27 @@ async fn embeddings() -> Response {
         })),
     )
         .into_response()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::status_json;
+
+    #[test]
+    fn status_json_shape() {
+        let v = status_json(
+            "shadow",
+            vec!["anthropic".to_string(), "openai".to_string()],
+            vec!["gpt-4o".to_string()],
+            3,
+            "abcd".to_string(),
+            true,
+        );
+        assert_eq!(v["mode"], "shadow");
+        assert_eq!(v["providers"][0], "anthropic");
+        assert_eq!(v["models"][0], "gpt-4o");
+        assert_eq!(v["receipts"], 3);
+        assert_eq!(v["chain_head"], "abcd");
+        assert_eq!(v["chain_verified"], true);
+    }
 }

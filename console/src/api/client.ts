@@ -8,6 +8,7 @@ import type {
   ExchangeResp,
   IssueReq,
   ReceiptsResp,
+  StatusResp,
   TokenResp,
   TrustToken,
   UsageResp,
@@ -127,5 +128,11 @@ export class AogClient {
   /** Metering aggregates + live receipt-chain integrity (`GET /v1/usage`). */
   usage(): Promise<UsageResp> {
     return jsonFetch<UsageResp>(`${this.base}/v1/usage`, { headers: this.authHeaders() });
+  }
+
+  /** The gateway's live posture: mode, providers, models, receipt-chain integrity
+   *  (`GET /v1/status`, open — no virtual key required). */
+  status(): Promise<StatusResp> {
+    return jsonFetch<StatusResp>(`${this.base}/v1/status`);
   }
 }

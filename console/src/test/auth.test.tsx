@@ -56,8 +56,8 @@ describe('login', () => {
 
     // The shell renders — "Sign out" is unique to the authed frame.
     expect(await screen.findByRole('button', { name: /sign out/i })).toBeInTheDocument();
-    // The tenant from the token surfaces in the top bar.
-    expect(screen.getByText('acme')).toBeInTheDocument();
+    // The tenant from the token surfaces (top bar + overview panel).
+    expect(screen.getAllByText('acme').length).toBeGreaterThan(0);
   });
 
   it('surfaces the rejection reason for an invalid token and stays on login', async () => {
