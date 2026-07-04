@@ -1,0 +1,106 @@
+//! `aog-apiserver` — the Loom control-plane API server (K5).
+//!
+//! A typed CRUD surface over the estate kinds (`aog-estate`) backed by the
+//! consensus store (`aog-store`). The one invariant this crate exists to hold:
+//! **every desired-state mutation traverses the admission chain; no handler can
+//! write the store directly.** That is enforced by type — see
+//! [`admission::Admission`], whose private `RaftNode` handle is the only writer,
+//! paired with a read-only [`reader::StoreReader`] — and by test
+//! (`tests/admission_bypass.rs`).
+//!
+//! AuthN (K6), policy deny-wins (K7), envelope-seal + token attenuation (K8),
+//! and receipt binding (K9) are named seams in the chain; K5 lands the surface
+//! and the choke point, with structural validation, metadata stamping, and the
+//! CAS-guarded commit already live.
+
+pub mod admission;
+pub mod codec;
+pub mod error;
+pub mod handlers;
+pub mod reader;
+
+use std::path::Path;
+use std::sync::Arc;
+
+use axum::Router;
+use axum::routing::get;
+
+use aog_store::raft::types::NodeId;
+use aog_store::raft::{NodeError, RaftNode};
+
+use crate::admission::Admission;
+use crate::reader::StoreReader;
+
+/// The API group + version every route is served under.
+pub const API_GROUP_VERSION: &str = "aog.islandmountain.io/v1";
+
+/// Shared server state: the admission writer and the read-only view. Cheap to
+/// clone (both `Arc`-backed). A handler is handed exactly these two
+/// capabilities — a write path that *is* the admission chain, and a read path
+/// that cannot write — and no way to reach the underlying node otherwise.
+#[derive(Clone)]
+pub struct AppState {
+    pub(crate) admission: Arc<Admission>,
+    pub(crate) reader: StoreReader,
+}
+
+impl AppState {
+    /// Bootstrap a fresh single-node estate under `dir` and assemble state.
+    ///
+    /// # Errors
+    /// [`NodeError`] if the Raft node cannot bootstrap.
+    pub async fn bootstrap(node_id: NodeId, dir: impl AsRef<Path>) -> Result<Self, NodeError> {
+        let raft = Arc::new(RaftNode::bootstrap(node_id, dir).await?);
+        Ok(Self::from_node(raft))
+    }
+
+    /// Recover an existing estate under `dir` (no cluster init).
+    ///
+    /// # Errors
+    /// [`NodeError`] if the Raft node cannot start.
+    pub async fn start(node_id: NodeId, dir: impl AsRef<Path>) -> Result<Self, NodeError> {
+        let raft = Arc::new(RaftNode::start(node_id, dir).await?);
+        Ok(Self::from_node(raft))
+    }
+
+    fn from_node(raft: Arc<RaftNode>) -> Self {
+        Self {
+            admission: Arc::new(Admission::new(Arc::clone(&raft))),
+            reader: StoreReader::new(raft),
+        }
+    }
+}
+
+/// Build the control-plane router over shared [`AppState`].
+pub fn router(state: AppState) -> Router {
+    Router::new()
+        .route("/healthz", get(healthz))
+        .route("/readyz", get(readyz))
+        .route(
+            "/apis/aog.islandmountain.io/v1/{kind}",
+            get(handlers::list).post(handlers::create),
+        )
+        .route(
+            "/apis/aog.islandmountain.io/v1/{kind}/{name}",
+            get(handlers::get_one)
+                .put(handlers::update)
+                .delete(handlers::delete),
+        )
+        .with_state(state)
+}
+
+/// Serve the control-plane API on `listener` until shutdown.
+///
+/// # Errors
+/// I/O error from the underlying server.
+pub async fn serve(listener: tokio::net::TcpListener, state: AppState) -> std::io::Result<()> {
+    axum::serve(listener, router(state)).await
+}
+
+async fn healthz() -> &'static str {
+    "ok"
+}
+
+async fn readyz() -> &'static str {
+    "ok"
+}

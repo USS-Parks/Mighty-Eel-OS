@@ -1,0 +1,24 @@
+[package]
+name = "aog-apiserver"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Loom control-plane API server (K5): typed CRUD per estate kind, every mutation forced through the admission choke point. AuthN/policy/seal/receipt stages land K6-K9."
+
+[dependencies]
+aog-estate = { path = "../aog-estate" }
+aog-store = { path = "../aog-store" }
+axum = { workspace = true }
+tokio = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }
+
+[lints]
+workspace = true

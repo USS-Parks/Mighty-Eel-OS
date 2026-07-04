@@ -133,3 +133,53 @@ final state (the K4 gate).
   authoritative); fmt clean; `check --workspace` clean; deny ok. **Gate:**
   informer reconstructs full state after a dropped connection ✓; no missed final
   state ✓. **Commit:** `LOOM-K4`.
+
+### K5 — `aog-apiserver` CRUD surface — DONE
+The typed control-plane API and the **admission choke point**. New crate
+`crates/aog-apiserver`: an axum 0.8 router exposing CRUD per estate kind where
+**every mutation is forced through one admission method**, and no handler can
+reach a store write any other way — the K5 gate, enforced by type.
+- **The type invariant.** `Admission` privately owns the sole writable `RaftNode`
+  handle in the crate; `Admission::admit` is the only method that calls
+  `RaftNode::write`. A handler receives `AppState { admission, reader }` — an
+  `Arc<Admission>` (write path = the chain) and a read-only `StoreReader`
+  (`get`/`list` only, no write method). The raw node is reachable from neither,
+  so a handler physically cannot construct a bypassing write.
+- **The chain (A1.7), staged to the roster.** `admit` runs authenticate → validate
+  → mutate → commit → receipt. Live now: structural `validate()` (fail-closed,
+  D7), metadata stamping (uid / generation / created_at), and the one
+  CAS-guarded `aog-store` commit (Create = `Absent`; Update/Delete =
+  `Revision(current)` read-modify-write, so a concurrent write loses the CAS →
+  `409`). Named seams, each a marked method: authenticate (K6 front-door WSF
+  token), policy deny-wins (K7), envelope-seal + child-token attenuation (K8),
+  `fabric-proof` receipt to `wsf-ledger` (K9). `resource_version` is the store's
+  `mod_revision`, overlaid on read (etcd/K8s convention) — never authoritative in
+  the stored body.
+- **Surface.** `POST/GET/PUT/DELETE /apis/aog.islandmountain.io/v1/{kind}[/{name}]`
+  + `GET /healthz|/readyz`; `ApiError` → HTTP (400/404/409/422/500, plus the
+  401/403 K6/K7 seams). URL `{kind}` → `Kind` via the estate deserializer (no
+  drift; `aogctl` K11 reuses it). `aog-estate` gained
+  `ResourceObject::metadata`/`metadata_mut` (additive; K1's 21 tests still green)
+  so admission can stamp any kind.
+- **Files:** `crates/aog-apiserver/{Cargo.toml, src/{lib,error,codec,reader,
+  admission,handlers}.rs, tests/{crud,admission_bypass}.rs}`; `ResourceObject`
+  accessors in `crates/aog-estate/src/lib.rs`; workspace member added.
+- **Verify:** clippy `--all-targets -D warnings` clean (pedantic); `cargo test -p
+  aog-apiserver` = **7 passed** — CRUD round-trip
+  (create→get→list→update→delete: 201/200/200/200/204 then 404), duplicate→409,
+  update-missing→404, unknown-kind→400, kind-mismatch→400; and the **gate suite**:
+  an admission-rejected request (bad spec / bad name) persists **nothing** (the
+  list stays empty), and every admitted object bears the mutate/commit stamps
+  (uid, generation=1, resource_version) a bypassing write could not produce.
+  `aog-estate` = 21 passed; fmt clean; `check --workspace` clean (additive, 0
+  regressions). Driven in-process via `tower::ServiceExt::oneshot` — no socket;
+  the router + admission + Raft store are the real ones.
+- **Note (A3.2 live-harness scope):** K5 is the CRUD/choke-point plumbing. The
+  admission *trust* stages A3.2's live-OpenBao + multi-node clause governs (token
+  authN, policy, receipts; kill-switch / split-brain under scale) land at
+  K6/K7/K9 and are proven under real partitions at H2/V4/V5. Single-node Raft is
+  all K3 built, so a ≥3-node harness is not yet constructible here — this is
+  called out, not skipped silently (doctrine D8.9).
+- **Gate:** no write reaches `aog-store` bypassing admission — enforced by type
+  (private node handle + read-only reader) ✓ and by test
+  (reject-persists-nothing + admission-stamps) ✓. **Commit:** `LOOM-K5`.

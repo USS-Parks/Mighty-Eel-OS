@@ -11,6 +11,7 @@ members = [
     "mai-scheduler",
     "mai-router",
     "mai-compliance",
+    "crates/aog-apiserver",
     "crates/aog-approvals",
     "crates/aog-estate",
     "crates/aog-gateway",

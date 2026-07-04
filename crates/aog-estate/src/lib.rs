@@ -276,6 +276,18 @@ macro_rules! resource_objects {
                 match self { $(ResourceObject::$kind(r) => r.metadata.name.as_str(),)+ }
             }
 
+            /// This object's shared metadata.
+            #[must_use]
+            pub fn metadata(&self) -> &ObjectMeta {
+                match self { $(ResourceObject::$kind(r) => &r.metadata,)+ }
+            }
+
+            /// This object's shared metadata, mutable — the admission chain
+            /// (`aog-apiserver`) stamps uid / generation / token_ref / receipt_ref here.
+            pub fn metadata_mut(&mut self) -> &mut ObjectMeta {
+                match self { $(ResourceObject::$kind(r) => &mut r.metadata,)+ }
+            }
+
             /// Validate the wrapped resource.
             ///
             /// # Errors
