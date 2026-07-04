@@ -134,6 +134,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "aog-estate"
+version = "0.1.0"
+dependencies = [
+ "fabric-contracts",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "aog-gateway"
 version = "0.1.0"
 dependencies = [
