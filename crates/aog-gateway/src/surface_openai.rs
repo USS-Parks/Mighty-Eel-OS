@@ -13,7 +13,7 @@ use std::sync::Arc;
 use axum::response::sse::{Event, Sse};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
-use axum::{Json, Router, extract::State, http::HeaderMap, http::StatusCode};
+use axum::{Json, Router, extract::Query, extract::State, http::HeaderMap, http::StatusCode};
 use chrono::Utc;
 use futures::StreamExt;
 use serde_json::{Value, json};
@@ -31,6 +31,7 @@ pub fn router(state: AppState) -> Router {
         .route("/v1/embeddings", post(embeddings))
         .route("/v1/models", get(list_models))
         .route("/v1/usage", get(usage))
+        .route("/v1/roi", get(roi))
         .route("/v1/status", get(status))
         .with_state(state)
 }
@@ -243,6 +244,36 @@ async fn usage(State(state): State<AppState>, headers: HeaderMap) -> Response {
         "chain_verified": verified,
     }))
     .into_response()
+}
+
+/// Query knobs for `/v1/roi` (both optional; defaults from [`crate::recommend::RoiInputs`]).
+#[derive(serde::Deserialize)]
+struct RoiQuery {
+    summit_cost_cents: Option<u64>,
+    window_days: Option<u32>,
+}
+
+/// `GET /v1/roi` — the G10 break-even + on-prem/upgrade/stay recommendation over
+/// the metered spend (aog-meter aggregates). `?summit_cost_cents=&window_days=`
+/// override the appliance cost + window. Authenticated (like `/v1/usage`).
+async fn roi(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(q): Query<RoiQuery>,
+) -> Response {
+    if let Err(e) = authorize(&state, &headers).await {
+        return e.into_response();
+    }
+    let defaults = crate::recommend::RoiInputs::default();
+    let inputs = crate::recommend::RoiInputs {
+        summit_cost_cents: q.summit_cost_cents.unwrap_or(defaults.summit_cost_cents),
+        window_days: q.window_days.unwrap_or(defaults.window_days),
+    };
+    let aggregates = {
+        let led = state.receipts.lock().expect("receipt ledger lock");
+        led.aggregate()
+    };
+    Json(crate::recommend::recommend(&aggregates, inputs)).into_response()
 }
 
 /// `GET /v1/status` — the gateway's live posture: enforcement mode, registered

@@ -16,6 +16,7 @@ pub mod http;
 pub mod meter;
 pub mod policy;
 pub mod provider;
+pub mod recommend;
 pub mod route;
 pub mod surface_anthropic;
 pub mod surface_openai;
