@@ -1,4 +1,4 @@
-//! Retention-based report pruning (Session 43).
+//! Retention-based report pruning.
 //!
 //! Reports are not part of the audit chain — losing them does not
 //! break the audit log's tamper-evidence property — but regulators

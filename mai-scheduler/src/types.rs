@@ -143,7 +143,7 @@ pub struct ScheduleRequest {
     pub priority: Priority,
     /// If this is a continuation of a prior sequence, the scheduler prefers
     /// the instance that last served it (KV cache locality hint). Even before
-    /// the KV cache manager exists (Session 17), we track this for routing.
+    /// the KV cache manager exists, we track this for routing.
     pub continuation_of: Option<SequenceId>,
     /// Caller-supplied metadata for debugging and telemetry. Never affects
     /// placement decisions; purely observational.
@@ -241,7 +241,7 @@ pub struct InstanceMetrics {
     pub last_request_epoch_ms: u64,
     /// Last sequence ID served (for continuation affinity).
     pub last_sequence_id: Option<SequenceId>,
-    // --- Batch metrics (Session 18) ---
+    // Batch metrics ---
     /// Current batch size (sequences in active forward pass).
     pub batch_size: u32,
     /// Number of sequences waiting in the prefill queue.
@@ -295,7 +295,7 @@ pub struct ClusterMetrics {
     pub kv_used_bytes: u64,
     /// KV cache: total budget bytes.
     pub kv_total_bytes: u64,
-    // --- Batch metrics (Session 18) ---
+    // Batch metrics ---
     /// Average batch size across all instances (rolling window).
     pub avg_batch_size: f64,
     /// Average batch utilization across all instances.
@@ -329,7 +329,7 @@ pub struct ModelAlias {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SchedulerConfig {
     /// Placement strategy name. "least-loaded" for Phase 1.
-    /// Session 19 adds "multi-factor".
+    /// adds "multi-factor".
     #[serde(default = "default_strategy")]
     pub strategy: String,
     /// Maximum queue depth per instance before it's considered overloaded.
@@ -375,7 +375,7 @@ impl Default for SchedulerConfig {
 /// Scoring function signature. Takes an instance state and a schedule request,
 /// returns a score. Lower score = better candidate.
 ///
-/// This is the extension point Session 19 replaces. Phase 1 uses a simple
+/// This is the extension point replaces. Phase 1 uses a simple
 /// least-loaded scorer. The function is stored as a `Box<dyn Fn>` in the
 /// placement engine, making it replaceable at runtime.
 pub type ScoringFn = Box<dyn Fn(&InstanceState, &ScheduleRequest) -> f64 + Send + Sync>;

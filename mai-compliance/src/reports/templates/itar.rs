@@ -1,4 +1,4 @@
-//! ITAR / EAR Compliance Summary template (Session 43).
+//! ITAR / EAR Compliance Summary template.
 //!
 //! Surfaces export-controlled queries, jurisdiction decisions, and
 //! deny / local-only counts. Scopes the audit query to entries that

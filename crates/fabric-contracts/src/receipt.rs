@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::common::RoutingDecision;
 
-/// BF-5 correlation fields, joined across cloud credential events and local
+/// correlation fields, joined across cloud credential events and local
 /// decisions. `token_id` accepts the legacy `claim_id` name on read.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Correlation {

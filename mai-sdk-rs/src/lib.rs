@@ -5,7 +5,7 @@
 //! access to the MAI inference kernel API. Provides both blocking and async
 //! clients with full type safety across the API boundary.
 //!
-//! Skeleton generated in Session 05; full client implementation in Session 11.
+//! Skeleton generated; full client implementation.
 //! All types align with docs/api/openapi.yaml schemas.
 
 use std::collections::{HashMap, VecDeque};
@@ -703,7 +703,7 @@ pub struct AuditLogResponse {
 pub struct MaiClientConfig {
     /// Base URL (default: http://localhost:8420)
     pub base_url: String,
-    /// API key for X-IM-Auth-Token authentication (Session 26).
+    /// API key for X-IM-Auth-Token authentication.
     ///
     /// In production deployments the server requires this on every non-health
     /// request. Profiles are resolved from the key by the server; clients no

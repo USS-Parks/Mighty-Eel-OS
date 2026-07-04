@@ -261,9 +261,8 @@ impl AdapterManager {
         let timeout = std::time::Duration::from_millis(self.config.request_timeout_ms);
         let deadline = tokio::time::Instant::now() + timeout;
 
-        // Re-wrap ipc_rx in the process so other callers can use it later
-        // (we need to consume events for THIS request_id only)
-        // For now, consume from the channel directly
+        // TODO(basho): re-wrap ipc_rx so other callers can use it later; we
+        // need events for THIS request_id only but consume the channel directly.
         let mut ipc_rx = ipc_rx;
         loop {
             match tokio::time::timeout_at(deadline, ipc_rx.recv()).await {

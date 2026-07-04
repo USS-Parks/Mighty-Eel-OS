@@ -38,7 +38,7 @@ use crate::pqc::PqcEngine;
 ///
 /// This is the primary vault type. It implements `VaultInterface` for backward
 /// compatibility with existing mai-core consumers and `ModelStorage` for the
-/// extended ZFS operations added in Session 12.
+/// extended ZFS operations.
 pub struct ZfsVault {
     config: VaultConfig,
     /// Model manifest cache: model_id -> (hash, size_bytes)
@@ -130,9 +130,9 @@ impl ZfsVault {
         let mut index = self.model_index.write().await;
         index.clear();
 
-        // In production: read ZFS dataset and parse model manifest files.
-        // Each model directory contains a manifest.json with hash and metadata.
-        // For now, scan the directory and register entries.
+        // TODO(basho): read the ZFS dataset and parse model manifest files
+        // (manifest.json with hash and metadata); currently scans the
+        // directory and registers entries.
 
         if models_dir.is_dir() {
             match std::fs::read_dir(models_dir) {
@@ -200,8 +200,8 @@ impl ZfsVault {
     async fn scan_snapshots(&self) -> Result<(), VaultError> {
         let mut snaps = self.snapshots.write().await;
         snaps.clear();
-        // In production: run `zfs list -t snapshot -o name,creation,referenced`
-        // and parse the output. For now, return empty list.
+        // TODO(basho): run `zfs list -t snapshot -o name,creation,referenced`
+        // and parse the output; currently returns an empty list.
         debug!("Snapshot scan complete (no ZFS access in stub mode)");
         Ok(())
     }
@@ -253,8 +253,8 @@ impl VaultInterface for ZfsVault {
 
         info!(model_id, path = %weights_path.display(), "Loading model weights from vault");
 
-        // Read the encrypted weights. In production, decryption happens here
-        // via the PqcProvider. For now, read raw bytes.
+        // TODO(basho): decrypt weights here via the PqcProvider; currently
+        // reads raw bytes.
         let data = tokio::fs::read(&weights_path)
             .await
             .map_err(|e| VaultError::IoError(e.to_string()))?;
@@ -398,8 +398,8 @@ impl ModelStorage for ZfsVault {
     }
 
     async fn storage_info(&self) -> Result<StorageInfo, VaultError> {
-        // In production: query ZFS dataset properties.
-        // For now, stat the mount point filesystem.
+        // TODO(basho): query ZFS dataset properties; currently stats the
+        // mount point filesystem.
         let index = self.model_index.read().await;
         let total_model_bytes: u64 = index.values().map(|e| e.size_bytes).sum();
 

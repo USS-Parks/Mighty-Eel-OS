@@ -48,11 +48,11 @@ pub struct DefaultScheduler {
     aliases: AliasResolver,
     /// Scheduler configuration.
     config: SchedulerConfig,
-    /// GPU topology for hardware-aware placement (Session 16).
+    /// GPU topology for hardware-aware placement.
     topology: Option<Arc<GpuTopology>>,
-    /// KV cache manager for VRAM-aware placement (Session 17).
+    /// KV cache manager for VRAM-aware placement.
     kv_manager: Option<Arc<dyn KvCacheManager>>,
-    /// Per-instance batch builders (Session 18). Keyed by instance ID.
+    /// Per-instance batch builders. Keyed by instance ID.
     /// Each builder is behind a Mutex since `build_step()` needs `&mut self`.
     batch_builders: DashMap<InstanceId, Mutex<BatchBuilder>>,
     /// Batch configuration template for new instances.
@@ -120,7 +120,7 @@ impl DefaultScheduler {
         sched
     }
 
-    /// Set the KV cache manager for VRAM-aware placement (Session 17).
+    /// Set the KV cache manager for VRAM-aware placement.
     ///
     /// When set, the scheduler:
     /// - Checks `can_fit()` before placement decisions
@@ -273,7 +273,7 @@ impl Scheduler for DefaultScheduler {
         // Step 4: Placement
         let decision = self.placement.place(request, &candidates)?;
 
-        // Step 4.5: KV cache awareness (Session 17)
+        // Step 4.5: KV cache awareness
         // If a KV cache manager is attached, check whether the new sequence
         // fits in the VRAM budget. If not, log a warning. Actual eviction is
         // driven by the trigger system (threshold/emergency), not inline here.
@@ -317,7 +317,7 @@ impl Scheduler for DefaultScheduler {
     fn release_sequence(&self, instance: &InstanceId, seq_id: SequenceId) {
         self.registry.record_request_complete(instance);
 
-        // Deallocate KV cache for this sequence (Session 17)
+        // Deallocate KV cache for this sequence
         if let Some(ref kv) = self.kv_manager {
             kv.deallocate(seq_id);
         }
@@ -326,7 +326,7 @@ impl Scheduler for DefaultScheduler {
     }
 
     fn register_instance(&self, config: InstanceConfig) -> Result<(), SchedulerError> {
-        // Create a batch builder for this instance (Session 18)
+        // Create a batch builder for this instance
         let batch_builder = BatchBuilder::new(config.model_name.clone(), self.batch_config.clone());
         self.batch_builders
             .insert(config.id.clone(), Mutex::new(batch_builder));
@@ -355,7 +355,7 @@ impl Scheduler for DefaultScheduler {
             (0, 0)
         };
 
-        // Aggregate batch metrics from all builders (Session 18)
+        // Aggregate batch metrics from all builders
         let mut batch_size_sum = 0.0_f64;
         let mut batch_util_sum = 0.0_f64;
         let mut batch_waiting_total = 0_u32;
@@ -391,15 +391,15 @@ impl Scheduler for DefaultScheduler {
 
         ClusterMetrics {
             total_instances,
-            healthy_instances: total_instances, // Follow-up: health integration (Session 22)
+            healthy_instances: total_instances, // Follow-up: health integration
             total_active_sequences: total_active,
             total_queue_depth: total_queue,
             total_requests_routed: self.total_routed.load(Ordering::Relaxed),
             total_requests_rejected: self.total_rejected.load(Ordering::Relaxed),
-            avg_routing_latency_us: 0, // Follow-up: latency tracking (Session 19)
+            avg_routing_latency_us: 0, // Follow-up: latency tracking
             topology_gpu_count: topo_gpus,
             topology_nvlink_cliques: topo_cliques,
-            topology_has_anomalies: false, // Follow-up: wire to MetricsRefresher (Session 19)
+            topology_has_anomalies: false, // Follow-up: wire to MetricsRefresher
             kv_active_sequences: self
                 .kv_manager
                 .as_ref()
@@ -416,7 +416,7 @@ impl Scheduler for DefaultScheduler {
         }
     }
     // -----------------------------------------------------------------------
-    // Power state integration (Session 22)
+    // Power state integration
     // -----------------------------------------------------------------------
 
     fn can_demote(&self, instance: &InstanceId) -> bool {
@@ -894,8 +894,6 @@ mod tests {
         assert_eq!(metrics.total_queue_depth, 100);
     }
 
-    // --- Session 17: KV cache integration tests ---
-
     fn make_kv_manager(budget: u64) -> Arc<crate::kv::HeuristicKvCacheManager> {
         use crate::kv::KvCacheConfig;
         let config = KvCacheConfig {
@@ -1009,8 +1007,6 @@ mod tests {
         assert!(!kv.can_fit(100, 131_072.0));
     }
 
-    // --- Session 18: Batch builder integration tests ---
-
     #[test]
     fn test_batch_builder_created_on_register() {
         let sched = DefaultScheduler::new(test_config());
@@ -1052,8 +1048,6 @@ mod tests {
         // Admission rate defaults to 1.0 when no attempts
         assert!((metrics.batch_admission_rate - 1.0).abs() < f64::EPSILON);
     }
-
-    // --- Session 19e: Scorer integration tests ---
 
     fn three_gpu_test_topology() -> Arc<crate::topology::GpuTopology> {
         use crate::topology::collector::{LinkType, ParsedGpu, ParsedLink, ParsedTopology};

@@ -18,7 +18,7 @@ pub type TransitionId = Uuid;
 /// Common result type for core operations
 pub type CoreResult<T> = Result<T, crate::CoreError>;
 
-// --- Cache types (Session 10d) ---
+// Cache types ---
 
 use std::time::{Duration, Instant};
 

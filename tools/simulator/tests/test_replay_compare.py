@@ -1,4 +1,4 @@
-"""Tests for the Session 32 Gate C backfill: replay comparison + report."""
+"""Tests for the Gate C backfill: replay comparison + report."""
 
 from __future__ import annotations
 

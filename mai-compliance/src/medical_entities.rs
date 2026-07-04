@@ -1,4 +1,4 @@
-//! Medical entity enrichment (Session 38).
+//! Medical entity enrichment.
 //!
 //! These detectors enrich routing and de-id decisions with clinical
 //! domain knowledge:

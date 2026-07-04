@@ -4,7 +4,7 @@ Shows the OCAP path: a TrustClaim with allowed_routes=["local_only"]
 governs every operation. The app refuses (without going to the wire)
 to send protected data anywhere except the local MAI instance.
 
-Once BF-6 lands, the manual TrustClaim construction here is replaced
+Once the live cloud trust bridge is available, the manual TrustClaim construction here is replaced
 by ``client.auth.exchange_token(claim_from_cloud_bridge)``.
 """
 
@@ -44,7 +44,7 @@ class SovereigntyViolation(RuntimeError):  # noqa: N818  see TRIBAL-SOV-NAMING b
 
 
 def claim_from_config(trust_cfg: dict[str, Any]) -> TrustClaim:
-    """Build a TrustClaim from TOML. Mock until BF-6."""
+    """Build a TrustClaim from TOML. Mock."""
     return TrustClaim(
         claim_id=trust_cfg.get("claim_id", "local-dev-claim"),
         tenant_id=trust_cfg.get("tenant_id", "local-dev"),

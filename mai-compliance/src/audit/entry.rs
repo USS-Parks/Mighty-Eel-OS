@@ -1,11 +1,11 @@
-//! Compliance audit entry schema (Session 42 + BF-5).
+//! Compliance audit entry schema.
 //!
 //! [`AuditEntry`] is the unit of evidence the compliance audit log
 //! produces: one row per policy decision, hash-chained to the previous
 //! row via [`AuditEntry::previous_hash`] and optionally
 //! signed periodically by the chain manager (see [`super::chain`]).
 //!
-//! BF-5 (audit correlation, Appendix A §A.9) is embedded as
+//! (audit correlation, Appendix A §A.9) is embedded as
 //! [`CorrelationFields`]: the metadata bridge between an OpenBao
 //! credential event and the Lamprey decision it authorised. The shape
 //! mirrors the JSON example in §A.9 verbatim so the cloud audit store
@@ -115,7 +115,7 @@ impl RuleMatch {
     }
 }
 
-/// BF-5 correlation fields (Appendix A §A.9).
+/// correlation fields (Appendix A §A.9).
 ///
 /// These bridge a credential event in the cloud trust system to a
 /// Lamprey decision recorded locally. The JSON shape matches the
@@ -187,10 +187,10 @@ pub struct AuditEntry {
     pub routing_reason: String,
     /// HMAC pseudonym of the user profile / subject. Distinct from
     /// `correlation.subject_hash` only in that the latter is the
-    /// BF-5 wire field; here we keep both equal so the entry is
+    /// wire field; here we keep both equal so the entry is
     /// self-contained.
     pub user_profile: String,
-    /// BF-5 correlation block.
+    /// correlation block.
     pub correlation: CorrelationFields,
     /// BLAKE3 of the previous entry's canonical bytes. Zero for
     /// chain head.

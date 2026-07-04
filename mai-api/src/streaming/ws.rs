@@ -323,11 +323,11 @@ async fn handle_ws_connection(socket: WebSocket, state: AppState) {
                                     continue;
                                 }
                                 // Binary frames are audio chunks for STT.
-                                // Audio processing integration deferred to Session 13.
+                                // Audio processing integration deferred.
                                 debug!(
                                     conn_id = %conn_id,
                                     size = data.len(),
-                                    "Received audio chunk (STT deferred to Session 13)"
+                                    "Received audio chunk (STT not yet implemented)"
                                 );
                             }
                             Message::Pong(_) => {
@@ -568,12 +568,13 @@ async fn handle_inference_request(
         },
     );
 
-    // In full integration (Session 11e), this would:
+    // In full integration, this would:
     // 1. Build an InferenceRequest and route through the scheduler
     // 2. Spawn a task that reads from the token channel
     // 3. Send inference.token messages for each token
     // 4. Send inference.complete on finish
-    // For now, send an immediate placeholder complete.
+    // TODO(basho): implement the streaming flow above; currently completes
+    // immediately.
 
     info!(
         request_id = %request_id,
@@ -582,7 +583,7 @@ async fn handle_inference_request(
         "WebSocket inference request registered"
     );
 
-    // Placeholder: immediately complete (real streaming in 11e)
+    // Immediately complete (see TODO(basho) above).
     conn.active_requests.remove(&request_id);
 
     Some(ServerMessage::inference_complete(&request_id, "stop", 0))
@@ -632,7 +633,7 @@ fn handle_inference_cancel(
 
 /// Handle a tool.result message.
 ///
-/// Tool calling integration is built in Session 13. This handler
+/// Tool calling integration is built. This handler
 /// validates the message format and acknowledges receipt.
 #[allow(clippy::unnecessary_wraps)]
 fn handle_tool_result(conn: &mut ConnectionState, msg: &ClientMessage) -> Option<ServerMessage> {
@@ -662,7 +663,7 @@ fn handle_tool_result(conn: &mut ConnectionState, msg: &ClientMessage) -> Option
         request_id = %request_id,
         tool_call_id = %tool_result.tool_call_id,
         function = %tool_result.function_name,
-        "Tool result received (processing deferred to Session 13)"
+        "Tool result received (processing not yet implemented)"
     );
 
     Some(ServerMessage::new(

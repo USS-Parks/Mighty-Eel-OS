@@ -4,7 +4,7 @@
 //! Adapters implementing this trait MUST NOT access hardware directly.
 //! All resource requests must route through the HIL.
 //!
-//! Session 03 deliverable. Corrected per Claude audit (B1, B2, B3).
+//! Corrected per Claude audit (B1, B2, B3).
 
 #![deny(unsafe_code)]
 

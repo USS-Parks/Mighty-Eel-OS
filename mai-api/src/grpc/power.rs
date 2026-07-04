@@ -65,7 +65,7 @@ impl proto::mai_power_server::MaiPower for MaiPowerService {
         Ok(Response::new(proto::PowerStateResponse {
             state: current.as_str().to_string(),
             estimated_watts: current.estimated_watts_gpu_era(),
-            state_duration_secs: 0, // Duration tracking added in Session 14
+            state_duration_secs: 0, // Duration tracking
             demotion_pending,
         }))
     }

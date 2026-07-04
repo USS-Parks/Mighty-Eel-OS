@@ -1,1 +1,1 @@
-"""Compliance-Routed — Session 30 plan-spec scaffold #3."""
+"""Compliance-Routed"""

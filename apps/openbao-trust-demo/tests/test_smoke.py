@@ -1,4 +1,4 @@
-"""Smoke tests: each pipeline step in isolation + BF-6 stub fallbacks."""
+"""Smoke tests: each pipeline step in isolation + stub fallbacks."""
 
 from __future__ import annotations
 
@@ -117,7 +117,7 @@ def test_check_local_trust_bundle_reads_bf6_live_endpoint() -> None:
 
 
 def test_check_local_trust_bundle_falls_back_when_server_unreachable() -> None:
-    """BF-6 endpoint is live but the server is degraded — the demo must still
+    """endpoint is live but the server is degraded — the demo must still
     produce an audit-ready snapshot rather than crash."""
     main = _load_main()
 

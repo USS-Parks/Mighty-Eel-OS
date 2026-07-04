@@ -4,7 +4,6 @@ EXL2 and GPTQ quantized inference with multi-model multiplexing on
 single GPU. Optimized for memory-efficient quantized serving with
 paged KV cache.
 
-Session 09 deliverable.
 """
 
 from __future__ import annotations

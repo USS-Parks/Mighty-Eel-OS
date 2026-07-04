@@ -1,4 +1,4 @@
-//! Lamprey Query Router (Session 36).
+//! Lamprey Query Router.
 //!
 //! The router is the entry point for every inference request that enters the
 //! MAI compliance stack. It decides whether a query is processed locally by

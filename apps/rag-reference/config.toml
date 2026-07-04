@@ -1,4 +1,4 @@
-# RAG Reference scaffold — Session 30
+# RAG Reference scaffold
 #
 # Ingests local text documents, embeds via /v1/embeddings, retrieves
 # the top-k by cosine similarity, and asks the chat model to answer

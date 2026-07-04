@@ -1,4 +1,4 @@
-//! Rule-based sensitivity classifier (Session 36).
+//! Rule-based sensitivity classifier.
 //!
 //! Inspects query text against a configurable set of regex patterns and
 //! returns the highest matched classification level. Patterns are loaded

@@ -1,7 +1,7 @@
 """Smoke client: verifies a packaged MAI deployment is reachable via the SDK.
 
 This is the Gate C "SDK runs against packaged deployment" evidence. It is not
-an L4-L5 application (those land in Sessions 29-31); it is a minimal,
+an L4-L5 application; it is a minimal,
 operator-friendly probe that exercises the public REST surface using the
 Python SDK so a deployment can be validated end-to-end.
 

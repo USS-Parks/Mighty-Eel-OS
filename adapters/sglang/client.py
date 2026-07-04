@@ -4,7 +4,6 @@ Communicates with SGLang server's REST API. SGLang serves an
 OpenAI-compatible API plus native endpoints for constrained decoding,
 RadixAttention, and fork-based parallelism.
 
-Session 09 deliverable.
 """
 
 from __future__ import annotations

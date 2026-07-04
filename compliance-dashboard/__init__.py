@@ -1,4 +1,4 @@
-"""MAI Compliance Dashboard (Session 44).
+"""MAI Compliance Dashboard.
 
 The exception to the "no L6 UI" rule: this small FastAPI app gives
 compliance officers, regulators, and acquirers a visual way to verify

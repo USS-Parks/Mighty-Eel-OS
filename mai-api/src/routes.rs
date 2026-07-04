@@ -14,9 +14,9 @@
 //! - `/v1/adapters` - Adapter listing
 //! - `/v1/audit/*` - Audit trail access
 //! - `/v1/profiles/*` - Family profile queries
-//! - `/v1/trust/*` - Local trust cache surface (BF-6)
-//! - `/v1/auth/exchange_token` - Local-dev token exchange stub (BF-6)
-//! - `/v1/compliance/*` - Compliance policy / audit / reports / feed (S44)
+//! `/v1/trust/*` - Local trust cache surface
+//! `/v1/auth/exchange_token` - Local-dev token exchange stub
+//! - `/v1/compliance/*` - Compliance policy / audit / reports / feed
 
 use std::convert::Infallible;
 
@@ -99,7 +99,7 @@ pub fn build_router(state: AppState) -> Router {
             post(handlers::models::remove_model_handler),
         );
 
-    // OTA update routes (Session 25)
+    // OTA update routes
     let update_routes = Router::new()
         .route("/v1/updates/check", get(handlers::updates::check_updates))
         .route(
@@ -169,7 +169,7 @@ pub fn build_router(state: AppState) -> Router {
             get(handlers::system::get_profile),
         );
 
-    // Telemetry / metrics routes (Session 20)
+    // Telemetry / metrics routes
     let telemetry_routes = Router::new()
         .route(
             "/v1/scheduler/metrics",
@@ -188,10 +188,10 @@ pub fn build_router(state: AppState) -> Router {
             get(handlers::telemetry::scheduler_anomalies),
         );
 
-    // WebSocket streaming route (Session 11c)
+    // WebSocket streaming route
     let ws_routes = Router::new().route("/v1/ws", any(streaming::ws::ws_upgrade));
 
-    // Trust Manifold routes (BF-6)
+    // Trust Manifold routes
     let trust_routes = Router::new()
         .route("/v1/trust/status", get(handlers::trust::get_trust_status))
         .route("/v1/trust/claims", get(handlers::trust::list_claims))
@@ -217,7 +217,7 @@ pub fn build_router(state: AppState) -> Router {
             post(handlers::trust::exchange_token),
         );
 
-    // Compliance management routes (Session 44)
+    // Compliance management routes
     let compliance_routes = Router::new()
         .route(
             "/v1/compliance/status",

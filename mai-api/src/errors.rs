@@ -65,7 +65,7 @@ pub enum ApiError {
     ProfileNotFound(String),
     /// MAI-4004: Token validation failed
     TokenInvalid,
-    /// MAI-4005: Rate limit exceeded (Session 14c). Payload is retry_after seconds.
+    /// MAI-4005: Rate limit exceeded. Payload is retry_after seconds.
     RateLimited(u64),
 
     // ─── MAI-5XXX: Config Errors ────────────────────────────────

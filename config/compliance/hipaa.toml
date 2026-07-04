@@ -1,4 +1,4 @@
-# MAI HIPAA Compliance Configuration (Session 38)
+# MAI HIPAA Compliance Configuration
 #
 # Deserializes into mai_compliance::{PhiDetectorConfig, BaaConfig,
 # DeidConfig} at server startup. Operators should tune thresholds and the

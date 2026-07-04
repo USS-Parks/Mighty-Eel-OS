@@ -1,4 +1,4 @@
-//! Composable compliance rule engine (Session 37).
+//! Composable compliance rule engine.
 //!
 //! Provides three layers:
 //!

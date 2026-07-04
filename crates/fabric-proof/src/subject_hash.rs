@@ -1,4 +1,4 @@
-//! HMAC-SHA256 subject pseudonymization (BF-3 §6).
+//! HMAC-SHA256 subject pseudonymization.
 //!
 //! `subject_hash = "hmac:" + lowercase_hex(HMAC-SHA256(tenant_key, subject_id))`.
 //! String-based core — mai-compliance wraps this with its `SubjectId` /

@@ -1,4 +1,4 @@
-//! # Model Package Management (Session 24)
+//! # Model Package Management
 //!
 //! Implements the `.mai-pkg` directory format, USB discovery, signature
 //! verification, installation pipeline, and secure removal. These modules

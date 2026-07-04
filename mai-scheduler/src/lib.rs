@@ -17,12 +17,6 @@
 //!
 //! # Extension Points
 //!
-//! - Session 16: topology discovery, weighted graph, placement penalty (done).
-//! - Session 17: KV cache manager integrated for cache-aware placement.
-//! - Session 18: continuous batching engine with admission control (done).
-//! - Session 19: multi-factor scorer replaces least-loaded default.
-//! - Session 20: admission control with request queuing.
-//! - Session 21: autoscaler for dynamic instance count.
 
 #![forbid(unsafe_code)]
 

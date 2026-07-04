@@ -1,4 +1,4 @@
-//! OCAP Governance Report template (Session 43).
+//! OCAP Governance Report template.
 //!
 //! Surfaces tribal data access decisions, treaty references, and
 //! cultural-consent outcomes. Scopes the audit query to entries

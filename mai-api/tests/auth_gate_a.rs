@@ -1,6 +1,6 @@
-//! Session 26 Gate A acceptance tests.
+//! Gate A acceptance tests.
 //!
-//! Verifies the four BUILD-EXECUTION-PLAN.md Session 26 acceptance criteria at
+//! Verifies the four BUILD-EXECUTION-PLAN.md acceptance criteria at
 //! the router level with a strict (production-like) `AuthState`:
 //!
 //! 1. Missing token returns `401 Unauthorized`.

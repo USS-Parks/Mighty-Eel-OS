@@ -1,4 +1,4 @@
-//! Session 36 acceptance: router decision must complete in under 5ms on the
+//! acceptance: router decision must complete in under 5ms on the
 //! 99th percentile. We sample 1_000 mixed-classification queries and assert
 //! the p99 stays under budget.
 //!

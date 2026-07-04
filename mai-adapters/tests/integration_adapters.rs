@@ -6,7 +6,6 @@
 //! These tests require a Python environment with the adapters package available.
 //! They test the full subprocess lifecycle: spawn, IPC, heartbeat, crash recovery.
 //!
-//! Session 08 deliverable.
 
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 

@@ -2,7 +2,7 @@
 //!
 //! Combines latency, memory pressure, topology cost, eviction cost, and
 //! batching benefit into a single composite score for each candidate instance.
-//! This scorer replaces Session 15's `least_loaded_scorer` as the default
+//! This scorer replaces `least_loaded_scorer` as the default
 //! placement function.
 //!
 //! # Score Formula

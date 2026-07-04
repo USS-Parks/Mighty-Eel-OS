@@ -9,7 +9,7 @@
 //! Collections are scoped to family profiles. Each profile's RAG context
 //! is isolated: a Child profile cannot search an Adult profile's embeddings.
 //!
-//! # Stub Status
+//! # Backend Status
 //!
 //! This implementation uses in-memory storage that simulates Qdrant behavior.
 //! Real Qdrant operations require the `qdrant-client` crate and a running

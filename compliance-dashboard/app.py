@@ -1,4 +1,4 @@
-"""MAI Compliance Dashboard FastAPI app (Session 44).
+"""MAI Compliance Dashboard FastAPI app.
 
 Single-process operator console. Renders seven pages:
 

@@ -1,8 +1,8 @@
-//! Session 33 Gate C acceptance tests.
+//! Gate C acceptance tests.
 //!
 //! Each test maps directly to one criterion in BUILD-EXECUTION-PLAN.md's
-//! "Session 33: Multi-Instance Scheduling" acceptance section. The new
-//! Session 33 primitives (`kv::offload`, `kv::tiered`, `preemption`,
+//! ": Multi-Instance Scheduling" acceptance section. The new
+//! primitives (`kv::offload`, `kv::tiered`, `preemption`
 //! `balancer`, `decision_cache`) carry their own unit tests; this file
 //! verifies the integrated user-visible behavior.
 
@@ -150,7 +150,7 @@ fn gate_c_session33_unknown_alias_returns_no_instance() {
     ));
 }
 
-// -- Criterion 6: Session 33 primitives behave under integration -----------
+// Criterion 6: primitives behave under integration -----------
 
 #[test]
 fn gate_c_session33_soft_eviction_round_trip_with_preemption_resume_boost() {

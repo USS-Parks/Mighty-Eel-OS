@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# MAI one-command local launch (Session 35).
+# MAI one-command local launch.
 #
 # Usage:
 #   scripts/launch.sh                       # default config (config/*.toml)

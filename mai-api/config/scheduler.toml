@@ -7,7 +7,7 @@
 # TOML files (scout.toml, ranger.toml, pack-leader.toml).
 
 # Placement strategy. Phase 1 only supports "least-loaded".
-# Session 19 adds "multi-factor" with topology + KV cache awareness.
+# A later phase adds "multi-factor" with topology + KV cache awareness.
 strategy = "least-loaded"
 
 # Per-instance queue depth at which the instance is considered overloaded.

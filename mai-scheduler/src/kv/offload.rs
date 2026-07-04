@@ -1,4 +1,4 @@
-//! Soft eviction (Session 33): KV cache offload to CPU pinned memory.
+//! Soft eviction: KV cache offload to CPU pinned memory.
 //!
 //! Standard eviction destroys a sequence's KV cache; restoring it requires a
 //! full re-prefill (seconds). Soft eviction instead copies the KV tensors

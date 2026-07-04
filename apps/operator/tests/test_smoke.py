@@ -132,7 +132,7 @@ def test_panel_airgap_marks_unverified_as_not_ok() -> None:
     assert "non_compliant" in p.summary
 
 
-# --- Panel: trust (BF-6 live) --------------------------------------
+# Panel: trust --------------------------------------
 
 def test_panel_trust_renders_bf6_live_status() -> None:
     main = _load_main()

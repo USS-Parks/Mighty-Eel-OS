@@ -1,4 +1,4 @@
-"""Trace-driven workload generator for the MAI simulator (Session 32).
+"""Trace-driven workload generator for the MAI simulator.
 
 Reads an anonymized NDJSON trace and replays its events as simulator workload.
 Inter-request gaps and bursts are preserved exactly; the timeline may be

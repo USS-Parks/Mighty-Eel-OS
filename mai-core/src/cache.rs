@@ -6,7 +6,7 @@
 //! # Design Decisions
 //!
 //! - **Standalone module**: Does not integrate into Scheduler or HotSwapManager
-//!   directly. Integration deferred to Session 11 (API server) which provides
+//!   directly. Integration is deferred to the API server, which provides
 //!   the natural request/response interception point.
 //! - **Profile isolation**: Cache keys include profile_id. The `invalidate_profile`
 //!   method purges all entries for a given family profile.
@@ -14,7 +14,7 @@
 //!   from that model must be purged (stale weights = stale outputs).
 //! - **Determinism gate**: Only requests with `streaming: false` are cacheable.
 //!   Streaming responses are delivered incrementally and caching them requires
-//!   buffering the full response, which is Session 11's concern.
+//!   buffering the full response, which is a separate concern.
 //! - **Air-gap safe**: No network access. Local memory only. Metrics never leave device.
 //! - **No unsafe code**: Pure safe Rust.
 
@@ -32,7 +32,7 @@ use crate::types::{
 /// Response cache with LRU eviction and TTL expiry.
 ///
 /// Thread safety: This struct is NOT internally synchronized. The caller
-/// (Session 11 API layer) is responsible for wrapping in `Arc<Mutex<_>>`
+/// is responsible for wrapping in `Arc<Mutex<_>>`
 /// or `Arc<RwLock<_>>` as appropriate for their concurrency model.
 pub struct ResponseCache {
     entries: HashMap<CacheKey, CacheEntry>,
@@ -106,7 +106,7 @@ impl ResponseCache {
     ///
     /// Requests are NOT cacheable if:
     /// - Cache is disabled in config
-    /// - Request is streaming (buffered response caching is Session 11 scope)
+    /// Request is streaming
     /// - Model is in the exclude list
     /// - Request type is FunctionCall (side effects, non-deterministic)
     pub fn is_cacheable(&self, request: &InferenceRequest) -> bool {

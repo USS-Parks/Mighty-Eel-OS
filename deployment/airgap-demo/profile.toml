@@ -3,7 +3,7 @@
 # Fully offline demo. Air-gap switch is hard-on. The trust cache is
 # pre-loaded from a signed bundle on disk. No network. Every
 # Lamprey decision uses the cached bundle + the local audit chain.
-# This is the profile used in the Session 46 demo suite to prove the
+# This is the profile used in the demo suite to prove the
 # Trust Manifold survives a complete cloud outage.
 
 [profile]

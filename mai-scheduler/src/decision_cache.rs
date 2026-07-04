@@ -1,4 +1,4 @@
-//! TTL-bounded cache of recent scheduling decisions (Session 33).
+//! TTL-bounded cache of recent scheduling decisions.
 //!
 //! Under steady load the same (model, priority, load condition) tuple
 //! produces the same placement decision over and over. Caching that decision

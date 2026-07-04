@@ -1,4 +1,4 @@
-//! Compliance Report Generator (Session 43).
+//! Compliance Report Generator.
 //!
 //! Produces regulator-ready compliance documentation from the
 //! [`crate::audit::AuditLog`]. Each report is built by feeding a
@@ -20,7 +20,7 @@
 //!   third-party templates can implement.
 //! - [`pdf`] — certification envelope. The "PDF" output is a text
 //!   rendering with an embedded ML-DSA-87 signature over the BLAKE3
-//!   of the canonical bytes. The dashboard (S44) can wrap this in a
+//!   of the canonical bytes. The dashboard can wrap this in a
 //!   real PDF; the verifiable artefact is the
 //!   [`pdf::CertifiedReport`].
 //! - [`prune`] — retention-based pruning. Reports older than the

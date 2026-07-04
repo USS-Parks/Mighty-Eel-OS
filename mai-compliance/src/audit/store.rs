@@ -1,15 +1,15 @@
-//! Append-only audit store (Session 42 + BF-5).
+//! Append-only audit store.
 //!
 //! [`AuditStore`] keeps the running tail of finalised audit entries
 //! in memory and (optionally) mirrors writes to an append-only WAL
-//! file on disk. It supports the BF-5 offline-queue / replay
+//! file on disk. It supports the offline-queue / replay
 //! semantics: callers can mark the store offline, accumulate
 //! correlation events, then call [`AuditStore::drain_offline_queue`]
 //! once connectivity returns.
 //!
 //! Storage encryption is left as a hook ([`StoreSealer`]). The
 //! shipped [`NullSealer`] is the bring-up default; production
-//! deployments plug in a vault-backed AEAD sealer (Session 27 vault
+//! deployments plug in a vault-backed AEAD sealer (vault
 //! integration). The hook is intentionally synchronous so the
 //! audit-write path stays non-async — the inference fast path must
 //! never await on a disk flush.

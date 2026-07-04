@@ -1,4 +1,4 @@
-//! Production trace capture for the scheduler (Session 32).
+//! Production trace capture for the scheduler.
 //!
 //! Captures per-request telemetry at completion time and appends NDJSON to a
 //! locally-rotated trace file. Privacy is structural: this module never sees

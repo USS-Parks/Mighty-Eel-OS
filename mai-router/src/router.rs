@@ -234,7 +234,7 @@ impl Router for DefaultRouter {
 
         // 2. Export-controlled or tribal data must stay local regardless of
         //    classification (Lamprey ITAR / OCAP baseline). The policy
-        //    runtime in Session 37 will let operators tighten further.
+        //    runtime will let operators tighten further.
         if has_export_controlled {
             return Ok(RoutingDecision::Local {
                 reason: "export-controlled entity detected (ITAR/EAR baseline)".to_string(),

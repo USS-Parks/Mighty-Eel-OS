@@ -3,7 +3,6 @@
 Tests cover: initialization, generate (streaming), generate_batch,
 embed, health_check, capabilities, error mapping, model switching.
 
-Session 08 deliverable.
 """
 
 from __future__ import annotations

@@ -3,7 +3,6 @@
 Full implementation: chat/completion streaming, embeddings,
 model management, GPU layer assignment, health checking.
 
-Session 08 deliverable.
 """
 
 from adapters.ollama.adapter import OllamaAdapter

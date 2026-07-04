@@ -1,4 +1,4 @@
-//! ITAR classification (Session 39).
+//! ITAR classification.
 //!
 //! Implements detection of US Munitions List (USML) categories I-XXI and
 //! assigns an [`ExportClassification`] level (`Uncontrolled` / `Ear99` /

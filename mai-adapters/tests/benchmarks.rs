@@ -15,7 +15,6 @@
 //! These benchmarks use simulated adapters (no GPU required).
 //! Results are written to `benchmark_results.json` for tracking.
 //!
-//! Session 10 deliverable.
 
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 

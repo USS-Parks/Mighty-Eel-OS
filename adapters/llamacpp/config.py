@@ -3,7 +3,6 @@
 Default values assume local llama-server (llama.cpp HTTP server).
 Critical for fallback, lightweight deployments, and GGUF models.
 
-Session 09 deliverable.
 """
 
 from __future__ import annotations

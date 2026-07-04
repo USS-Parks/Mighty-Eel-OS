@@ -1,4 +1,4 @@
-# MAI OCAP Compliance Configuration (Session 40)
+# MAI OCAP Compliance Configuration
 #
 # Deserialises into mai_compliance::{TribalDataDetectorConfig,
 # TreatyDetectorConfig, CulturalFilterConfig, OcapConfig} at server

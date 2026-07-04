@@ -1,4 +1,4 @@
-"""Trace-driven policy comparison harness (Session 32 Gate C backfill).
+"""Trace-driven policy comparison harness.
 
 Replays an NDJSON trace through multiple KV policies and emits a comparison
 report. Deterministic given the same seed + trace + policy. The output is

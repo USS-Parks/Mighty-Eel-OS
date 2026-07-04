@@ -1,7 +1,7 @@
-//! Integration tests for the Session 44 + BF-6 endpoints.
+//! Integration tests for the + endpoints.
 //!
-//! Exercises the trust status surface (BF-6) and the compliance
-//! management surface (S44) through the full axum router so the auth
+//! Exercises the trust status surface and the compliance
+//! management surface through the full axum router so the auth
 //! middleware + route dispatch + handler paths are all covered.
 
 use std::sync::Arc;
@@ -125,7 +125,7 @@ async fn json_body(response: axum::response::Response) -> Value {
     serde_json::from_slice(&bytes).unwrap_or_else(|e| panic!("invalid JSON body: {e}"))
 }
 
-// ─── BF-6: trust endpoints ────────────────────────────────────────
+// ───: trust endpoints ────────────────────────────────────────
 
 #[tokio::test]
 async fn s44_trust_status_returns_air_gapped_by_default() {
@@ -248,7 +248,7 @@ async fn s44_exchange_token_returns_local_dev_token() {
     assert!(body["expires_at_secs"].as_u64().unwrap() > body["issued_at_secs"].as_u64().unwrap());
 }
 
-// ─── S44: compliance endpoints ────────────────────────────────────
+// ─── compliance endpoints ────────────────────────────────────
 
 #[tokio::test]
 async fn s44_compliance_status_lists_standard_template_modules() {

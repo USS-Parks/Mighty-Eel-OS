@@ -1,4 +1,4 @@
-//! TPM 2.0 key management (Session 27: real software-TPM fallback).
+//! TPM 2.0 key management.
 //!
 //! Implements `TpmProvider` for hardware-backed key sealing and unsealing.
 //! Keys are bound to PCR (Platform Configuration Register) state, ensuring
@@ -95,7 +95,7 @@ impl TpmManager {
     /// Compute an initial PCR state (deterministic for testing).
     fn compute_initial_pcr_state() -> Vec<u8> {
         // In production: read actual PCR values from TPM.
-        // Stub: use a fixed "healthy boot" state.
+        // Stub mode uses a fixed "healthy boot" state.
         blake3::hash(b"healthy-boot-pcr-0-7").as_bytes().to_vec()
     }
 
@@ -237,7 +237,7 @@ impl TpmProvider for TpmManager {
         }
 
         // In production: TPM2_Quote over PCR values.
-        // Stub: BLAKE3 hash of current PCR state.
+        // Stub mode hashes the current PCR state with BLAKE3.
         let pcr_state = self.current_pcr_state.read().await;
         let quote = blake3::hash(&pcr_state).as_bytes().to_vec();
         debug!(

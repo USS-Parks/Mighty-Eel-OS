@@ -220,7 +220,7 @@ pub trait AuditSigner: Send + Sync + 'static {
 /// No-op signer for deployments without PQC keys provisioned.
 ///
 /// Returns empty signatures. Verification always returns true.
-/// Real PQC signing is added in Session 12 (Vault Integration).
+/// Real PQC signing (Vault Integration).
 #[derive(Debug, Clone)]
 pub struct NullSigner;
 

@@ -1,4 +1,4 @@
-# Tribal Data Sovereignty Demo scaffold — Session 30
+# Tribal Data Sovereignty Demo scaffold
 #
 # Local-only protected data example. Demonstrates the OCAP path:
 # a TrustClaim with compliance_scopes=["ocap"] and
@@ -11,7 +11,7 @@
 
 [trust]
 # Mock claim — local-dev only. Real claims arrive signed from the
-# Cloud OpenBao Trust Bridge once BF-6 lands.
+# Cloud OpenBao Trust Bridge once it is live.
 tenant_id              = "nation-of-example"
 subject_id             = "elder-marie"
 subject_hash           = "hmac-placeholder"

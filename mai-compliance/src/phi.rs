@@ -1,4 +1,4 @@
-//! PHI detection for all 18 HIPAA Safe Harbor identifiers (Session 38).
+//! PHI detection for all 18 HIPAA Safe Harbor identifiers.
 //!
 //! Each identifier has one or more regex patterns and is detected with a
 //! `PhiConfidence` tier (`Explicit` / `Probable` / `Possible`). The detector

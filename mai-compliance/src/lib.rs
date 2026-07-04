@@ -1,6 +1,6 @@
 //! MAI Compliance Engine.
 //!
-//! HIPAA-specific modules (Session 38):
+//! HIPAA-specific modules:
 //!
 //! - [`phi`] — detector for all 18 HIPAA Safe Harbor identifiers with
 //!   Explicit / Probable / Possible confidence levels.
@@ -10,7 +10,7 @@
 //! - [`medical_entities`] — ICD-10 code validation, RxNorm medication
 //!   dictionary, and lab-value parsing that enrich routing decisions.
 //!
-//! Export-control modules (Session 39):
+//! Export-control modules:
 //!
 //! - [`itar`] — USML category I–XXI detection with the
 //!   default-to-ITAR-on-ambiguity rule.
@@ -21,22 +21,22 @@
 //! - [`tech_data`] — generic technical-data classifier (drawings,
 //!   specs, design methodology) used to enrich ambiguous content.
 //!
-//! Trust Manifold projection (BF-2):
+//! Trust Manifold projection:
 //!
 //! - [`trust`] — `TrustContext` and supporting enums (service identity,
 //!   compliance scope, allowed route, data classification, revocation
-//!   status). Every Lamprey decision path from Session 39 onward
+//!   status). Every Lamprey decision path
 //!   accepts a `&TrustContext`. See `docs/TRUST-MANIFOLD.md` and
 //!   `docs/SERVICE-IDENTITY.md` for the architecture.
 //!
-//! Tribal data sovereignty (Session 40):
+//! Tribal data sovereignty:
 //!
 //! - [`ocap`] — OCAP (Ownership, Control, Access, Possession) policy
 //!   engine. Sub-modules: tribal-identifier detection, treaty-aware
 //!   routing, cultural-sensitivity filter, and the unified rules
 //!   evaluator. Consumes `&TrustContext` on every decision.
 //!
-//! Trust bundle verification (BF-3):
+//! Trust bundle verification:
 //!
 //! - [`bundle`] — ML-DSA-87-backed verifier for signed policy bundles
 //!   and signed claims. See `docs/TRUST-BUNDLE-SPEC.md` for the wire
@@ -44,12 +44,11 @@
 //! - [`subject_hash`] — HMAC-SHA256 pseudonymization of subject ids for
 //!   audit correlation.
 //!
-//! Wiring into the `mai-router` pipeline lands in Session 41 (policy
+//! Wiring into the `mai-router` pipeline (policy
 //! runtime); this crate is intentionally standalone so it can be reused
-//! by audit reporting (Session 43) and the compliance dashboard
-//! (Session 44).
+//! by audit reporting and the compliance dashboard
 //!
-//! Compliance report generator (Session 43):
+//! Compliance report generator:
 //!
 //! - [`reports`] — [`reports::ReportManager`] turns audit-log entries
 //!   into regulator-ready documents (HIPAA audit trail, ITAR/EAR

@@ -1,4 +1,4 @@
-//! HMAC-SHA256 subject pseudonymization (BF-3 §6).
+//! HMAC-SHA256 subject pseudonymization.
 //!
 //! Raw subject identifiers (employee IDs, patient MRNs, treaty signatories,
 //! service accounts) cannot appear in audit logs that may sync to a central

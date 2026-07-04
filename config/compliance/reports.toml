@@ -1,4 +1,4 @@
-# MAI Compliance Report Generator Configuration (Session 43)
+# MAI Compliance Report Generator Configuration
 #
 # Loaded by mai_compliance::reports::ReportManagerBuilder at startup.
 # Deserialises into PruneConfig (retention) plus a list of default

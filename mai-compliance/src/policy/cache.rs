@@ -1,4 +1,4 @@
-//! Decision cache (Session 41).
+//! Decision cache.
 //!
 //! [`DecisionCache`] memoises recent [`AggregateDecision`] outputs so
 //! that repeated identical requests bypass the per-module evaluators.
@@ -30,7 +30,7 @@ use serde::{Deserialize, Serialize};
 use super::bundle::PolicyBundle;
 use super::composer::AggregateDecision;
 
-/// Default TTL for cache entries (60s, per §A.13 / S41 spec).
+/// Default TTL for cache entries (60s).
 pub const DEFAULT_TTL_SECS: u64 = 60;
 
 /// Configuration for the decision cache.

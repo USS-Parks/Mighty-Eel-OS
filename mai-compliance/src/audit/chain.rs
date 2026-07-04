@@ -1,4 +1,4 @@
-//! Hash chain manager with periodic PQC signatures (Session 42).
+//! Hash chain manager with periodic PQC signatures.
 //!
 //! [`HashChainManager`] is the append-only structure that turns a
 //! stream of [`AuditEntry`] records into a tamper-evident chain. Each
@@ -21,7 +21,7 @@
 //!   bring-up and tests that don't exercise the verifiability path.
 //! - [`MlDsaChainSigner`] holds an ML-DSA-87 signing key. Production
 //!   deployments wire this to a vault-issued audit key (separate
-//!   from the model-signing key — see Session 27).
+//!   from the model-signing key).
 //!
 //! Verification uses
 //! [`crate::bundle::MlDsaBundleVerifier`] to keep the signing-side
@@ -112,7 +112,7 @@ pub enum ChainError {
 ///
 /// The chain manager hashes the entry's canonical bytes with BLAKE3
 /// before invoking [`Self::sign`], so signers always receive a fixed
-/// 32-byte payload. This matches the BF-3 verifier contract
+/// 32-byte payload. This matches the verifier contract
 /// ([`crate::bundle::BundleVerifier::verify`]): both signer and
 /// verifier operate over the same 32-byte digest.
 pub trait ChainSigner: Send + Sync + std::fmt::Debug {
@@ -133,7 +133,7 @@ impl ChainSigner for NullSigner {
 }
 
 /// ML-DSA-87 chain signer. Holds the signing key in memory; the key
-/// is expected to be sourced from the vault (Session 27) at startup.
+/// is expected to be sourced from the vault at startup.
 #[derive(Debug, Clone)]
 pub struct MlDsaChainSigner {
     signing_key_bytes: Vec<u8>,
@@ -246,7 +246,6 @@ impl HashChainManager {
         // interval > 1). `signature_interval == 0` disables. The
         // signer is handed the BLAKE3 of the canonical bytes so the
         // signing primitive operates over a fixed 32-byte digest
-        // (mirrors the BF-3 verifier contract).
         draft.signature = if self.config.signature_interval > 0
             && (draft.id + 1).is_multiple_of(self.config.signature_interval)
         {

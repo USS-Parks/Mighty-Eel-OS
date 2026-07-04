@@ -180,7 +180,7 @@ def panel_trust(client: MaiClient) -> Panel:
 
 
 def _do_trust(client: MaiClient) -> Panel:
-    """BF-6 live: read /v1/trust/status for the consolidated dashboard view."""
+    """live: read /v1/trust/status for the consolidated dashboard view."""
     status = client.trust.status()
     return Panel(
         name="trust", ok=True,

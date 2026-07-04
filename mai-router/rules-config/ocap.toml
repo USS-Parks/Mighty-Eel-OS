@@ -1,5 +1,5 @@
 # OCAP (Ownership, Control, Access, Possession) tribal data sovereignty
-# baseline policy module (Session 37).
+# baseline policy module.
 #
 # Loaded into PolicyModuleRegistry as "ocap_baseline". Default posture:
 # tribal identifiers force local routing. Cloud cannot be used because

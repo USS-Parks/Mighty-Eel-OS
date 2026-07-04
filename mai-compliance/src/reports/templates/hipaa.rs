@@ -1,4 +1,4 @@
-//! HIPAA Audit Trail Report template (Session 43).
+//! HIPAA Audit Trail Report template.
 //!
 //! Surfaces every HIPAA-relevant policy decision in the window:
 //! PHI accesses, BAA module verdicts, deny / quarantine counts, and

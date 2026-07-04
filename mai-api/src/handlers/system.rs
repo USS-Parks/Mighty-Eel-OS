@@ -353,14 +353,15 @@ pub async fn get_audit_log(
 /// GET /v1/profiles
 ///
 /// Admin sees all profiles. Non-admin users see only their own profile.
-/// Profile data comes from the profile store (Session 12 vault integration).
-/// For now, returns the requesting profile as a stub.
+/// Profile data comes from the profile store.
+/// TODO(basho): return all profiles for admins; currently returns only
+/// the requesting profile.
 pub async fn list_profiles(
     State(_state): State<AppState>,
     profile: ProfileInfo,
 ) -> Result<impl IntoResponse, ApiError> {
-    // In production, admin would query the profile store from vault.
-    // For now, return the requesting profile as a single-item list.
+    // TODO(basho): query the profile store from vault for admins; currently
+    // returns the requesting profile as a single-item list.
     let profiles = vec![ProfileResponse {
         id: profile.profile_id.clone(),
         name: profile
@@ -390,8 +391,8 @@ pub async fn get_profile(
         )));
     }
 
-    // In production, look up from vault profile store.
-    // Stub: return the requested profile if it matches the caller.
+    // TODO(basho): look up from the vault profile store. Currently returns
+    // the requested profile if it matches the caller.
     if profile.profile_id == profile_id {
         Ok(Json(ProfileResponse {
             id: profile.profile_id.clone(),
@@ -402,7 +403,8 @@ pub async fn get_profile(
             role: format!("{:?}", profile.role),
         }))
     } else {
-        // Admin viewing another profile: stub response
+        // Admin viewing another profile: minimal response (vault profile
+        // store lookup is the TODO(basho) above).
         Ok(Json(ProfileResponse {
             id: profile_id.clone(),
             name: profile_id,

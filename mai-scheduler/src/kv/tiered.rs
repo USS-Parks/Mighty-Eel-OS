@@ -1,4 +1,4 @@
-//! Two-tier KV cache controller (Session 33).
+//! Two-tier KV cache controller.
 //!
 //! Hot tier — sequences in GPU VRAM, actively serving requests.
 //! Warm tier — sequences offloaded to CPU pinned memory (via `OffloadManager`).

@@ -1,1 +1,1 @@
-"""homebase application scaffold. Stub: implementation in Session 16."""
+"""homebase application scaffold."""

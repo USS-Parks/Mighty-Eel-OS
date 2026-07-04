@@ -1,6 +1,6 @@
 //! Canonical-JSON encoding + BLAKE3 hashing.
 //!
-//! Byte-identical to mai-compliance's BF-3 `write_canonical`: object keys are
+//! Byte-identical to mai-compliance's `write_canonical`: object keys are
 //! emitted in lexicographic order, arrays preserve their order, and scalars use
 //! the default `serde_json` encoding. This guarantees a bundle hashes the same
 //! in `fabric-proof` and `mai-compliance`.
@@ -73,7 +73,7 @@ pub fn canonical_hash<T: Serialize>(value: &T) -> Result<[u8; 32], ProofError> {
 
 /// BLAKE3-32 of the canonical-JSON encoding of `{"metadata": M, "payload": P}`.
 ///
-/// Matches mai-compliance BF-3 `payload_hash` exactly, so signed bundles verify
+/// Matches mai-compliance `payload_hash` exactly, so signed bundles verify
 /// across both crates.
 ///
 /// # Errors

@@ -1,4 +1,4 @@
-//! System Activity Summary template (Session 43).
+//! System Activity Summary template.
 //!
 //! Module-agnostic: routing stats, module health roll-up, and the
 //! aggregate decision mix. Useful as the everyday operations report

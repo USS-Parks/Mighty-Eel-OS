@@ -1,4 +1,4 @@
-//! Technical-data classifier (Session 39).
+//! Technical-data classifier.
 //!
 //! Generic detector for content shaped like engineering / technical
 //! data, independent of the USML category catalog. The output is a
@@ -15,7 +15,7 @@
 //! The detector is heuristic-only; an optional ML / Python-subprocess
 //! classifier can be plugged in later by implementing the
 //! [`TechDataClassifier`] trait. The heuristic implementation is the
-//! "air-gap friendly fallback" called out in the Session 39 prompt:
+//! "air-gap friendly fallback" called out in the prompt:
 //! no model weights, no network, single-pass regex sweep.
 //!
 //! Confidence levels follow the same `Possible / Probable / Explicit`

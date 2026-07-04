@@ -155,7 +155,7 @@ impl ModelLifecycleManager {
         Ok(())
     }
 
-    /// Run a deterministic standard benchmark placeholder.
+    /// Run a deterministic synthetic benchmark.
     ///
     /// Real adapter-backed benchmarking lands where live inference engines are
     /// available; this keeps the lifecycle surface testable and stable.

@@ -109,7 +109,7 @@ fn emit_audit_entry(entry: &AuditEntry) {
 }
 
 /// In-memory audit buffer for batch writes to vault.
-/// The vault interface (Session 12) will consume this.
+/// The vault interface will consume this.
 #[derive(Debug, Default)]
 pub struct AuditBuffer {
     entries: Vec<AuditEntry>,

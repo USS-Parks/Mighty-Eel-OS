@@ -1,4 +1,4 @@
-//! Treaty-aware routing (Session 40).
+//! Treaty-aware routing.
 //!
 //! Treaties are not policy strings — they are legal instruments
 //! recognised in Canadian courts and increasingly in US tribal law.

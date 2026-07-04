@@ -1,4 +1,4 @@
-//! Session 38 acceptance: PHI detection must complete in under 10ms p99
+//! acceptance: PHI detection must complete in under 10ms p99
 //! on a representative mixed corpus.
 
 #![allow(clippy::print_stdout, clippy::print_stderr)]

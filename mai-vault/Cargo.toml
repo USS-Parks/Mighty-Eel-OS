@@ -7,7 +7,7 @@ license.workspace = true
 description = "L2 vault implementation: ZFS storage, PQC encryption, TPM, profiles, audit, vectors"
 
 [features]
-# Session 27 dual-PQC strategy.
+# dual-PQC strategy.
 #
 #  * `pqc-dev`   — RustCrypto-only, no C deps. Default for cross-platform dev/test.
 #                  KEM: `ml-kem` (FIPS 203). DSA: `ml-dsa` (FIPS 204, pre-1.0).

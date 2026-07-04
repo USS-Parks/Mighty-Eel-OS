@@ -1,4 +1,4 @@
-"""MAI SDK Integration Tests (Session 14c).
+"""MAI SDK Integration Tests.
 
 These tests run the Python SDK against a live MAI server. They verify
 that every SDK method reaches the correct endpoint, streaming works

@@ -14,7 +14,7 @@ from typing import Any
 
 from mai.types import ComplianceReport
 
-# Templates supported by the S43 engine, in the order the dashboard
+# Templates supported by the report engine, in the order the dashboard
 # renders them in the dropdown.
 TEMPLATE_CHOICES: list[tuple[str, str]] = [
     ("hipaa_audit_trail", "HIPAA Audit Trail"),

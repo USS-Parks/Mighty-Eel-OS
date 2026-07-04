@@ -1,4 +1,4 @@
-//! Priority-based preemption with starvation prevention (Session 33).
+//! Priority-based preemption with starvation prevention.
 //!
 //! When an instance is at capacity and a higher-priority request arrives, the
 //! scheduler may *preempt* a lower-priority sequence — pausing it (via soft

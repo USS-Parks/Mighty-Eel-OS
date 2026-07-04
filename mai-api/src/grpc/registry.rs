@@ -96,9 +96,8 @@ impl proto::mai_registry_server::MaiRegistry for MaiRegistryService {
 
     /// Trigger a model scan. Admin only.
     ///
-    /// NOTE: ModelRegistry does not yet have a scan() method.
-    /// This is a placeholder that returns the current model count.
-    /// Full filesystem scanning is deferred to Session 15 (Model Management).
+    /// TODO(basho): ModelRegistry does not yet have a scan() method; this
+    /// returns the current model count until filesystem scanning lands.
     async fn scan_models(
         &self,
         request: Request<proto::ScanModelsRequest>,
@@ -122,7 +121,7 @@ impl proto::mai_registry_server::MaiRegistry for MaiRegistryService {
             new_models: 0,
             message: format!(
                 "scan placeholder: {count} models currently registered; \
-                 full filesystem scan available in Session 15"
+                 full filesystem scan not yet implemented"
             ),
         }))
     }

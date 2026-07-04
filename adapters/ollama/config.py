@@ -3,7 +3,6 @@
 Default values assume local Ollama server (air-gapped deployment).
 All network access is localhost-only by design.
 
-Session 08 deliverable.
 """
 
 from __future__ import annotations

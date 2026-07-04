@@ -34,7 +34,7 @@ fail_on_unknown = false
 
 # ─── Required release-gating benchmarks ────────────────────────────────
 #
-# The eight Session 10 benchmarks. min_us is informational (a result
+# The eight benchmarks. min_us is informational (a result
 # faster than this gets logged as "suspiciously fast"); max_us is the
 # hard ceiling — exceeding it fails the gate.
 

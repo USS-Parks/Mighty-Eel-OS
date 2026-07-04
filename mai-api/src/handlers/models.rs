@@ -123,11 +123,11 @@ pub async fn list_models(
 
     let mut models: Vec<ModelDetail> = Vec::new();
     for summary in &summaries {
-        // Determine model safety tags (in production, these come from manifest metadata)
-        // For now, use heuristic: all models are adult-accessible, specific tags TBD
-        let is_teen_safe = true; // Placeholder: read from manifest metadata
-        let is_child_safe = false; // Placeholder: only small/safe models
-        let is_default = false; // Placeholder: check config for default model
+        // TODO(basho): read safety tags and the default flag from manifest
+        // metadata; this heuristic treats all models as adult-accessible.
+        let is_teen_safe = true;
+        let is_child_safe = false;
+        let is_default = false;
 
         if !can_access_model(
             &profile,

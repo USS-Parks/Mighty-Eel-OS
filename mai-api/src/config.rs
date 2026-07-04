@@ -284,7 +284,7 @@ impl ServerConfig {
     pub fn validate(&self) -> Result<(), ConfigError> {
         // Bind address safety: refuse every wildcard "any" address. These
         // bind to every interface and have no legitimate use in this
-        // codebase. Session 28 strengthened this from "0.0.0.0 only" to
+        // codebase. strengthened this from "0.0.0.0 only" to
         // "any IPv4/IPv6 unspecified address".
         let bind = self.server.bind_address.trim();
         if bind == "0.0.0.0" || bind == "::" || bind == "[::]" {
@@ -570,7 +570,7 @@ mod tests {
 
     #[test]
     fn test_reject_ipv6_wildcard_bind() {
-        // Session 28 strengthened: IPv6 unspecified must also be rejected.
+        // strengthened: IPv6 unspecified must also be rejected.
         let mut config = ServerConfig::default();
         config.server.bind_address = "::".to_string();
         assert!(matches!(config.validate(), Err(ConfigError::UnsafeBind(_))));

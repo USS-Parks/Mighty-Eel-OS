@@ -1,4 +1,4 @@
-//! De-identification (Session 38).
+//! De-identification.
 //!
 //! Takes a query text plus the `PhiReport` from the detector and produces a
 //! redacted version where each detected PHI span is replaced with a

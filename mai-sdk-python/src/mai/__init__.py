@@ -2,11 +2,6 @@
 
 Provides typed client access to the MAI API for building L4-L5
 applications on top of the Model Abstraction Interface.
-
-Session 05 deliverable: type stubs and client skeleton.
-Session 14c: streaming, auth token, retry, endpoint fixes.
-Session 29: full coverage — namespaces, separate errors/retry/config,
-async split, CLI, trust stubs (BF-6 deferred).
 """
 
 __version__ = "0.2.0"

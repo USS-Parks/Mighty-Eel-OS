@@ -1,6 +1,6 @@
 """Compliance-Routed — placeholder router that mimics Lamprey output.
 
-Until the server exposes ``/v1/compliance/decide`` (Sessions 36-44),
+Until the server exposes ``/v1/compliance/decide``,
 this scaffold evaluates a *local* mock rule table to produce the same
 shape the real Lamprey policy runtime will emit. The shape mirrors
 ``mai-compliance::AggregateDecision`` so adapter code written today
@@ -55,7 +55,7 @@ class RequestMetadata:
 
 
 # ---------------------------------------------------------------------------
-# Mock router (replace with client.compliance.decide() in BF-6/S41 hookup)
+# Mock router (replace with client.compliance.decide())
 # ---------------------------------------------------------------------------
 
 class MockComplianceRouter:
@@ -177,7 +177,7 @@ def run(prompt: str, *, config_path: Path = DEFAULT_CONFIG,
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="compliance-routed",
-        description="Mock-Lamprey-routed chat. Local rules until BF-6.",
+        description="Mock-Lamprey-routed chat using local rules only.",
     )
     parser.add_argument("prompt")
     parser.add_argument("--config", default=str(DEFAULT_CONFIG))

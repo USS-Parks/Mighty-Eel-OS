@@ -171,7 +171,7 @@ pub fn sanitize_label_value(s: &str) -> String {
     let lower = out.to_lowercase();
     const SUSPICIOUS_PREFIXES: &[&str] = &[
         "sk-",     // OpenAI-style API key
-        "bearer_", // sanitized "Bearer XXX"
+        "bearer_", // sanitized bearer-token prefix
         "hvs.",    // HashiCorp Vault token (HCP)
         "s.",      // legacy Vault token
         "ghp_",    // GitHub PAT

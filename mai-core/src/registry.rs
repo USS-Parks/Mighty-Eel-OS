@@ -386,9 +386,9 @@ impl ModelRegistry {
 
         match weights_result {
             Ok(_weights) => {
-                // Weights loaded successfully. In production, weights would be
-                // passed to the adapter process for VRAM placement via HIL.
-                // For now, mark as Loaded.
+                // Weights loaded successfully.
+                // TODO(basho): pass weights to the adapter process for VRAM
+                // placement via HIL; currently just marks the entry Loaded.
                 entry.status = ModelStatus::Loaded;
                 info!(model_id = %model_id, "Model loaded successfully");
                 Ok(())

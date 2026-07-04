@@ -3,7 +3,6 @@
 Default values assume local NVIDIA Triton Inference Server with TensorRT-LLM backend.
 Highest performance target for H100/H200 hardware.
 
-Session 09 deliverable.
 """
 
 from __future__ import annotations

@@ -1,4 +1,4 @@
-"""Tests for Session 32 trace tooling.
+"""Tests for trace tooling.
 
 Covers:
 - anonymize.py: schema enforcement, salt-driven re-hashing, privacy assertions.

@@ -1,4 +1,4 @@
-//! Signed claim and policy-bundle verification (BF-3).
+//! Signed claim and policy-bundle verification.
 //!
 //! See `docs/TRUST-BUNDLE-SPEC.md` for the wire format and verification
 //! algorithm. This module owns the Rust projection of those schemas plus
@@ -9,7 +9,7 @@
 //! - [`SignedPolicyBundle`] — the Trust Bridge's periodic revocation
 //!   snapshot. Consumed by [`crate::trust_cache::LocalTrustCache::record_signed_refresh`].
 //! - [`SignedClaim`] — a per-subject assertion. Consumed at request time
-//!   when the policy runtime (Session 41) needs to validate a caller's
+//!   when the policy runtime needs to validate a caller's
 //!   trust context.
 //!
 //! Verification is canonical-JSON over `{metadata, payload}`, BLAKE3 to a

@@ -1,4 +1,4 @@
-# ITAR / EAR baseline policy module (Session 37)
+# ITAR / EAR baseline policy module
 #
 # Loaded into PolicyModuleRegistry as "itar_baseline". Default posture:
 # export-controlled technical data is denied from cloud routing AND from

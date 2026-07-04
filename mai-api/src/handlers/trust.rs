@@ -1,6 +1,6 @@
-//! Trust Manifold handlers (BF-6).
+//! Trust Manifold handlers.
 //!
-//! Wires the local trust cache (BF-4) and the in-process token
+//! Wires the local trust cache and the in-process token
 //! exchange stub onto the public REST surface so the Python SDK
 //! `client.trust.*` and `client.auth.exchange_token` calls have a
 //! real server to talk to.

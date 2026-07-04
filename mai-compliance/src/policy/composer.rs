@@ -1,4 +1,4 @@
-//! Policy composition engine (Session 41).
+//! Policy composition engine.
 //!
 //! The composer coordinates the per-domain compliance modules (HIPAA
 //! via [`crate::baa`], ITAR/EAR via [`crate::jurisdiction`], OCAP via
@@ -12,7 +12,7 @@
 //!    of all module routes.
 //! 3. **Flag accumulation.** Flags from every enabled module are
 //!    concatenated in priority order, never deduplicated — the audit
-//!    layer (Session 42) needs to see every signal that fired.
+//!    layer needs to see every signal that fired.
 //!
 //! The default priority chain is `OCAP > ITAR > HIPAA`, configurable
 //! from `config/compliance/policy.toml`. Priority only affects the
@@ -335,7 +335,7 @@ impl Default for ComposerConfig {
 }
 
 impl ComposerConfig {
-    /// OCAP > ITAR > HIPAA, per S41 acceptance criteria.
+    /// OCAP > ITAR > HIPAA, per the policy acceptance criteria.
     pub fn default_priority() -> Vec<ModuleId> {
         vec![ModuleId::Ocap, ModuleId::Itar, ModuleId::Hipaa]
     }

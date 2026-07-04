@@ -359,7 +359,7 @@ def test_health_check_returns_false_on_failure() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Trust (BF-6 wired)
+# Trust
 # ---------------------------------------------------------------------------
 
 def test_trust_status_decodes_envelope() -> None:
@@ -455,7 +455,7 @@ def test_auth_exchange_token_round_trips_body() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Compliance (Session 44 wired)
+# Compliance
 # ---------------------------------------------------------------------------
 
 def test_compliance_get_status_decodes_envelope() -> None:

@@ -1,4 +1,4 @@
-# MAI one-command local launch (Session 35) — PowerShell variant.
+# MAI one-command local launch — PowerShell variant.
 #
 # Usage:
 #   scripts\launch.ps1                          # default config

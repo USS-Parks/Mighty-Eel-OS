@@ -155,7 +155,6 @@ impl FrameworkConfig {
     /// Returns the first failure encountered, keyed by adapter name.
     /// Used by [`crate::manager::AdapterManager`] at config-load time and
     /// after every hot-reload to enforce the air-gap host policy from
-    /// Session 28.
     pub fn validate_hosts(
         &self,
         state: ConnectivityState,

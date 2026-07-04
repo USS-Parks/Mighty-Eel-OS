@@ -3,7 +3,6 @@
 Default values assume local ExLlamaV2 server (TabbyAPI or custom).
 Specializes in EXL2/GPTQ quantized models with multi-model multiplexing.
 
-Session 09 deliverable.
 """
 
 from __future__ import annotations

@@ -1,9 +1,9 @@
 //! Placement engine: decides which instance handles a request.
 //!
 //! Phase 1: least-loaded placement with continuation affinity.
-//! Phase 2 (Session 16): topology_penalty method added for hardware-aware
-//! placement. NOT wired into the default scorer yet (Session 19 does that).
-//! The scoring function is pluggable via `ScoringFn`, so Session 19 can
+//! Phase 2: topology_penalty method added for hardware-aware
+//! placement. NOT wired into the default scorer yet.
+//! The scoring function is pluggable via `ScoringFn`, so can
 //! replace it with a multi-factor scorer without changing the placement
 //! engine's structure.
 //!
@@ -37,7 +37,7 @@ pub struct PlacementEngine {
     /// Queue depth threshold for overload filtering.
     overload_threshold: u32,
     /// GPU topology for hardware-aware placement scoring.
-    /// None until topology is initialized (Session 16+).
+    /// None until topology is initialized.
     topology: Option<Arc<GpuTopology>>,
 }
 
@@ -62,7 +62,7 @@ impl PlacementEngine {
         }
     }
 
-    /// Replace the scoring function at runtime (used by Session 19).
+    /// Replace the scoring function at runtime.
     pub fn set_scorer(&mut self, scorer: ScoringFn) {
         self.scoring_fn = scorer;
         self.scoring_reason_fn = None;
@@ -74,7 +74,7 @@ impl PlacementEngine {
         self.scoring_reason_fn = Some(reason_fn);
     }
 
-    /// Set the GPU topology for hardware-aware placement (Session 16).
+    /// Set the GPU topology for hardware-aware placement.
     pub fn set_topology(&mut self, topology: Arc<GpuTopology>) {
         self.topology = Some(topology);
     }
@@ -85,7 +85,7 @@ impl PlacementEngine {
     /// Higher penalty means worse interconnect quality for tensor-parallel
     /// workloads. Returns 0.0 if topology is not set or instance has <= 1 GPU.
     ///
-    /// NOT wired into the default scorer yet. Session 19 integrates this
+    /// NOT wired into the default scorer yet. integrates this
     /// into the multi-factor scoring function.
     pub fn topology_penalty(&self, gpu_ids: &[GpuId]) -> f64 {
         self.topology
@@ -198,7 +198,7 @@ impl PlacementEngine {
 /// Score = queue_depth * 1000.0 + (vram_used / 1_000_000) as f64
 ///
 /// This ensures queue_depth is the primary factor and vram_used is the
-/// tiebreaker. Session 19 replaces this with a multi-factor scorer that
+/// tiebreaker. replaces this with a multi-factor scorer that
 /// includes topology cost, KV cache affinity, thermal headroom, etc.
 #[allow(clippy::cast_precision_loss)] // Acceptable: scoring doesn't need full u64 precision
 fn least_loaded_scorer(state: &InstanceState, _request: &ScheduleRequest) -> f64 {

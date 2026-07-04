@@ -1,4 +1,4 @@
-//! Cross-instance load balancer (Session 33).
+//! Cross-instance load balancer.
 //!
 //! When two instances serve the same model and one is sustained-overloaded
 //! while the other has capacity, migrating a sequence's KV cache between

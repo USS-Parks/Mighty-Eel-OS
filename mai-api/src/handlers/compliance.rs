@@ -1,4 +1,4 @@
-//! Compliance management handlers (Session 44).
+//! Compliance management handlers.
 //!
 //! Binds the [`mai_compliance`] façades — `PolicyManager`,
 //! `AuditLog`, `ReportManager`, and the `AuditFeed` — onto the public

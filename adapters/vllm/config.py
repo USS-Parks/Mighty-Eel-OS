@@ -3,7 +3,6 @@
 Default values assume local vLLM server with OpenAI-compatible API.
 vLLM is the primary adapter for Ranger/Pack Leader tiers (tensor parallelism).
 
-Session 09 deliverable.
 """
 
 from __future__ import annotations

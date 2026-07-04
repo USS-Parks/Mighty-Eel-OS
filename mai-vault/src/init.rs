@@ -1,4 +1,4 @@
-//! First-boot vault initialization (Session 27).
+//! First-boot vault initialization.
 //!
 //! Orchestrates the cold-start sequence required to bring an empty vault into
 //! a usable state:

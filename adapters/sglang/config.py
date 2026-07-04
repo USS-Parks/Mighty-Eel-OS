@@ -4,7 +4,6 @@ Default values assume local SGLang server. Specializes in
 RadixAttention KV cache reuse and constrained decoding with
 guaranteed schema compliance.
 
-Session 09 deliverable.
 """
 
 from __future__ import annotations

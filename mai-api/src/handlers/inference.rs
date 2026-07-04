@@ -5,7 +5,7 @@
 //! the scheduler, and return OpenAI-compatible response formats.
 //!
 //! Streaming (SSE) delegates to the streaming::sse module. Requests with
-//! `stream: true` return an SSE event stream (Session 11c).
+//! `stream: true` return an SSE event stream.
 
 use axum::Json;
 use axum::extract::State;
@@ -37,14 +37,14 @@ use mai_scheduler::{Priority as SchedulerPriority, ScheduleRequest};
 /// checks profile permissions, routes through the scheduler, and
 /// returns a ChatCompletionResponse.
 ///
-/// If `stream: true`, delegates to SSE streaming handler (Session 11c).
+/// If `stream: true`, delegates to SSE streaming handler.
 #[allow(clippy::too_many_lines, clippy::cast_possible_truncation)]
 pub async fn chat_completions(
     State(state): State<AppState>,
     profile: ProfileInfo,
     Json(req): Json<ChatCompletionRequest>,
 ) -> Result<impl IntoResponse, ApiError> {
-    // Streaming via SSE (Session 11c)
+    // Streaming via SSE
     if req.stream {
         let last_event_id = None; // Extracted from headers in full integration (11e)
         return crate::streaming::sse::handle_sse_chat(state, profile, req, last_event_id)
@@ -76,7 +76,7 @@ pub async fn chat_completions(
         estimated_tokens: estimate_chat_tokens(&req),
     };
 
-    // Route through new scheduler (Session 15)
+    // Route through new scheduler
     let sched_priority = scheduler_priority_from_profile(&profile);
     let sched_req =
         ScheduleRequest::new(model_name.as_deref().unwrap_or("default"), sched_priority);
@@ -156,7 +156,7 @@ pub async fn chat_completions(
         },
     };
 
-    // Release sequence in scheduler (Session 15)
+    // Release sequence in scheduler
     state
         .scheduler
         .release_sequence(&decision.instance_id, session_id);
@@ -678,7 +678,7 @@ fn priority_from_profile(profile: &ProfileInfo) -> RequestPriority {
     }
 }
 
-/// Map a profile role to the new scheduler priority (Session 15).
+/// Map a profile role to the new scheduler priority.
 fn scheduler_priority_from_profile(profile: &ProfileInfo) -> SchedulerPriority {
     use crate::types::ProfileRole;
     match profile.role {

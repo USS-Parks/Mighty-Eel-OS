@@ -1,4 +1,4 @@
-//! Adapter host validation under air-gap policy (Session 28).
+//! Adapter host validation under air-gap policy.
 //!
 //! Loopback enforcement runs at two points:
 //!

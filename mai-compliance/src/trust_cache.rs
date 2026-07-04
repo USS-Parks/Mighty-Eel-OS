@@ -1,10 +1,10 @@
-//! Local trust cache (BF-4).
+//! Local trust cache.
 //!
 //! When the Lamprey Trust Bridge is unreachable, the appliance falls
 //! back to the most recent signed policy bundle and revocation snapshot
 //! held locally. This module is the in-memory state model for that
-//! cache; the on-disk format is BF-4 (this module) and signature
-//! verification is BF-3 (see [`crate::bundle`] and `docs/TRUST-BUNDLE-SPEC.md`).
+//! cache; the on-disk format is (this module) and signature
+//! verification is (see [`crate::bundle`] and `docs/TRUST-BUNDLE-SPEC.md`).
 //!
 //! Two refresh entry points:
 //!
@@ -48,7 +48,7 @@
 //! Audit events generated while the cache is degraded, stale, or
 //! air-gapped accumulate in an in-memory queue surfaced by
 //! [`LocalTrustCache::offline_audit_backlog`]. The queue is flushed by
-//! Session 42's audit subsystem when connectivity returns; the cache
+//! the audit subsystem when connectivity returns; the cache
 //! itself does not transmit anything.
 
 use std::collections::BTreeMap;
@@ -121,7 +121,7 @@ pub enum TrustCacheError {
     #[error("expire_after ({expire:?}) must be >= warn_after ({warn:?})")]
     ThresholdsInverted { warn: Duration, expire: Duration },
     /// The signed bundle handed to [`LocalTrustCache::record_signed_refresh`]
-    /// failed BF-3 verification (expired, tampered, unknown anchor, etc.).
+    /// failed verification (expired, tampered, unknown anchor, etc.).
     /// The wrapped [`BundleError`] carries the specific reason; the cache
     /// state is unchanged.
     #[error("signed bundle rejected: {0}")]
@@ -180,7 +180,7 @@ impl LocalTrustCache {
     /// **Bare-data path.** Use this only for tests or trusted in-process
     /// bootstrap. Production code paths must use
     /// [`Self::record_signed_refresh`] so unsigned or invalid bundles are
-    /// rejected at the refresh boundary (BF-3).
+    /// rejected at the refresh boundary.
     ///
     /// `refresh_secs` must be at-or-before `now_secs`. Snapshots replace
     /// any previously-held entries for the same `claim_id`.
@@ -215,7 +215,7 @@ impl LocalTrustCache {
     }
 
     /// Verify a [`SignedPolicyBundle`] and, on success, apply its contents
-    /// to the cache (BF-3 entry point).
+    /// to the cache.
     ///
     /// Behavior on failure: the cache is left **completely untouched**.
     /// A bundle that fails verification — expired, tampered, signed by
@@ -268,7 +268,7 @@ impl LocalTrustCache {
     /// Snapshot of every claim currently held in the cache, in stable
     /// `claim_id` order. The returned vector is owned so callers do not
     /// hold the cache lock across the boundary; this is the canonical
-    /// read path used by `GET /v1/trust/claims` (BF-6).
+    /// read path used by `GET /v1/trust/claims`.
     #[must_use]
     pub fn claims(&self) -> Vec<RevocationSnapshot> {
         self.revocations.values().cloned().collect()
@@ -346,7 +346,7 @@ impl LocalTrustCache {
     }
 
     /// Push an audit event onto the offline backlog. The cache stores
-    /// these as opaque strings; Session 42 defines the JSON shape.
+    /// these as opaque strings; defines the JSON shape.
     pub fn enqueue_offline_audit(&mut self, event: impl Into<String>) {
         self.offline_audit_backlog.push(event.into());
     }
@@ -358,7 +358,7 @@ impl LocalTrustCache {
     }
 
     /// Drain the offline audit backlog. Returns every queued event in
-    /// FIFO order. The caller (Session 42 audit) is responsible for
+    /// FIFO order. The caller is responsible for
     /// re-queueing on flush failure.
     pub fn drain_offline_backlog(&mut self) -> Vec<String> {
         std::mem::take(&mut self.offline_audit_backlog)
@@ -507,7 +507,7 @@ mod tests {
     }
 
     // -----------------------------------------------------------------
-    // BF-3: signed refresh integration tests
+    // signed refresh integration tests
     // -----------------------------------------------------------------
 
     use crate::bundle::{

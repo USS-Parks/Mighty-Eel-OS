@@ -53,20 +53,20 @@ if TYPE_CHECKING:
 
 
 # ---------------------------------------------------------------------------
-# Trust namespace error (BF-6 stub)
+# Trust namespace error
 # ---------------------------------------------------------------------------
 
 class TrustNotProvisionedError(MaiError):
     """Raised when a trust API is called but the server has no trust bridge.
 
-    Session 29 ships the SDK trust surface as a stub. BF-6 wires the
-    real OpenBao Trust Manifold backend in a later session. Applications
-    that catch this can fall back to API-key auth.
+    The SDK trust surface currently ships as a stub; a later build wires
+    the real OpenBao Trust Manifold backend. Applications that catch this
+    can fall back to API-key auth.
     """
 
 
 _TRUST_STUB_MESSAGE = (
-    "trust API is not provisioned in this build (BF-6 pending). "
+    "trust API is not provisioned in this build. "
     "Configure a Trust Manifold backend or use API-key auth."
 )
 
@@ -315,14 +315,14 @@ class Admin:
 
 
 # ---------------------------------------------------------------------------
-# Auth (Session 29 placeholder — server endpoint pending)
+# Auth
 # ---------------------------------------------------------------------------
 
 class Auth:
     """Auth/token operations (``client.auth``).
 
     Implements ``POST /v1/auth/exchange_token`` against the local-dev
-    BF-6 stub. The token is opaque to consumers — pass it back to the
+    stub. The token is opaque to consumers — pass it back to the
     server as part of the request envelope; the real OpenBao-backed
     exchange replaces the body of the server handler without changing
     the wire shape.
@@ -349,13 +349,13 @@ class Auth:
 
 
 # ---------------------------------------------------------------------------
-# Trust (BF-6)
+# Trust
 # ---------------------------------------------------------------------------
 
 class Trust:
     """Trust Manifold namespace (``client.trust``).
 
-    Reads the local trust cache via the BF-6 server endpoints. Every
+    Reads the local trust cache via the server endpoints. Every
     method is metadata-only — no prompt, completion, embedding, or
     regulated payload travels through this surface (Trust Manifold
     hard rule §A.2.4).
@@ -388,13 +388,13 @@ class Trust:
 
 
 # ---------------------------------------------------------------------------
-# Compliance (Session 44)
+# Compliance
 # ---------------------------------------------------------------------------
 
 class Compliance:
     """Lamprey compliance namespace (``client.compliance``).
 
-    Wires the S41 PolicyManager, S42 AuditLog, and S43 ReportManager
+    Wires the PolicyManager, AuditLog, and ReportManager
     onto the SDK. Mirrors the dashboard surface so SDK callers can
     do everything the dashboard can do programmatically.
     """

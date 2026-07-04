@@ -1,4 +1,4 @@
-//! OCAP — Ownership, Control, Access, Possession (Session 40).
+//! OCAP — Ownership, Control, Access, Possession.
 //!
 //! OCAP is the First Nations data governance framework. Tribal
 //! communities own their data, control its use, control access to it,
@@ -34,7 +34,7 @@
 //!   ceiling violation is itself an OCAP violation.
 //! - `revocation_status` — tribal data on a revoked claim is denied.
 //! - `trust_bundle_version` and `claim_id` — recorded in every
-//!   [`OcapDecision`] so the Session 42 audit log can correlate the
+//!   [`OcapDecision`] so the audit log can correlate the
 //!   decision back to the credential event.
 
 pub mod cultural;

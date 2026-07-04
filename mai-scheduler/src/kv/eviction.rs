@@ -9,11 +9,11 @@
 //! - **Priority penalty**: priority-based bias (system priority = never evict)
 //! - **Reuse prediction**: estimated likelihood of future reuse
 //! - **Batch contribution**: protection bonus for sequences in the active
-//!   batch (Session 18). Prevents normal eviction from disrupting in-flight
+//!   batch. Prevents normal eviction from disrupting in-flight
 //!   generation. Emergency removal uses the PreemptionPolicy instead.
 //!
 //! All weights are runtime-configurable via `EvictionConfig`, loaded from
-//! config/kv.toml. This allows tuning via the simulation framework (Session 21).
+//! config/kv.toml. This allows tuning via the simulation framework.
 
 use std::collections::HashSet;
 
@@ -59,7 +59,7 @@ pub struct EvictionConfig {
     #[serde(default = "default_max_seq_bytes")]
     pub max_sequence_bytes: u64,
 
-    /// Weight for batch contribution (Session 18). Active batch members get
+    /// Weight for batch contribution. Active batch members get
     /// a protection bonus that reduces their eviction score. Higher = more
     /// protection for sequences currently generating tokens.
     #[serde(default = "default_batch_weight")]
@@ -181,7 +181,7 @@ impl EvictionScorer {
 
         // Batch contribution: active batch members get a protection bonus
         // that makes them very unlikely to be evicted through normal eviction.
-        // Emergency preemption (Session 18 PreemptionPolicy) handles the case
+        // Emergency preemption handles the case
         // where active members MUST be removed.
         let batch_contribution = if is_in_batch {
             self.config.batch_weight

@@ -4,7 +4,6 @@ Connects to a local Ollama server via HTTP REST API.
 All network access is localhost-only (air-gapped by design).
 GPU layer assignment via Ollama's num_gpu parameter.
 
-Session 08 deliverable.
 """
 
 from __future__ import annotations

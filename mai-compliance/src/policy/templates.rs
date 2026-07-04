@@ -1,4 +1,4 @@
-//! Pre-built compliance profiles (Session 41).
+//! Pre-built compliance profiles.
 //!
 //! Templates are *starting points*: each one selects the modules that
 //! make sense for a deployment vertical and gives the composer a
@@ -158,7 +158,7 @@ mod tests {
             cfg.enabled,
             BTreeSet::from([ModuleId::Hipaa, ModuleId::Ocap])
         );
-        // OCAP must rank above HIPAA per the S40-S41 priority chain.
+        // OCAP must rank above HIPAA per the default priority chain.
         assert_eq!(cfg.priority, vec![ModuleId::Ocap, ModuleId::Hipaa]);
     }
 

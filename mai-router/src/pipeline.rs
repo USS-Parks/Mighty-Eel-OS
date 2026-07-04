@@ -1,13 +1,13 @@
-//! Pre-processing pipeline (Session 37).
+//! Pre-processing pipeline.
 //!
-//! Stitches the Session 36 router primitives — classifier, entity scanner,
-//! budget tracker — together with the Session 37 rule engine into a single
+//! Stitches the router primitives — classifier, entity scanner
+//! budget tracker — together with the rule engine into a single
 //! ordered evaluation:
 //!
-//!   1. Classify text          (Session 36)
-//!   2. Scan for entities      (Session 36)
-//!   3. Evaluate policy rules  (Session 37)
-//!   4. Budget check           (Session 36)
+//! 1. Classify text
+//! 2. Scan for entities
+//! 3. Evaluate policy rules
+//! 4. Budget check
 //!   5. Resolve final decision
 //!
 //! Any stage can short-circuit. Per-stage microsecond timings are emitted
@@ -172,7 +172,7 @@ impl Pipeline {
             });
         }
 
-        // 4. Default Session 36 precedence (mirrors DefaultRouter::route):
+        // 4. Default precedence (mirrors DefaultRouter::route):
         //    deny floor → entity-forced local → cloud ceiling → budget.
         if classification >= self.config.deny_at {
             return Ok(PipelineResult {

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # e2e_inference.sh - End-to-end inference path verification
 #
-# Session 14b: Validates that the MAI API server returns real model
+# Validates that the MAI API server returns real model
 # output (not placeholder content) for all inference endpoints.
 #
 # Prerequisites:

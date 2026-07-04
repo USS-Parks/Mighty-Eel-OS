@@ -1,4 +1,4 @@
-//! Compliance entity detection (Session 36).
+//! Compliance entity detection.
 //!
 //! Dictionary-based recognition of entities that influence routing decisions:
 //! medical terminology (PHI / HIPAA), tribal identifiers (OCAP), and

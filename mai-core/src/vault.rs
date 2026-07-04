@@ -33,8 +33,8 @@ use std::collections::HashMap;
 
 /// Vault errors covering all L2 subsystems.
 ///
-/// Expanded from the original 4-variant stub. Existing code that calls
-/// `.to_string()` on `VaultError` is unaffected by new variants.
+/// Existing code that calls `.to_string()` on `VaultError` is
+/// unaffected by new variants.
 #[derive(Debug, thiserror::Error)]
 pub enum VaultError {
     // -- ZFS / storage (original) --

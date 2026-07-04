@@ -1,4 +1,4 @@
-//! Routing fallback chain (Session 36).
+//! Routing fallback chain.
 //!
 //! After the router produces a decision, the caller asks an `Engine` to
 //! actually execute it. Cloud calls can fail (timeout, rate limit, network);

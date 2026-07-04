@@ -4,7 +4,7 @@
 //! quality between those GPUs directly affects inference latency. NVLink
 //! connections are much faster than PCIe or cross-socket links.
 //!
-//! This scorer uses the precomputed path cost matrix from Session 16's
+//! This scorer uses the precomputed path cost matrix from
 //! `GpuTopology` to penalize instances with poor GPU interconnect quality.
 //!
 //! # Formula

@@ -1,4 +1,4 @@
-//! EAR / Commerce Control List classification (Session 39).
+//! EAR / Commerce Control List classification.
 //!
 //! Implements detection of Export Administration Regulations (EAR)
 //! controlled content. Two kinds of signal are extracted:

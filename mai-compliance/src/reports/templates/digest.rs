@@ -1,4 +1,4 @@
-//! Monthly Compliance Digest template (Session 43).
+//! Monthly Compliance Digest template.
 //!
 //! Executive-style cross-domain summary covering all compliance
 //! modules in one short narrative. Pairs naturally with a 30-day

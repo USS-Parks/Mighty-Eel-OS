@@ -1,4 +1,4 @@
-//! Per-profile cost / token-budget tracker (Session 36).
+//! Per-profile cost / token-budget tracker.
 //!
 //! Cloud routing costs money. This module enforces per-profile monthly token
 //! budgets with soft and hard caps:

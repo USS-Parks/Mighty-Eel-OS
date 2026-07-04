@@ -20,9 +20,8 @@
 //! network connections. Telemetry is local-only.
 
 #![forbid(unsafe_code)] // Enforced by CI; drivers in mai-hil may use unsafe
-// #![warn(missing_docs)] // Re-enable after stub phase (Session 08+)
 
-pub mod airgap; // Session 28: canonical ConnectivityState shared across crates
+pub mod airgap; // canonical ConnectivityState shared across crates
 pub mod cache;
 pub mod circuit_breaker;
 pub mod health;
@@ -32,7 +31,7 @@ pub mod power;
 pub mod registry;
 pub mod scheduler;
 pub mod sentinel;
-pub mod vault; // L2 interface, implemented in Session 12
+pub mod vault; // L2 interface
 
 // Re-export core types for convenience
 pub use airgap::{AirGapPolicy, ConnectivityState};

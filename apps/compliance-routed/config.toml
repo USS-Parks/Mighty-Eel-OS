@@ -1,7 +1,7 @@
-# Compliance-Routed scaffold — Session 30
+# Compliance-Routed scaffold
 #
-# Placeholder app demonstrating the integration point Lamprey (Sessions
-# 36-44) will fill. Until the server-side policy runtime is exposed via
+# Demo scaffold for the integration point the Lamprey policy runtime
+# will fill. Until the server-side policy runtime is exposed via
 # /v1/compliance/*, this scaffold runs a *local* mock router that
 # evaluates a small rule table over RequestMetadata and returns the same
 # decision shape the real Lamprey will return.

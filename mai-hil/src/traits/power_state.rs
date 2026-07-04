@@ -2,7 +2,7 @@ use crate::HilError;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 // Note: Serialize/Deserialize on HardwareEvent enables tamper-evident audit log
-// serialization per the air-gap daemon specification (Session 02, Issue #1).
+// serialization per the air-gap daemon specification.
 
 /// Power states for the MAI system.
 ///

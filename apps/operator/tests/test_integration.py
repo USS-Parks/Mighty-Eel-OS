@@ -113,7 +113,7 @@ def test_full_dashboard_json(
                      "airgap", "audit", "trust"):
         assert required in panel_names
 
-    # Trust panel reports the BF-6 live consolidated mode.
+    # Trust panel reports the live consolidated mode.
     trust_panel = next(p for p in data["panels"] if p["name"] == "trust")
     assert trust_panel["ok"] is True
     assert "mode=connected" in trust_panel["summary"]

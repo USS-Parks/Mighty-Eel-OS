@@ -1,8 +1,8 @@
-//! Compliance Report Manager (Session 43 API surface).
+//! Compliance Report Manager.
 //!
 //! [`ReportManager`] composes the engine, certifier, template
 //! registry, and pruner into a single typed façade that backs the
-//! HTTP routes documented in the S43 prompt:
+//! HTTP routes listed below:
 //!
 //! | Route | API call |
 //! |-------|----------|
@@ -12,12 +12,12 @@
 //! | `DELETE /v1/compliance/reports/{id}`     | [`ReportManager::delete`] |
 //!
 //! HTTP wiring (axum routes, JSON shapes, auth) is in `mai-api`;
-//! this module is pure so the dashboard process (S44) and tests can
+//! this module is pure so the dashboard process and tests can
 //! use it directly.
 //!
 //! Generation events are auditable: the manager exposes
 //! [`ReportManager::record_generation_event`] which the audit log
-//! treats as a policy-change event (visible to the BF-5 correlation
+//! treats as a policy-change event (visible to the correlation
 //! pipeline so external observers see "a report was produced").
 
 use std::collections::HashMap;
@@ -78,7 +78,7 @@ pub enum ReportStatus {
 /// Persistent record of a generated (or pending) report.
 ///
 /// The manager keeps these in memory; production deployments mirror
-/// them to disk via a callback (out of scope for the S43 typed
+/// them to disk via a callback (out of scope for this typed
 /// surface).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ReportRecord {

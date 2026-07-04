@@ -1,4 +1,4 @@
-# Local Secure Inference reference app — Session 30
+# Local Secure Inference reference app
 #
 # Settings for the chat scaffold. The MaiClient picks up MAI_BASE_URL,
 # MAI_API_KEY, etc. from the environment if you leave [client] blank.

@@ -1,4 +1,4 @@
-# OpenBao-Backed Local Trust Demo — Session 30
+# OpenBao-Backed Local Trust Demo
 #
 # Demonstrates the cloud-OpenBao-Core -> Lamprey-Trust-Bridge ->
 # Local-Trust-Cache ring described in docs/TRUST-MANIFOLD.md and
@@ -8,12 +8,12 @@
 #   1. user authenticates through the (simulated) cloud trust bridge
 #   2. a short-lived TrustClaim is issued
 #   3. local MAI's trust cache state is checked
-#   4. claim is exchanged for a session token (BF-6 stub today)
+#   4. claim is exchanged for a session token
 #   5. Lamprey-ready audit metadata is built
 #   6. an authenticated inference is dispatched
 #   7. an audit correlation ID is printed for replay
 #
-# Once BF-6 lands, ``simulate_bridge_authentication()`` is replaced by
+# Once the live cloud bridge lands, ``simulate_bridge_authentication()`` is replaced by
 # a real call to the cloud trust bridge and ``client.auth.exchange_token``
 # returns a real session token.
 
@@ -40,7 +40,7 @@ max_data_classification = "confidential"
 
 [audit]
 # Prefix for the audit correlation ID. Together with the claim_id and
-# a timestamp this yields a stable per-session token usable by S42's
+# a timestamp this yields a stable per-session token usable by the compliance
 # audit log (see mai-compliance::audit::AuditCorrelation).
 correlation_prefix = "openbao-demo"
 

@@ -3,7 +3,6 @@
 Communicates with ExLlamaV2 server (TabbyAPI-compatible or custom).
 Uses stdlib urllib only. All connections localhost-only.
 
-Session 09 deliverable.
 """
 
 from __future__ import annotations

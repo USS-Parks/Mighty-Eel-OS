@@ -24,7 +24,7 @@
 
 #![forbid(unsafe_code)]
 
-// Session 11a: Foundation + Middleware modules
+// Foundation + Middleware modules
 pub mod air_gap;
 pub mod audit;
 pub mod auth;
@@ -50,7 +50,7 @@ pub mod sealer_builder;
 // SHIP-06: Trust builder (selects bundle verifier, loads ML-DSA anchors, picks token-exchange mode)
 pub mod trust_builder;
 
-// Session 11b: REST API Endpoints
+// REST API Endpoints
 pub mod handlers;
 pub mod routes;
 pub mod state;
@@ -64,16 +64,16 @@ pub mod middleware;
 // the SEC-95 follow-up. See `docs/SCAN-1-INTERNAL-GITDOCTOR-REPORT.md`.
 pub mod rate_limit;
 
-// Session 11c: SSE Streaming + WebSocket
+// SSE Streaming + WebSocket
 pub mod streaming;
 
-// Session 11d: gRPC Server
+// gRPC Server
 pub mod grpc;
 
-// Session 11e: Server Bootstrap
+// Server Bootstrap
 pub mod server;
 
-// OpenBao Trust Bridge HTTP client (BF-6 bridge integration)
+// OpenBao Trust Bridge HTTP client
 pub mod openbao_client;
 
 // Public re-exports for SDK consumers and binary entry point

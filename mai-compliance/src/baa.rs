@@ -1,4 +1,4 @@
-//! Business Associate Agreement (BAA) enforcement (Session 38).
+//! Business Associate Agreement (BAA) enforcement.
 //!
 //! Given a `PhiReport` from the detector, the enforcer evaluates it
 //! against the deployment's BAA posture and returns a `BaaDecision` with

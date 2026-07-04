@@ -4,7 +4,6 @@ Lightweight inference via llama-server. Critical for fallback deployments,
 GGUF models, and grammar-constrained decoding. Supports Metal (Apple Silicon)
 for development/test environments.
 
-Session 09 deliverable.
 """
 
 from __future__ import annotations

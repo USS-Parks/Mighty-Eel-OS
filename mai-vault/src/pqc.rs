@@ -1,4 +1,4 @@
-//! Post-quantum cryptography engine (Session 27: real PQC).
+//! Post-quantum cryptography engine.
 //!
 //! Implements `PqcProvider` using ML-KEM-1024 (FIPS 203) for key encapsulation
 //! and ML-DSA-87 (FIPS 204) for digital signatures. Bulk model-weight data is

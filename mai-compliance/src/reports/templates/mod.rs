@@ -1,4 +1,4 @@
-//! Pre-built compliance report templates (Session 43).
+//! Pre-built compliance report templates.
 //!
 //! Five canonical templates plus a [`TemplateRegistry`] that resolves
 //! [`super::engine::ReportType`] values to template instances.

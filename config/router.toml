@@ -1,8 +1,9 @@
-# MAI Router Configuration (Lamprey Session 36)
+# MAI Router Configuration
 #
 # This file shapes the default routing posture: local vs cloud, deny floors,
 # sensitivity patterns, entity dictionaries, and per-role budgets. Reload
-# semantics: hot reload lands in Session 37 (rule engine + SIGHUP).
+# semantics: the rule registry hot-reloads per module; SIGHUP wiring is
+# not yet implemented.
 #
 # The shipped defaults are conservative. Operators are expected to tune
 # patterns and budgets to their deployment domain.

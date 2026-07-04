@@ -1,4 +1,4 @@
-# MAI Policy Runtime Configuration (Session 41)
+# MAI Policy Runtime Configuration
 #
 # Loaded by the policy runtime at startup. Deserialises into
 # `mai_compliance::ComposerConfig` (priority + enabled set) plus a
@@ -15,7 +15,7 @@
 # configuration (`ear.toml`, `itar.toml`, `ocap.toml`, `hipaa.toml`).
 
 [composer]
-# Default priority chain per S41 acceptance criteria. OCAP wins over
+# Default priority chain per the policy-runtime acceptance criteria. OCAP wins over
 # ITAR wins over HIPAA when reasons are surfaced to the audit log.
 # Recognised module ids: "hipaa", "itar", "ocap".
 priority = ["ocap", "itar", "hipaa"]

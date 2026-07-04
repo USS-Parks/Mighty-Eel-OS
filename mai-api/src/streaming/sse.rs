@@ -95,7 +95,7 @@ pub async fn handle_sse_chat(
         estimated_tokens: estimate_chat_tokens(&req),
     };
 
-    // Route through new scheduler (Session 15)
+    // Route through new scheduler
     let sched_priority = scheduler_priority_from_profile(&profile);
     let sched_req =
         ScheduleRequest::new(model_name.as_deref().unwrap_or("default"), sched_priority);
@@ -529,7 +529,7 @@ fn priority_from_profile(profile: &ProfileInfo) -> RequestPriority {
     }
 }
 
-/// Map a profile role to the new scheduler priority (Session 15).
+/// Map a profile role to the new scheduler priority.
 fn scheduler_priority_from_profile(profile: &ProfileInfo) -> SchedulerPriority {
     use crate::types::ProfileRole;
     match profile.role {

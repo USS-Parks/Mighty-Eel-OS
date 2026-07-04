@@ -1,4 +1,4 @@
-# MAI ITAR Compliance Configuration (Session 39)
+# MAI ITAR Compliance Configuration
 #
 # Deserializes into mai_compliance::{ItarDetectorConfig, JurisdictionConfig}
 # at server startup. Operators tune confidence floor, ambiguity rule, and

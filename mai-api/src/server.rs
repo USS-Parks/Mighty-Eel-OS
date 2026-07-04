@@ -5,7 +5,7 @@
 //! 2. Optionally runs the air-gap startup check
 //! 3. Initializes all mai-core components (scheduler, registry, health,
 //!    power, hotswap) and wraps them in shared `AppState`
-//!    3b. Loads API keys from config/auth_keys.toml (Session 14c)
+//! 3b. Loads API keys from config/auth_keys.toml
 //! 4. Starts the REST server (axum, default port 8420) and the gRPC
 //!    server (tonic, default port 8421) concurrently
 //! 5. Listens for SIGTERM / SIGINT (Unix) or ctrl-c (all platforms) and
@@ -181,7 +181,7 @@ impl MaiServer {
     /// 1. Validate configuration
     /// 2. Air-gap verification (if enforcement enabled)
     /// 3. Initialize mai-core components
-    ///    3b. Load API key authentication (Session 14c)
+    /// 3b. Load API key authentication
     /// 4. Build shared AppState
     /// 5. Start REST + gRPC servers concurrently
     /// 6. Block on shutdown signal (SIGTERM / SIGINT / ctrl-c)
@@ -271,8 +271,8 @@ impl MaiServer {
 
         // HotSwapManager still uses the old mai-core scheduler internally for
         // adapter lifecycle coordination (pause_routing, resume_routing, etc.).
-        // It will be migrated to the new Scheduler trait in Session 22 (health
-        // integration). For now, wire it with a stub old-scheduler.
+        // TODO(basho): migrate HotSwapManager to the new Scheduler trait
+        // (health integration); until then wire a default legacy scheduler.
         let legacy_scheduler =
             mai_core::scheduler::Scheduler::new(mai_core::scheduler::SchedulerConfig::default())
                 .map_err(|e| ServerError::Init(format!("Legacy scheduler for hotswap: {e}")))?;
@@ -296,7 +296,7 @@ impl MaiServer {
         };
         let config = Arc::new(RwLock::new(self.config.clone()));
 
-        // -- Step 3b: Load API key authentication (Session 14c; SHIP-17) --
+        // Step 3b: Load API key authentication --
         let auth = load_auth_state(ship_profile.as_ref())?;
 
         // -- Step 3c: Load adapter config and start AdapterManager --
@@ -347,7 +347,7 @@ impl MaiServer {
                         );
 
                         // Register each model served by this adapter as an
-                        // instance in the new scheduler (Session 15).
+                        // instance in the new scheduler.
                         let gpu_ids: Vec<GpuId> =
                             entry.gpu_ids.iter().map(|id| GpuId::new(*id)).collect();
 
@@ -360,7 +360,7 @@ impl MaiServer {
                                 gpu_ids: gpu_ids.clone(),
                                 #[allow(clippy::cast_possible_truncation)]
                                 max_batch_size: entry.max_concurrent as u32,
-                                vram_allocated: 0, // Populated by health monitor (Session 22)
+                                vram_allocated: 0, // Populated by health monitor
                                 capabilities: InstanceCapabilities::default(),
                             };
                             if let Err(e) = scheduler.register_instance(instance_cfg) {
@@ -755,7 +755,7 @@ fn apply_ship_profile(
     Ok((state, runtime))
 }
 
-// -- Auth Loading (Session 14c) --
+// Auth Loading --
 
 /// Load authentication state from config or generate a first-boot key.
 ///
@@ -1019,7 +1019,7 @@ fn load_adapter_boot_config(path: Option<&Path>) -> AdapterBootConfig {
 
 /// Build the production scheduler with startup config wiring.
 ///
-/// Session 19 activates multi-factor scoring here: topology and KV handles are
+/// activates multi-factor scoring here: topology and KV handles are
 /// attached before `config/scoring.toml` is applied, so scorer rebuild captures
 /// every runtime dependency.
 fn build_configured_scheduler() -> DefaultScheduler {
@@ -1235,7 +1235,7 @@ fn resolve_config_path(primary: &str, fallback: Option<&str>) -> PathBuf {
 
 /// Stub vault implementation for server bootstrap.
 ///
-/// In production, Session 12 provides a real ZFS-backed vault. This stub
+/// In production, provides a real ZFS-backed vault. This stub
 /// allows the server to start and pass health checks without vault hardware.
 struct StubVault;
 

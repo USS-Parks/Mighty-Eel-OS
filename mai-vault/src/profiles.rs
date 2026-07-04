@@ -49,8 +49,8 @@ impl ProfileManager {
             "Initializing profile store"
         );
 
-        // In production: open SQLite, run migrations, load profiles.
-        // Stub: check if a JSON dump exists and load it.
+        // TODO(basho): open SQLite, run migrations, load profiles. The
+        // interim store is a JSON dump, loaded here if present.
         if self.config.db_path.exists() {
             match std::fs::read_to_string(&self.config.db_path) {
                 Ok(content) => match serde_json::from_str::<Vec<FamilyProfile>>(&content) {

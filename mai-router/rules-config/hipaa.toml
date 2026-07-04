@@ -1,4 +1,4 @@
-# HIPAA baseline policy module (Session 37)
+# HIPAA baseline policy module
 #
 # Loaded into PolicyModuleRegistry as "hipaa_baseline". Default posture:
 # PHI must stay local. Admins can override via separate admin_override

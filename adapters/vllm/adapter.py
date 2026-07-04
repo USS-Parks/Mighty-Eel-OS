@@ -4,7 +4,6 @@ OpenAI-compatible inference via vLLM's native API server.
 Primary adapter for Ranger and Pack Leader tiers (tensor parallelism,
 continuous batching via PagedAttention, LoRA hot-loading).
 
-Session 09 deliverable.
 """
 
 from __future__ import annotations

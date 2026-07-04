@@ -550,7 +550,7 @@ impl HotSwapManager {
                         info!("Activated new GPU: {gpu_id}");
                     }
                     HardwareChangeEvent::MemristorCardInserted => {
-                        // Stub: TetraMem card detection. The adapter slot is reserved
+                        // TetraMem card detection: the adapter slot is reserved
                         // but the actual TetraMem driver returns NotImplemented.
                         info!("Memristor card detected - adapter slot reserved for future");
                     }

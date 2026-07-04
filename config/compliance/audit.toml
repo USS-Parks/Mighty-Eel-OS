@@ -1,9 +1,9 @@
-# MAI Compliance Audit Log Configuration (Session 42 + BF-5)
+# MAI Compliance Audit Log Configuration
 #
 # Loaded by the audit log at startup. Deserialises into
 # mai_compliance::{ChainConfig, AuditStoreConfig, TriggersConfig}.
 # The shipped defaults satisfy HIPAA 7-year retention and the §A.9
-# BF-5 metadata-only sync acceptance criteria.
+# metadata-only sync acceptance criteria.
 #
 # Operators should treat this file as code: review, version, and roll
 # out the same way as ear.toml / itar.toml / ocap.toml / hipaa.toml /
@@ -20,7 +20,7 @@ signature_interval = 1000
 
 # Identifier of the public key the verifier uses to validate
 # periodic signatures. This MUST be a key id present in the
-# MlDsaBundleVerifier anchor registry (same registry as BF-3 bundle
+# MlDsaBundleVerifier anchor registry (same registry as bundle
 # verification). Leave empty for unsigned bring-up; set before
 # enabling signature_interval > 0 in production.
 signing_key_id = ""
@@ -48,7 +48,7 @@ max_in_memory = 8192
 # 365 days (2555) is the HIPAA minimum.
 retention_days = 2555
 
-# Cap on the number of BF-5 correlation events queued while the
+# Cap on the number of correlation events queued while the
 # cloud audit destination is unreachable. Oldest events are dropped
 # once the cap is reached; drop count is surfaced on
 # AuditStore::drop_counters() for dashboards.
@@ -57,7 +57,7 @@ offline_queue_capacity = 4096
 # -- Triggers --
 [triggers]
 # Sliding-window length in seconds. Default 300 = 5 minutes,
-# matching the violation-threshold acceptance criterion (S42:
+# matching the violation-threshold acceptance criterion (
 # "any policy violation detected within 1 second" — the detection
 # latency is per-event; the *escalation* threshold uses this window).
 window_secs = 300

@@ -1,4 +1,4 @@
-# MAI EAR Compliance Configuration (Session 39)
+# MAI EAR Compliance Configuration
 #
 # Deserializes into mai_compliance::EarDetectorConfig at server startup.
 # The EAR detector is the EAR-side complement to itar.toml; both are
@@ -34,7 +34,7 @@ ear99_on_generic_reference = true
 
 # -- License exception overrides --
 # License Exception detection is informational; the policy runtime
-# (Session 41) decides whether a given exception applies. Add codes
+# decides whether a given exception applies. Add codes
 # below if your deployment uses non-standard or customer-specific
 # exception identifiers that should also be surfaced.
 #

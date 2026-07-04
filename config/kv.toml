@@ -13,7 +13,7 @@ total_budget_bytes = 8_000_000_000
 
 # --- Eviction Scoring Weights ---
 # Higher eviction score = more likely to be evicted.
-# Tune these via the simulation framework (Session 21).
+# Tune these via the simulation framework.
 
 [eviction]
 # Weight for idle time component (time since last access).

@@ -1,4 +1,4 @@
-//! Compliance triggers and escalation (Session 42).
+//! Compliance triggers and escalation.
 //!
 //! [`TriggerManager`] watches the audit stream and fires escalation
 //! events when configured thresholds are crossed:
@@ -17,7 +17,7 @@
 //!
 //! The manager is intentionally pure / synchronous: it consumes an
 //! event, mutates its sliding-window counter, and returns a list of
-//! escalations the caller can publish (typically back to the S41
+//! escalations the caller can publish (typically back to the compliance
 //! audit feed and / or to a paging channel).
 
 use std::collections::VecDeque;

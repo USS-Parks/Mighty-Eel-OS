@@ -3,7 +3,7 @@
 //! pseudonymization, and ML-DSA-87 signed-bundle verification (over
 //! [`fabric_crypto`]).
 //!
-//! Extracted from mai-compliance's proven BF-3 / S42 code so WSF's receipt
+//! Extracted from mai-compliance's proven code so WSF's receipt
 //! ledger + trust-bundle verification and mai-compliance share one
 //! implementation. The canonical-JSON encoding is **byte-identical** to
 //! mai-compliance's, so a bundle hashes the same in both crates.

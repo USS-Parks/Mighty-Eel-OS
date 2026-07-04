@@ -1,4 +1,4 @@
-//! Cultural sensitivity filter (Session 40).
+//! Cultural sensitivity filter.
 //!
 //! Separate from [`super::tribal_data`]: that module identifies
 //! tribal *governance metadata* (treaty, reserve, clan, nation), so

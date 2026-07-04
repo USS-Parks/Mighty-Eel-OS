@@ -1,6 +1,6 @@
 //! End-to-End Integration Tests for the full MAI stack.
 //!
-//! Session 10 deliverable: 14 integration tests covering the complete
+//! 14 integration tests covering the complete
 //! inference path from scheduler through adapter framework to backend.
 //!
 //! Default mode: all tests run with mock infrastructure (no GPU needed).

@@ -1,4 +1,4 @@
-//! OCAP policy engine — Ownership, Control, Access, Possession (Session 40).
+//! OCAP policy engine — Ownership, Control, Access, Possession.
 //!
 //! Combines the outputs of [`super::tribal_data`],
 //! [`super::treaty`], and [`super::cultural`] with the tenant's
@@ -37,7 +37,7 @@
 //! Every [`OcapDecision`] carries the audit-grade trust fields
 //! (`tenant_id`, `subject_hash`, `claim_id`, `trust_bundle_version`,
 //! `service_identity`, `offline_mode`, `revocation_status`) so the
-//! Session 42 audit log can record the decision without re-deriving
+//! audit log can record the decision without re-deriving
 //! anything from the TrustContext.
 
 use std::collections::BTreeSet;
@@ -309,7 +309,7 @@ impl OcapReason {
 }
 
 /// Result of an OCAP evaluation. Includes the trust-correlation
-/// fields the Session 42 audit log needs.
+/// fields the audit log needs.
 #[derive(Debug, Clone, Serialize)]
 pub struct OcapDecision {
     /// Routing outcome.
@@ -325,7 +325,7 @@ pub struct OcapDecision {
     /// Primary matched rule (the one that fixed the outcome).
     pub matched_rule: Option<String>,
 
-    // -- Trust correlation fields (BF-2 / §A.13). --
+    // Trust correlation fields. --
     /// Tenant id from the trust context.
     pub tenant_id: String,
     /// Audit-safe subject hash.
@@ -574,7 +574,7 @@ impl OcapEvaluator {
         }
 
         // 9. No OCAP signal at all → allow. The trust ceiling still
-        //    applies above us in the policy runtime (Session 41).
+        //    applies above us in the policy runtime.
         reasons.push(OcapReason::new(
             "ocap.no_signal",
             "No tribal-data, treaty, or cultural-sensitivity signal detected.",

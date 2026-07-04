@@ -18,7 +18,7 @@ verifier = "ml-dsa"
 # Long thresholds: this node's cache is authoritative.
 warn_after_secs = 21600      # 6 hours
 expire_after_secs = 604800   # 7 days
-# OpenBao integration points (consumed by Sessions 26b–28c work).
+# OpenBao integration points.
 openbao_endpoint = "https://vault.example.org:8200"
 openbao_namespace = "lamprey"
 
@@ -38,5 +38,5 @@ bind_address = "0.0.0.0:8443"
 log_level = "info"
 # Inference paths are disabled on this profile; the only HTTP surface
 # that matters is /v1/trust/*, /v1/auth/*, and the bundle publication
-# endpoints (BF-6 server-side wiring).
+# endpoints.
 disable_inference = true

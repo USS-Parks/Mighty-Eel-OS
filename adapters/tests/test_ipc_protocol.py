@@ -1,4 +1,4 @@
-"""IPC Protocol v1.0 verification tests (Session 14a).
+"""IPC Protocol v1.0 verification tests.
 
 Tests the NDJSON wire format contract between Rust (AdapterProcess) and
 Python (runner.py). Validates:

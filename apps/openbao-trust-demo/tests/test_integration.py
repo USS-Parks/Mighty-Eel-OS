@@ -44,7 +44,7 @@ def _mk_client(handler: Callable[[httpx.Request], httpx.Response]) -> MaiClient:
 def test_full_pipeline_runs_end_to_end(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """All seven steps against BF-6 live endpoints. Chat must receive the
+    """All seven steps against live endpoints. Chat must receive the
     audit metadata pinned into its system message and the audit summary
     must reflect the live bundle state."""
     chat_bodies: list[dict] = []
@@ -98,7 +98,7 @@ def test_full_pipeline_runs_end_to_end(
     audit = json.loads(out[json_start:])
     assert audit["route_decision"] == "local_only"
     assert audit["service_identity"] == "openbao-trust-bridge"
-    assert audit["bundle_state"] == "live"  # BF-6 live endpoint
+    assert audit["bundle_state"] == "live"  # live endpoint
     assert audit["bundle_connectivity"] == "connected"
     assert audit["correlation_id"].startswith("openbao-demo-claim-")
 

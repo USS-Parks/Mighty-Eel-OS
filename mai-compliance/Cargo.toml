@@ -17,14 +17,14 @@ blake3 = { workspace = true }
 chrono = { workspace = true }
 regex = "1"
 
-# Session 28: canonical ConnectivityState shared with mai-adapters and mai-api.
+# canonical ConnectivityState shared with mai-adapters and mai-api.
 mai-core = { path = "../mai-core" }
 
 # SOV-F1: shared audit-proof primitives. mai-compliance's subject_hash + canonical
 # encoding delegate here so the wire format is single-sourced with WSF.
 fabric-proof = { path = "../crates/fabric-proof" }
 
-# BF-3: signed claim / policy-bundle verification. ml-dsa matches the vault
+# signed claim / policy-bundle verification. ml-dsa matches the vault
 # pqc-dev backend; we only verify here, so no liboqs/pqc-prod path is needed.
 ml-dsa = "0.0.4"
 hmac = "0.12"
@@ -38,7 +38,7 @@ aes-gcm = "0.10"
 rand = "0.8"
 
 [dev-dependencies]
-# Used in BF-3 tests to sign sample bundles. Production code in this crate
+# Used in tests to sign sample bundles. Production code in this crate
 # never generates keys — it verifies only.
 rand = "0.8"
 

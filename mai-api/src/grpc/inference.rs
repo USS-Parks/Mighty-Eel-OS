@@ -94,7 +94,7 @@ impl proto::mai_inference_server::MaiInference for MaiInferenceService {
             estimated_tokens,
         };
 
-        // Route through new scheduler (Session 15)
+        // Route through new scheduler
         let model_alias = if req.model.is_empty() {
             "default"
         } else {
@@ -204,7 +204,7 @@ impl proto::mai_inference_server::MaiInference for MaiInferenceService {
             estimated_tokens,
         };
 
-        // Route through new scheduler (Session 15)
+        // Route through new scheduler
         let model_alias = if req.model.is_empty() {
             "default"
         } else {
@@ -227,14 +227,14 @@ impl proto::mai_inference_server::MaiInference for MaiInferenceService {
         let state = self.state.clone();
 
         // Spawn streaming task
-        // NOTE: Real adapter IPC streaming is wired in Session 11e.
-        // This task currently sends a single completion chunk as placeholder.
+        // TODO(basho): wire real adapter IPC streaming; this task currently
+        // sends a single completion chunk.
         tokio::spawn(async move {
             let created = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .map_or(0, |duration| duration.as_secs());
 
-            // Placeholder: send role chunk then done chunk
+            // Send role chunk then done chunk
             let role_chunk = proto::ChatCompletionChunk {
                 id: rid.clone(),
                 object: "chat.completion.chunk".to_string(),
@@ -272,7 +272,7 @@ impl proto::mai_inference_server::MaiInference for MaiInferenceService {
 
             let _ = tx.send(Ok(done_chunk)).await;
 
-            // Mark request completed (Session 15)
+            // Mark request completed
             state
                 .scheduler
                 .release_sequence(&mai_scheduler::InstanceId::new(&adapter_id), session_id);
@@ -345,8 +345,8 @@ impl proto::mai_inference_server::MaiInference for MaiInferenceService {
             .scheduler
             .release_sequence(&decision.instance_id, session_id);
 
-        // NOTE: Actual embedding computation via adapter IPC wired in 11e.
-        // Placeholder response with empty embeddings.
+        // TODO(basho): wire actual embedding computation via adapter IPC;
+        // currently returns empty embeddings.
         let embeddings: Vec<proto::EmbeddingData> = req
             .input
             .iter()

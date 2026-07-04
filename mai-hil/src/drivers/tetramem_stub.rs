@@ -9,7 +9,7 @@ use async_trait::async_trait;
 ///
 /// This is a skeletal implementation that satisfies the compiler and trait contracts.
 /// All methods return `HilError::NotImplemented` to indicate that real TetraMem SDK
-/// integration will be implemented in Phase 3 (Session 21+). The struct compiles cleanly.
+/// integration will be implemented in Phase 3. The struct compiles cleanly.
 #[derive(Debug)]
 pub struct TetraMemDriver {
     pub device_index: u32,

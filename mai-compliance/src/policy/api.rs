@@ -1,7 +1,7 @@
-//! Runtime policy management API (Session 41).
+//! Runtime policy management API.
 //!
 //! [`PolicyManager`] is the typed core that backs the HTTP endpoints
-//! listed in the S41 prompt:
+//! listed below:
 //!
 //! | Route | Manager call |
 //! |-------|--------------|
@@ -16,7 +16,7 @@
 //! HTTP wiring (auth, JSON shape, error mapping) lives in `mai-api`
 //! and lands in a later session; this module is intentionally pure so
 //! it can be exercised by `cargo test --workspace` without an HTTP
-//! stack and reused by the dashboard process (Session 44).
+//! stack and reused by the dashboard process.
 //!
 //! All mutating calls do three things in order:
 //!
@@ -28,7 +28,7 @@
 //!
 //! Step 2 is the load-bearing one — skipping it would let stale
 //! decisions persist after a policy reload, which is exactly the
-//! failure mode S41 acceptance criteria call out.
+//! failure mode the acceptance criteria call out.
 
 use std::sync::{Arc, Mutex};
 
@@ -225,7 +225,7 @@ impl PolicyManager {
         self.replace_config(template.composer_config(), PolicySource::Template(template));
     }
 
-    /// "Reload from disk." For now, the manager has no disk knowledge
+    /// "Reload from disk." The manager has no disk knowledge
     /// — operators pass the freshly loaded config in. This still
     /// bumps the reload counter, invalidates the cache, and publishes
     /// the `policy_changed` event so the dashboard surfaces the

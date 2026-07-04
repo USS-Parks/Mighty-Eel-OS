@@ -17,8 +17,8 @@ Hierarchy::
         TimeoutError                # request timed out
         AirGapViolationError        # server reports air_gap_violation
         PowerStateUnavailableError  # server reports power_state_unavailable
-        ClaimExpiredError           # trust claim expired (BF-2 surface)
-        TrustCacheStaleError        # local trust cache stale/expired (BF-4)
+        ClaimExpiredError           # trust claim expired
+        TrustCacheStaleError        # local trust cache stale/expired
 
 The legacy ``mai.types.MaiError`` re-imports the new ``MaiError`` so
 existing code keeps working.
@@ -144,14 +144,14 @@ class PowerStateUnavailableError(MaiError):
 
 
 class ClaimExpiredError(AuthenticationError):
-    """Trust Manifold claim has expired (BF-2 surface).
+    """Trust Manifold claim has expired.
 
     Subclass of ``AuthenticationError`` so existing 401 handlers catch it.
     """
 
 
 class TrustCacheStaleError(MaiError):
-    """Local trust cache is stale or expired (BF-4 surface).
+    """Local trust cache is stale or expired.
 
     Raised by the SDK when the local trust cache cannot validate the
     server's claim and the connectivity state is degraded/stale/expired.

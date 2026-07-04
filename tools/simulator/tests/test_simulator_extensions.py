@@ -1,4 +1,4 @@
-"""Tests for Session 32 simulator extensions: trace_generator and hybrid."""
+"""Tests for simulator extensions: trace_generator and hybrid."""
 
 from __future__ import annotations
 

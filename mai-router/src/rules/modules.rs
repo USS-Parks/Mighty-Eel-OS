@@ -1,4 +1,4 @@
-//! Policy module system (Session 37).
+//! Policy module system.
 //!
 //! Rules are grouped into named **modules** (HIPAA, ITAR, OCAP, cost
 //! control, admin override, ...). Modules can be enabled or disabled at

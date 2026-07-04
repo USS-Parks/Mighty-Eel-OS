@@ -1,4 +1,4 @@
-//! Report certification ("PDF") — Session 43.
+//! Report certification ("PDF")
 //!
 //! Wraps a generated [`super::engine::ReportDocument`] in a signed
 //! envelope. The certification layer is intentionally output-format
@@ -8,18 +8,18 @@
 //! corresponding ML-DSA-87 public key registered with their
 //! [`crate::bundle::BundleVerifier`].
 //!
-//! The signing primitive matches the BF-3 bundle verifier and the
-//! S42 audit-chain signer: signer receives a 32-byte BLAKE3 digest
+//! The signing primitive matches the bundle verifier and the
+//! audit-chain signer: signer receives a 32-byte BLAKE3 digest
 //! and returns an ML-DSA-87 signature. Verification therefore uses
 //! the same anchor registry as everything else in the trust stack —
 //! there is exactly one signing primitive in the system.
 //!
 //! ## "PDF" naming
 //!
-//! The S43 prompt calls this `pdf.rs`. A real PDF binary is a
+//! This module is deliberately named `pdf.rs`. A real PDF binary is a
 //! presentation concern, not a verification concern, so the module
 //! exposes the *signed text body* + *certification metadata* and
-//! lets the dashboard (S44) render it into whatever container
+//! lets the dashboard render it into whatever container
 //! (real PDF, HTML preview, e-mail attachment) it wants. The signed
 //! artefact is the [`CertifiedReport`].
 

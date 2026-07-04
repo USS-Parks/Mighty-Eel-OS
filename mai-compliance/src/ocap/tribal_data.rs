@@ -1,4 +1,4 @@
-//! Tribal identifier and traditional-knowledge detection (Session 40).
+//! Tribal identifier and traditional-knowledge detection.
 //!
 //! Pattern-based scanner that surfaces references to tribal nations,
 //! reserves, clans, sacred sites, ceremonies, traditional medicines,

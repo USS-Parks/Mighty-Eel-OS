@@ -4,7 +4,6 @@ Communicates with vLLM's OpenAI-compatible REST API.
 Uses stdlib urllib only (no external dependencies).
 All connections are localhost-only (air-gap safe).
 
-Session 09 deliverable.
 """
 
 from __future__ import annotations

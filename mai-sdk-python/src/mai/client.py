@@ -1,6 +1,6 @@
 """MAI SDK sync client.
 
-Session 29 rewrite:
+rewrite:
     * exception hierarchy in :mod:`mai.errors`
     * retry policy in :mod:`mai.retry`
     * config loader in :mod:`mai.config`
@@ -118,7 +118,7 @@ class MaiClient:
         ``client.admin``        - profiles, audit log, registry
         ``client.auth``         - token exchange APIs
         ``client.trust``        - trust claims/bundle APIs
-        ``client.compliance``   - Lamprey APIs (Sessions 36-44)
+        ``client.compliance``   - Lamprey compliance APIs
     """
 
     def __init__(self, config: MaiClientConfig | None = None) -> None:

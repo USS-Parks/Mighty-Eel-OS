@@ -5,7 +5,7 @@
 //! rate, and queue wait time percentiles.
 //!
 //! Thread-safe via atomics and mutex-protected percentile tracking.
-//! Metrics are consumed by the scheduler scoring engine (Session 19)
+//! Metrics are consumed by the scheduler scoring engine
 //! and exposed through ClusterMetrics.
 
 use std::collections::VecDeque;

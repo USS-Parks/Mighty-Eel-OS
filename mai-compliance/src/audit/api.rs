@@ -1,6 +1,6 @@
-//! Compliance audit log façade and query API (Session 42).
+//! Compliance audit log façade and query API.
 //!
-//! [`AuditLog`] is the typed core that backs the S42 HTTP endpoints:
+//! [`AuditLog`] is the typed core that backs the audit HTTP endpoints:
 //!
 //! | Route | API call |
 //! |-------|----------|
@@ -10,7 +10,7 @@
 //! | `GET    /v1/compliance/audit/integrity`                | [`AuditLog::integrity_status`] |
 //!
 //! HTTP wiring lives in `mai-api`; this surface is pure so the
-//! dashboard process (Session 44) and tests can use it directly.
+//! dashboard process and tests can use it directly.
 //!
 //! The log produces entries from two input sources:
 //!
@@ -55,7 +55,7 @@ pub struct AuditRecordInput<'a> {
     /// Active policy bundle version, surfaced into
     /// [`CorrelationFields::policy_version`].
     pub policy_version: &'a str,
-    /// Optional OpenBao credential event id (BF-5). `None` for
+    /// Optional OpenBao credential event id. `None` for
     /// local-only / offline flows.
     pub credential_event_id: Option<String>,
     /// Wall-clock nanoseconds since the Unix epoch. Caller supplies
@@ -173,7 +173,7 @@ impl AuditLog {
 
     /// Record a decision. Builds the [`AuditEntry`], assigns it via
     /// the chain manager, appends it to the store, runs the triggers,
-    /// and queues a correlation event for BF-5 sync. Returns the
+    /// and queues a correlation event for sync. Returns the
     /// finalised entry and any escalations the triggers emitted.
     pub fn record(
         &self,
@@ -208,8 +208,8 @@ impl AuditLog {
 
         let correlation = CorrelationFields {
             credential_event_id: input.credential_event_id,
-            // Placeholder — chain finalize fills `id`; the
-            // correlation id mirrors it once known.
+            // Chain finalize fills `id`; the correlation id
+            // mirrors it once known.
             lamprey_decision_id: String::new(),
             mai_request_id: input.request_id.to_string(),
             tenant,
@@ -240,7 +240,7 @@ impl AuditLog {
         // and signature already reflect the entry's canonical bytes
         // including the empty `lamprey_decision_id`; we re-finalize
         // by overwriting the id and recomputing). The cleanest
-        // contract is: the BF-5 `lamprey_decision_id` is the entry
+        // contract is: the `lamprey_decision_id` is the entry
         // id formatted as `"dec_<id>"`. Setting it after finalize
         // changes the content hash, so we must use this id as the
         // chain link going forward.
@@ -254,7 +254,7 @@ impl AuditLog {
         let id = self.store.append(entry.clone())?;
         debug_assert_eq!(id, entry.id);
 
-        // BF-5: queue a correlation event for sync.
+        // queue a correlation event for sync.
         self.store.enqueue_correlation(entry.correlation.clone());
 
         // Triggers.

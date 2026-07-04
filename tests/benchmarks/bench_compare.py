@@ -17,7 +17,6 @@ Usage:
     # List all stored runs:
     python3 tests/benchmarks/bench_compare.py list
 
-Session 10 deliverable.
 """
 
 import json

@@ -6,7 +6,7 @@
 //!   Request:  `{"id": <u64>, "method": <string>, "params": <object>}\n`
 //!   Response: `{"id": <u64>, "result": <value>}\n`
 //!
-//! **NDJSON IPC Protocol v1.0** (Session 14a):
+//! **NDJSON IPC Protocol v1.0**:
 //!   Startup config:  JSON object on stdin (one line, no request_id)
 //!   Handshake:       `{"type": "handshake", "adapter_name": ..., "capabilities": ...}\n`
 //!   Request:         `{"request_id": "<uuid>", "type": "<method>", "payload": {}}\n`
@@ -74,7 +74,7 @@ pub enum AdapterEvent {
     Metrics(AdapterMetrics),
 }
 
-// ─── NDJSON IPC Protocol v1.0 (Session 14a) ─────────────────────────────────
+// ─── NDJSON IPC Protocol v1.0 ─────────────────────────────────
 
 /// Startup configuration sent to the Python subprocess on stdin (first line).
 /// This is NOT a request; it has no request_id. The runner reads it once at boot.

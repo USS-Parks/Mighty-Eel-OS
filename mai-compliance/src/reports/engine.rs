@@ -1,4 +1,4 @@
-//! Report generation engine (Session 43).
+//! Report generation engine.
 //!
 //! [`ReportEngine`] turns a [`ReportType`] + date range into a
 //! [`ReportDocument`] by:
@@ -155,7 +155,7 @@ pub struct RevocationSnapshotSummary {
 /// degraded intervals from the absence of `credential_event_id` on
 /// adjacent entries. The first entry with no credential event opens
 /// an interval; the first credential-backed entry that follows
-/// closes it. This is an approximation — the dashboard (S44) refines
+/// closes it. This is an approximation — the dashboard refines
 /// it with the live `ConnectivityState` feed — but it's sufficient
 /// for regulator-ready reports.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -198,7 +198,7 @@ pub struct PolicyVersionEvent {
 /// Trust + credential section — the §A.13 gate.
 ///
 /// Every report carries one of these regardless of template, so the
-/// acquisition narrative (S45) can point at any generated report and
+/// acquisition narrative can point at any generated report and
 /// say "trust section appears here, here, and here."
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TrustSection {

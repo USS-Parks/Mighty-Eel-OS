@@ -1,4 +1,4 @@
-//! rule-tester (Session 37 Lamprey policy CLI).
+//! rule-tester.
 //!
 //! Given a rules-module TOML and a scenarios TOML, evaluate every scenario
 //! and print which rules fired with the winning action. Designed for

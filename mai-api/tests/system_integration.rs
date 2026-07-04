@@ -1,4 +1,4 @@
-//! Session 34 system integration tests.
+//! system integration tests.
 //!
 //! Closes the four genuine gaps the audit identified that other integration
 //! test files do not cover at the integration level:
@@ -15,7 +15,7 @@
 //!
 //! Hardware-dependent Phase 1 exit criteria (test_scout_config_boots,
 //! test_ranger_config_boots, test_two_gpu_configs, test_72_hour_stability)
-//! are deferred to Session 35 burn-in by design.
+//! are deferred burn-in by design.
 
 use std::collections::HashMap;
 use std::sync::Arc;

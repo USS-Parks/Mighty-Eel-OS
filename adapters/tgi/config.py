@@ -3,7 +3,6 @@
 Default values assume local HuggingFace TGI server.
 Supports quantization, speculative decoding, and watermarking.
 
-Session 09 deliverable.
 """
 
 from __future__ import annotations

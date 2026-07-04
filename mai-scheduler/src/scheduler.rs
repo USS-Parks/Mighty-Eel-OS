@@ -13,8 +13,8 @@
 //! 3. **Single authority**: No handler, adapter, or other component makes
 //!    placement decisions. All inference routing flows through this trait.
 //!
-//! 4. **Extensible**: Sessions 16-21 add topology awareness, KV cache
-//!    management, and continuous batching. The trait surface accommodates
+//! 4. **Extensible**: topology awareness, KV cache management, and
+//!    continuous batching layer on top. The trait surface accommodates
 //!    those additions without breaking changes.
 
 use crate::types::{
@@ -68,7 +68,7 @@ pub trait Scheduler: Send + Sync {
     fn cluster_metrics(&self) -> ClusterMetrics;
 
     // -----------------------------------------------------------------------
-    // Power state integration methods (Session 22)
+    // Power state integration methods
     // -----------------------------------------------------------------------
 
     /// Check if a specific instance can be safely demoted. Returns true if the

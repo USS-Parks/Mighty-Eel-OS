@@ -58,25 +58,25 @@ pub struct AppState {
     pub adapter_manager: Arc<Mutex<AdapterManager>>,
     /// Metrics collector: request lifecycle, health scoring, anomaly detection
     pub metrics_collector: Arc<MetricsCollector>,
-    /// Session 28: canonical connectivity state shared with mai-adapters
+    /// canonical connectivity state shared with mai-adapters
     /// and mai-compliance. Defaults to `AirGapped` when constructed via
     /// [`AppState::new`]; override with [`AppState::with_airgap_policy`].
     pub airgap_policy: AirGapPolicy,
-    /// BF-4: local trust cache. Holds the most recent signed policy
+    /// local trust cache. Holds the most recent signed policy
     /// bundle plus per-claim revocation snapshots. Defaults to an empty
     /// cache with stock thresholds; production wires a real refresher.
     pub trust_cache: Arc<RwLock<LocalTrustCache>>,
-    /// BF-3: verifier used when ingesting a signed bundle. Defaults to
+    /// verifier used when ingesting a signed bundle. Defaults to
     /// [`AcceptAllBundleVerifier`] so bring-up works without a key
     /// material; production wires `MlDsaBundleVerifier` with the
     /// vault-anchored registry.
     pub bundle_verifier: Arc<dyn BundleVerifier + Send + Sync>,
-    /// S41: policy runtime (composer + decision cache + audit feed).
+    /// Policy runtime (composer + decision cache + audit feed).
     /// Internally `Arc<Mutex<…>>` so cloning the AppState is cheap.
     pub policy_manager: PolicyManager,
-    /// S42: tamper-evident compliance audit log.
+    /// Tamper-evident compliance audit log.
     pub compliance_audit: ComplianceAuditLog,
-    /// S43: compliance report generator façade.
+    /// Compliance report generator façade.
     pub report_manager: Arc<ReportManager>,
     /// SHIP-07 Slice B: selected `POST /v1/auth/exchange_token` mode.
     /// Defaults to [`TrustExchangeMode::LocalDevSynthetic`] so the

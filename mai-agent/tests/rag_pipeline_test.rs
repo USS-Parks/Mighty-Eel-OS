@@ -63,19 +63,19 @@ fn full_rag_pipeline_flow() {
             "architecture",
             0,
             "Island Mountain provides air-gapped AI inference servers.",
-            "docs/architecture.md",
+            "test-corpus/architecture.md",
         ),
         chunk(
             "pqc",
             0,
             "Post-quantum cryptography protects data sovereignty.",
-            "docs/pqc.md",
+            "test-corpus/pqc.md",
         ),
         chunk(
             "sentinel",
             0,
             "The Sentinel model runs in sleep mode with minimal VRAM.",
-            "docs/sentinel.md",
+            "test-corpus/sentinel.md",
         ),
     ];
     let batch = pipeline

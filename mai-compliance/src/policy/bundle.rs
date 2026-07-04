@@ -1,4 +1,4 @@
-//! Policy decision bundle (Session 41 input).
+//! Policy decision bundle.
 //!
 //! [`PolicyBundle`] is the unified, serialisable input fed to the
 //! [`composer`](super) when it asks each compliance module for a
@@ -9,13 +9,12 @@
 //! 2. [`TrustContext`] — the verified claim projection produced earlier
 //!    in the pipeline (see [`crate::trust`]).
 //! 3. [`ClassificationResult`] — the sensitivity verdict from the
-//!    router's classifier (Session 36), reduced to a wire-format level
+//!    router's classifier, reduced to a wire-format level
 //!    plus the patterns that matched.
 //!
 //! The bundle is `Serialize + Deserialize` so it can be persisted for
 //! replay / audit and reloaded from disk by tooling. No verification or
 //! signing happens here — that lives in the audit subsystem
-//! (Session 43).
 
 use std::fs;
 use std::io;
@@ -72,7 +71,7 @@ pub struct ClassificationResult {
     pub entity_count: u32,
 }
 
-/// Unified decision input for the Session 41 policy runtime.
+/// Unified decision input for the policy runtime.
 ///
 /// Each enabled compliance module (HIPAA, ITAR, OCAP, …) receives a
 /// reference to this bundle and returns its own per-module decision.

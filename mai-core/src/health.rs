@@ -596,7 +596,7 @@ impl HealthMonitor {
         }
     }
 
-    /// Default alert rules per Session 04 spec
+    /// Default alert rules spec
     fn default_alert_rules() -> Vec<AlertRule> {
         vec![
             AlertRule {

@@ -11,7 +11,7 @@ These types align with the internal Rust types defined in mai-core:
     RequestPriority         -> scheduler::RequestPriority
     ErrorResponse.code      -> errors::CoreError variant
 
-Session 05 deliverable. Full validation logic in Session 11.
+Full validation logic.
 """
 
 from __future__ import annotations
@@ -494,7 +494,7 @@ class ErrorResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Model lifecycle types (Session 29)
+# Model lifecycle types
 # ---------------------------------------------------------------------------
 
 class ModelLoadResponse(BaseModel):
@@ -557,7 +557,7 @@ class ModelDiscoverResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# System / power types (Session 29)
+# System / power types
 # ---------------------------------------------------------------------------
 
 class AirgapStatusResponse(BaseModel):
@@ -595,7 +595,7 @@ class SystemHealthResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Scheduler / telemetry types (Session 29)
+# Scheduler / telemetry types
 # ---------------------------------------------------------------------------
 
 class SchedulerMetricsResponse(BaseModel):
@@ -672,13 +672,13 @@ class UpdateStatusResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Trust Manifold types (Session 29 stubs; BF-6 deferred)
+# Trust Manifold types
 # ---------------------------------------------------------------------------
 
 class TrustClaim(BaseModel):
     """Trust Manifold claim issued by the cloud trust bridge.
 
-    Mock shape until BF-6 lands. Mirrors mai.compliance::TrustContext at
+    Mock shape mirroring mai.compliance::TrustContext at
     the wire boundary so SDK callers can pass a claim object through to
     the (yet-unimplemented) /v1/trust/claims endpoint.
     """
@@ -700,7 +700,7 @@ class TrustClaim(BaseModel):
 
 
 class TrustBundleStatus(BaseModel):
-    """Local trust cache state (BF-4 / BF-6 shape).
+    """Local trust cache state.
 
     Matches the JSON returned by ``GET /v1/trust/bundle_status``.
     """
@@ -763,7 +763,7 @@ class ExchangeTokenResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Compliance (Session 44 / BF-6)
+# Compliance
 # ---------------------------------------------------------------------------
 
 class ComplianceModuleStatus(BaseModel):
@@ -831,7 +831,7 @@ class ComplianceReportList(BaseModel):
 # Compatibility re-export
 # ---------------------------------------------------------------------------
 
-# MaiError moved to mai.errors as part of Session 29 (exception hierarchy).
+# MaiError moved to mai.errors (exception hierarchy).
 # Re-exported here for backwards compatibility with code that imports
-# ``from mai.types import MaiError`` (Session 14c style).
+# ``from mai.types import MaiError``.
 from mai.errors import MaiError as MaiError  # noqa: E402, PLC0414 — explicit re-export

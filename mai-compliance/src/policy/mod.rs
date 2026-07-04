@@ -1,4 +1,4 @@
-//! Policy runtime (Session 41).
+//! Policy runtime.
 //!
 //! The runtime coordinates the per-domain compliance modules (HIPAA,
 //! ITAR/EAR, OCAP) and folds their independent verdicts into a single
@@ -17,7 +17,7 @@
 //! - [`audit_feed`] — in-process broadcast channel for compliance
 //!   events. The eventual SSE endpoint in `mai-api` wraps a subscriber.
 //! - [`api`] — typed runtime-management surface ([`PolicyManager`])
-//!   that backs the HTTP endpoints documented in the S41 prompt.
+//!   that backs the compliance HTTP endpoints in `mai-api`.
 
 pub mod api;
 pub mod audit_feed;

@@ -1,5 +1,5 @@
 // MAI gRPC API - Proto3 Service Definitions
-// Session 05 Deliverable | Island Mountain MAI OS
+// Island Mountain MAI OS
 //
 // High-performance internal API for L4 components (agent orchestrator,
 // RAG pipeline). Lower latency than REST for tool calling chains and

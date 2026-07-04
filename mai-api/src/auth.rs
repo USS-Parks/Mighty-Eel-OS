@@ -1,6 +1,6 @@
 //! Authentication and authorization middleware for the MAI API.
 //!
-//! # Trust Model (Session 14c)
+//! # Trust Model
 //!
 //! Every non-health request must carry a valid API key via the
 //! `X-IM-Auth-Token` header. The key maps to a profile with role-based
@@ -40,7 +40,7 @@ use crate::types::{ModelAccessFilter, ProfileInfo, ProfileRole};
 
 // -- Header Constants --
 
-/// Header name for API key authentication (Session 14c).
+/// Header name for API key authentication.
 pub const AUTH_TOKEN_HEADER: &str = "X-IM-Auth-Token";
 
 /// Header name for internal service-to-service profile identification.

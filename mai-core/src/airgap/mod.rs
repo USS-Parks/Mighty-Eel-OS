@@ -1,4 +1,4 @@
-//! Air-gap and connectivity state for the MAI runtime (Session 28 + BF-4).
+//! Air-gap and connectivity state for the MAI runtime.
 //!
 //! This module owns the canonical [`ConnectivityState`] enum that every
 //! trust-aware crate consumes — `mai-adapters` for host validation,
@@ -9,8 +9,8 @@
 //!
 //! # State model
 //!
-//! The five states model the union of Session 28's hardware-air-gap
-//! semantics and BF-4's trust-cache freshness semantics:
+//! The five states model the union of hardware-air-gap
+//! semantics and the trust-cache freshness semantics:
 //!
 //! | State | Trigger | Behaviour |
 //! |---|---|---|

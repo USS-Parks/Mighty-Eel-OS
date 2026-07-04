@@ -1,6 +1,6 @@
-//! Rule engine (Session 37).
+//! Rule engine.
 //!
-//! Programmable compliance rules layered on top of the Session 36 router
+//! Programmable compliance rules layered on top of the router
 //! primitives. A `Rule` carries a name, integer priority, a `Condition`
 //! (boolean tree over fields), an `Action`, and an `AuditLevel`. Rules
 //! evaluate against a `FactSet` derived from the request + the classifier

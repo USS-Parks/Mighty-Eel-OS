@@ -1,4 +1,4 @@
-//! Session 46 — Compliance performance baseline.
+//! Compliance performance baseline.
 //!
 //! Plan §1421 and roster §3845 set three numerical targets for the
 //! acquisition release:
@@ -76,7 +76,7 @@ fn bundle_for(tenant: &str, request_id: &str) -> PolicyBundle {
 
 #[test]
 fn composer_p99_under_5ms() {
-    // The S46 target is on the *composer fold* (priority sort +
+    // The perf target is on the *composer fold* (priority sort +
     // any-deny-wins + most-restrictive-route). Detection-stage
     // latency is owned by individual detector tests (phi_perf etc.).
     // We pre-evaluate the modules once, then time only the compose

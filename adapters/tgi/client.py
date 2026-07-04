@@ -3,7 +3,6 @@
 Communicates with HuggingFace Text Generation Inference REST API.
 Uses stdlib urllib only (no external dependencies).
 
-Session 09 deliverable.
 """
 
 from __future__ import annotations

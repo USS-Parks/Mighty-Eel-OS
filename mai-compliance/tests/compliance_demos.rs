@@ -1,4 +1,4 @@
-//! Session 46 — Compliance Demo Suite (end-to-end scenarios).
+//! Compliance Demo Suite (end-to-end scenarios).
 //!
 //! Automates the four acquisition demos under
 //! `docs/acquisition/demos/` plus the audit-tamper and Trust Manifold
@@ -156,7 +156,7 @@ fn test_hipaa_workflow() {
             .as_deref()
             .unwrap_or("")
             .is_empty(),
-        "BF-5 correlation must carry a credential_event_id"
+        "correlation must carry a credential_event_id"
     );
 
     // 5. Generate a certified HIPAA report covering the window.

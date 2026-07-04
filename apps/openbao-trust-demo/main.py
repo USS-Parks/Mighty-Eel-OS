@@ -1,32 +1,31 @@
 """OpenBao-Backed Local Trust Demo.
 
 Walks the seven-step Trust Manifold pipeline end-to-end against a local
-MAI instance, using mocked cloud-bridge endpoints until BF-6 lands:
+MAI instance:
 
     1. ``simulate_bridge_authentication()`` — the cloud OpenBao trust
        bridge would normally mint a short-lived ``TrustClaim``. This
        function emits one with the wire shape the bridge will use.
     2. ``audit_correlation_id()`` — derives a stable per-session ID
-       from the claim, suitable for joining the S42 audit log.
+       from the claim, suitable for joining the audit log.
     3. ``check_local_trust_bundle()`` — calls
-       ``client.trust.bundle_status()`` (BF-6 live endpoint).
+       ``client.trust.bundle_status()``.
        Falls back to an ``"unreachable"`` snapshot if the server is down
        so the audit summary still emits a stable shape.
     4. ``exchange_for_session_token()`` — calls
-       ``client.auth.exchange_token(claim.subject_id, ...)`` (BF-6 live
+       ``client.auth.exchange_token(claim.subject_id,...)`` (live
        endpoint). Falls back to a claim-derived placeholder token if the
        server is unreachable.
     5. ``build_lamprey_metadata()`` — assembles the audit payload that
-       S42's ``AuditFeed`` consumes (claim_id, tenant_id, subject_hash,
+       the ``AuditFeed`` consumes (claim_id, tenant_id, subject_hash,
        service_identity, trust_bundle_version, route_decision,
        correlation_id).
     6. ``run_inference()`` — sends one authenticated chat completion.
     7. ``print_audit_summary()`` — emits the metadata + correlation
        ID as JSON to stdout for replay tooling.
 
-BF-6 landed alongside Session 44 (2026-05-22): steps 3 and 4 now hit
-real local endpoints; step 1 still simulates the cloud OpenBao bridge
-until that bring-up. Steps 2, 5, 6, 7 are unchanged from S30.
+Steps 3 and 4 hit real local endpoints; step 1 still simulates the
+cloud OpenBao trust bridge until that bring-up.
 """
 
 from __future__ import annotations
@@ -62,8 +61,8 @@ class BridgeResult:
 def _subject_hash(tenant_id: str, subject_id: str) -> str:
     """HMAC-style pseudonymization marker.
 
-    BF-3 landed real HMAC subject hashing in Rust; the SDK side gets it
-    in BF-6. Until then we use a stable SHA-256 prefix so the wire
+    Real HMAC subject hashing lives in Rust; the SDK side does not have
+    it yet. Until then we use a stable SHA-256 prefix so the wire
     shape is correct and tests can assert on it.
     """
     digest = hashlib.sha256(f"{tenant_id}|{subject_id}".encode()).hexdigest()
@@ -112,7 +111,7 @@ def simulate_bridge_authentication(
 def audit_correlation_id(claim: TrustClaim, prefix: str) -> str:
     """Stable per-claim correlation ID. Format: ``<prefix>-<claim_id>``.
 
-    Joins the cloud-side claim with the local audit log. S42's
+    Joins the cloud-side claim with the local audit log. The audit log's
     ``AuditEntry`` keys on this string in addition to ``claim_id``.
     """
     return f"{prefix}-{claim.claim_id}"
@@ -124,7 +123,7 @@ def audit_correlation_id(claim: TrustClaim, prefix: str) -> str:
 
 @dataclass
 class BundleSnapshot:
-    """Either a real ``TrustBundleStatus`` summary or a BF-6 stub fallback."""
+    """Either a real ``TrustBundleStatus`` summary or a stub fallback."""
     state: str  # "live" or "stub"
     bundle_version: str
     connectivity: str
@@ -136,7 +135,7 @@ def check_local_trust_bundle(client: MaiClient,
                              fallback_version: str) -> BundleSnapshot:
     """Query the SDK's trust bundle status.
 
-    BF-6 (S44) wired the endpoint live, so a healthy server always returns
+    The endpoint is wired live, so a healthy server always returns
     a real ``TrustBundleStatus``. The fallback branch is the air-gap /
     server-down posture: the demo must still emit an audit-ready summary
     even if the local trust cache is unreachable.
@@ -161,8 +160,8 @@ def check_local_trust_bundle(client: MaiClient,
 # ---------------------------------------------------------------------------
 
 def exchange_for_session_token(client: MaiClient, claim: TrustClaim) -> str:
-    """Trade the claim for a server session token via BF-6's live
-    ``POST /v1/auth/exchange_token``.
+    """Trade the claim for a server session token via the live
+    ``POST /v1/auth/exchange_token`` endpoint.
 
     Falls back to a claim-derived placeholder if the server is unreachable
     so the audit summary still carries a stable correlation marker. The
@@ -203,7 +202,7 @@ def build_lamprey_metadata(claim: TrustClaim, *,
                            bundle: BundleSnapshot,
                            correlation_id: str,
                            route_decision: str = "local_only") -> LampreyMetadata:
-    """Assemble the audit payload S42 ingests."""
+    """Assemble the audit payload the audit log ingests."""
     return LampreyMetadata(
         claim_id=claim.claim_id,
         tenant_id=claim.tenant_id,

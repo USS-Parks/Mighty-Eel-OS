@@ -1,5 +1,5 @@
-//! Jurisdiction determination and country-based routing (Session 39 +
-//! BF-2 trust integration).
+//! Jurisdiction determination and country-based routing (+
+//! trust integration).
 //!
 //! Combines the outputs of [`itar`](crate::itar) and [`ear`](crate::ear)
 //! into a single [`UnifiedClassification`] and applies country / person
@@ -18,7 +18,7 @@
 //! [`default_to_itar_on_ambiguity`](crate::itar::ItarDetectorConfig::default_to_itar_on_ambiguity)
 //! promoted the report to `Itar`, the unified classification keeps it
 //! as `Itar`. This satisfies the most-restrictive default in the
-//! Session 39 acceptance criteria.
+//! acceptance criteria.
 //!
 //! Order of checks (highest-priority deny first):
 //!
@@ -220,7 +220,7 @@ pub enum Outcome {
 
 /// Audit-grade snapshot of the trust context at decision time. The
 /// raw `subject_id` is intentionally excluded — only the HMAC
-/// [`SubjectHash`] is retained so the audit layer (Session 42, BF-5)
+/// [`SubjectHash`] is retained so the audit layer
 /// can record the decision without leaking PII.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct TrustSnapshot {
@@ -284,7 +284,7 @@ impl JurisdictionEvaluator {
     /// Evaluate a request.
     ///
     /// The `trust` argument carries the Trust Manifold projection
-    /// (BF-2). Until the verified-claim pipeline lands (BF-3 / S41),
+    /// Until the verified-claim pipeline lands
     /// callers may construct it via [`TrustContext::for_local_dev`]
     /// for tests and bring-up.
     pub fn evaluate(
@@ -673,8 +673,6 @@ mod tests {
         assert!(!PersonType::NonUsPerson.is_itar_eligible());
         assert!(!PersonType::Unknown.is_itar_eligible());
     }
-
-    // ---- BF-2 Trust Manifold tests ----
 
     #[test]
     fn test_trust_revoked_short_circuits_to_deny() {

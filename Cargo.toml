@@ -105,7 +105,7 @@ all = { level = "warn", priority = -1 }
 pedantic = { level = "warn", priority = -1 }
 print_stdout = "deny"
 print_stderr = "deny"
-# Stub-phase exceptions: re-enable as implementations land
+# Pedantic-tier lints allowed as deliberate workspace style choices.
 missing_errors_doc = "allow"
 missing_panics_doc = "allow"
 module_name_repetitions = "allow"

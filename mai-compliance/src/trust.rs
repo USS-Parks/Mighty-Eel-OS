@@ -1,7 +1,7 @@
-//! Trust Manifold projection types (BF-2).
+//! Trust Manifold projection types.
 //!
 //! Defines the [`TrustContext`] struct consumed by every Lamprey
-//! component from Session 39 onward, along with the supporting enums
+//! component onward, along with the supporting enums
 //! (service identity, compliance scope, allowed route, data
 //! classification, revocation status). The wire-level claim that
 //! produces a `TrustContext` is defined in `docs/TRUST-MANIFOLD.md`
@@ -18,10 +18,10 @@
 //!   and [`TrustContext::revocation_status`]) that come from the local
 //!   trust cache, not from the claim itself.
 //!
-//! Until BF-3 (signed bundle verification) and BF-4 (local trust
+//! (signed bundle verification) and (local trust
 //! cache) land, callers construct `TrustContext` directly from mock
 //! values via [`TrustContext::for_local_dev`] or
-//! [`TrustContext::strict_local_only`]. Session 41 will replace these
+//! [`TrustContext::strict_local_only`]. will replace these
 //! construction sites with calls into the verified-claim pipeline.
 
 use std::collections::BTreeSet;
@@ -37,7 +37,7 @@ pub struct TenantId(String);
 
 impl TenantId {
     /// Construct a tenant id. Rejects empty strings and obvious shape
-    /// violations. Stricter normalisation lands in BF-3 when the
+    /// violations. Stricter normalisation when the
     /// claim verifier is wired.
     pub fn new(id: impl Into<String>) -> Result<Self, TrustContextError> {
         let raw = id.into();
@@ -143,7 +143,7 @@ pub enum ComplianceScope {
     Hipaa,
     /// ITAR / EAR jurisdiction may evaluate.
     ItarEar,
-    /// OCAP (tribal data sovereignty, Session 40) may evaluate.
+    /// OCAP may evaluate.
     Ocap,
 }
 
@@ -246,7 +246,7 @@ pub enum TrustContextError {
 }
 
 /// Decision-time projection of a verified Lamprey claim plus local
-/// appliance state. Every Lamprey component from Session 39 onward
+/// appliance state. Every Lamprey component onward
 /// takes a `&TrustContext` on its decision path.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TrustContext {
@@ -278,7 +278,7 @@ pub struct TrustContext {
     /// Globally unique claim id; audit correlation key.
     pub claim_id: String,
     /// Appliance connectivity state. Upgraded from `offline_mode: bool`
-    /// in Session 28 / BF-4 — the canonical enum lives in
+    /// / — the canonical enum lives in
     /// [`mai_core::airgap::ConnectivityState`]. Use [`Self::offline_mode`]
     /// for the legacy boolean view.
     #[serde(default = "default_connectivity")]
@@ -288,7 +288,7 @@ pub struct TrustContext {
 }
 
 /// Default connectivity used when deserialising legacy claims that
-/// predate the BF-4 field. `Connected` was the historical implicit
+/// predate the field. `Connected` was the historical implicit
 /// default for everything except the explicit `offline_mode: true`
 /// case, which now maps to `Degraded` at construction sites.
 fn default_connectivity() -> ConnectivityState {

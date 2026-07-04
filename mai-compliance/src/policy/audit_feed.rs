@@ -1,8 +1,8 @@
-//! Compliance audit feed (Session 41).
+//! Compliance audit feed.
 //!
 //! [`AuditFeed`] is an in-process broadcast channel for compliance
-//! events. The Session 44 dashboard subscribes to it; tests subscribe
-//! to it; the audit log (Session 42) subscribes to it. The feed is
+//! events. The dashboard subscribes to it; tests subscribe
+//! to it; the audit log subscribes to it. The feed is
 //! intentionally transport-free — exposing it over an HTTP SSE
 //! endpoint is the responsibility of `mai-api`, which can wrap a
 //! subscriber and forward events as `text/event-stream` lines.
