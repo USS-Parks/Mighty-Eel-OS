@@ -48,7 +48,7 @@ pub struct PreflightResponse {
 }
 
 /// Pull the bearer virtual key out of the `Authorization` header.
-fn bearer_key(headers: &HeaderMap) -> Result<&str, (StatusCode, String)> {
+pub(crate) fn bearer_key(headers: &HeaderMap) -> Result<&str, (StatusCode, String)> {
     let raw = headers
         .get(AUTHORIZATION)
         .and_then(|v| v.to_str().ok())
