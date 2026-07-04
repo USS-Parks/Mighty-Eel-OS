@@ -13,6 +13,7 @@
 
 pub mod app;
 pub mod http;
+pub mod meter;
 pub mod policy;
 pub mod provider;
 pub mod route;

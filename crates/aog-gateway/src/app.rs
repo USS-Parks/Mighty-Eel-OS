@@ -9,12 +9,13 @@
 //! it (e.g. PHI forces a local target regardless of the requested model).
 
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use axum::http::{HeaderMap, StatusCode};
 use chrono::Utc;
 use mai_router::{DefaultRouter, Router};
 
+use crate::meter::{PriceBook, ReceiptLedger};
 use crate::policy::{PolicyEngine, PolicyMode};
 use crate::provider::Registry;
 use crate::{Gateway, ResolvedContext};
@@ -94,11 +95,16 @@ pub struct AppState {
     pub policy: Arc<PolicyEngine>,
     /// The G6 enforcement posture. Defaults to `Shadow` (never blocks) for M1.
     pub mode: PolicyMode,
+    /// The G7 append-only receipt ledger (BLAKE3 chain over metadata-only receipts).
+    pub receipts: Arc<Mutex<ReceiptLedger>>,
+    /// The G7 cost model.
+    pub prices: Arc<PriceBook>,
 }
 
 impl AppState {
     /// Assemble state with the default `mai-router` engine, the baseline policy
-    /// engine, and `Shadow` mode (the safe M1 default — decide + log, never block).
+    /// engine, `Shadow` mode (the safe M1 default — decide + log, never block),
+    /// a fresh receipt ledger, and the baseline price book.
     #[must_use]
     pub fn new(gateway: Arc<Gateway>, registry: Arc<Registry>, models: Arc<ModelMap>) -> Self {
         Self {
@@ -108,6 +114,8 @@ impl AppState {
             router: Arc::new(DefaultRouter::with_defaults()),
             policy: Arc::new(PolicyEngine::baseline()),
             mode: PolicyMode::Shadow,
+            receipts: Arc::new(Mutex::new(ReceiptLedger::new())),
+            prices: Arc::new(PriceBook::baseline()),
         }
     }
 

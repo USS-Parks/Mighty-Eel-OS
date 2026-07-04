@@ -128,6 +128,7 @@ dependencies = [
  "fabric-contracts",
  "fabric-crypto",
  "fabric-envelope",
+ "fabric-proof",
  "fabric-token",
  "futures",
  "hex",

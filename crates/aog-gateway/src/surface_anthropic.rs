@@ -108,6 +108,8 @@ async fn messages(
         Err(e) => return e.into_response(),
     };
     let target_cloud = crate::policy::target_is_cloud(&target);
+    let provider_name = target.provider.clone();
+    let workflow_id = crate::meter::workflow_from(&headers);
     let neutral = anthropic_neutral(&body, target.model);
     let query = crate::route::query_text(&neutral.messages);
 
@@ -133,7 +135,23 @@ async fn messages(
         }
     } else {
         match provider.complete(&neutral).await {
-            Ok(r) => Json(message_json(&inbound_model, &r)).into_response(),
+            Ok(r) => {
+                // Metering + receipt (G7): every non-stream completion is receipted.
+                crate::meter::record(
+                    &state.receipts,
+                    &state.prices,
+                    &crate::meter::Completion {
+                        ctx: &ctx,
+                        provider: &provider_name,
+                        model: &inbound_model,
+                        route: &decision,
+                        allowed_cloud: policy_decision.allowed_cloud,
+                        usage: r.usage,
+                        workflow_id: workflow_id.clone(),
+                    },
+                );
+                Json(message_json(&inbound_model, &r)).into_response()
+            }
             Err(e) => provider_http(&e).into_response(),
         }
     };

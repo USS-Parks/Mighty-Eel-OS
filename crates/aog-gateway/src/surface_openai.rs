@@ -30,6 +30,7 @@ pub fn router(state: AppState) -> Router {
         .route("/v1/completions", post(completions))
         .route("/v1/embeddings", post(embeddings))
         .route("/v1/models", get(list_models))
+        .route("/v1/usage", get(usage))
         .with_state(state)
 }
 
@@ -148,6 +149,8 @@ async fn chat_completions(
         Err(e) => return e.into_response(),
     };
     let target_cloud = crate::policy::target_is_cloud(&target);
+    let provider_name = target.provider.clone();
+    let workflow_id = crate::meter::workflow_from(&headers);
     let neutral = neutral_from(&body, target.model);
     let query = crate::route::query_text(&neutral.messages);
 
@@ -173,12 +176,46 @@ async fn chat_completions(
         }
     } else {
         match provider.complete(&neutral).await {
-            Ok(r) => Json(chat_completion_json(&inbound_model, &r)).into_response(),
+            Ok(r) => {
+                // Metering + receipt (G7): every non-stream completion is receipted.
+                crate::meter::record(
+                    &state.receipts,
+                    &state.prices,
+                    &crate::meter::Completion {
+                        ctx: &ctx,
+                        provider: &provider_name,
+                        model: &inbound_model,
+                        route: &decision,
+                        allowed_cloud: policy_decision.allowed_cloud,
+                        usage: r.usage,
+                        workflow_id: workflow_id.clone(),
+                    },
+                );
+                Json(chat_completion_json(&inbound_model, &r)).into_response()
+            }
             Err(e) => provider_http(&e).into_response(),
         }
     };
     let resp = crate::route::tag_route(resp, &decision);
     crate::policy::tag_policy(resp, &policy_decision, state.mode, &outcome)
+}
+
+/// `GET /v1/usage` — aog-meter aggregates (per tenant/provider/model/task) +
+/// the receipt-chain head + a live chain-verify. Authenticated.
+async fn usage(State(state): State<AppState>, headers: HeaderMap) -> Response {
+    if let Err(e) = authorize(&state, &headers).await {
+        return e.into_response();
+    }
+    let (aggregates, head, verified) = {
+        let led = state.receipts.lock().expect("receipt ledger lock");
+        (led.aggregate(), led.head_hex(), led.verify())
+    };
+    Json(json!({
+        "aggregates": aggregates,
+        "chain_head": head,
+        "chain_verified": verified,
+    }))
+    .into_response()
 }
 
 fn chat_completion_json(model: &str, r: &CompletionResponse) -> Value {

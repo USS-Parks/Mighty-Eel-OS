@@ -152,6 +152,7 @@ jobs:
           cargo test -p aog-gateway --test openai_surface -- --nocapture
           cargo test -p aog-gateway --test anthropic_surface -- --nocapture
           cargo test -p aog-gateway --test policy_modes -- --nocapture
+          cargo test -p aog-gateway --test metering -- --nocapture
 
   # SOV-0.7 deferrals still open:
   #   * tsc + vitest job -> Phase C, when the React console exists.
