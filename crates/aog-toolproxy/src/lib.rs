@@ -15,6 +15,7 @@
 pub mod receipt;
 
 use std::sync::{Mutex, RwLock};
+use std::time::Duration;
 
 use async_trait::async_trait;
 use mai_agent::ToolRegistry;
@@ -28,6 +29,41 @@ pub enum ProxyError {
     /// The registry rejected the call (unknown tool, role denied, bad arguments).
     #[error("tool governance: {0}")]
     Rejected(#[from] AgentError),
+    /// The per-call credential could not be minted (T2) — the call never executes.
+    #[error("credential minting failed: {0}")]
+    Mint(String),
+}
+
+/// A per-call ephemeral credential (T2), minted just before execution and revoked
+/// at call end — never persisted, never handed to the agent process.
+#[derive(Debug, Clone)]
+pub struct MintedCredential {
+    /// Opaque lease id — safe to log and receipt (identifies, does not authorize).
+    pub lease_id: String,
+    /// The ephemeral secret the executor uses transiently for this one call. Must
+    /// not be persisted or returned to the agent; dropped when the call returns.
+    pub secret: String,
+    /// Time-to-live — the call's lifetime.
+    pub ttl: Duration,
+}
+
+/// The seam to WSF's credential broker (wsf-bridge): mint an ephemeral credential
+/// scoped to one tool call, and revoke it at call end. Minting per call — not per
+/// session — is what keeps a standing credential out of the agent process.
+#[async_trait]
+pub trait CredentialMinter: Send + Sync {
+    /// Mint a call-scoped credential for `tool`, authorized by `ctx`.
+    ///
+    /// # Errors
+    /// Any minter error aborts the call before it executes.
+    async fn mint(
+        &self,
+        tool: &ToolDefinition,
+        ctx: &InvokeContext,
+    ) -> Result<MintedCredential, String>;
+
+    /// Best-effort revoke a lease at call end (the TTL also bounds it).
+    async fn revoke(&self, lease_id: &str);
 }
 
 /// The seam an agent / L4 implements to actually run a validated tool call. AOG
@@ -35,9 +71,16 @@ pub enum ProxyError {
 /// un-governed. T2 mints the call's ephemeral credentials at this boundary.
 #[async_trait]
 pub trait ToolExecutor: Send + Sync {
-    /// Execute a validated call. Implementations should honour `tool.timeout` and
-    /// return a [`ToolResult`] (success or a captured error) rather than panicking.
-    async fn execute(&self, tool: &ToolDefinition, call: &ToolCall) -> ToolResult;
+    /// Execute a validated call, using the per-call ephemeral credential (T2) when
+    /// one was minted (`None` if no minter is configured). Implementations should
+    /// honour `tool.timeout`, return a [`ToolResult`] rather than panicking, and
+    /// must not persist `cred` beyond the call.
+    async fn execute(
+        &self,
+        tool: &ToolDefinition,
+        call: &ToolCall,
+        cred: Option<&MintedCredential>,
+    ) -> ToolResult;
 }
 
 /// Who/what authorized a tool call — recorded on the receipt (never the credential).
@@ -55,6 +98,7 @@ pub struct InvokeContext {
 pub struct ToolProxy {
     registry: RwLock<ToolRegistry>,
     receipts: Mutex<ToolReceiptChain>,
+    minter: Option<Box<dyn CredentialMinter>>,
 }
 
 impl Default for ToolProxy {
@@ -69,7 +113,17 @@ impl ToolProxy {
         Self {
             registry: RwLock::new(ToolRegistry::new()),
             receipts: Mutex::new(ToolReceiptChain::new()),
+            minter: None,
         }
+    }
+
+    /// Attach the credential minter (T2). Every brokered call then mints an
+    /// ephemeral, call-scoped credential — revoked at call end — instead of the
+    /// agent process holding a standing one.
+    #[must_use]
+    pub fn with_minter(mut self, minter: Box<dyn CredentialMinter>) -> Self {
+        self.minter = Some(minter);
+        self
     }
 
     /// Register a tool the proxy will broker.
@@ -110,7 +164,24 @@ impl ToolProxy {
             reg.validate_tool_call(call, &ctx.role)?.clone()
         };
 
-        let result = executor.execute(&tool, call).await;
+        // Mint the per-call credential (T2), if a minter is configured. It lives only
+        // for this call — passed to the executor by reference, revoked below, dropped
+        // when `invoke` returns; the agent process never holds a standing credential.
+        let cred = match &self.minter {
+            Some(m) => Some(m.mint(&tool, ctx).await.map_err(ProxyError::Mint)?),
+            None => None,
+        };
+
+        let result = executor.execute(&tool, call, cred.as_ref()).await;
+
+        // End the lease at call end (its TTL also bounds it).
+        if let (Some(m), Some(c)) = (&self.minter, &cred) {
+            m.revoke(&c.lease_id).await;
+        }
+
+        let (cred_lease, cred_ttl_ms) = cred.as_ref().map_or((None, None), |c| {
+            (Some(c.lease_id.clone()), Some(ms(c.ttl)))
+        });
 
         self.receipts
             .lock()
@@ -126,6 +197,8 @@ impl ToolProxy {
                 chain_step: call.chain_step,
                 at: chrono::Utc::now().to_rfc3339(),
                 error: result.error.clone(),
+                cred_lease,
+                cred_ttl_ms,
             });
         Ok(result)
     }
@@ -159,8 +232,14 @@ impl ToolProxy {
     }
 }
 
+/// Milliseconds of a duration, saturating to `u64::MAX`.
+fn ms(d: Duration) -> u64 {
+    u64::try_from(d.as_millis()).unwrap_or(u64::MAX)
+}
+
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
     use std::time::Duration;
 
     use mai_agent::types::{ToolAccessRole, ToolCall, ToolDefinition, ToolResult};
@@ -172,7 +251,12 @@ mod tests {
 
     #[async_trait]
     impl ToolExecutor for EchoExecutor {
-        async fn execute(&self, _tool: &ToolDefinition, call: &ToolCall) -> ToolResult {
+        async fn execute(
+            &self,
+            _tool: &ToolDefinition,
+            call: &ToolCall,
+            _cred: Option<&MintedCredential>,
+        ) -> ToolResult {
             ToolResult {
                 call_id: call.call_id.clone(),
                 tool_id: call.tool_id.clone(),
@@ -315,5 +399,128 @@ mod tests {
         assert_ne!(head1, head2, "each call advances the chain");
         assert_eq!(proxy.receipt_count(), 2);
         assert!(proxy.verify_receipts());
+    }
+
+    // ── T2: per-call credential minting ──────────────────────────────────
+
+    /// A minter that hands out ephemeral creds and tracks live leases, so a test can
+    /// assert none survive the call.
+    struct RecordingMinter {
+        live: Arc<Mutex<Vec<String>>>,
+        counter: Arc<Mutex<u32>>,
+    }
+
+    #[async_trait]
+    impl CredentialMinter for RecordingMinter {
+        async fn mint(
+            &self,
+            tool: &ToolDefinition,
+            _ctx: &InvokeContext,
+        ) -> Result<MintedCredential, String> {
+            let mut n = self.counter.lock().unwrap();
+            *n += 1;
+            let lease_id = format!("lease-{}-{}", tool.id, *n);
+            self.live.lock().unwrap().push(lease_id.clone());
+            Ok(MintedCredential {
+                lease_id,
+                secret: "ephemeral-secret".to_string(),
+                ttl: Duration::from_secs(30),
+            })
+        }
+
+        async fn revoke(&self, lease_id: &str) {
+            self.live.lock().unwrap().retain(|l| l != lease_id);
+        }
+    }
+
+    /// An executor that records the lease id of the credential it was handed.
+    struct CredCapturingExecutor {
+        seen: Arc<Mutex<Option<String>>>,
+    }
+
+    #[async_trait]
+    impl ToolExecutor for CredCapturingExecutor {
+        async fn execute(
+            &self,
+            _tool: &ToolDefinition,
+            call: &ToolCall,
+            cred: Option<&MintedCredential>,
+        ) -> ToolResult {
+            // The executor can use a live, non-empty secret during the call.
+            assert!(cred.is_some_and(|c| !c.secret.is_empty()));
+            *self.seen.lock().unwrap() = cred.map(|c| c.lease_id.clone());
+            ToolResult {
+                call_id: call.call_id.clone(),
+                tool_id: call.tool_id.clone(),
+                success: true,
+                output: serde_json::Value::Null,
+                error: None,
+                duration_ms: 1,
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn mints_a_per_call_credential_and_revokes_it_at_call_end() {
+        let live = Arc::new(Mutex::new(Vec::<String>::new()));
+        let minter = Box::new(RecordingMinter {
+            live: Arc::clone(&live),
+            counter: Arc::new(Mutex::new(0)),
+        });
+        let proxy = ToolProxy::new().with_minter(minter);
+        proxy
+            .register(tool("write.record", true, ToolAccessRole::Parent))
+            .unwrap();
+
+        let seen = Arc::new(Mutex::new(None));
+        let exec = CredCapturingExecutor {
+            seen: Arc::clone(&seen),
+        };
+        proxy
+            .invoke(
+                &call("c1", "write.record"),
+                &ctx(ToolAccessRole::Parent),
+                &exec,
+            )
+            .await
+            .unwrap();
+
+        // The executor received a live per-call credential during the call.
+        assert!(
+            seen.lock().unwrap().is_some(),
+            "the executor got a per-call credential"
+        );
+        // TTL == the call: the lease is revoked at call end — no standing cred survives.
+        assert!(
+            live.lock().unwrap().is_empty(),
+            "the lease is revoked at call end"
+        );
+        // The receipt records the lease id + TTL only — never the secret.
+        let rec = &proxy.receipts()[0];
+        assert!(rec.cred_lease.is_some());
+        assert_eq!(rec.cred_ttl_ms, Some(30_000));
+        assert!(
+            !serde_json::to_string(rec)
+                .unwrap()
+                .contains("ephemeral-secret"),
+            "the credential secret is never receipted"
+        );
+    }
+
+    #[tokio::test]
+    async fn no_minter_means_no_cred_on_the_receipt() {
+        let proxy = ToolProxy::new();
+        proxy
+            .register(tool("read.file", false, ToolAccessRole::Guest))
+            .unwrap();
+        proxy
+            .invoke(
+                &call("c1", "read.file"),
+                &ctx(ToolAccessRole::Guest),
+                &EchoExecutor,
+            )
+            .await
+            .unwrap();
+        assert_eq!(proxy.receipts()[0].cred_lease, None);
     }
 }

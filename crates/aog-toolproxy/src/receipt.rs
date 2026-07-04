@@ -24,6 +24,13 @@ pub struct ToolReceipt {
     pub at: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+    /// The ephemeral credential lease minted for this call (T2) — the id only,
+    /// never the secret; `None` when no minter is configured.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cred_lease: Option<String>,
+    /// The minted credential's TTL in ms (the call's lifetime).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cred_ttl_ms: Option<u64>,
 }
 
 /// Append-only tool-call receipt ledger: a BLAKE3 chain over [`ToolReceipt`]s.
