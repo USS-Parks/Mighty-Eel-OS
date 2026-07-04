@@ -5,6 +5,10 @@
 # Rust build artifacts
 target/
 
+# Console build artefacts (the console image reinstalls + rebuilds these)
+console/node_modules/
+console/dist/
+
 # Python caches and venvs
 __pycache__/
 *.py[cod]

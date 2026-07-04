@@ -1,0 +1,101 @@
+name: aog-wsf-appliance
+
+# One-command AOG/WSF appliance (D1): OpenBao trust core + the WSF trust plane
+# (wsf-api) + the AOG gateway + the console, with Postgres + MinIO reserved for
+# service state / evidence, and a mock local model so a governed request
+# completes end-to-end. Dev-mode OpenBao — NOT production. See README.md.
+
+services:
+  # ── Trust core ──────────────────────────────────────────────────────────
+  openbao:
+    image: openbao/openbao:latest
+    cap_add: [IPC_LOCK]
+    command: server -dev -dev-root-token-id=root -dev-listen-address=0.0.0.0:8200
+    ports: ["8200:8200"]
+    healthcheck:
+      test: ["CMD", "bao", "status", "-address=http://127.0.0.1:8200"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  # ── Reserved data stores (topology per plan; M1 services do not wire them yet)
+  postgres: # reserved for WSF service state
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: wsf
+      POSTGRES_USER: wsf
+      POSTGRES_PASSWORD: wsf-dev
+    volumes: ["pg-data:/var/lib/postgresql/data"]
+
+  objectstore: # reserved for sealed envelopes + evidence packs (MinIO)
+    image: minio/minio:latest
+    command: server /data
+    environment:
+      MINIO_ROOT_USER: wsf
+      MINIO_ROOT_PASSWORD: wsf-dev-secret
+    volumes: ["minio-data:/data"]
+
+  # ── Mock on-prem model (OpenAI-compatible) so the gateway has a backend ──
+  mock-llm:
+    image: python:3.12-slim
+    command: ["python", "/app/app.py"]
+    volumes: ["./mock-llm:/app:ro"]
+
+  # ── One-shot init: provision OpenBao, mint anchor keys, seed the demo token ─
+  seed:
+    build:
+      context: ../..
+      dockerfile: deployment/appliance/Dockerfile
+    image: islandmountain/aog-wsf-appliance:latest
+    user: "0:0" # writes the shared /seed volume
+    command: ["/usr/local/bin/wsf-seed"]
+    environment:
+      WSF_OPENBAO_ADDR: http://openbao:8200
+      WSF_OPENBAO_TOKEN: root
+      WSF_OPENBAO_ROLE_ID: appliance
+      WSF_OPENBAO_SECRET_ID: appliance-secret
+      WSF_SEED_OUT: /seed/appliance.env
+    volumes: ["seed-data:/seed"]
+    depends_on:
+      openbao: { condition: service_healthy }
+    restart: "no"
+
+  # ── WSF trust plane ─────────────────────────────────────────────────────
+  wsf-api:
+    image: islandmountain/aog-wsf-appliance:latest
+    command: ["sh", "-c", "set -a && . /seed/appliance.env && exec /usr/local/bin/wsf-api serve"]
+    environment:
+      WSF_LISTEN: 0.0.0.0:8300
+      WSF_AWS_ENDPOINT: https://sts.amazonaws.com
+    volumes: ["seed-data:/seed:ro"]
+    ports: ["8081:8300"]
+    depends_on:
+      seed: { condition: service_completed_successfully }
+
+  # ── AOG gateway (shadow mode — the M1 posture) ──────────────────────────
+  aog-gateway:
+    image: islandmountain/aog-wsf-appliance:latest
+    command: ["sh", "-c", "set -a && . /seed/appliance.env && exec /usr/local/bin/aog-gateway serve"]
+    environment:
+      AOG_LISTEN: 0.0.0.0:8080
+      AOG_LOCAL_BASE: http://mock-llm:8000
+      AOG_MODE: shadow
+    volumes: ["seed-data:/seed:ro"]
+    ports: ["8080:8080"]
+    depends_on:
+      seed: { condition: service_completed_successfully }
+      mock-llm: { condition: service_started }
+
+  # ── Console (nginx serves the SPA + proxies /api/wsf, /api/aog) ──────────
+  console:
+    build:
+      context: ../..
+      dockerfile: deployment/appliance/Dockerfile.console
+    image: islandmountain/aog-wsf-console:latest
+    ports: ["8088:80"]
+    depends_on: [wsf-api, aog-gateway]
+
+volumes:
+  seed-data:
+  pg-data:
+  minio-data:
