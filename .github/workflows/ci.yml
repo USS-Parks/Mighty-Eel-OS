@@ -149,6 +149,7 @@ jobs:
           cargo test -p wsf-tenants --test live_tenants -- --nocapture
           cargo test -p wsf-api --test live_api -- --nocapture
           cargo test -p aog-gateway --test live_gateway -- --nocapture
+          cargo test -p aog-gateway --test kill_switch -- --nocapture
           cargo test -p aog-gateway --test openai_surface -- --nocapture
           cargo test -p aog-gateway --test anthropic_surface -- --nocapture
           cargo test -p aog-gateway --test policy_modes -- --nocapture
