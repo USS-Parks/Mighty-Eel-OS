@@ -1,0 +1,24 @@
+[package]
+name = "aog-toolproxy"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "AOG tool-governance proxy: agents register tools, calls execute THROUGH AOG (validated, executed, receipted) — fulfilling the mai-agent execution seam"
+
+[dependencies]
+fabric-proof = { path = "../fabric-proof" }
+mai-agent = { path = "../../mai-agent" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+chrono = { workspace = true }
+async-trait = { workspace = true }
+hex = "0.4"
+
+[dev-dependencies]
+tokio = { workspace = true }
+
+[lints]
+workspace = true

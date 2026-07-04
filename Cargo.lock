@@ -146,6 +146,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "aog-toolproxy"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "fabric-proof",
+ "hex",
+ "mai-agent",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+]
+
+[[package]]
 name = "arrayref"
 version = "0.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
