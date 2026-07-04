@@ -64,13 +64,17 @@ async fn run() -> Result<(), String> {
 
     let openbao = OpenBaoAuth::new(OpenBaoConfig::new(&addr, role_id, secret_id))
         .map_err(|e| format!("openbao config: {e}"))?;
-    let gateway = Arc::new(Gateway::new(
-        openbao,
-        GatewayConfig {
-            token_public_key: anchor,
-            virtual_key_kv_prefix: vk_prefix,
-        },
-    ));
+    let revocation_path = env_or("AOG_REVOCATION_PATH", "kv/data/aog/revocation");
+    let gateway = Arc::new(
+        Gateway::new(
+            openbao,
+            GatewayConfig {
+                token_public_key: anchor,
+                virtual_key_kv_prefix: vk_prefix,
+            },
+        )
+        .with_revocation_path(revocation_path),
+    );
 
     // Providers: always a local OpenAI-compatible backend; cloud providers when keyed.
     let local_base = env_or("AOG_LOCAL_BASE", "http://mock-llm:8000");

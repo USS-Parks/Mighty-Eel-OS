@@ -74,6 +74,7 @@ pub(crate) fn to_http(err: GatewayError) -> (StatusCode, String) {
     match err {
         GatewayError::UnknownKey | GatewayError::Unauthorized(_) => (StatusCode::UNAUTHORIZED, msg),
         GatewayError::BudgetExhausted => (StatusCode::PAYMENT_REQUIRED, msg),
+        GatewayError::Revoked => (StatusCode::FORBIDDEN, msg),
         GatewayError::Malformed(_) => (StatusCode::INTERNAL_SERVER_ERROR, msg),
         GatewayError::OpenBao(_) => (StatusCode::BAD_GATEWAY, msg),
     }
@@ -136,6 +137,7 @@ mod tests {
             to_http(GatewayError::BudgetExhausted).0,
             StatusCode::PAYMENT_REQUIRED
         );
+        assert_eq!(to_http(GatewayError::Revoked).0, StatusCode::FORBIDDEN);
         assert_eq!(
             to_http(GatewayError::Malformed("bad".into())).0,
             StatusCode::INTERNAL_SERVER_ERROR

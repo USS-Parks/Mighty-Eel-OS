@@ -27,6 +27,7 @@ use std::sync::Mutex;
 use chrono::{DateTime, Utc};
 use fabric_contracts::{Budget, TrustToken};
 use fabric_crypto::providers::MlDsa87Verifier;
+use fabric_revocation::RevocationSnapshot;
 use sha2::{Digest, Sha256};
 use wsf_bridge::OpenBaoAuth;
 
@@ -48,6 +49,10 @@ pub enum GatewayError {
     /// An OpenBao interaction failed.
     #[error("openbao: {0}")]
     OpenBao(#[from] wsf_bridge::OpenBaoError),
+    /// The token (or its subject) is named in the current revocation snapshot —
+    /// the kill switch. Rejected regardless of signature validity or budget.
+    #[error("token revoked")]
+    Revoked,
 }
 
 /// The resolved request context — a verified, in-budget token + its tenant.
@@ -114,6 +119,9 @@ pub struct Gateway {
     config: GatewayConfig,
     /// G9 per-token runtime spend (session-cumulative budget enforcement).
     spend: SpendLedger,
+    /// G9 kill switch: KV path to the signed revocation snapshot. Empty (the
+    /// default) disables the check — no snapshot source configured.
+    revocation_kv_path: String,
 }
 
 /// Whether a budget has any dimension exhausted (a cap of 0 = that axis unused).
@@ -132,7 +140,16 @@ impl Gateway {
             openbao,
             config,
             spend: SpendLedger::default(),
+            revocation_kv_path: String::new(),
         }
+    }
+
+    /// Set the KV path the kill switch reads the signed revocation snapshot from
+    /// (e.g. `kv/data/aog/revocation`). Empty (the default) disables the check.
+    #[must_use]
+    pub fn with_revocation_path(mut self, path: impl Into<String>) -> Self {
+        self.revocation_kv_path = path.into();
+        self
     }
 
     /// Resolve a virtual key to a verified, in-budget [`ResolvedContext`].
@@ -165,6 +182,42 @@ impl Gateway {
             .map_err(|e| GatewayError::Unauthorized(e.to_string()))?
         {
             return Err(GatewayError::Unauthorized("token expired".to_string()));
+        }
+
+        // Kill switch (G9): consult the signed revocation snapshot. A revoked token
+        // or subject halts the session's next call. No snapshot at the path = nothing
+        // revoked (fail-open on absence); a present-but-invalid snapshot fails closed.
+        if !self.revocation_kv_path.is_empty() {
+            match self
+                .openbao
+                .get_kv_data(&vault_token, &self.revocation_kv_path)
+                .await
+            {
+                Ok(d) => {
+                    let snap = d.get("snapshot").cloned().ok_or_else(|| {
+                        GatewayError::Unauthorized("malformed revocation record".to_string())
+                    })?;
+                    let snapshot: RevocationSnapshot =
+                        serde_json::from_value(snap).map_err(|e| {
+                            GatewayError::Unauthorized(format!("revocation snapshot: {e}"))
+                        })?;
+                    fabric_revocation::verify(
+                        &snapshot,
+                        &MlDsa87Verifier,
+                        &self.config.token_public_key,
+                    )
+                    .map_err(|e| {
+                        GatewayError::Unauthorized(format!("revocation snapshot signature: {e}"))
+                    })?;
+                    if snapshot.is_token_revoked(&token.token_id)
+                        || snapshot.is_subject_revoked(&token.subject_hash)
+                    {
+                        return Err(GatewayError::Revoked);
+                    }
+                }
+                Err(wsf_bridge::OpenBaoError::NotFound(_)) => {}
+                Err(e) => return Err(GatewayError::OpenBao(e)),
+            }
         }
 
         // Budget pre-flight (G1 static caps + G9 session-cumulative runtime spend).

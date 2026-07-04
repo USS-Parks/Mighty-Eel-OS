@@ -13,6 +13,7 @@ fabric-crypto = { path = "../fabric-crypto" }
 fabric-token = { path = "../fabric-token" }
 fabric-proof = { path = "../fabric-proof" }
 fabric-envelope = { path = "../fabric-envelope" }
+fabric-revocation = { path = "../fabric-revocation" }
 wsf-bridge = { path = "../wsf-bridge" }
 mai-router = { path = "../../mai-router" }
 mai-compliance = { path = "../../mai-compliance" }

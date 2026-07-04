@@ -130,6 +130,7 @@ dependencies = [
  "fabric-crypto",
  "fabric-envelope",
  "fabric-proof",
+ "fabric-revocation",
  "fabric-token",
  "futures",
  "hex",
