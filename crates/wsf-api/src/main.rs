@@ -27,9 +27,20 @@ fn b64(key: &str) -> Result<Vec<u8>, String> {
         .map_err(|e| format!("{key} is not valid base64: {e}"))
 }
 
-#[tokio::main(flavor = "current_thread")]
-async fn main() {
-    if let Err(e) = run().await {
+fn main() {
+    // ML-DSA-87 + reqwest/hyper futures use large stack frames; run the runtime
+    // on a generous stack so this holds on Windows (~1 MB default main stack) too.
+    let worker = std::thread::Builder::new()
+        .stack_size(16 * 1024 * 1024)
+        .spawn(|| {
+            tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .expect("tokio runtime")
+                .block_on(run())
+        })
+        .expect("spawn runtime thread");
+    if let Err(e) = worker.join().expect("runtime thread panicked") {
         eprintln!("wsf-api: {e}");
         std::process::exit(1);
     }
