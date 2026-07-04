@@ -298,3 +298,26 @@ physically separate from the intent store (A1.4 / doctrine I-5).
   rejected mutation → zero receipts); fmt + `check --workspace` clean.
 - **Gate:** mutation ↔ receipt 1:1 ✓; the chain verifies off-host with the public
   key only ✓. **Commit:** `LOOM-K9`.
+
+### K10 — Resource versioning + conversion — DONE
+The estate is served at a single **hub** api-version; a stored object at an older
+schema version is upgraded to the hub transparently **on read**, so a kind bump
+serves old objects with no migration or downtime. New `crate::convert`.
+- **Read-path conversion.** `ConversionRegistry` maps `(Kind, from_version)` → a
+  single-step converter and holds the hub version. `StoreReader` reads at the
+  Value level (`codec::decode_value`, `resource_version` overlaid) and walks the
+  converter chain to the hub before serving (bounded against a non-advancing
+  cycle); an unknown-but-valid older version is served as stored, never dropped.
+  The default is the **identity** registry (hub = the estate `API_VERSION`) —
+  every object served exactly as stored, so K5–K9 behavior is unchanged. Writes
+  are untouched: admission still validates the estate's current schema.
+- **Files:** `crates/aog-apiserver/{src/{convert.rs (new), reader.rs, codec.rs,
+  handlers.rs, lib.rs}, tests/{convert.rs (new), common/mod.rs}}`.
+  `AppState::with_conversions` sets the registry.
+- **Verify:** clippy `--all-targets --no-deps -D warnings` clean; `cargo test -p
+  aog-apiserver` = **25 passed** (+2 K10: a stored v1 `PolicyBundle` is served as
+  v2 on GET and in LIST — api-version bumped, a new field defaulted, the original
+  field preserved; the identity registry serves the stored v1 unchanged); fmt +
+  `check --workspace` clean.
+- **Gate:** a v1→v2 kind converts transparently on read ✓; old (v1) objects still
+  served ✓. **Commit:** `LOOM-K10`.

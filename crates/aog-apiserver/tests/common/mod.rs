@@ -6,6 +6,7 @@
 use std::path::PathBuf;
 
 use aog_apiserver::auth::{Authenticator, TOKEN_HEADER};
+use aog_apiserver::convert::ConversionRegistry;
 use aog_apiserver::seal::Sealer;
 use aog_apiserver::{AppState, router};
 use axum::Router;
@@ -110,6 +111,21 @@ pub async fn authed_app_state(dir_name: &str) -> (Router, AppState, String) {
     let state = AppState::bootstrap(1, fresh_dir(dir_name), auth, Sealer::generate().unwrap())
         .await
         .unwrap();
+    let header = header_for(&mint(&signer));
+    (router(state.clone()), state, header)
+}
+
+/// An authenticated app + state configured with a K10 conversion registry.
+pub async fn authed_app_with_conversions(
+    dir_name: &str,
+    conversions: ConversionRegistry,
+) -> (Router, AppState, String) {
+    let signer = anchor();
+    let auth = Authenticator::new(signer.public_key().to_vec());
+    let state = AppState::bootstrap(1, fresh_dir(dir_name), auth, Sealer::generate().unwrap())
+        .await
+        .unwrap()
+        .with_conversions(conversions);
     let header = header_for(&mint(&signer));
     (router(state.clone()), state, header)
 }

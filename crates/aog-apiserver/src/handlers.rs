@@ -67,7 +67,7 @@ pub async fn get_one(
 ) -> Result<Response, ApiError> {
     let kind = parse_kind(&kind_seg).ok_or(ApiError::UnknownKind(kind_seg))?;
     match state.reader.get(kind, &name).await? {
-        Some(object) => Ok(Json(object.to_value()?).into_response()),
+        Some(value) => Ok(Json(value).into_response()),
         None => Err(ApiError::NotFound {
             kind: kind.to_string(),
             name,
@@ -84,11 +84,7 @@ pub async fn list(
     Path(kind_seg): Path<String>,
 ) -> Result<Response, ApiError> {
     let kind = parse_kind(&kind_seg).ok_or(ApiError::UnknownKind(kind_seg))?;
-    let objects = state.reader.list(kind).await?;
-    let items = objects
-        .iter()
-        .map(ResourceObject::to_value)
-        .collect::<Result<Vec<_>, _>>()?;
+    let items = state.reader.list(kind).await?;
     Ok(Json(json!({
         "apiVersion": aog_estate::API_VERSION,
         "kind": format!("{kind}List"),

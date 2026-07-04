@@ -54,3 +54,25 @@ pub fn decode(versioned: &Versioned) -> Result<ResourceObject, ApiError> {
     object.metadata_mut().resource_version = versioned.mod_revision;
     Ok(object)
 }
+
+/// Parse stored bytes into a JSON value for serving, overlaying the authoritative
+/// `resource_version` from the store's `mod_revision`. Unlike [`decode`], it does
+/// not require the bytes to match the current typed schema — the read path (K10)
+/// may then convert an older stored version up to the hub version.
+///
+/// # Errors
+/// [`ApiError::Store`] if the bytes are not valid JSON.
+pub fn decode_value(versioned: &Versioned) -> Result<serde_json::Value, ApiError> {
+    let mut value: serde_json::Value =
+        serde_json::from_slice(&versioned.value).map_err(|e| ApiError::Store(e.to_string()))?;
+    if let Some(meta) = value
+        .get_mut("metadata")
+        .and_then(serde_json::Value::as_object_mut)
+    {
+        meta.insert(
+            "resource_version".to_owned(),
+            serde_json::Value::from(versioned.mod_revision),
+        );
+    }
+    Ok(value)
+}

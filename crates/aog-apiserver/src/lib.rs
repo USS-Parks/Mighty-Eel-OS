@@ -15,6 +15,7 @@
 pub mod admission;
 pub mod auth;
 pub mod codec;
+pub mod convert;
 pub mod error;
 pub mod handlers;
 pub mod policy;
@@ -33,6 +34,7 @@ use wsf_ledger::EvidencePack;
 
 use crate::admission::Admission;
 use crate::auth::Authenticator;
+use crate::convert::ConversionRegistry;
 use crate::reader::StoreReader;
 use crate::seal::Sealer;
 
@@ -109,6 +111,14 @@ impl AppState {
         generated_at: &str,
     ) -> Result<EvidencePack, crate::error::ApiError> {
         self.admission.export_receipts(generated_at)
+    }
+
+    /// Configure the read-path conversion registry (K10). Default is the identity
+    /// (serve stored objects unchanged).
+    #[must_use]
+    pub fn with_conversions(mut self, conversions: ConversionRegistry) -> Self {
+        self.reader = self.reader.with_conversions(conversions);
+        self
     }
 }
 
