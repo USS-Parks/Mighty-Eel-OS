@@ -170,3 +170,30 @@ export interface StatusResp {
   chain_head: string;
   chain_verified: boolean;
 }
+
+// ── aog-approvals (T3) ─────────────────────────────────────────────────────
+
+/** A pending human-approval request for a side-effecting tool call (T3). Carries
+ *  a diff preview of exactly what the call will do. */
+export interface ApprovalTicket {
+  id: string;
+  tool_id: string;
+  session_id: string;
+  profile_id: string;
+  summary: string;
+  diff_preview: string;
+  requested_at: string;
+  status: 'pending' | 'approved' | 'denied';
+}
+
+/** GET /v1/approvals — the pending inbox. */
+export interface ApprovalsResp {
+  pending: ApprovalTicket[];
+}
+
+/** The result of an approve/deny action — the recorded decision + actor. */
+export interface ApprovalActionResp {
+  id: string;
+  status: 'approved' | 'denied';
+  actor: string;
+}

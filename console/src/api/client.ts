@@ -3,6 +3,8 @@
 // SDK the W6 DEVLOG deferred to Phase C. No dependencies — just `fetch`.
 
 import type {
+  ApprovalActionResp,
+  ApprovalsResp,
   AttenuateReq,
   ExchangeReq,
   ExchangeResp,
@@ -115,6 +117,14 @@ export class AogClient {
     return this.bearer ? { authorization: `Bearer ${this.bearer}` } : {};
   }
 
+  private post<T>(path: string, body: unknown): Promise<T> {
+    return jsonFetch<T>(`${this.base}${path}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...this.authHeaders() },
+      body: JSON.stringify(body),
+    });
+  }
+
   /** Liveness — `GET /healthz`. Never throws; returns reachability. */
   async health(): Promise<boolean> {
     try {
@@ -123,6 +133,30 @@ export class AogClient {
     } catch {
       return false;
     }
+  }
+
+  /** The pending human-approval inbox (T3) — side-effecting tool calls awaiting a
+   *  decision, each with a diff preview. */
+  approvals(): Promise<ApprovalsResp> {
+    return jsonFetch<ApprovalsResp>(`${this.base}/v1/approvals`, {
+      headers: this.authHeaders(),
+    });
+  }
+
+  /** Approve a pending request; records the actor. */
+  approve(id: string, actor: string): Promise<ApprovalActionResp> {
+    return this.post<ApprovalActionResp>(
+      `/v1/approvals/${encodeURIComponent(id)}/approve`,
+      { actor },
+    );
+  }
+
+  /** Deny a pending request with a reason; records the actor. */
+  deny(id: string, actor: string, reason: string): Promise<ApprovalActionResp> {
+    return this.post<ApprovalActionResp>(`/v1/approvals/${encodeURIComponent(id)}/deny`, {
+      actor,
+      reason,
+    });
   }
 
   /** Metering aggregates + live receipt-chain integrity (`GET /v1/usage`). */
