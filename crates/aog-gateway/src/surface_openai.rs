@@ -134,9 +134,10 @@ async fn chat_completions(
     Json(body): Json<Value>,
 ) -> Response {
     // Auth + pre-flight budget (G1).
-    if let Err(e) = authorize(&state, &headers).await {
-        return e.into_response();
-    }
+    let ctx = match authorize(&state, &headers).await {
+        Ok(c) => c,
+        Err(e) => return e.into_response(),
+    };
     let inbound_model = body
         .get("model")
         .and_then(Value::as_str)
@@ -148,7 +149,16 @@ async fn chat_completions(
     };
     let neutral = neutral_from(&body, target.model);
 
-    if body.get("stream").and_then(Value::as_bool).unwrap_or(false) {
+    // Classify + route (G5, shadow mode — decide + log via x-aog-* headers).
+    let decision = crate::route::classify_and_route(
+        state.router.as_ref(),
+        &crate::route::query_text(&neutral.messages),
+        neutral.max_tokens.unwrap_or(0),
+        &ctx.tenant_id,
+        ctx.token.roles.first().map_or("user", String::as_str),
+    );
+
+    let resp = if body.get("stream").and_then(Value::as_bool).unwrap_or(false) {
         match provider.stream(&neutral).await {
             Ok(chunks) => chat_sse(inbound_model, chunks),
             Err(e) => provider_http(&e).into_response(),
@@ -158,7 +168,8 @@ async fn chat_completions(
             Ok(r) => Json(chat_completion_json(&inbound_model, &r)).into_response(),
             Err(e) => provider_http(&e).into_response(),
         }
-    }
+    };
+    crate::route::tag_route(resp, &decision)
 }
 
 fn chat_completion_json(model: &str, r: &CompletionResponse) -> Value {

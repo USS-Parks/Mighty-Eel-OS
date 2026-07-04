@@ -13,6 +13,7 @@ use std::sync::Arc;
 
 use axum::http::{HeaderMap, StatusCode};
 use chrono::Utc;
+use mai_router::{DefaultRouter, Router};
 
 use crate::provider::Registry;
 use crate::{Gateway, ResolvedContext};
@@ -79,22 +80,34 @@ impl ModelMap {
 }
 
 /// Everything an inference surface needs: auth (Gateway), dispatch (Registry),
-/// routing (ModelMap). Cheap to clone (all `Arc`).
+/// model routing (ModelMap), and classify-and-route (`mai-router`). Cheap to
+/// clone (all `Arc`).
 #[derive(Clone)]
 pub struct AppState {
     pub gateway: Arc<Gateway>,
     pub registry: Arc<Registry>,
     pub models: Arc<ModelMap>,
+    /// The G5 classify-and-route engine. Defaults to `mai-router`'s `DefaultRouter`.
+    pub router: Arc<dyn Router + Send + Sync>,
 }
 
 impl AppState {
+    /// Assemble state with the default `mai-router` classify-and-route engine.
     #[must_use]
     pub fn new(gateway: Arc<Gateway>, registry: Arc<Registry>, models: Arc<ModelMap>) -> Self {
         Self {
             gateway,
             registry,
             models,
+            router: Arc::new(DefaultRouter::with_defaults()),
         }
+    }
+
+    /// Override the classify-and-route engine (tests / custom policy).
+    #[must_use]
+    pub fn with_router(mut self, router: Arc<dyn Router + Send + Sync>) -> Self {
+        self.router = router;
+        self
     }
 }
 

@@ -332,6 +332,34 @@ async fn openai_client_completes_chat_and_stream() {
     assert_eq!(mv["object"], "list");
     assert_eq!(mv["data"][0]["id"], "gpt-4o-mini");
 
+    // --- G5: the surface classifies + tags the route (shadow mode) ---
+    // A PHI payload is classified and tagged local_only, even though the model
+    // maps to the (mock cloud) provider — shadow mode decides + logs, never blocks.
+    let phi = http
+        .post(format!("{base}/v1/chat/completions"))
+        .bearer_auth("vk_g3")
+        .json(&json!({
+            "model": "gpt-4o-mini",
+            "messages": [{"role": "user", "content": "Patient John Doe, SSN 123-45-6789, diagnosis and plan"}]
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(phi.status(), 200);
+    assert_eq!(
+        phi.headers()
+            .get("x-aog-route")
+            .and_then(|v| v.to_str().ok()),
+        Some("local_only"),
+        "PHI payload must be routed local (shadow-tagged)"
+    );
+    assert_eq!(
+        phi.headers()
+            .get("x-aog-route-source")
+            .and_then(|v| v.to_str().ok()),
+        Some("classified"),
+    );
+
     // --- auth is enforced on the surface: no bearer → 401 ---
     let unauth = http
         .post(format!("{base}/v1/chat/completions"))
@@ -341,5 +369,7 @@ async fn openai_client_completes_chat_and_stream() {
         .unwrap();
     assert_eq!(unauth.status(), 401, "unauthenticated chat rejected");
 
-    eprintln!("G3 live gate PASSED against {addr} (OpenAI-wire chat + stream + models + auth)");
+    eprintln!(
+        "G3 live gate PASSED against {addr} (OpenAI-wire chat + stream + models + auth + G5 route tag)"
+    );
 }
