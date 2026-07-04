@@ -1,0 +1,78 @@
+name: aog-wsf-shadow
+
+# Shadow-mode lead artifact (D2). A minimal, safe stack a prospect runs against
+# their OWN OpenAI spend to get an ROI / risk read — zero enforcement, nothing
+# blocked, no data egress beyond the OpenAI calls they already make. Reuses the
+# appliance images; drops the reserved data stores + the mock model.
+#
+#   1. echo "OPENAI_API_KEY=sk-..." > deployment/shadow/.env
+#   2. cd deployment/shadow && docker compose up --build
+#   3. point your OpenAI client at http://localhost:8080/v1 with key `vk_demo`
+#   4. watch cost + routing + risk on the console (http://localhost:8088)
+#
+# Dev-mode OpenBao — this is a demo, not a production deployment.
+
+services:
+  openbao:
+    image: openbao/openbao:latest
+    cap_add: [IPC_LOCK]
+    command: server -dev -dev-root-token-id=root -dev-listen-address=0.0.0.0:8200
+    healthcheck:
+      test: ["CMD", "bao", "status", "-address=http://127.0.0.1:8200"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  seed:
+    build:
+      context: ../..
+      dockerfile: deployment/appliance/Dockerfile
+    image: islandmountain/aog-wsf-appliance:latest
+    user: "0:0"
+    command: ["/usr/local/bin/wsf-seed"]
+    environment:
+      WSF_OPENBAO_ADDR: http://openbao:8200
+      WSF_OPENBAO_TOKEN: root
+      WSF_OPENBAO_ROLE_ID: appliance
+      WSF_OPENBAO_SECRET_ID: appliance-secret
+      WSF_SEED_OUT: /seed/appliance.env
+    volumes: ["seed-data:/seed"]
+    depends_on:
+      openbao: { condition: service_healthy }
+    restart: "no"
+
+  wsf-api:
+    image: islandmountain/aog-wsf-appliance:latest
+    command: ["sh", "-c", "set -a && . /seed/appliance.env && exec /usr/local/bin/wsf-api serve"]
+    environment:
+      WSF_LISTEN: 0.0.0.0:8300
+    volumes: ["seed-data:/seed:ro"]
+    ports: ["8081:8300"]
+    depends_on:
+      seed: { condition: service_completed_successfully }
+
+  # Shadow mode + the prospect's own OpenAI key: govern (classify/route/meter/
+  # receipt) their real traffic without ever blocking it.
+  aog-gateway:
+    image: islandmountain/aog-wsf-appliance:latest
+    command: ["sh", "-c", "set -a && . /seed/appliance.env && exec /usr/local/bin/aog-gateway serve"]
+    environment:
+      AOG_LISTEN: 0.0.0.0:8080
+      AOG_MODE: shadow
+      AOG_OPENAI_KEY: ${OPENAI_API_KEY:?set OPENAI_API_KEY in deployment/shadow/.env}
+      AOG_OPENAI_BASE: ${OPENAI_BASE:-https://api.openai.com}
+    volumes: ["seed-data:/seed:ro"]
+    ports: ["8080:8080"]
+    depends_on:
+      seed: { condition: service_completed_successfully }
+
+  console:
+    build:
+      context: ../..
+      dockerfile: deployment/appliance/Dockerfile.console
+    image: islandmountain/aog-wsf-console:latest
+    ports: ["8088:80"]
+    depends_on: [wsf-api, aog-gateway]
+
+volumes:
+  seed-data:
