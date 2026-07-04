@@ -1,0 +1,53 @@
+# HIPAA policy pack — v1 (D4)
+#
+# The v1 vertical slice: PHI is detected, pinned to local-only routing (never sent
+# to a third party), and every governed action is receipted into the WSF ledger and
+# mapped to a HIPAA §164.312 technical safeguard for an audit-ready evidence pack.
+#
+# This manifest is the human-readable contract; `crates/hipaa-pack` is its enforced
+# implementation, and `wsf-ledger` produces the signed evidence pack the console
+# (C9) exports.
+
+[pack]
+id = "HIPAA-v1"
+title = "HIPAA Security Rule — Technical Safeguards (vertical slice)"
+regime = "hipaa"
+scope = "45 CFR Part 164, Subpart C — §164.312 technical safeguards"
+
+# The enforceable rule: any request carrying PHI is pinned local-only. The 18 HIPAA
+# identifiers are detected by the mai-compliance PhiDetector (reused by aog-gateway
+# G5/G6 and hipaa-pack::govern).
+[[rule]]
+id = "phi-local-only"
+when = "classification in {phi, restricted, controlled, secret}"
+then = "route = local_only; cloud = denied"
+plain_language = "Protected health information is processed on the box and is never transmitted to a cloud provider."
+safeguard = "transmission_security"
+
+# The §164.312 technical safeguards and the ledger evidence that proves each. The
+# mapping is a deterministic function of the signed receipts, so a regulator
+# re-derives it from the evidence rather than trusting an assertion.
+[[control]]
+control = "access_control"
+citation = "45 CFR §164.312(a)(1)"
+evidence = "every action carries an authorizing trust-token id (token_id on the receipt)"
+
+[[control]]
+control = "audit_controls"
+citation = "45 CFR §164.312(b)"
+evidence = "every action is receipted into the append-only, hash-chained WSF ledger"
+
+[[control]]
+control = "integrity"
+citation = "45 CFR §164.312(c)(1)"
+evidence = "the receipt chain verifies from genesis (BLAKE3 links) and the pack is ML-DSA-signed"
+
+[[control]]
+control = "transmission_security"
+citation = "45 CFR §164.312(e)(1)"
+evidence = "PHI-classified requests carry route=local_only — the payload never left the boundary"
+
+# What a produced evidence pack asserts, and how a regulator checks it off-host.
+[evidence_pack]
+format = "wsf-ledger EvidencePack (ML-DSA-87 signed) + §164.312 control mapping"
+verify = "verify_hipaa_pack(pack, public_key): the signature verifies AND the control mapping re-derives from the signed receipts — no access to the running system required"

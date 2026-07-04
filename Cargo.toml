@@ -22,6 +22,7 @@ members = [
     "crates/fabric-proof",
     "crates/fabric-revocation",
     "crates/fabric-token",
+    "crates/hipaa-pack",
     "crates/wsf-api",
     "crates/wsf-bridge",
     "crates/wsf-broker",

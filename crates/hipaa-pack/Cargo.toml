@@ -1,0 +1,20 @@
+[package]
+name = "hipaa-pack"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "HIPAA v1 policy pack (D4): PHI → local-only governance + §164.312 evidence mapping over the WSF ledger"
+
+[dependencies]
+mai-compliance = { path = "../../mai-compliance" }
+wsf-ledger = { path = "../wsf-ledger" }
+fabric-crypto = { path = "../fabric-crypto" }
+fabric-proof = { path = "../fabric-proof" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+hex = "0.4"
+
+[lints]
+workspace = true
