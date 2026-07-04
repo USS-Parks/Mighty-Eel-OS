@@ -74,3 +74,39 @@ backend.
   the revision across reopen); fmt clean; `check --workspace` clean. **Gate:**
   CAS rejects stale writes ✓; deterministic apply from a fixed op log ✓.
   **Commit:** `LOOM-K2`.
+
+### K3 — `aog-store` Raft (openraft) — DONE
+Wrapped the K2 store in **openraft 0.9.24**. A4 consensus decision: **openraft**
+over raft-rs — async-native fits the tokio/axum estate, and the Raft protocol
+itself is not hand-rolled (A4: "getting this wrong is expensive"). Single-node
+bootstrap now; multi-node election/replication is H1.
+- **`features = ["serde", "storage-v2"]`** — the v2 storage traits
+  (`RaftLogStorage`/`RaftStateMachine`) are sealed without `storage-v2`.
+- **`raft/types.rs`** — `TypeConfig` (D=`RaftRequest{op}`, R=`RaftResponse`,
+  NodeId=u64, Node=BasicNode). An application-level CAS rejection is a
+  `RaftResponse::Rejected` **value**, never a `StorageError` (which would fault
+  the node) — fail-closed at the store, consensus still commits (D7).
+- **`raft/log_store.rs`** — `RedbLogStore`: `RaftLogStorage` + `RaftLogReader`
+  over redb; durable entries (index→JSON) + persisted `vote`/`committed`/
+  `last_purged`; `append` flushes, then signals `LogFlushed`.
+- **`raft/state_machine.rs`** — `RedbStateMachine`: `RaftStateMachine` +
+  `RaftSnapshotBuilder`. The applied KV **is** the K2 `Store<RedbBackend>`;
+  `last_applied`/membership persisted alongside so `applied_state` recovers on
+  restart. State behind `Arc<RwLock>` so the committed KV is readable outside
+  openraft (which owns the machine). `Store::restore` added for snapshot install.
+- **`raft/network.rs`** — single-node no-peer stub; H1 replaces it with a real
+  sender-constrained transport (I-3).
+- **`raft/mod.rs`** — `RaftNode`: `bootstrap` (init single voter + wait for
+  leader), `start` (recover only), `write` (linearizable `client_write`), `get`,
+  `revision`, `shutdown`.
+- **Files:** `crates/aog-store/src/raft/{mod,types,network,log_store,
+  state_machine}.rs`; `tests/raft.rs`; `Store::restore` in `lib.rs`; `openraft` +
+  `tokio` deps + lock.
+- **Verify:** clippy `--all-targets -D warnings` clean (one scoped
+  `result_large_err` allow — openraft's 224-byte `StorageError` is forced by its
+  API); `cargo test -p aog-store` = **5 passed** (K2 ×3 + K3: a linearizable
+  `client_write` commits+applies, a failed precondition returns `Rejected`;
+  committed state + revision survive a full node restart from the durable
+  stores); fmt clean; `check --workspace` clean (75 crates). **Gate:**
+  linearizable-write test ✓; leader restart preserves committed state ✓.
+  **Commit:** `LOOM-K3`.

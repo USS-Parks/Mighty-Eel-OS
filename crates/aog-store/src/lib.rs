@@ -12,6 +12,7 @@
 //!
 //! Intent only. Proof lives in `wsf-ledger`, never here (A1.4).
 
+pub mod raft;
 mod redb_backend;
 
 use std::collections::BTreeMap;
@@ -213,6 +214,22 @@ impl<B: Backend> Store<B> {
     /// The first failing op's error.
     pub fn apply_all(&mut self, ops: &[Op]) -> Result<Vec<Applied>, StoreError> {
         ops.iter().map(|op| self.apply(op)).collect()
+    }
+
+    /// Replace state from a snapshot dump, preserving exact versions (used by
+    /// Raft snapshot install, K3). Overwrites the listed keys and lifts the
+    /// global revision to cover them; does not delete keys absent from `entries`.
+    ///
+    /// # Errors
+    /// Backend failure.
+    pub fn restore(&mut self, entries: &[(String, Versioned)]) -> Result<(), StoreError> {
+        let mut max = self.revision;
+        for (key, versioned) in entries {
+            self.backend.insert(key, versioned)?;
+            max = max.max(versioned.mod_revision);
+        }
+        self.revision = max;
+        Ok(())
     }
 
     fn check(
