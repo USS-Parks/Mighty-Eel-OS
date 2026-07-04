@@ -34,6 +34,10 @@ jobs:
           # era, plus any in-flight branch's pre-CANON commits). Add SHAs here — or
           # squash before merge. Every new commit is still checked.
           legacy_skip='487c3523118c82401d6db3777614d9bb8d4813f8 8e4d435cadf23acce0b0a1a7a413bce22d94b844 a9b8c3f9fda2f3181aac60e7b6342174408ee7c8 2a79f3542b1e1c69b077e20a938e7d2a7fe6a1d8 96dcf89b80ce330a223681bda84f3dccfde68ac8 35056b2ffe88c9f28f4fc62cc32437a98150c7f8'
+          # Branch session/SOV-1 Phase-0 pre-CANON commits (AI co-author footer, pre-CANON adoption):
+          legacy_skip="$legacy_skip cdfb05fc2af07168ba24fd0f4b824116d2615626 1e9f0354e2d50a6fa8070fcf01d1718a03d1719c 55882a21b17825f955c656880cfaac9416b6327a 4f7a06b1094d3776af753e8b4f091d56dfa7c600 df24aa2df4ebd0c0cc04db0f73bdcf0353c5cb5f 2075e62b1c6934e230809e9cb6f21c9f9e0c7ab9 1ffe99b3c21ef9916c4371aa79afaee6db864e8e c9175be1c116ae6709564d355e0af8fef61189f7 4d2ec57e022efa5c948a956e52d6c7556a5da3d4"
+          # Branch session/SOV-1 Phase-F pre-CANON commits (same era):
+          legacy_skip="$legacy_skip 439488cd651212e765259a3d470ca69e31c30813 68bc4509c51858a27d14e29b998316fb32053d4c 5d434cc1e4625a8e0401534b82397c09a2fd867a ed1d8091122a6cd11e36cb295d4f58ea3498ae8a edcfb8c5d89f42240e1af7e7beb279ac9fab3a8c 2aa300883d1b277eb1ec32e5dd681eb2e61a1339"
           fail=0
           for sha in $(git rev-list "$range"); do
             subj=$(git log -1 --format=%s "$sha")
