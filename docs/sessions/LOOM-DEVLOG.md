@@ -51,3 +51,26 @@ every trust-bearing field reuses a frozen contract type (`Classification`,
   (50 crates, 0 regressions — additive). **Gate:** round-trip + schema-reject
   test for every kind ✓; `fabric-contracts` dep, no ad-hoc structs ✓.
   **Commit:** `LOOM-K1`.
+
+### K2 — `aog-store` state machine — DONE
+The deterministic desired-state KV. New crate `crates/aog-store`: keys map to
+`Versioned` values (bytes + create/mod revision + version); a monotonic global
+revision bumps once per successful mutation. Writes carry a `Precondition`
+(compare-and-set): `Any`, `Absent`, or `Revision(n)`. `Op::{Put,Delete}` are the
+units the Raft log will carry (K3); `Store::apply`/`apply_all` are a **pure
+function of the op sequence** — the same log replays to identical state on any
+backend.
+- **Engine decision (A4): redb** (2.6.3) — stable, maintained, pure-Rust,
+  single-file ACID; sled's 1.0 is perpetually beta. A `Backend` trait keeps the
+  revision/CAS state machine engine-independent: `MemBackend` (BTreeMap — tests +
+  Raft's in-core state) and `RedbBackend` (durable; `Versioned` as JSON in one
+  table). Global revision recovers on open as `max(mod_revision)`.
+- **Files:** `crates/aog-store/{Cargo.toml, src/lib.rs, src/redb_backend.rs,
+  tests/store.rs}`; workspace member added; `redb` added to the lock.
+- **Verify:** clippy `--all-targets -D warnings` clean; `cargo test -p aog-store`
+  = **3 passed** (deterministic apply from a fixed op log → identical results,
+  revision, and state across two stores; CAS rejects a stale revision, an
+  `Absent` clash, and a missing-key delete; redb persists the value and recovers
+  the revision across reopen); fmt clean; `check --workspace` clean. **Gate:**
+  CAS rejects stale writes ✓; deterministic apply from a fixed op log ✓.
+  **Commit:** `LOOM-K2`.
