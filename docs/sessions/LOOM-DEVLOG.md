@@ -321,3 +321,37 @@ serves old objects with no migration or downtime. New `crate::convert`.
   `check --workspace` clean.
 - **Gate:** a v1→v2 kind converts transparently on read ✓; old (v1) objects still
   served ✓. **Commit:** `LOOM-K10`.
+
+### K11 — `aogctl` (kernel subset) — DONE
+The control-plane CLI. New crate `crates/aogctl`: a `Client` library over the
+apiserver's typed CRUD surface + a thin binary, both presenting a WSF token in
+`x-wsf-token` (the K6 front door) so the CLI earns each action like any caller.
+- **Client (lib).** `apply` (create, or replace on a create-time 409), `get`,
+  `list`, `delete` over `reqwest`. A non-2xx response becomes a
+  `ClientError::Status { status, message }` — a refusal (401/402/403/409) is
+  surfaced to the operator, never swallowed.
+- **Binary.** `aogctl apply -f FILE | get KIND [NAME] | describe KIND NAME |
+  delete KIND NAME`; server + token from `AOGCTL_SERVER`/`AOGCTL_TOKEN`;
+  `--output json` (default: a compact `KIND NAME REV` table). `print_*` is allowed
+  only in the binary (a CLI writes stdout).
+- **Files:** `crates/aogctl/{Cargo.toml, src/{lib.rs, main.rs}, tests/roundtrip.rs}`;
+  workspace member added.
+- **Verify:** clippy `--all-targets --no-deps -D warnings` clean; `cargo test -p
+  aogctl` = **2 passed** against a **live in-process apiserver on an ephemeral
+  port** (real HTTP): apply→get round-trips (create, then create→409→replace
+  update, list, delete→404); an over-budget apply surfaces a client-visible 402;
+  fmt + `check --workspace` clean.
+- **Gate:** apply-then-get round-trips a resource ✓; an over-budget apply is
+  rejected client-visibly (402 + message) ✓. **Commit:** `LOOM-K11`.
+
+---
+
+**Phase K complete (K1–K11).** M3a's control-plane kernel: a typed estate
+(`aog-estate`) over a consensus store (`aog-store`: CAS KV → openraft →
+watch/informer), served by `aog-apiserver` — a typed CRUD surface where every
+mutation is forced through the admission chain (authenticate → validate → mutate
+→ commit → receipt), and driven by `aogctl`. The chain is real end to end:
+front-door WSF token verify (K6), deny-wins compliance policy (K7), envelope-seal
++ child-token attenuation (K8), off-host-verifiable hash-chained receipts (K9);
+reads convert stored objects to the hub version (K10). Next: Phase R
+(reconciliation runtime + controllers), then the M3a wrap (X1–X2).

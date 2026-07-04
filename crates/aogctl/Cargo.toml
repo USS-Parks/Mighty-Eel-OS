@@ -1,0 +1,33 @@
+[package]
+name = "aogctl"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "aogctl — the Loom control-plane CLI (K11 kernel subset): apply/get/describe/delete against aog-apiserver with a WSF token"
+
+[[bin]]
+name = "aogctl"
+path = "src/main.rs"
+
+[lib]
+name = "aogctl"
+path = "src/lib.rs"
+
+[dependencies]
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+
+[dev-dependencies]
+aog-apiserver = { path = "../aog-apiserver" }
+fabric-contracts = { path = "../fabric-contracts" }
+fabric-crypto = { path = "../fabric-crypto" }
+fabric-token = { path = "../fabric-token" }
+base64 = "0.22"
+chrono = { workspace = true }
+
+[lints]
+workspace = true
