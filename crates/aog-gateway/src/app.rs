@@ -13,6 +13,7 @@ use std::sync::{Arc, Mutex};
 
 use axum::http::{HeaderMap, StatusCode};
 use chrono::Utc;
+use mai_compliance::PhiDetector;
 use mai_router::{DefaultRouter, Router};
 
 use crate::meter::{PriceBook, ReceiptLedger};
@@ -99,6 +100,8 @@ pub struct AppState {
     pub receipts: Arc<Mutex<ReceiptLedger>>,
     /// The G7 cost model.
     pub prices: Arc<PriceBook>,
+    /// The G8 PHI/PII detector — finds the sensitive spans tokenized on cloud egress.
+    pub detector: Arc<PhiDetector>,
 }
 
 impl AppState {
@@ -116,6 +119,7 @@ impl AppState {
             mode: PolicyMode::Shadow,
             receipts: Arc::new(Mutex::new(ReceiptLedger::new())),
             prices: Arc::new(PriceBook::baseline()),
+            detector: Arc::new(PhiDetector::baseline()),
         }
     }
 

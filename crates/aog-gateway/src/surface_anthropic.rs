@@ -128,14 +128,25 @@ async fn messages(
             Err(blocked) => return blocked,
         };
 
+    let mut tokenized_spans = 0u32;
     let resp = if body.get("stream").and_then(Value::as_bool).unwrap_or(false) {
         match provider.stream(&neutral).await {
             Ok(chunks) => messages_sse(inbound_model, chunks),
             Err(e) => provider_http(&e).into_response(),
         }
     } else {
-        match provider.complete(&neutral).await {
-            Ok(r) => {
+        // Tokenize sensitive spans before cloud egress (G8): the cloud provider
+        // sees placeholders only; the response is detokenized inside the boundary.
+        let egress =
+            crate::tokenize::egress(state.detector.as_ref(), target_cloud, &neutral.messages);
+        tokenized_spans = egress.span_count();
+        let dispatched = CompletionRequest {
+            messages: egress.messages,
+            ..neutral.clone()
+        };
+        match provider.complete(&dispatched).await {
+            Ok(mut r) => {
+                r.content = crate::tokenize::restore(&r.content, &egress.map);
                 // Metering + receipt (G7): every non-stream completion is receipted.
                 crate::meter::record(
                     &state.receipts,
@@ -148,6 +159,7 @@ async fn messages(
                         allowed_cloud: policy_decision.allowed_cloud,
                         usage: r.usage,
                         workflow_id: workflow_id.clone(),
+                        tokenized_spans,
                     },
                 );
                 Json(message_json(&inbound_model, &r)).into_response()
@@ -156,7 +168,8 @@ async fn messages(
         }
     };
     let resp = crate::route::tag_route(resp, &decision);
-    crate::policy::tag_policy(resp, &policy_decision, state.mode, &outcome)
+    let resp = crate::policy::tag_policy(resp, &policy_decision, state.mode, &outcome);
+    crate::tokenize::tag(resp, tokenized_spans)
 }
 
 fn message_json(model: &str, r: &CompletionResponse) -> Value {

@@ -19,6 +19,7 @@ pub mod provider;
 pub mod route;
 pub mod surface_anthropic;
 pub mod surface_openai;
+pub mod tokenize;
 
 use chrono::{DateTime, Utc};
 use fabric_contracts::TrustToken;

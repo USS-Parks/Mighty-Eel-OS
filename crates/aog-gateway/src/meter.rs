@@ -82,6 +82,13 @@ impl PriceBook {
     }
 }
 
+/// True for a zero span count — lets a non-tokenized receipt serialize (and hash)
+/// exactly as it did before G8, so existing receipt chains are unaffected.
+#[allow(clippy::trivially_copy_pass_by_ref)]
+fn is_zero(n: &u32) -> bool {
+    *n == 0
+}
+
 /// A metadata-only receipt for one completed request.
 #[derive(Debug, Clone, Serialize)]
 pub struct GatewayReceipt {
@@ -103,6 +110,12 @@ pub struct GatewayReceipt {
     pub model_weights_digest: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub workflow_id: Option<String>,
+    /// G8: count of sensitive spans tokenized on cloud egress for this request
+    /// (0 = none; omitted when zero so a non-tokenized receipt is byte-identical
+    /// to its pre-G8 shape). The placeholder→original map itself never leaves the
+    /// gateway and is never receipted — only this count is.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub tokenized_spans: u32,
 }
 
 /// Aggregated spend for one (tenant, provider, model, task) group.
@@ -226,6 +239,8 @@ pub struct Completion<'a> {
     pub allowed_cloud: bool,
     pub usage: Usage,
     pub workflow_id: Option<String>,
+    /// G8: sensitive spans tokenized on cloud egress (0 when local or nothing hit).
+    pub tokenized_spans: u32,
 }
 
 /// The caller-supplied task id from the `x-aog-workflow` header, if present —
@@ -273,6 +288,7 @@ pub fn record(ledger: &Mutex<ReceiptLedger>, prices: &PriceBook, c: &Completion)
         spend_cents: spend,
         model_weights_digest: local_weights_digest(c.provider, c.model),
         workflow_id: c.workflow_id.clone(),
+        tokenized_spans: c.tokenized_spans,
     };
     guard.append(receipt)
 }
@@ -298,6 +314,7 @@ mod tests {
             spend_cents: spend,
             model_weights_digest: None,
             workflow_id: Some(wf.to_string()),
+            tokenized_spans: 0,
         }
     }
 
