@@ -197,3 +197,34 @@ export interface ApprovalActionResp {
   status: 'approved' | 'denied';
   actor: string;
 }
+
+// ── aog policy studio (G6) ─────────────────────────────────────────────────
+
+/** A rule's enforcement mode (serde `snake_case`). */
+export type PolicyMode = 'shadow' | 'report_only' | 'enforce';
+
+/** One policy rule, rendered in plain language alongside its code (C6). */
+export interface PolicyRule {
+  id: string;
+  title: string;
+  regime: ComplianceScope;
+  plain_language: string;
+  code: string;
+  mode: PolicyMode;
+}
+
+/** GET /v1/policy — the rule set + the global default enforcement mode. */
+export interface PolicyResp {
+  rules: PolicyRule[];
+  default_mode: PolicyMode;
+}
+
+/** A human-readable, rule-cited explanation of a specific denial — the killer demo:
+ *  a local model explains *why* a request was denied, citing the exact policy line. */
+export interface DenialExplanation {
+  decision: string;
+  rule_id: string;
+  rule_title: string;
+  cited_line: string;
+  plain_language: string;
+}

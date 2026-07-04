@@ -8,6 +8,7 @@ const NAV = [
   { to: '/routing', label: 'Routing & Spend', end: false },
   { to: '/audit', label: 'Audit', end: false },
   { to: '/approvals', label: 'Approvals', end: false },
+  { to: '/policy', label: 'Policy studio', end: false },
 ];
 
 function shortId(id: string): string {

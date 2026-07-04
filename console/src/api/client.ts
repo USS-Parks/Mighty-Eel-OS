@@ -6,9 +6,13 @@ import type {
   ApprovalActionResp,
   ApprovalsResp,
   AttenuateReq,
+  DenialExplanation,
   ExchangeReq,
   ExchangeResp,
   IssueReq,
+  PolicyMode,
+  PolicyResp,
+  PolicyRule,
   ReceiptsResp,
   StatusResp,
   TokenResp,
@@ -157,6 +161,24 @@ export class AogClient {
       actor,
       reason,
     });
+  }
+
+  /** The policy-as-code rule set (G6), for the Policy Studio. */
+  policy(): Promise<PolicyResp> {
+    return jsonFetch<PolicyResp>(`${this.base}/v1/policy`, { headers: this.authHeaders() });
+  }
+
+  /** Set a rule's enforcement mode (shadow → report_only → enforce). */
+  setPolicyMode(ruleId: string, mode: PolicyMode): Promise<PolicyRule> {
+    return this.post<PolicyRule>(`/v1/policy/${encodeURIComponent(ruleId)}/mode`, { mode });
+  }
+
+  /** Explain a specific denial in plain language, citing the exact policy line. */
+  explainDenial(decision: string): Promise<DenialExplanation> {
+    return jsonFetch<DenialExplanation>(
+      `${this.base}/v1/policy/explain?decision=${encodeURIComponent(decision)}`,
+      { headers: this.authHeaders() },
+    );
   }
 
   /** Metering aggregates + live receipt-chain integrity (`GET /v1/usage`). */
