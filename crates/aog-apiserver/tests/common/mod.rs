@@ -102,6 +102,18 @@ pub async fn authed_app(dir_name: &str) -> (Router, String) {
     (app, header_for(&mint(&signer)))
 }
 
+/// Like [`authed_app`] but also returns a clone of the [`AppState`] so a test can
+/// inspect the receipt ledger (K9).
+pub async fn authed_app_state(dir_name: &str) -> (Router, AppState, String) {
+    let signer = anchor();
+    let auth = Authenticator::new(signer.public_key().to_vec());
+    let state = AppState::bootstrap(1, fresh_dir(dir_name), auth, Sealer::generate().unwrap())
+        .await
+        .unwrap();
+    let header = header_for(&mint(&signer));
+    (router(state.clone()), state, header)
+}
+
 /// Send a request, optionally carrying the `x-wsf-token` header.
 pub async fn send(
     app: &Router,

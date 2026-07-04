@@ -15,6 +15,8 @@ fabric-crypto = { path = "../fabric-crypto" }
 fabric-token = { path = "../fabric-token" }
 fabric-revocation = { path = "../fabric-revocation" }
 fabric-envelope = { path = "../fabric-envelope" }
+fabric-proof = { path = "../fabric-proof" }
+wsf-ledger = { path = "../wsf-ledger" }
 mai-compliance = { path = "../../mai-compliance" }
 axum = { workspace = true }
 tokio = { workspace = true }

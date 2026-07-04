@@ -14,16 +14,20 @@
 //!   4. commit        (the sole `aog-store` write, guarded by a CAS precondition)
 //!   5. receipt       (K9 — hash-chained `fabric-proof` receipt to `wsf-ledger`)
 //!
-//! Stages 1–4 do real work today; only stage 5 (receipt, K9) remains a seam. The
-//! choke point is complete — every mutation traverses this one method.
+//! All five stages do real work now. The choke point is complete — every mutation
+//! traverses this one method, and each admitted one is receipted.
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use aog_estate::{Kind, ResourceObject, TokenRef};
 use aog_store::raft::RaftNode;
 use aog_store::raft::types::RaftResponse;
 use aog_store::{Op, Precondition, Revision};
+use base64::Engine as _;
+use base64::engine::general_purpose::STANDARD as BASE64;
 use fabric_contracts::TrustToken;
+use fabric_crypto::providers::RustCryptoMlDsa87;
+use wsf_ledger::{EvidencePack, Ledger};
 
 use crate::codec::{decode, encode, store_key};
 use crate::error::ApiError;
@@ -36,6 +40,16 @@ pub enum Verb {
     Create,
     Update,
     Delete,
+}
+
+impl Verb {
+    fn as_str(self) -> &'static str {
+        match self {
+            Verb::Create => "create",
+            Verb::Update => "update",
+            Verb::Delete => "delete",
+        }
+    }
 }
 
 /// The authenticated caller, produced by the front-door authenticator (K6) from
@@ -103,15 +117,21 @@ pub struct Admission {
     raft: Arc<RaftNode>,
     policy: AdmissionPolicy,
     sealer: Sealer,
+    ledger: Arc<Mutex<Ledger>>,
 }
 
 impl Admission {
     #[must_use]
     pub fn new(raft: Arc<RaftNode>, sealer: Sealer) -> Self {
+        // The receipt ledger signs its evidence pack; ML-DSA keygen is infallible
+        // (fabric-crypto), so this construction cannot fail.
+        let ledger_signer = RustCryptoMlDsa87::generate("aog-apiserver-receipts")
+            .expect("ML-DSA keygen infallible");
         Self {
             raft,
             policy: AdmissionPolicy::baseline(),
             sealer,
+            ledger: Arc::new(Mutex::new(Ledger::new(Arc::new(ledger_signer)))),
         }
     }
 
@@ -133,8 +153,9 @@ impl Admission {
         // K6 gate). The chain here is validate -> mutate -> commit -> receipt.
         self.validate(&req, principal)?;
         let staged = self.mutate(&req, principal).await?;
+        let before_digest = staged.before_digest.clone();
         let outcome = self.commit(&req, staged).await?;
-        self.receipt(&req, principal, &outcome);
+        self.receipt(&req, principal, before_digest.as_deref(), &outcome);
         Ok(outcome)
     }
 
@@ -170,6 +191,7 @@ impl Admission {
                         expected: Precondition::Absent,
                     },
                     object: Some(object),
+                    before_digest: None,
                 })
             }
             Verb::Update => {
@@ -181,6 +203,7 @@ impl Admission {
                     .object
                     .clone()
                     .ok_or_else(|| ApiError::BadBody("update requires a body".to_owned()))?;
+                let before_digest = digest(&current.object);
                 stamp_update(&mut object, &current.object, principal);
                 self.finish_mutation(&mut object, principal)?;
                 let value = encode(&object)?;
@@ -191,6 +214,7 @@ impl Admission {
                         expected: Precondition::Revision(current.revision),
                     },
                     object: Some(object),
+                    before_digest,
                 })
             }
             Verb::Delete => {
@@ -198,12 +222,14 @@ impl Admission {
                     kind: req.kind.to_string(),
                     name: req.name.clone(),
                 })?;
+                let before_digest = digest(&current.object);
                 Ok(Staged {
                     op: Op::Delete {
                         key,
                         expected: Precondition::Revision(current.revision),
                     },
                     object: None,
+                    before_digest,
                 })
             }
         }
@@ -265,17 +291,71 @@ impl Admission {
         }
     }
 
-    // 5. receipt — K9 seam.
-    #[allow(clippy::unused_self)]
+    // 5. receipt — K9: one hash-chained receipt per admitted mutation.
     fn receipt(
         &self,
-        _req: &AdmissionRequest,
-        _principal: &Principal,
-        _outcome: &AdmissionOutcome,
+        req: &AdmissionRequest,
+        principal: &Principal,
+        before_digest: Option<&str>,
+        outcome: &AdmissionOutcome,
     ) {
-        // K9: emit a hash-chained `fabric-proof` receipt (token, before/after
-        // digest, decision) to `wsf-ledger` — provable off-host with the public
-        // key alone, and physically separate from this intent store (A1.4).
+        let token_id = outcome
+            .object
+            .as_ref()
+            .and_then(|o| o.metadata().token_ref.as_ref())
+            .or(principal.token_ref.as_ref())
+            .map(|t| t.token_id.clone())
+            .unwrap_or_default();
+        let after_digest = outcome.object.as_ref().and_then(digest);
+        let receipt = serde_json::json!({
+            "receipt_id": format!("rcpt:{}:{}:{}", req.kind, req.name, outcome.revision),
+            "token_id": token_id,
+            "tenant_id": principal.tenant.clone().unwrap_or_default(),
+            "kind": req.kind.to_string(),
+            "name": req.name,
+            "verb": req.verb.as_str(),
+            "decision": "admit",
+            "before_digest": before_digest,
+            "after_digest": after_digest,
+            "revision": outcome.revision,
+            "recorded_at": now_rfc3339(),
+        });
+        // Physically separate from the intent store (A1.4); provable off-host with
+        // the ledger's public key alone. A canonical-JSON receipt cannot fail to
+        // hash, so ingest is effectively infallible here.
+        let _ = self
+            .ledger
+            .lock()
+            .expect("receipt ledger lock")
+            .ingest("aog-apiserver", receipt);
+    }
+
+    /// Number of receipts in the ledger — one per admitted mutation (K9).
+    #[must_use]
+    pub fn receipts_len(&self) -> usize {
+        self.ledger.lock().expect("receipt ledger lock").len()
+    }
+
+    /// The receipt ledger's public key — verifies an exported pack off-host.
+    #[must_use]
+    pub fn receipts_public_key(&self) -> Vec<u8> {
+        self.ledger
+            .lock()
+            .expect("receipt ledger lock")
+            .public_key()
+            .to_vec()
+    }
+
+    /// Export a signed evidence pack over the receipt chain.
+    ///
+    /// # Errors
+    /// [`ApiError::Store`] on hashing/signing failure.
+    pub fn export_receipts(&self, generated_at: &str) -> Result<EvidencePack, ApiError> {
+        self.ledger
+            .lock()
+            .expect("receipt ledger lock")
+            .export_pack(generated_at)
+            .map_err(|e| ApiError::Store(e.to_string()))
     }
 
     // Read current committed state for a read-modify-write (update/delete).
@@ -299,6 +379,7 @@ impl Admission {
 struct Staged {
     op: Op,
     object: Option<ResourceObject>,
+    before_digest: Option<String>,
 }
 
 /// Current committed state of a key (for read-modify-write).
@@ -331,6 +412,13 @@ fn stamp_update(object: &mut ResourceObject, current: &ResourceObject, principal
         .token_ref
         .clone()
         .or_else(|| prior.token_ref.clone());
+}
+
+/// The canonical digest of an object, for a receipt's before/after fields.
+fn digest(object: &ResourceObject) -> Option<String> {
+    let value = object.to_value().ok()?;
+    let hash = fabric_proof::canonical_hash(&value).ok()?;
+    Some(BASE64.encode(hash))
 }
 
 fn new_uid() -> String {

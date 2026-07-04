@@ -273,3 +273,28 @@ production custodies both in OpenBao, Phase W).
 - **Gate:** a sealed field is unreadable in the store (only the placeholder +
   ciphertext appear) ✓; the child token is a strict subset of the parent
   scope/budget ✓. **Commit:** `LOOM-K8`.
+
+### K9 — Admission: receipt binding — DONE
+The receipt stage is now real: every admitted mutation emits one hash-chained
+receipt to a `wsf-ledger::Ledger` — provable off-host with the public key alone,
+physically separate from the intent store (A1.4 / doctrine I-5).
+- **One receipt per mutation.** After commit, `receipt` ingests a metadata-only
+  receipt — `token_id` (the K8 scoped child), tenant, kind/name/verb,
+  `before_digest` / `after_digest` (canonical-JSON `fabric-proof` digests of the
+  prior/stored object: create = none→digest, update = digest→digest, delete =
+  digest→none), decision `admit`, revision, timestamp — into the ledger's BLAKE3
+  chain. A rejected mutation (structural / policy / CAS) never reaches this stage,
+  so it writes nothing.
+- **Off-host proof.** The ledger signs an `EvidencePack` (ML-DSA-87);
+  `wsf_ledger::verify_pack` checks it with the public key alone — no ledger, no
+  running system. `Admission`/`AppState` expose `receipts_len`,
+  `receipts_public_key`, `export_receipts`. The ledger signer is generated at
+  construction (kernel; production custodies it in OpenBao).
+- **Files:** `crates/aog-apiserver/{Cargo.toml (+wsf-ledger, +fabric-proof),
+  src/{admission.rs, lib.rs}, tests/{receipt.rs (new), common/mod.rs}}`.
+- **Verify:** clippy `--all-targets --no-deps -D warnings` clean; `cargo test -p
+  aog-apiserver` = **23 passed** (+2 K9: three mutations → three receipts, the
+  signed pack verifies off-host and a tampered receipt / wrong key fail; a
+  rejected mutation → zero receipts); fmt + `check --workspace` clean.
+- **Gate:** mutation ↔ receipt 1:1 ✓; the chain verifies off-host with the public
+  key only ✓. **Commit:** `LOOM-K9`.

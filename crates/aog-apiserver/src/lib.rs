@@ -29,6 +29,7 @@ use axum::{Router, middleware};
 
 use aog_store::raft::types::NodeId;
 use aog_store::raft::{NodeError, RaftNode};
+use wsf_ledger::EvidencePack;
 
 use crate::admission::Admission;
 use crate::auth::Authenticator;
@@ -85,6 +86,29 @@ impl AppState {
             reader: StoreReader::new(raft),
             authenticator: Arc::new(authenticator),
         }
+    }
+
+    /// Number of admitted-mutation receipts in the ledger (K9).
+    #[must_use]
+    pub fn receipts_len(&self) -> usize {
+        self.admission.receipts_len()
+    }
+
+    /// The receipt ledger's public key — verifies an exported pack off-host.
+    #[must_use]
+    pub fn receipts_public_key(&self) -> Vec<u8> {
+        self.admission.receipts_public_key()
+    }
+
+    /// Export a signed evidence pack over the receipt chain.
+    ///
+    /// # Errors
+    /// [`crate::error::ApiError`] on hashing/signing failure.
+    pub fn export_receipts(
+        &self,
+        generated_at: &str,
+    ) -> Result<EvidencePack, crate::error::ApiError> {
+        self.admission.export_receipts(generated_at)
     }
 }
 

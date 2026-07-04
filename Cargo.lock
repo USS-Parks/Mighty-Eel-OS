@@ -149,6 +149,7 @@ dependencies = [
  "fabric-contracts",
  "fabric-crypto",
  "fabric-envelope",
+ "fabric-proof",
  "fabric-revocation",
  "fabric-token",
  "mai-compliance",
@@ -157,6 +158,7 @@ dependencies = [
  "tokio",
  "tower 0.5.3",
  "uuid",
+ "wsf-ledger",
 ]
 
 [[package]]
