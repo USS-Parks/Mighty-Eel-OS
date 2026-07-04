@@ -27,9 +27,20 @@
   - Signatures are **pure-Rust ML-DSA-87 end-to-end** (off-host + air-gap verifiable); OpenBao gives
     identity (AppRole) + custody (KV, Transit-wrapped data keys) but never the signature. The `wsf-live`
     CI job runs all nine live gates against Dockerized OpenBao + Moto on every push.
-- **NEXT:** **Phase G** (AOG gateway — the inference-edge control plane; reuse `mai-router` + `mai-compliance`,
-  build the cloud provider clients MAI never had), then T (tool governance) → C (console) → D (deploy/proof)
-  → Z (ship/Bucket). See the plan's Phase G section.
+- **DONE (this session):** **the M1 AOG gateway cut — Phase G, G1–G7** — one new `crates/aog-gateway`
+  crate. G1 virtual-key → trust-token auth + budget preflight · G2 `Provider` trait + real OpenAI &
+  Anthropic HTTP clients (SSE streaming) · G3 OpenAI-compatible surface (`/v1/chat/completions` + stream,
+  `/v1/models`, `/v1/completions`) · G4 Anthropic-compatible surface (`/v1/messages` + event-typed stream,
+  `x-api-key`) · G5 classify+route (reuse `mai-router` DefaultRouter; PHI→local; **F5 envelope-label
+  short-circuit**) · G6 policy+modes (reuse `mai-compliance` **deny-wins composer**; shadow/report-only/
+  enforce; HIPAA module wired, ITAR/OCAP = M2) · G7 metering + verifiable BLAKE3 receipt chain + `GET
+  /v1/usage`. **24 unit + 7 live gates**, each REALLY RUN against the Dockerized OpenBao on `:8250`;
+  `wsf-live` CI job extended with all 7. Shipped safe: **default mode is Shadow** (never blocks).
+- **NEXT:** **Phase G / M2 — G8–G10:** **G8** egress tokenization (tokenize sensitive spans for a cloud
+  route, detokenize on return — reuse `mai-compliance` `deid`) · **G9** budget enforcement + kill switch
+  (decrement token budget per call; **revoke token → gateway refuses**) · **G10** ROI recommender
+  (`aog-meter` break-even + utilization). Then T (tool governance) → C (console) → D (deploy/proof) →
+  Z (ship/Bucket). See the plan's Phase G/T/C/D/Z sections.
 
 ---
 
@@ -38,7 +49,7 @@
 ```
 Worktree (do ALL work here):
   C:\Users\17076\Documents\Claude\Island Mountain\Island Mountain Mighty Eel OS\mai-worktrees\mai-SOV-1
-Branch:  session/SOV-1   (HEAD = 84646a4, SOV-W10 — Phase W complete)   — NOT pushed; push only at the very end
+Branch:  session/SOV-1   (HEAD = df4bec7, SOV-G7 — M1 AOG gateway cut complete)   — NOT pushed; push only at the very end
 Toolchain: cargo 1.95.0 / rustc 1.95.0 present; node 24; Docker v29.4 up. Disk fine.
 ```
 
@@ -172,21 +183,35 @@ The stale VS-Code clone (`Documents/VS Code Lamprey Repo Clone/...`) was **delet
 
 ---
 
-## 5. What's NEXT — Phase G (AOG gateway). **Phase W is COMPLETE.**
+## 5. What's NEXT — Phase G / M2 (G8–G10). **The M1 gateway cut (G1–G7) is COMPLETE.**
 
-**Phase W (W1–W10) is fully done + live-verified** (see §0 + `docs/sessions/SOVEREIGNTY-DEVLOG.md`
-"Phase W COMPLETE"). Resume at **Phase G** — the AOG gateway (the estate model gateway: one
-OpenAI/Anthropic-compatible endpoint, policy-routed, metered, receipted). Per the plan's Phase G:
-- **G1** `aog-gateway` skeleton + virtual keys (virtual key → WSF trust token; over-budget rejected pre-flight).
-- **G2** provider adapters (NEW cloud clients: local vLLM/Ollama via MAI adapters, Anthropic, OpenAI — the code MAI never had).
-- **G3/G4** OpenAI- + Anthropic-compatible surfaces (`/v1/chat/completions`, `/v1/messages`, SSE streaming).
-- **G5** classify + route (reuse `mai-router` + mai-compliance classifiers; if the payload is a WSF envelope, read the F5 label instead of re-classifying — the flagship integration).
-- **G6** policy decision + modes (reuse mai-compliance deny-wins composer; shadow/report/enforce).
-- **G7** metering + receipts (WSF receipts → `wsf-ledger`; `aog-meter` aggregates). **G8** egress tokenization. **G9** budget enforce + kill switch (revoke token → gateway refuses). **G10** ROI recommender.
-- **Reuse map:** `mai-router/src/*` (routing), `mai-compliance/src/policy/composer.rs` + engines (policy), `mai-compliance::{deid,phi,itar}` (egress redaction), `wsf-api`/`wsf-broker`/`wsf-ledger`/`fabric-token` (identity/token/cred/receipts). Read `docs/architecture/SOVEREIGNTY-REUSE-MAP.md` §"AOG services".
+**G1–G7 are fully done + live-verified** (see §0 + `docs/sessions/SOVEREIGNTY-DEVLOG.md`
+"M1 gateway cut COMPLETE"). The `aog-gateway` crate has: auth + budget preflight, real OpenAI+Anthropic
+provider adapters (streaming), both API surfaces, classify+route (mai-router + F5 envelope short-circuit),
+the deny-wins policy composer with shadow/report/enforce modes, and metering + a verifiable receipt chain
++ `GET /v1/usage`. Resume at **Phase G / M2**:
+- **G8 — egress tokenization.** When policy permits a cloud route for classified data, tokenize the
+  sensitive spans (reuse `mai-compliance::deid` + the F5 label placeholder swap), send placeholders to
+  the cloud provider, detokenize the response **inside the boundary**. Both events receipted. *Gate:
+  cloud sees placeholders only; response detokenized correctly; both events in the receipt chain.*
+- **G9 — budget enforcement + kill switch.** Decrement the token budget per call (currently preflight-
+  checked only — G1 — never decremented); **revoke the token → the gateway refuses the next call** (the
+  real kill switch). *Gate: budget exhaustion blocks mid-session; revocation halts an in-flight session.*
+- **G10 — ROI recommender.** `aog-meter` computes break-even ("Summit pays for itself in N months at
+  current volume") + utilization recommendations (idle → on-prem; saturation → upgrade). *Gate:
+  deterministic recommendation from a fixed telemetry fixture.*
+- **Reuse map for M2:** `mai-compliance::{deid,phi,itar}` (egress redaction — G8), `fabric-token::try_spend`
+  + `fabric-revocation` (budget/kill-switch — G9), the G7 `aog_gateway::meter` ledger (ROI — G10).
+- **How G1–G7 are wired (for extending):** `aog-gateway/src/` — `app.rs` holds `AppState` (gateway auth +
+  `Registry` + `ModelMap` + `mai-router` + `PolicyEngine`/mode + `ReceiptLedger`/`PriceBook`); the two
+  surfaces (`surface_openai.rs`/`surface_anthropic.rs`) run the same pipeline: `authorize` → resolve
+  provider → `route::classify_and_route` → `policy::gate` → dispatch → `meter::record` → tag `x-aog-*`
+  headers. G8 slots between route and dispatch (tokenize) + after dispatch (detokenize); G9 extends the
+  `policy::gate`/`meter::record` seam; G10 is a read over the `meter` ledger.
 
 The Phase-W working notes below (shared OpenBaoAuth, env-gated live-test pattern, the wsf-live CI job,
-the Signer-trait-in-scope gotcha) all still apply to Phase G.
+the Signer-trait-in-scope gotcha) all still apply. Every AOG live test env-gates on `WSF_OPENBAO_ADDR`;
+the Dockerized OpenBao runs on `:8250` (`docker run … openbao/openbao … -dev`, root token `root`).
 - ~~W1 `wsf-bridge`~~ DONE (`4ef11a5`). ~~W2 `wsf-broker`~~ DONE (`5ee41db`).
 - **W3 `wsf-seal` (NEXT):** network service over `fabric-envelope`; the F4 `data_key_wrapped` becomes
   a **real OpenBao-Transit wrap** (`transit/encrypt|decrypt/<key>` — Transit *does* symmetric AEAD,
@@ -243,4 +268,4 @@ cargo check --workspace              # exit 0
 cargo audit                          # exit 0, 0 vulnerabilities (1 accepted proc-macro-error2 warning)
 ```
 
-**Nothing is uncommitted; nothing is pushed.** **Phase W is complete.** Pick up at **Phase G, G1** (`aog-gateway`).
+**Nothing is uncommitted; nothing is pushed.** **The M1 gateway cut (G1–G7) is complete.** Pick up at **Phase G / M2, G8** (egress tokenization) in `aog-gateway`.
