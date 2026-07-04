@@ -49,7 +49,7 @@
 ```
 Worktree (do ALL work here):
   C:\Users\17076\Documents\Claude\Island Mountain\Island Mountain Mighty Eel OS\mai-worktrees\mai-SOV-1
-Branch:  session/SOV-1   (HEAD = df4bec7, SOV-G7 — M1 AOG gateway cut complete)   — NOT pushed; push only at the very end
+Branch:  session/SOV-1   (HEAD = df4bec7, SOV-G7 — AOG gateway prompts G1–G7 done; M1 still needs C1–C4 + D1–D2)   — NOT pushed; push only at the very end
 Toolchain: cargo 1.95.0 / rustc 1.95.0 present; node 24; Docker v29.4 up. Disk fine.
 ```
 
