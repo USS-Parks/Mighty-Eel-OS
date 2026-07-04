@@ -12,6 +12,7 @@
 //! token, never a standing secret.
 
 pub mod http;
+pub mod provider;
 
 use chrono::{DateTime, Utc};
 use fabric_contracts::TrustToken;
