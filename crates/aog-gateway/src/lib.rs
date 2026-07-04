@@ -14,6 +14,7 @@
 pub mod app;
 pub mod http;
 pub mod provider;
+pub mod surface_anthropic;
 pub mod surface_openai;
 
 use chrono::{DateTime, Utc};

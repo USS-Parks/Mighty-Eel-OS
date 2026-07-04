@@ -98,14 +98,27 @@ impl AppState {
     }
 }
 
-/// Authorize a request: extract the bearer virtual key, resolve + verify its
-/// trust token, and run the pre-flight budget check (all of G1). Returns the
-/// verified [`ResolvedContext`] or an HTTP error tuple.
+/// Extract the virtual key from either client convention: Anthropic SDKs send
+/// `x-api-key`, OpenAI SDKs send `Authorization: Bearer`. Accepting both lets a
+/// single gateway front either surface with the caller's native header.
+fn extract_key(headers: &HeaderMap) -> Result<&str, (StatusCode, String)> {
+    if let Some(k) = headers.get("x-api-key").and_then(|v| v.to_str().ok()) {
+        let k = k.trim();
+        if !k.is_empty() {
+            return Ok(k);
+        }
+    }
+    crate::http::bearer_key(headers)
+}
+
+/// Authorize a request: extract the virtual key (Bearer or `x-api-key`), resolve
+/// and verify its trust token, and run the pre-flight budget check (all of G1).
+/// Returns the verified [`ResolvedContext`] or an HTTP error tuple.
 pub(crate) async fn authorize(
     state: &AppState,
     headers: &HeaderMap,
 ) -> Result<ResolvedContext, (StatusCode, String)> {
-    let key = crate::http::bearer_key(headers)?;
+    let key = extract_key(headers)?;
     state
         .gateway
         .resolve_and_check(key, Utc::now())

@@ -69,26 +69,26 @@ fn neutral_messages(body: &Value) -> Vec<ChatMessage> {
         .unwrap_or_default()
 }
 
-fn opt_u32(body: &Value, key: &str) -> Option<u32> {
+pub(crate) fn opt_u32(body: &Value, key: &str) -> Option<u32> {
     body.get(key)
         .and_then(Value::as_u64)
         .and_then(|n| u32::try_from(n).ok())
 }
 
 #[allow(clippy::cast_possible_truncation)]
-fn opt_f32(body: &Value, key: &str) -> Option<f32> {
+pub(crate) fn opt_f32(body: &Value, key: &str) -> Option<f32> {
     body.get(key).and_then(Value::as_f64).map(|f| f as f32)
 }
 
-fn new_id(prefix: &str) -> String {
+pub(crate) fn new_id(prefix: &str) -> String {
     format!("{prefix}{}", Utc::now().timestamp_micros())
 }
 
-fn created() -> i64 {
+pub(crate) fn created() -> i64 {
     Utc::now().timestamp()
 }
 
-fn provider_http(e: &ProviderError) -> (StatusCode, String) {
+pub(crate) fn provider_http(e: &ProviderError) -> (StatusCode, String) {
     match e {
         ProviderError::Upstream { status, body } => (
             StatusCode::from_u16(*status).unwrap_or(StatusCode::BAD_GATEWAY),
@@ -101,7 +101,7 @@ fn provider_http(e: &ProviderError) -> (StatusCode, String) {
 }
 
 /// Resolve an inbound model id to (target, provider), or an HTTP error.
-fn resolve_provider(
+pub(crate) fn resolve_provider(
     state: &AppState,
     model: &str,
 ) -> Result<(Target, Arc<dyn Provider>), (StatusCode, String)> {
