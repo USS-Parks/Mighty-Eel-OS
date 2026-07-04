@@ -8,11 +8,11 @@
 //! # Module Structure
 //!
 //! - `scorer`: orchestrator that combines sub-scores into a single decision
-//! `latency`: queue-based latency estimation
-//! `memory`: VRAM pressure penalty with configurable exponent
-//! `topology`: GPU interconnect cost for tensor-parallel
-//! `eviction`: eviction cost penalty
-//! `batching`: batch fit benefit
+//! - `latency`: queue-based latency estimation
+//! - `memory`: VRAM pressure penalty with configurable exponent
+//! - `topology`: GPU interconnect cost for tensor-parallel
+//! - `eviction`: eviction cost penalty
+//! - `batching`: batch fit benefit
 //!
 //! # Extension Points
 //!

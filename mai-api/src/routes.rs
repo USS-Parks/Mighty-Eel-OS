@@ -14,8 +14,8 @@
 //! - `/v1/adapters` - Adapter listing
 //! - `/v1/audit/*` - Audit trail access
 //! - `/v1/profiles/*` - Family profile queries
-//! `/v1/trust/*` - Local trust cache surface
-//! `/v1/auth/exchange_token` - Local-dev token exchange stub
+//! - `/v1/trust/*` - Local trust cache surface
+//! - `/v1/auth/exchange_token` - Local-dev token exchange stub
 //! - `/v1/compliance/*` - Compliance policy / audit / reports / feed
 
 use std::convert::Infallible;
