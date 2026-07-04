@@ -204,6 +204,19 @@ async fn chat_completions(
                         tokenized_spans,
                     },
                 );
+                // Budget decrement (G9): accrue this call's usage against the token;
+                // the next resolve folds it in and rejects once a cap is reached.
+                state.gateway.record_spend(
+                    &ctx.token.token_id,
+                    u64::from(r.usage.input_tokens) + u64::from(r.usage.output_tokens),
+                    state.prices.cost(
+                        &provider_name,
+                        &inbound_model,
+                        r.usage.input_tokens,
+                        r.usage.output_tokens,
+                    ),
+                    0,
+                );
                 Json(chat_completion_json(&inbound_model, &r)).into_response()
             }
             Err(e) => provider_http(&e).into_response(),
