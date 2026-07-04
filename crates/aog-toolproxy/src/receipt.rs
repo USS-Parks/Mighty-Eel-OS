@@ -31,6 +31,18 @@ pub struct ToolReceipt {
     /// The minted credential's TTL in ms (the call's lifetime).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cred_ttl_ms: Option<u64>,
+    /// The call was side-effecting and routed through the approval inbox (T3).
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub approval_required: bool,
+    /// Who approved a gated call (the actor); `None` for un-gated or blocked calls.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub approved_by: Option<String>,
+}
+
+/// `skip_serializing_if` predicate — omit a `false` flag so an un-gated receipt is
+/// unchanged.
+fn is_false(b: &bool) -> bool {
+    !*b
 }
 
 /// Append-only tool-call receipt ledger: a BLAKE3 chain over [`ToolReceipt`]s.

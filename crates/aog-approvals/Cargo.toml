@@ -1,0 +1,26 @@
+[package]
+name = "aog-approvals"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "AOG approval inbox: side-effecting tool calls pause for human approval with a diff preview; every decision + actor is receipted"
+
+[dependencies]
+fabric-proof = { path = "../fabric-proof" }
+aog-toolproxy = { path = "../aog-toolproxy" }
+mai-agent = { path = "../../mai-agent" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+chrono = { workspace = true }
+tokio = { workspace = true }
+async-trait = { workspace = true }
+hex = "0.4"
+
+[dev-dependencies]
+tokio = { workspace = true }
+
+[lints]
+workspace = true

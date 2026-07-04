@@ -66,6 +66,23 @@ pub trait CredentialMinter: Send + Sync {
     async fn revoke(&self, lease_id: &str);
 }
 
+/// The seam to the approval inbox (aog-approvals): a side-effecting (`has_side_effects`)
+/// call pauses here for a human decision. Implementations **block** until approved or
+/// denied. `Ok(actor)` proceeds (recording who approved); `Err(reason)` blocks the
+/// call — it never executes. This is the mechanism T4 leans on: a mutating call
+/// triggered by untrusted tool output must pass through this gate, not auto-run.
+#[async_trait]
+pub trait ApprovalGate: Send + Sync {
+    /// Review a side-effecting call with a diff preview. Blocks until decided.
+    async fn review(
+        &self,
+        tool: &ToolDefinition,
+        call: &ToolCall,
+        ctx: &InvokeContext,
+        diff_preview: &str,
+    ) -> Result<String, String>;
+}
+
 /// The seam an agent / L4 implements to actually run a validated tool call. AOG
 /// owns the path around it — validate before, receipt after — so a tool never runs
 /// un-governed. T2 mints the call's ephemeral credentials at this boundary.
@@ -99,6 +116,7 @@ pub struct ToolProxy {
     registry: RwLock<ToolRegistry>,
     receipts: Mutex<ToolReceiptChain>,
     minter: Option<Box<dyn CredentialMinter>>,
+    approvals: Option<Box<dyn ApprovalGate>>,
 }
 
 impl Default for ToolProxy {
@@ -114,6 +132,7 @@ impl ToolProxy {
             registry: RwLock::new(ToolRegistry::new()),
             receipts: Mutex::new(ToolReceiptChain::new()),
             minter: None,
+            approvals: None,
         }
     }
 
@@ -123,6 +142,14 @@ impl ToolProxy {
     #[must_use]
     pub fn with_minter(mut self, minter: Box<dyn CredentialMinter>) -> Self {
         self.minter = Some(minter);
+        self
+    }
+
+    /// Attach the approval gate (T3). Every side-effecting (`has_side_effects`) call
+    /// then pauses for a human decision before it executes.
+    #[must_use]
+    pub fn with_approvals(mut self, approvals: Box<dyn ApprovalGate>) -> Self {
+        self.approvals = Some(approvals);
         self
     }
 
@@ -164,9 +191,28 @@ impl ToolProxy {
             reg.validate_tool_call(call, &ctx.role)?.clone()
         };
 
+        // Approval gate (T3): a side-effecting call pauses for a human decision
+        // before anything runs. A denial blocks the call — no credential, no
+        // execution — and is receipted.
+        let mut approval_required = false;
+        let mut approved_by = None;
+        if tool.has_side_effects
+            && let Some(gate) = &self.approvals
+        {
+            approval_required = true;
+            let preview = diff_preview(&tool, call);
+            match gate.review(&tool, call, ctx, &preview).await {
+                Ok(actor) => approved_by = Some(actor),
+                Err(reason) => {
+                    let blocked = blocked_result(call, &reason);
+                    self.append_receipt(call, ctx, &tool, &blocked, None, true, None);
+                    return Ok(blocked);
+                }
+            }
+        }
+
         // Mint the per-call credential (T2), if a minter is configured. It lives only
-        // for this call — passed to the executor by reference, revoked below, dropped
-        // when `invoke` returns; the agent process never holds a standing credential.
+        // for this call — dropped when `invoke` returns; the agent never holds it.
         let cred = match &self.minter {
             Some(m) => Some(m.mint(&tool, ctx).await.map_err(ProxyError::Mint)?),
             None => None,
@@ -179,10 +225,32 @@ impl ToolProxy {
             m.revoke(&c.lease_id).await;
         }
 
-        let (cred_lease, cred_ttl_ms) = cred.as_ref().map_or((None, None), |c| {
+        self.append_receipt(
+            call,
+            ctx,
+            &tool,
+            &result,
+            cred.as_ref(),
+            approval_required,
+            approved_by,
+        );
+        Ok(result)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn append_receipt(
+        &self,
+        call: &ToolCall,
+        ctx: &InvokeContext,
+        tool: &ToolDefinition,
+        result: &ToolResult,
+        cred: Option<&MintedCredential>,
+        approval_required: bool,
+        approved_by: Option<String>,
+    ) {
+        let (cred_lease, cred_ttl_ms) = cred.map_or((None, None), |c| {
             (Some(c.lease_id.clone()), Some(ms(c.ttl)))
         });
-
         self.receipts
             .lock()
             .expect("receipt lock")
@@ -199,8 +267,9 @@ impl ToolProxy {
                 error: result.error.clone(),
                 cred_lease,
                 cred_ttl_ms,
+                approval_required,
+                approved_by,
             });
-        Ok(result)
     }
 
     /// The receipt-chain head (hex).
@@ -235,6 +304,25 @@ impl ToolProxy {
 /// Milliseconds of a duration, saturating to `u64::MAX`.
 fn ms(d: Duration) -> u64 {
     u64::try_from(d.as_millis()).unwrap_or(u64::MAX)
+}
+
+/// A human-readable preview of what a side-effecting call will do. A production
+/// preview is tool-specific (a real diff); this default renders the tool + its
+/// arguments so the approver sees the concrete call.
+fn diff_preview(tool: &ToolDefinition, call: &ToolCall) -> String {
+    format!("{} {}", tool.id, call.arguments)
+}
+
+/// The result returned for a call the approval gate blocked — it never executed.
+fn blocked_result(call: &ToolCall, reason: &str) -> ToolResult {
+    ToolResult {
+        call_id: call.call_id.clone(),
+        tool_id: call.tool_id.clone(),
+        success: false,
+        output: serde_json::Value::Null,
+        error: Some(format!("blocked by approval: {reason}")),
+        duration_ms: 0,
+    }
 }
 
 #[cfg(test)]
@@ -522,5 +610,98 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(proxy.receipts()[0].cred_lease, None);
+    }
+
+    // ── T3: approval gate for side-effecting calls ───────────────────────
+
+    struct AlwaysGate {
+        approve: bool,
+        actor: String,
+    }
+
+    #[async_trait]
+    impl ApprovalGate for AlwaysGate {
+        async fn review(
+            &self,
+            _tool: &ToolDefinition,
+            _call: &ToolCall,
+            _ctx: &InvokeContext,
+            _preview: &str,
+        ) -> Result<String, String> {
+            if self.approve {
+                Ok(self.actor.clone())
+            } else {
+                Err("denied by policy".to_string())
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn side_effecting_call_is_blocked_when_the_gate_denies() {
+        let proxy = ToolProxy::new().with_approvals(Box::new(AlwaysGate {
+            approve: false,
+            actor: String::new(),
+        }));
+        proxy
+            .register(tool("write.record", true, ToolAccessRole::Parent))
+            .unwrap();
+        let r = proxy
+            .invoke(
+                &call("c1", "write.record"),
+                &ctx(ToolAccessRole::Parent),
+                &EchoExecutor,
+            )
+            .await
+            .unwrap();
+        assert!(!r.success, "a denied mutating call does not execute");
+        assert!(r.error.unwrap().contains("blocked by approval"));
+        let rec = &proxy.receipts()[0];
+        assert!(rec.approval_required);
+        assert_eq!(rec.approved_by, None);
+    }
+
+    #[tokio::test]
+    async fn side_effecting_call_proceeds_when_approved_and_records_the_approver() {
+        let proxy = ToolProxy::new().with_approvals(Box::new(AlwaysGate {
+            approve: true,
+            actor: "alice".to_string(),
+        }));
+        proxy
+            .register(tool("write.record", true, ToolAccessRole::Parent))
+            .unwrap();
+        let r = proxy
+            .invoke(
+                &call("c1", "write.record"),
+                &ctx(ToolAccessRole::Parent),
+                &EchoExecutor,
+            )
+            .await
+            .unwrap();
+        assert!(r.success, "an approved call executes");
+        let rec = &proxy.receipts()[0];
+        assert!(rec.approval_required);
+        assert_eq!(rec.approved_by.as_deref(), Some("alice"));
+    }
+
+    #[tokio::test]
+    async fn read_only_call_skips_the_gate() {
+        // has_side_effects = false → never routed to approval, even with a deny gate.
+        let proxy = ToolProxy::new().with_approvals(Box::new(AlwaysGate {
+            approve: false,
+            actor: String::new(),
+        }));
+        proxy
+            .register(tool("read.file", false, ToolAccessRole::Guest))
+            .unwrap();
+        let r = proxy
+            .invoke(
+                &call("c1", "read.file"),
+                &ctx(ToolAccessRole::Guest),
+                &EchoExecutor,
+            )
+            .await
+            .unwrap();
+        assert!(r.success, "a read-only call is not gated");
+        assert!(!proxy.receipts()[0].approval_required);
     }
 }
