@@ -116,6 +116,17 @@ if printf '%s\n' "$STAGED_FILES" | grep -q '\.rs$'; then
     fi
 fi
 
+# CHECK 6: CANON §11 no-slop gate — block newly-added build-process artifacts
+# (Session/BF markers, dangling doc refs, bare TODO / stub confessions). Scans
+# only ADDED lines so pre-existing debt can't wedge an unrelated commit; the
+# pre-push full-tree scan is the zero-remain backstop.
+SLOP_SCAN="$(git rev-parse --show-toplevel)/.integrity/scripts/no-slop-scan.sh"
+if [ -x "$SLOP_SCAN" ]; then
+    if ! "$SLOP_SCAN" staged; then
+        ERRORS=$((ERRORS + 1))
+    fi
+fi
+
 echo ""
 echo -e "Files: $(echo "$STAGED_FILES" | wc -w) | ${RED}Blocked${NC}: ${ERRORS} | ${YELLOW}Warnings${NC}: ${WARNINGS}"
 

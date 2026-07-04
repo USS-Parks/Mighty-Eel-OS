@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# Canon §I.3 — enforce the commit footer, forbid AI co-author credits.
+# Auto-fixes the message in place (idempotent): strips any AI-attribution
+# trailer and guarantees the footer. Reuses footer-filter.awk.
+set -euo pipefail
+MSG_FILE="$1"
+HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
+AWK="$HOOK_DIR/footer-filter.awk"
+FOOTER="Authored and reviewed by Basho Parks, Copyright 2026"
+
+work="$(mktemp)"
+# Drop git's comment + verbose-scissors lines the way git would — unless the
+# message is nothing but comment lines (protects a rare `-m '#...'` message).
+if grep -qvE '^#' "$MSG_FILE"; then
+  sed -e '/^# -\{5,\} >8 -\{5,\}/,$d' -e '/^#/d' "$MSG_FILE" > "$work"
+else
+  cat "$MSG_FILE" > "$work"
+fi
+
+out="$(mktemp)"
+awk -f "$AWK" < "$work" > "$out"
+mv "$out" "$MSG_FILE"
+rm -f "$work"
+
+if ! grep -qF "$FOOTER" "$MSG_FILE"; then
+  echo "commit-msg: canon footer could not be applied" >&2
+  exit 1
+fi
+exit 0
