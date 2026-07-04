@@ -476,3 +476,38 @@ vanish before OpenBao is deprovisioned).
   `check --workspace` clean.
 - **Gate:** provision→issue→deprovision→revoked-everywhere (live OpenBao) ✓.
   **Commit:** `LOOM-R3`.
+
+### R4 — TrustRing controller — DONE
+Rings become per-ring OpenBao Transit keys, and a ring can be **darkened** —
+its key disabled so everything sealed under it stops unsealing, and its
+workloads halt. New `transit.rs` (`TransitAdmin`: ensure/read/disable a
+Transit key over the AppRole login — the key-lifecycle calls the M1 client
+never needed; encrypt/decrypt stay on `wsf_bridge::OpenBaoAuth`) + `rings.rs`
+(`TrustRingController`, run on a `"TrustRing/"` **and** a
+`"RevocationIntent/"` informer):
+- **Live ring:** Transit key `loom-ring-<n>` ensured; status
+  `Ready`/`key_version`/`dark:false` (written only on change).
+- **Dark ring:** a `RevocationIntent` targeting `Ring(n)` → the key is
+  disabled (deletion-allowed + delete; idempotent via an existence check —
+  Transit answers 400, not 404, to a config write on a deleted key, the one
+  live-only defect this gate caught), every ring-`n` `Workload` is marked
+  `Failed`/0-ready (estate halt; M3b node runtime enforces eviction), status
+  goes `dark`/`Degraded`, and the intent is acknowledged `Ready`/propagated —
+  closing the loop R2's indexer honestly left `Pending`.
+- **Ring deletion retains the key** (reclaim-policy Retain): sealed data never
+  becomes unreadable as a side effect; darkness is a declared, receipted
+  intent only.
+- **Files:** `crates/aog-controller/{Cargo.toml (reqwest→main, dev +wsf-seal),
+  src/{transit.rs (new), rings.rs (new), lib.rs}, tests/live_ring.rs (new)}`.
+- **Verify:** clippy `--all-targets --no-deps -D warnings` clean; **15 passed**
+  with `WSF_OPENBAO_ADDR` set — the R4 live gate against live OpenBao 2.5.4 +
+  live Transit: ring declared → key exists (version 1, status Ready) → an
+  envelope sealed through **`wsf-seal`** under the ring key unseals fine →
+  one declarative darken-intent → the key is gone from Transit, **the same
+  envelope now fails to unseal** (its wrapped data key is undecryptable), the
+  ring reports dark/Degraded, the ring's workload is halted (Failed, 0
+  ready), and the intent is propagated; apiserver suite 30 passed (no
+  regression); fmt + `check --workspace` clean.
+- **Gate:** disabling a ring key makes its envelopes unreadable ✓ (live
+  crypto, not simulated) + halts ring workloads ✓ (estate leg).
+  **Commit:** `LOOM-R4`.

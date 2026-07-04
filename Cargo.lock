@@ -197,6 +197,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "wsf-bridge",
+ "wsf-seal",
  "wsf-tenants",
 ]
 

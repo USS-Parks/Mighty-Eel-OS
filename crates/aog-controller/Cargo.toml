@@ -11,6 +11,7 @@ aog-apiserver = { path = "../aog-apiserver" }
 aog-estate = { path = "../aog-estate" }
 aog-store = { path = "../aog-store" }
 chrono = { workspace = true }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
@@ -25,7 +26,7 @@ fabric-contracts = { path = "../fabric-contracts" }
 fabric-crypto = { path = "../fabric-crypto" }
 fabric-revocation = { path = "../fabric-revocation" }
 fabric-token = { path = "../fabric-token" }
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+wsf-seal = { path = "../wsf-seal" }
 
 [lints]
 workspace = true

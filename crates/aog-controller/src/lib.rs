@@ -18,14 +18,17 @@ pub mod intents;
 pub mod objects;
 pub mod provision;
 pub mod queue;
+pub mod rings;
 pub mod runtime;
 pub mod teardown;
+pub mod transit;
 
 pub use gc::GarbageCollector;
 pub use intents::RevocationIndexer;
 pub use objects::{EstateClient, is_terminating, parse_key};
 pub use provision::{OPENBAO_FINALIZER, TenantProvisioner};
 pub use queue::{Backoff, WorkQueue};
+pub use rings::TrustRingController;
 pub use runtime::{
     Action, AlwaysLeader, Controller, LeaderGate, ReconcileError, Reconciler, SharedGate, SyncStats,
 };
