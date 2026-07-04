@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   check-footer:
-    name: Canonical co-author footer
+    name: Canonical footer (no AI co-author)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -27,9 +27,12 @@ jobs:
           else
             range="${{ github.event.before }}..${{ github.sha }}"
           fi
-          required='Co-Authored by Basho Parks and Claude Opus 4\.7 xHigh <basho@islandmountain\.io> <claude@anthropic\.com>'
-          # Legacy TLM-1/2/3 commits pushed before the footer policy was enforced.
-          # Forward-only allowlist; every new commit is still checked.
+          # CANON §3: every commit carries this footer verbatim, and never credits
+          # an AI co-author. This replaces the prior AI co-author requirement.
+          required='Authored and reviewed by Basho Parks, Copyright 2026'
+          # Grandfathered commits from before a footer-policy change (the legacy TLM
+          # era, plus any in-flight branch's pre-CANON commits). Add SHAs here — or
+          # squash before merge. Every new commit is still checked.
           legacy_skip='487c3523118c82401d6db3777614d9bb8d4813f8 8e4d435cadf23acce0b0a1a7a413bce22d94b844 a9b8c3f9fda2f3181aac60e7b6342174408ee7c8 2a79f3542b1e1c69b077e20a938e7d2a7fe6a1d8 96dcf89b80ce330a223681bda84f3dccfde68ac8 35056b2ffe88c9f28f4fc62cc32437a98150c7f8'
           fail=0
           for sha in $(git rev-list "$range"); do
