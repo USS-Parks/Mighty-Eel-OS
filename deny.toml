@@ -65,6 +65,24 @@ ignore = [
     { id = "RUSTSEC-2026-0176", reason = "pyo3 0.24 OOB read in PyList/PyTuple nth iterators; API not used anywhere in the workspace (grep-verified). pyo3 is mai-adapters-only (parked, off trust path). Fix is a 0.24->0.29 major bump deferred to adapter revival. See INDEPENDENT-EVIDENCE-DEFERRALS.md §1.4." },
     { id = "RUSTSEC-2026-0177", reason = "pyo3 0.24 missing Sync bound on PyCFunction::new_closure; API not used anywhere in the workspace (grep-verified). pyo3 is mai-adapters-only (parked, off trust path). Fix is a 0.24->0.29 major bump deferred to adapter revival. See INDEPENDENT-EVIDENCE-DEFERRALS.md §1.4." },
 
+    # ───────────────────────────────────────────────────────────────
+    # RUSTSEC-2026-0173 - proc-macro-error2 is unmaintained
+    # ───────────────────────────────────────────────────────────────
+    # Crate:  proc-macro-error2 2.0.1  (proc-macro, compile-time only)
+    # Path:   mai-api -> validator 0.20 -> validator_derive 0.20
+    #         (proc-macro) -> proc-macro-error2
+    #
+    # Unmaintained-crate advisory (informational, not a vulnerability).
+    # proc-macro-error2 runs only during validator_derive's macro
+    # expansion at build time; it is not linked into any shipped runtime
+    # binary and sits on no trust path. `validator` 0.20.0 is the latest
+    # published release (verified), so no upgrade drops the dependency yet,
+    # and the advisory itself states no safe upgrade is available. The real
+    # fix is a future `validator` release (or replacement) that migrates
+    # off proc-macro-error2 - a semver bump into the legacy mai-api crate.
+    # Deferred to the post-RC1 dependency-refresh lane (see DEFERRALS doc).
+    { id = "RUSTSEC-2026-0173", reason = "proc-macro-error2 2.0.1 unmaintained; compile-time-only proc-macro pulled transitively via validator_derive 0.20 (mai-api -> validator 0.20). validator 0.20.0 is the latest release so no upgrade drops it; advisory confirms no safe upgrade available. Not linked into any runtime binary and off the trust path. Fix is a future validator bump/replacement; deferred to post-RC1 dependency-refresh lane. See INDEPENDENT-EVIDENCE-DEFERRALS.md." },
+
     # NB: RUSTSEC-2024-0436 (paste) was fully removed from the tree in
     # SOV-0.2b (dropping pqcrypto-mldsa); no ignore needed.
 ]
@@ -92,6 +110,7 @@ allow = [
     "BSD-3-Clause",
     "BSL-1.0",
     "CC0-1.0",
+    "CDLA-Permissive-2.0",      # webpki-roots: Mozilla CA-root data (permissive data license, no copyleft)
     "ISC",
     "LicenseRef-Proprietary",   # MAI workspace own crates
     "MIT",
