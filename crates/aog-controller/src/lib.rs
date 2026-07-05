@@ -7,12 +7,19 @@
 //! replica acts ([`LeaderGate`]). The Phase-R controllers (Tenant, TrustRing,
 //! Capability, PolicyBundle, …) are reconcilers run on this runtime.
 //!
+//! R6: the [`PolicyBundleController`] signs each `PolicyBundle` and publishes it
+//! to the channel gateway/node edges poll ([`BundleStore`]); an edge verifies
+//! it with the control-plane public key alone and refuses a stale replay
+//! ([`EdgeBundleCache`]).
+//!
 //! Trust posture: this crate's read path is the informer (bounded-stale,
 //! resync-recovered, A1.6); its write path is **never** the store directly —
 //! a controller mutates desired state only through the apiserver admission
 //! chain (`aog-apiserver`), so every controller action is validated, sealed,
 //! and receipted like any other caller's (A1.7, doctrine I-3/I-5).
 
+pub mod bundle_store;
+pub mod bundles;
 pub mod capability;
 pub mod gc;
 pub mod intents;
@@ -24,6 +31,11 @@ pub mod runtime;
 pub mod teardown;
 pub mod transit;
 
+pub use bundle_store::{
+    BundleReject, BundleStore, EdgeBundleCache, MemBundleStore, OpenBaoBundleStore, SignedBundle,
+    sign_bundle, verify_bundle,
+};
+pub use bundles::PolicyBundleController;
 pub use capability::CapabilityController;
 pub use gc::GarbageCollector;
 pub use intents::RevocationIndexer;

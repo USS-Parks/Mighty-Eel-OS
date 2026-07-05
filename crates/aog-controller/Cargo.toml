@@ -11,6 +11,10 @@ aog-apiserver = { path = "../aog-apiserver" }
 aog-estate = { path = "../aog-estate" }
 aog-store = { path = "../aog-store" }
 chrono = { workspace = true }
+fabric-contracts = { path = "../fabric-contracts" }
+fabric-crypto = { path = "../fabric-crypto" }
+fabric-proof = { path = "../fabric-proof" }
+hex = "0.4"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -23,8 +27,6 @@ wsf-tenants = { path = "../wsf-tenants" }
 aog-gateway = { path = "../aog-gateway" }
 axum = { workspace = true }
 base64 = "0.22"
-fabric-contracts = { path = "../fabric-contracts" }
-fabric-crypto = { path = "../fabric-crypto" }
 fabric-revocation = { path = "../fabric-revocation" }
 fabric-token = { path = "../fabric-token" }
 wsf-seal = { path = "../wsf-seal" }

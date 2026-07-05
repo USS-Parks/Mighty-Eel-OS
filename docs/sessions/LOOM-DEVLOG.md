@@ -555,3 +555,47 @@ replicas could bill a $100 cap ~$N×100. Now the ledger is shared.
   round-trip ✓; single-process behavior unchanged ✓ (gateway suite green);
   concurrent decrement across 3 clients never over-spends a cap (live) ✓.
   **Commit:** `LOOM-X1-R5`.
+
+### R6 — PolicyBundle controller — DONE
+A declared `PolicyBundle` becomes a signed artifact on the channel every
+gateway/node edge polls, and an edge verifies it with the control-plane public
+key **alone** — offline, air-gap-fit. New `bundle_store.rs` (the artifact +
+channel) + `bundles.rs` (the controller).
+- **Sign + distribute.** `sign_bundle` mints a `SignedBundle` — the bundle's
+  `(version, mode, rules)` ML-DSA-signed over its canonical BLAKE3 payload
+  (signature field cleared), the exact shape of a `fabric-revocation` snapshot,
+  reusing `fabric-crypto`'s `Signer`. `BundleStore` is the channel:
+  `OpenBaoBundleStore` publishes to KV-v2 `kv/data/policy-bundles/<name>` (the
+  poll path R3 established), `MemBundleStore` is its in-memory double. The
+  controller signs and publishes, then records `status.distributed_to` = every
+  `Node` + gateway `Workload` the estate declares.
+- **Edge verify + anti-rollback (I-3/I-4/I-8).** `verify_bundle` checks the
+  signature under the public key alone — wrong key, tampered content, or a
+  malformed signature all fail closed. `EdgeBundleCache::accept` is the node's
+  decision: a bad signature is refused, and a validly-signed but **stale**
+  bundle (version `<=` the applied one) is refused too, so a replayed older
+  bundle can never silently downgrade enforcement.
+- **Never regress the channel.** The controller is level-triggered and
+  idempotent — it re-signs/publishes only on real drift (absent, content
+  changed, or a tampered artifact healed) — and refuses to ship a spec whose
+  version is behind the live artifact (`Degraded`, not published; I-4). Rollback
+  is roll-forward to a new signed version; every prior signed artifact stays
+  independently verifiable.
+- **Files:** `crates/aog-controller/{Cargo.toml (fabric-crypto/-proof/-contracts
+  + hex to deps), src/{bundle_store.rs (new), bundles.rs (new), lib.rs},
+  tests/live_bundle.rs (new)}`.
+- **Verify:** clippy `--all-targets --no-deps -D warnings` clean +
+  `--workspace -D warnings -A clippy::pedantic` (CI) clean; **20 passed** across
+  aog-controller with `WSF_OPENBAO_ADDR` set — +3 bundle unit tests
+  (sign→verify round-trip incl. wrong-key/tamper; edge accepts forward, refuses
+  stale replay + forged signature; mem-store publish/fetch/retract) and the
+  **R6 live gate**: a `PolicyBundle` is signed and published to **live** OpenBao
+  KV, an edge fetches it and verifies with the public key alone, a v2 update
+  reaches the edge, a replayed v1 is refused (`Stale`), a stale spec is
+  `Degraded` (channel not downgraded), and a tampered artifact is refused
+  (`BadSignature`); hermetic across repeated runs (channel purged on setup).
+  fmt + `check --workspace` clean.
+- **Gate:** a bundle update reaches all nodes ✓ (`distributed_to` = the estate's
+  nodes + gateways; published to the live poll path); signature verifies at the
+  edge ✓ (public key alone, off-host); stale bundle rejected ✓ (edge
+  anti-rollback + controller no-regress). **Commit:** `LOOM-R6`.
