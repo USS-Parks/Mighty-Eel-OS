@@ -9,9 +9,12 @@ repository.workspace = true
 [dependencies]
 aog-estate = { path = "../aog-estate" }
 chrono = { workspace = true }
+fabric-cache = { path = "../fabric-cache" }
 fabric-contracts = { path = "../fabric-contracts" }
 fabric-crypto = { path = "../fabric-crypto" }
 fabric-identity = { path = "../fabric-identity" }
+fabric-revocation = { path = "../fabric-revocation" }
+fabric-token = { path = "../fabric-token" }
 thiserror = { workspace = true }
 
 [lints]

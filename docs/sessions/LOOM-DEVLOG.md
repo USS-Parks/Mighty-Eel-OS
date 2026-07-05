@@ -1085,3 +1085,26 @@ the CLI.
   run here against docker + `alpine`: start → Running → stop → not-Running →
   clean restart → Running). Skips inert on the air-gap path where no container
   CLI is configured. **Commit:** `LOOM-N5`.
+
+### N6 — Edge admission + W5 offline-safe cache — DONE
+`aog-node::edge::EdgeAdmission`: the node verifies a runtime token **locally**
+(signature via the anchor key, expiry, revocation snapshot) and narrows the
+route the caller may use to what current connectivity safely allows — the W5
+state machine (`fabric-cache::evaluate` → `route_ceiling`) combined with the
+token's own allowance and the request. Fail-static (I-4): degradation only
+*reduces* privilege, never widens.
+- **Offline-safe.** With the control plane unreachable but within soft TTL →
+  `Degraded` → the node keeps deciding (still cloud); past hard TTL → `Expired`
+  → `LocalOnly`. It never fails to decide; it narrows.
+- **Air-gap (I-8).** An air-gapped node is `AirGapped` → `LocalOnly`, so a cloud
+  request is narrowed to local — cloud denied.
+- **Local auth.** A tampered, expired, or revoked token is denied without any
+  control-plane round-trip (local asymmetric verify + the last-applied
+  `RevocationSnapshot`).
+- **Files:** `crates/aog-node/{Cargo.toml, src/{lib.rs, edge.rs (new)}}`.
+- **Verify:** fmt + clippy `-D warnings` clean; **22 tests** pass (7 new).
+- **Gate:** the node keeps issuing safe, narrowed decisions with the control
+  plane unreachable ✓ (`an_unreachable_but_fresh_node_still_decides`,
+  `a_stale_node_narrows_to_local`); an air-gapped node denies cloud routes ✓
+  (`an_air_gapped_node_denies_cloud`); tampered / expired / revoked tokens denied
+  locally. **Commit:** `LOOM-N6`.
