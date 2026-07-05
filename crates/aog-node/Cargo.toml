@@ -1,0 +1,18 @@
+[package]
+name = "aog-node"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+aog-estate = { path = "../aog-estate" }
+chrono = { workspace = true }
+fabric-contracts = { path = "../fabric-contracts" }
+fabric-crypto = { path = "../fabric-crypto" }
+fabric-identity = { path = "../fabric-identity" }
+thiserror = { workspace = true }
+
+[lints]
+workspace = true

@@ -245,6 +245,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "aog-node"
+version = "0.1.0"
+dependencies = [
+ "aog-estate",
+ "chrono",
+ "fabric-contracts",
+ "fabric-crypto",
+ "fabric-identity",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "aog-scheduler"
 version = "0.1.0"
 dependencies = [

@@ -996,3 +996,24 @@ admission choke point.
   model set, and classification.
 - **Gate:** a bound workload receives a scoped token; the binding is receipted ✓
   (`scheduler_binds_replicas_with_scoped_tokens`). **Commit:** `LOOM-S7`.
+
+---
+
+## Phase N — Node / edge runtime (`aog-node`)
+
+### N1 — Node agent + registration — DONE
+New crate `crates/aog-node`. A node joins with a `fabric-identity` leaf signed by
+the trust anchor, plus its declared attestation profile + capacity (the `Node`
+spec). `mint_node_identity` issues the leaf (anchor-signed, binding node name +
+PKI fingerprint, TTL-bounded); `Registrar::admit` verifies a `NodeRegistration`
+against the roster anchor key and refuses — fail-closed — a non-workload
+identity, one that names a different node, or one that does not verify. A node
+that cannot prove its identity does not join.
+- **Files:** `crates/aog-node/{Cargo.toml, src/{lib.rs, registration.rs}}` (new
+  crate) + workspace `Cargo.toml` member.
+- **Verify:** fmt + clippy `-D warnings` clean; **3 tests** pass.
+- **Gate:** a node joins with a verified identity ✓
+  (`an_anchor_signed_identity_joins`); a spoofed node is rejected ✓
+  (`a_spoofed_identity_is_rejected` — a leaf signed by a non-anchor key fails
+  verification; `an_identity_naming_another_node_is_rejected` — subject
+  mismatch). **Commit:** `LOOM-N1`.
