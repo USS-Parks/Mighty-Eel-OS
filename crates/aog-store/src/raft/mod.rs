@@ -1,19 +1,26 @@
-//! K3 — the single-node Raft node over the K2 store. openraft (0.9) on top of
-//! redb: linearizable writes via `client_write`, committed state durable across
-//! a restart. The estate is one voter here; multi-node election/replication is
-//! wired at H1 (this module's network is a no-peer stub).
+//! K3 / H1 — the Raft node over the K2 store. openraft (0.9) on top of redb:
+//! linearizable writes via `client_write`, committed state durable across a
+//! restart. K3 ran one voter with a no-peer stub network; H1 adds the multi-node
+//! path — [`RaftNode::join`] onto a [`Cluster`], `add_learner` + `change_membership`
+//! to form a ≥3-node control plane, leader election/failover, and a leadership
+//! [`RaftNode::leadership`] watch that drives a controller's `SharedGate` so only
+//! the leader reconciles.
 
+pub mod cluster;
 pub mod log_store;
 pub mod network;
 pub mod state_machine;
 pub mod types;
 pub mod watch;
 
-use std::collections::BTreeMap;
+pub use cluster::Cluster;
+
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
+use openraft::network::RaftNetworkFactory;
 use openraft::{BasicNode, Config, Raft, ServerState};
 use redb::Database;
 
@@ -44,12 +51,22 @@ pub struct RaftNode {
 
 impl RaftNode {
     /// Start the node over `dir` (creating the redb stores), recovering any
-    /// persisted log + state machine. Does **not** initialize a cluster — use
-    /// [`RaftNode::bootstrap`] for a fresh estate.
+    /// persisted log + state machine, with the no-peer K3 network. Does **not**
+    /// initialize a cluster — use [`RaftNode::bootstrap`] for a fresh single-node
+    /// estate or [`RaftNode::join`] for a multi-node one.
     ///
     /// # Errors
     /// [`NodeError`] on storage or raft construction failure.
     pub async fn start(node_id: NodeId, dir: impl AsRef<Path>) -> Result<Self, NodeError> {
+        Self::build(node_id, dir, SingleNodeNetwork).await
+    }
+
+    /// Start the node over `dir` wired to `network` — the no-peer stub for K3, a
+    /// [`Cluster`] network for H1.
+    async fn build<N>(node_id: NodeId, dir: impl AsRef<Path>, network: N) -> Result<Self, NodeError>
+    where
+        N: RaftNetworkFactory<TypeConfig>,
+    {
         let dir = dir.as_ref();
         std::fs::create_dir_all(dir).map_err(|e| NodeError::Io(e.to_string()))?;
 
@@ -71,11 +88,28 @@ impl RaftNode {
                 .map_err(|e| NodeError::Raft(e.to_string()))?,
         );
 
-        let raft = Raft::new(node_id, config, SingleNodeNetwork, log_store, sm.clone())
+        let raft = Raft::new(node_id, config, network, log_store, sm.clone())
             .await
             .map_err(|e| NodeError::Raft(e.to_string()))?;
 
         Ok(Self { raft, sm, node_id })
+    }
+
+    /// Start a node wired to `cluster` and register its handle so peers can reach
+    /// it (H1). It joins un-initialized; the bootstrap node forms the cluster with
+    /// [`initialize`](Self::initialize) then [`add_learner`](Self::add_learner) +
+    /// [`change_membership`](Self::change_membership).
+    ///
+    /// # Errors
+    /// [`NodeError`] on storage or raft construction failure.
+    pub async fn join(
+        node_id: NodeId,
+        dir: impl AsRef<Path>,
+        cluster: &Cluster,
+    ) -> Result<Self, NodeError> {
+        let node = Self::build(node_id, dir, cluster.network(node_id)).await?;
+        cluster.register(node_id, node.raft.clone());
+        Ok(node)
     }
 
     /// Start the node and initialize a fresh single-voter cluster, waiting until
@@ -99,6 +133,97 @@ impl RaftNode {
             .map_err(|e| NodeError::Raft(e.to_string()))?;
 
         Ok(node)
+    }
+
+    /// Initialize a fresh cluster with `voters` as its initial members and wait
+    /// for a leader. Call once, on the bootstrap node (H1).
+    ///
+    /// # Errors
+    /// [`NodeError::Raft`] on a raft failure.
+    pub async fn initialize(&self, voters: BTreeSet<NodeId>) -> Result<(), NodeError> {
+        let members: BTreeMap<NodeId, BasicNode> = voters
+            .into_iter()
+            .map(|id| (id, BasicNode::new("")))
+            .collect();
+        self.raft
+            .initialize(members)
+            .await
+            .map_err(|e| NodeError::Raft(e.to_string()))?;
+        Ok(())
+    }
+
+    /// Add `id` as a learner (non-voting) and wait for it to catch up — the first
+    /// step of admitting a node to the cluster (H1). The node must already have
+    /// [`join`](Self::join)ed.
+    ///
+    /// # Errors
+    /// [`NodeError::Raft`] on a raft failure.
+    pub async fn add_learner(&self, id: NodeId) -> Result<(), NodeError> {
+        self.raft
+            .add_learner(id, BasicNode::new(""), true)
+            .await
+            .map_err(|e| NodeError::Raft(e.to_string()))?;
+        Ok(())
+    }
+
+    /// Set the cluster's voter set to `voters` (promotes caught-up learners to
+    /// voters, or removes a member).
+    ///
+    /// # Errors
+    /// [`NodeError::Raft`] on a raft failure.
+    pub async fn change_membership(&self, voters: BTreeSet<NodeId>) -> Result<(), NodeError> {
+        self.raft
+            .change_membership(voters, false)
+            .await
+            .map_err(|e| NodeError::Raft(e.to_string()))?;
+        Ok(())
+    }
+
+    /// Whether this node is the current Raft leader — the signal a controller's
+    /// `SharedGate` follows so only the leader reconciles.
+    #[must_use]
+    pub fn is_leader(&self) -> bool {
+        matches!(self.raft.metrics().borrow().state, ServerState::Leader)
+    }
+
+    /// The cluster's current leader, if one is established.
+    #[must_use]
+    pub fn current_leader(&self) -> Option<NodeId> {
+        self.raft.metrics().borrow().current_leader
+    }
+
+    /// Wait up to `timeout` for a leader to be established, returning its id — how
+    /// a failover test asserts a new leader emerged within SLO.
+    ///
+    /// # Errors
+    /// [`NodeError::Raft`] if no leader emerges within `timeout`.
+    pub async fn wait_for_leader(&self, timeout: Duration) -> Result<NodeId, NodeError> {
+        self.raft
+            .wait(Some(timeout))
+            .metrics(|m| m.current_leader.is_some(), "a leader is elected")
+            .await
+            .map_err(|e| NodeError::Raft(e.to_string()))?;
+        self.current_leader()
+            .ok_or_else(|| NodeError::Raft("leader elected but not reported".to_owned()))
+    }
+
+    /// A watch of this node's leadership, updated on every Raft state change — the
+    /// H1 wiring a `SharedGate` follows, so losing leadership stops this replica
+    /// reconciling on the next pass (fail-closed for action, doctrine I-4).
+    #[must_use]
+    pub fn leadership(&self) -> tokio::sync::watch::Receiver<bool> {
+        let mut metrics = self.raft.metrics();
+        let initial = matches!(metrics.borrow().state, ServerState::Leader);
+        let (tx, rx) = tokio::sync::watch::channel(initial);
+        tokio::spawn(async move {
+            while metrics.changed().await.is_ok() {
+                let leader = matches!(metrics.borrow().state, ServerState::Leader);
+                if tx.send(leader).is_err() {
+                    break;
+                }
+            }
+        });
+        rx
     }
 
     /// This node's id.

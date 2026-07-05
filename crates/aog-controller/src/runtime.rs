@@ -84,6 +84,21 @@ impl SharedGate {
     pub fn set(&self, leader: bool) {
         self.0.store(leader, Ordering::SeqCst);
     }
+
+    /// Drive this gate from a Raft leadership watch (H1): the gate opens when the
+    /// node leads and closes when it does not, so only the leader's controllers
+    /// reconcile. Leadership loss takes effect on the gate at once and on action
+    /// the next sync — fail-closed for action, not observation (doctrine I-4). The
+    /// follower task ends when the watch sender (the node) drops.
+    pub fn follow(self: &Arc<Self>, mut leadership: tokio::sync::watch::Receiver<bool>) {
+        let gate = Arc::clone(self);
+        tokio::spawn(async move {
+            gate.set(*leadership.borrow());
+            while leadership.changed().await.is_ok() {
+                gate.set(*leadership.borrow());
+            }
+        });
+    }
 }
 
 impl LeaderGate for SharedGate {

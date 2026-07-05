@@ -1408,3 +1408,39 @@ enforcement (O5), signed ToolGrant distribution with revoke-halts-every-proxy
   OpenBao's real KV/approle state, not vacuous skips.
 - NOT pushed/merged — awaits Basho.
 - Next: **Phase H** (H1–H6) — HA, consensus hardening, DR, federation.
+
+---
+
+## Phase H — HA, consensus hardening, DR, federation
+
+### H1 — Multi-node Raft (≥3-node control plane) — DONE
+K3's single-node openraft node is promoted to a real multi-node control plane:
+election, replication, leader failover, and a leadership-fenced `SharedGate`.
+- **`raft/cluster.rs` (new) — the multi-node transport.** A `Cluster` registry of
+  peer `Raft` handles; `ClusterNetwork` routes openraft's `append_entries` /
+  `vote` / `install_snapshot` RPCs by direct call to the target — **real** openraft
+  consensus across ≥3 in-process nodes. An `isolated` set injects a partition (a
+  node in it neither sends nor receives RPCs), the seam H2 uses.
+- **`RaftNode` (mod.rs).** Generalized `build<N>` over any network; `join` onto a
+  `Cluster` (registers the handle so peers reach it); `initialize` + `add_learner`
+  + `change_membership` to form the cluster; `is_leader` / `current_leader` /
+  `wait_for_leader`; and a `leadership()` watch.
+- **`SharedGate::follow` (aog-controller runtime).** Drives a controller's gate
+  from a node's `leadership()` watch, so only the leader reconciles — leadership is
+  fenced to the gate, not assumed.
+- **Files:** `crates/aog-store/src/raft/{cluster.rs (new), mod.rs}`;
+  `crates/aog-controller/src/runtime.rs`; `crates/aog-controller/tests/ha.rs (new)`.
+- **Verify:** `fmt` + `clippy -p aog-store` / `-p aog-controller --all-targets
+  --no-deps -D warnings` clean; `cargo test -p aog-store` **7 passed** (K3 intact),
+  `-p aog-controller` **82 passed**. H1 gate test (`ha.rs`): a 3-node cluster forms
+  and replicates a committed write to both followers; partitioning the leader
+  triggers a **re-election within SLO** among the survivors, the committed write
+  **survives with zero loss**, the new leader commits a fresh write, and the
+  `SharedGate` follows to the new leader. **Gate:** leader loss → new leader within
+  SLO, zero committed-state loss ✓.
+- **Scope note (honest):** an in-process 3-node cluster running real openraft
+  consensus with a real leader partition — genuine election/replication/commit, not
+  simulated. The over-the-wire mTLS transport is deployment packaging; fencing the
+  *old* partitioned leader (classic Raft still has it believe it leads until it
+  sees a higher term) is split-brain safety — proven under a real partition in H2.
+  **Commit:** `LOOM-H1`.
