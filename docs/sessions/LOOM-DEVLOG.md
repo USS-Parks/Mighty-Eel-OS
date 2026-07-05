@@ -1333,3 +1333,29 @@ New `mission.rs`.
   names; 2 controller tests: materialize exactly the allowed-tool grants, prune on
   shrink). **Gate:** an agent cannot exceed its MissionContract scope/budget ✓.
   **Commit:** `LOOM-O5`.
+
+### O6 — ToolGrant orchestration — DONE
+The declarative `ToolGrant`s become a signed, versioned active-grant set on the
+channel every proxy polls; revoking one halts the tool on every proxy. New
+`toolgrants.rs`.
+- **The signed set + edge cache.** `SignedGrantSet` (version + sorted
+  `GrantEntry { tool, systems }`) is ML-DSA-signed over its canonical payload
+  (signature cleared), exactly like an R6 policy bundle, so a proxy verifies it
+  offline with the control-plane public key alone. `EdgeGrantCache::accept`
+  refuses a bad signature and an anti-rollback stale set (version ≤ applied — a
+  replay cannot resurrect a revoked grant); `allows(tool)` / `allows_system` is
+  the per-call enforcement point.
+- **`ToolGrantController`.** Compiles every live (non-terminating) `ToolGrant`
+  into the set and publishes it to the `GrantStore` channel (`MemGrantStore` + the
+  OpenBao poll path in production), advancing the version only on real change. A
+  deleted or terminating grant is excluded → the next set omits its tool → the
+  proxy denies its next call. Complements O5, which owns the grants' lifecycle.
+- **Files:** `crates/aog-controller/src/{toolgrants.rs (new), lib.rs}`;
+  `crates/aog-controller/tests/toolgrants.rs (new)`.
+- **Verify:** `fmt` + `clippy -p aog-controller --all-targets --no-deps -D
+  warnings` clean; `cargo test -p aog-controller` **72 passed** (4 unit tests:
+  verify + allow, wrong-key refused, stale replay refused, revocation drops the
+  tool; 1 controller test: two proxies both allow `calc`, then deleting its grant
+  republishes a newer set and both proxies deny `calc` while `search` keeps
+  working). **Gate:** revoking a ToolGrant halts the tool on every proxy ✓.
+  **Commit:** `LOOM-O6`.

@@ -47,6 +47,11 @@
 //! into owned `ToolGrant`s, and the pure [`mission_allows`] gate denies any agent
 //! action outside the contract's tools/systems or past its call ceiling.
 //!
+//! O6: the [`ToolGrantController`] compiles the live `ToolGrant`s into a signed,
+//! versioned active-grant set every `aog-toolproxy` polls ([`EdgeGrantCache`]);
+//! revoking a grant drops its tool from the next set, halting the tool's next
+//! call on every proxy (anti-rollback keeps a replay from resurrecting it).
+//!
 //! Trust posture: this crate's read path is the informer (bounded-stale,
 //! resync-recovered, A1.6); its write path is **never** the store directly —
 //! a controller mutates desired state only through the apiserver admission
@@ -73,6 +78,7 @@ pub mod rollout;
 pub mod runtime;
 pub mod scheduler;
 pub mod teardown;
+pub mod toolgrants;
 pub mod transit;
 pub mod vkeys;
 pub mod workloads;
@@ -107,5 +113,9 @@ pub use runtime::{
 };
 pub use scheduler::SchedulerController;
 pub use teardown::{TENANT_FINALIZER, TenantTeardown};
+pub use toolgrants::{
+    EdgeGrantCache, GrantEntry, GrantReject, GrantStore, MemGrantStore, SignedGrantSet,
+    ToolGrantController, sign_grants, verify_grants,
+};
 pub use vkeys::{VIRTUALKEY_FINALIZER, VirtualKeyController};
 pub use workloads::{HttpWorkloadProbe, StaticWorkloadProbe, WorkloadController, WorkloadProbe};
