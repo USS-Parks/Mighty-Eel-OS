@@ -895,3 +895,27 @@ Secret) — no re-declaration.
   `never_force_placed_on_least_bad_node`); it is placed on a TPM-attested node
   with a matching floor (`ring3_secret_placed_on_attested_node`). **Commit:**
   `LOOM-S4`.
+
+### S5 — Budget/ROI (consolidation) scorer — DONE
+`ConsolidationScorer`: prefer bin-packing onto already-used nodes to reduce the
+number of active nodes and the hardware bill — the placement-time, real-signal
+half of the budget/ROI objective. Score = mean *used* fraction
+(`1 - free_fraction`) over the dimensions a node declares, normalised `[0,1]`.
+Shares the `mean_free_fraction` real-telemetry basis with the S2 utilisation
+scorer (they are exact complements), so neither invents a value; a node with no
+declared capacity abstains.
+- **Posture, not default.** Consolidation (pack) is the deliberate opposite of
+  utilisation (spread); wiring both at full weight cancels. So
+  `attested_scheduler()` keeps the spread posture as the safe default for a
+  sovereignty appliance, and `ConsolidationScorer` ships opt-in for
+  cost-optimising operators. Posture selection is the controller's (S7).
+- **Meter coupling — honest deferral.** Spend-weighted ROI (actual dollars /
+  value) is a runtime meter signal the scheduler does not hold at placement time;
+  it folds in when the meter feeds per-node efficiency into the estate. The
+  scheduler does not depend on `aog-gateway`'s meter.
+- **Files:** `crates/aog-scheduler/src/{scorers.rs, lib.rs}`.
+- **Verify:** fmt + clippy `-D warnings` clean; **38 tests** pass.
+- **Gate:** deterministic score from a fixed telemetry fixture ✓
+  (`consolidation_is_deterministic_from_fixture` asserts an exact `0.75` from a
+  fixed `Capacity`; `utilization_and_consolidation_are_complementary` proves the
+  exact complement). **Commit:** `LOOM-S5`.

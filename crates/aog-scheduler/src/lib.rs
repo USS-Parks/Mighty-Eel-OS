@@ -43,7 +43,7 @@ pub mod types;
 
 pub use filters::{AttestationFilter, CapacityFilter, ReadinessFilter, RingFilter};
 pub use framework::{Filter, Scheduler, Scorer};
-pub use scorers::UtilizationScorer;
+pub use scorers::{ConsolidationScorer, UtilizationScorer};
 pub use types::{
     FilterVerdict, NodeEvaluation, NodeSnapshot, ScheduleOutcome, ScheduleRequest,
     SchedulingDecision, SignalProvenance,
@@ -58,8 +58,10 @@ pub fn baseline_scheduler() -> Scheduler {
 
 /// The current Phase-S wiring the binding controller (S7) drives: the hard
 /// filters and soft scorers landed so far — readiness, ring (S3), attestation
-/// (S4) and capacity filters plus the utilisation scorer. The budget/ROI (S5)
-/// and spread/HA (S6) scorers join here as they land.
+/// (S4) and capacity filters plus the utilisation scorer (the spread posture).
+/// The spread/HA scorer (S6) joins here as it lands; the cost-consolidation
+/// scorer (S5, [`ConsolidationScorer`]) is the opposing posture and ships
+/// opt-in, since wiring both spread and pack at once would cancel.
 pub fn attested_scheduler() -> Scheduler {
     Scheduler::new()
         .with_filter(ReadinessFilter)
