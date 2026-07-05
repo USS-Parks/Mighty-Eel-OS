@@ -1231,3 +1231,30 @@ precise "drop the ordinals at or beyond `replicas`".
 - **Gate:** declaring N replicas converges to N, correctly placed (packing +
   spread) ✓; scale-down removes the excess and clears its token ✓.
   **Commit:** `LOOM-O1`.
+
+### O2 — Rollout controller (progressive / canary / blue-green) — DONE
+A `RolloutPlan` is advanced through availability-safe steps by a **pure,
+deterministic stepper** and a thin reconcile loop that receipts each step.
+- **`rollout.rs` (new) — the stepper.** `rollout_progress(strategy, total,
+  max_surge, max_unavailable, step) -> { updated, unavailable, complete }` is the
+  whole decision — no clock, no estate read (A1.12 bar-5 determinism). The
+  **availability floor** `available >= total - max_unavailable` holds at *every*
+  step because `unavailable <= max_unavailable` by construction. Progressive
+  cycles a window = surge + unavailable per step; canary validates a small first
+  cohort then the rest; blue-green stands the new set up beside the old and
+  switches atomically (zero downtime). `total_steps` gives the terminal step.
+- **`RolloutController`.** Resolves the target `Workload`'s replica count, asks
+  the stepper where the rollout is, and writes the next `status.step` (an admitted
+  update → a receipt, K9) until `complete` → `Ready`. A missing target holds
+  `Degraded` (fail-closed), re-checked on the resync heartbeat, never a phantom
+  rollout. Physical replica replacement is O1 placement + N9 drain; O2 owns the
+  order, the pace, and the receipt trail.
+- **Files:** `crates/aog-controller/src/{rollout.rs (new), lib.rs}`;
+  `crates/aog-controller/tests/rollout.rs (new)`.
+- **Verify:** `fmt` + `clippy -p aog-controller --all-targets --no-deps -D
+  warnings` clean; `cargo test -p aog-controller` **46 passed** (7 stepper unit
+  tests incl. an exhaustive availability-floor property over every strategy ×
+  total × surge × unavailable × step; 2 controller tests). **Gate:** rollout
+  maintains availability ✓ (the floor property); each step receipted ✓
+  (`receipts_len` grows `>= steps` as the plan reaches `Ready`).
+  **Commit:** `LOOM-O2`.

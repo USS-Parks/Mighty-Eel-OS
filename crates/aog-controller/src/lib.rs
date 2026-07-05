@@ -33,6 +33,11 @@
 //! exactly its declared `replicas`, packing onto node capacity when replicas
 //! outnumber nodes and dropping the excess (revoking their tokens) on scale-down.
 //!
+//! O2: the [`RolloutController`] advances a `RolloutPlan` through
+//! availability-safe steps (progressive / canary / blue-green) via a pure,
+//! deterministic stepper whose availability floor is provable, receipting each
+//! step through admission.
+//!
 //! Trust posture: this crate's read path is the informer (bounded-stale,
 //! resync-recovered, A1.6); its write path is **never** the store directly —
 //! a controller mutates desired state only through the apiserver admission
@@ -53,6 +58,7 @@ pub mod provision;
 pub mod queue;
 pub mod revocation;
 pub mod rings;
+pub mod rollout;
 pub mod runtime;
 pub mod scheduler;
 pub mod teardown;
@@ -77,6 +83,7 @@ pub use provision::{OPENBAO_FINALIZER, TenantProvisioner};
 pub use queue::{Backoff, WorkQueue};
 pub use revocation::RevocationController;
 pub use rings::TrustRingController;
+pub use rollout::{RolloutController, RolloutProgress, rollout_progress, total_steps};
 pub use runtime::{
     Action, AlwaysLeader, Controller, LeaderGate, ReconcileError, Reconciler, SharedGate, SyncStats,
 };
