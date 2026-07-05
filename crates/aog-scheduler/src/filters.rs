@@ -87,10 +87,64 @@ impl Filter for RingFilter {
     }
 }
 
+/// Hard filter — the attested-placement differentiator (S4, A1.3.2). A workload
+/// is placed only where its data-classification ceiling is provably held:
+/// `classification_ceiling <= node.attestation_floor`, and for any sensitive
+/// workload (ceiling `>= Restricted`) that floor must be backed by a real
+/// hardware root — an attestation platform (TPM / Nitro / SEV-SNP) with a
+/// recorded measurement (PCR). A node that merely *claims* a high floor with no
+/// hardware backing is under-attested; the workload is refused and stays Pending
+/// rather than force-placed to relieve pressure (doctrine I-2 / I-4).
+#[derive(Debug, Clone, Copy, Default)]
+pub struct AttestationFilter;
+
+impl Filter for AttestationFilter {
+    fn name(&self) -> &'static str {
+        "attestation"
+    }
+
+    fn filter(&self, request: &ScheduleRequest, node: &NodeSnapshot) -> FilterVerdict {
+        use aog_estate::AttestationPlatform;
+        use fabric_contracts::Classification;
+
+        let ceiling = request.classification_ceiling;
+        let floor = node.attestation_floor;
+        if ceiling > floor {
+            return FilterVerdict::unfit(
+                "attestation",
+                format!(
+                    "workload classification ceiling {ceiling:?} exceeds node attestation floor {floor:?}"
+                ),
+            );
+        }
+        // A sensitive ceiling demands a hardware-rooted floor: a bare assertion
+        // is not attestation (I-4). Public / Internal need no hardware root.
+        if ceiling >= Classification::Restricted {
+            if node.attestation.platform == AttestationPlatform::None {
+                return FilterVerdict::unfit(
+                    "attestation",
+                    format!(
+                        "classification {ceiling:?} requires a hardware attestation platform; node reports none"
+                    ),
+                );
+            }
+            if node.attestation.pcr.is_none() {
+                return FilterVerdict::unfit(
+                    "attestation",
+                    format!(
+                        "classification {ceiling:?} requires a recorded PCR measurement; node reports none"
+                    ),
+                );
+            }
+        }
+        FilterVerdict::Fit
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use aog_estate::{AttestationProfile, Capacity, WorkloadKind};
+    use aog_estate::{AttestationPlatform, AttestationProfile, Capacity, WorkloadKind};
     use fabric_contracts::Classification;
 
     fn snap(ready: bool, heartbeat: bool) -> NodeSnapshot {
@@ -183,5 +237,83 @@ mod tests {
         let mut request = req();
         request.ring = 3;
         assert!(!RingFilter.filter(&request, &node).is_fit());
+    }
+
+    fn att_snap(floor: Classification, platform: AttestationPlatform, pcr: bool) -> NodeSnapshot {
+        NodeSnapshot {
+            name: "n".to_owned(),
+            ring: 3,
+            attestation_floor: floor,
+            attestation: AttestationProfile {
+                platform,
+                air_gapped: true,
+                pcr: pcr.then(|| "pcr-digest".to_owned()),
+            },
+            ready: true,
+            capacity: Capacity::default(),
+            allocatable: Capacity::default(),
+            last_heartbeat: Some("t".to_owned()),
+            resource_version: 1,
+        }
+    }
+
+    fn req_ceiling(ceiling: Classification) -> ScheduleRequest {
+        ScheduleRequest {
+            workload_name: "wl".to_owned(),
+            workload_kind: WorkloadKind::Gateway,
+            ring: 3,
+            classification_ceiling: ceiling,
+        }
+    }
+
+    #[test]
+    fn ceiling_within_backed_floor_is_fit() {
+        let node = att_snap(Classification::Secret, AttestationPlatform::Tpm, true);
+        assert!(
+            AttestationFilter
+                .filter(&req_ceiling(Classification::Secret), &node)
+                .is_fit()
+        );
+    }
+
+    #[test]
+    fn ceiling_above_floor_is_unfit() {
+        let node = att_snap(Classification::Internal, AttestationPlatform::Tpm, true);
+        assert!(
+            !AttestationFilter
+                .filter(&req_ceiling(Classification::Secret), &node)
+                .is_fit()
+        );
+    }
+
+    #[test]
+    fn sensitive_workload_needs_hardware_platform() {
+        // Floor claims Secret but there is no hardware root → under-attested.
+        let node = att_snap(Classification::Secret, AttestationPlatform::None, false);
+        assert!(
+            !AttestationFilter
+                .filter(&req_ceiling(Classification::Secret), &node)
+                .is_fit()
+        );
+    }
+
+    #[test]
+    fn sensitive_workload_needs_pcr() {
+        let node = att_snap(Classification::Secret, AttestationPlatform::Tpm, false);
+        assert!(
+            !AttestationFilter
+                .filter(&req_ceiling(Classification::Restricted), &node)
+                .is_fit()
+        );
+    }
+
+    #[test]
+    fn public_workload_needs_no_hardware() {
+        let node = att_snap(Classification::Public, AttestationPlatform::None, false);
+        assert!(
+            AttestationFilter
+                .filter(&req_ceiling(Classification::Public), &node)
+                .is_fit()
+        );
     }
 }

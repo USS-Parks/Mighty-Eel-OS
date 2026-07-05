@@ -864,3 +864,34 @@ readiness.
   ring-1-only estate stays Pending (`cross_ring_placement_is_impossible`); a
   ring-2 node takes it (`same_ring_node_takes_the_workload`). **Commit:**
   `LOOM-S3`.
+
+### S4 — Attestation predicate (hard) — the differentiator — DONE
+`AttestationFilter`: a workload is placed only where its data-classification
+ceiling is provably held. Two hard conditions:
+- **Ordering.** `classification_ceiling <= node.attestation_floor` — the node is
+  attested to hold at least as sensitive as the workload's data.
+- **Hardware backing.** A sensitive ceiling (`>= Restricted`) additionally
+  requires the floor to be rooted in real hardware — an attestation platform
+  (TPM / Nitro / SEV-SNP) with a recorded PCR. A node that merely *claims* a
+  high floor with no hardware is under-attested; a bare assertion is not
+  attestation (I-4). Public / Internal workloads need no hardware root.
+
+Wired into `attested_scheduler()` after the ring filter. `Classification` is the
+frozen `fabric-contracts` ordinal (Public < Internal < Restricted < Controlled <
+Secret) — no re-declaration.
+- **Air-gap compatibility — honest deferral.** A1.8 also lists air-gap
+  compatibility as a hard predicate, but a workload's air-gap *requirement*
+  derives from its `TrustRing`, not from `WorkloadSpec`, and the scheduler is not
+  handed the ring resource. That match lands when the binding controller (S7)
+  enriches the request from the ring, and at the node edge (N6, which denies
+  cloud routes on an air-gapped node). The node's own `air_gapped` attestation
+  flag is already carried on `NodeSnapshot`. Noted, not skipped.
+- **Files:** `crates/aog-scheduler/src/{filters.rs, lib.rs}`,
+  `tests/attested_placement.rs`.
+- **Verify:** fmt + clippy `-D warnings` clean; **34 tests** pass.
+- **Gate:** a Ring-3 Secret workload is refused on an under-attested node and
+  stays Pending, never force-placed ✓
+  (`ring3_secret_refused_on_underattested_node`,
+  `never_force_placed_on_least_bad_node`); it is placed on a TPM-attested node
+  with a matching floor (`ring3_secret_placed_on_attested_node`). **Commit:**
+  `LOOM-S4`.

@@ -41,7 +41,7 @@ pub mod framework;
 pub mod scorers;
 pub mod types;
 
-pub use filters::{CapacityFilter, ReadinessFilter, RingFilter};
+pub use filters::{AttestationFilter, CapacityFilter, ReadinessFilter, RingFilter};
 pub use framework::{Filter, Scheduler, Scorer};
 pub use scorers::UtilizationScorer;
 pub use types::{
@@ -57,13 +57,14 @@ pub fn baseline_scheduler() -> Scheduler {
 }
 
 /// The current Phase-S wiring the binding controller (S7) drives: the hard
-/// filters and soft scorers landed so far — readiness, ring (S3) and capacity
-/// filters plus the utilisation scorer. The attestation predicate (S4) and the
-/// budget/ROI (S5) and spread/HA (S6) scorers join here as they land.
+/// filters and soft scorers landed so far — readiness, ring (S3), attestation
+/// (S4) and capacity filters plus the utilisation scorer. The budget/ROI (S5)
+/// and spread/HA (S6) scorers join here as they land.
 pub fn attested_scheduler() -> Scheduler {
     Scheduler::new()
         .with_filter(ReadinessFilter)
         .with_filter(RingFilter)
+        .with_filter(AttestationFilter)
         .with_filter(CapacityFilter)
         .with_scorer(1.0, UtilizationScorer)
 }

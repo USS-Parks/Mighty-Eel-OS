@@ -3,7 +3,8 @@
 //! S2 (capacity + utilisation), S3 (ring), S4 (attestation).
 
 use aog_estate::{
-    AttestationProfile, Capacity, Node, NodeSpec, NodeStatus, Workload, WorkloadKind, WorkloadSpec,
+    AttestationPlatform, AttestationProfile, Capacity, Node, NodeSpec, NodeStatus, Workload,
+    WorkloadKind, WorkloadSpec,
 };
 use aog_scheduler::{NodeSnapshot, ScheduleRequest, attested_scheduler};
 use fabric_contracts::Classification;
@@ -134,4 +135,101 @@ fn same_ring_node_takes_the_workload() {
     let decision =
         attested_scheduler().schedule(&ScheduleRequest::from_workload(&wl), &[ring_node("r2", 2)]);
     assert_eq!(decision.scheduled_node(), Some("r2"));
+}
+
+/// A ready node with an explicit attestation profile and ample capacity.
+fn attested_node(
+    name: &str,
+    ring: u8,
+    floor: Classification,
+    platform: AttestationPlatform,
+    pcr: bool,
+) -> NodeSnapshot {
+    let mut n = Node::new(
+        name,
+        NodeSpec {
+            ring,
+            attestation_floor: floor,
+            attestation: AttestationProfile {
+                platform,
+                air_gapped: true,
+                pcr: pcr.then(|| "pcr-digest".to_owned()),
+            },
+            capacity: slots(4),
+        },
+    );
+    n.status = Some(NodeStatus {
+        ready: true,
+        last_heartbeat: Some("2026-07-04T00:00:00Z".to_owned()),
+        allocatable: slots(4),
+        ..NodeStatus::default()
+    });
+    NodeSnapshot::from_node(&n)
+}
+
+fn ring3_secret_workload() -> Workload {
+    let mut wl = workload();
+    wl.spec.ring = 3;
+    wl.spec.classification_ceiling = Classification::Secret;
+    wl
+}
+
+#[test]
+fn ring3_secret_refused_on_underattested_node() {
+    // The only node claims a Secret floor but has no hardware root — it is
+    // under-attested. The Ring-3 Secret workload must stay Pending, never
+    // force-placed to relieve pressure (the S4 differentiator).
+    let underattested = attested_node(
+        "bare",
+        3,
+        Classification::Secret,
+        AttestationPlatform::None,
+        false,
+    );
+    let decision = attested_scheduler().schedule(
+        &ScheduleRequest::from_workload(&ring3_secret_workload()),
+        &[underattested],
+    );
+    assert!(decision.is_pending());
+}
+
+#[test]
+fn ring3_secret_placed_on_attested_node() {
+    let attested = attested_node(
+        "tpm",
+        3,
+        Classification::Secret,
+        AttestationPlatform::Tpm,
+        true,
+    );
+    let decision = attested_scheduler().schedule(
+        &ScheduleRequest::from_workload(&ring3_secret_workload()),
+        &[attested],
+    );
+    assert_eq!(decision.scheduled_node(), Some("tpm"));
+}
+
+#[test]
+fn never_force_placed_on_least_bad_node() {
+    // Two nodes, both unfit for a Ring-3 Secret workload: one with too low a
+    // floor, one with a high floor but no hardware root. Neither is chosen.
+    let low_floor = attested_node(
+        "low",
+        3,
+        Classification::Internal,
+        AttestationPlatform::Tpm,
+        true,
+    );
+    let no_hardware = attested_node(
+        "nohw",
+        3,
+        Classification::Secret,
+        AttestationPlatform::None,
+        false,
+    );
+    let decision = attested_scheduler().schedule(
+        &ScheduleRequest::from_workload(&ring3_secret_workload()),
+        &[low_floor, no_hardware],
+    );
+    assert!(decision.is_pending());
 }
