@@ -17,6 +17,7 @@
 //! placement plus N9's drain; O2 owns the *order and pace* and the receipt trail.
 
 use std::future::Future;
+use std::sync::Arc;
 use std::time::Duration;
 
 use aog_estate::{Kind, Phase, ResourceObject, RolloutPlan, RolloutPlanStatus, RolloutStrategy};
@@ -150,16 +151,48 @@ pub fn total_steps(
     }
 }
 
+/// Observed error/failure count for a rollout's target — read from the
+/// tamper-evident receipt ledger or the meter (O3). Synchronous: it reflects a
+/// telemetry snapshot the caller already holds, keeping the controller's estate
+/// access on the async side. A fail-closed source reports conservatively (an
+/// unreadable signal is never "zero errors").
+pub trait ErrorBudgetProbe: Send + Sync {
+    /// Errors observed for `target` in the current rollout window.
+    fn errors(&self, target: &str) -> u32;
+}
+
 /// Advances `RolloutPlan`s. Run it on a `"RolloutPlan/"` informer.
 #[derive(Clone)]
 pub struct RolloutController {
     client: EstateClient,
+    error_probe: Option<Arc<dyn ErrorBudgetProbe>>,
 }
 
 impl RolloutController {
     #[must_use]
     pub fn new(client: EstateClient) -> Self {
-        Self { client }
+        Self {
+            client,
+            error_probe: None,
+        }
+    }
+
+    /// Enable O3 auto-rollback: when `probe` reports more errors for a rollout's
+    /// target than its `error_budget`, the rollout reverses to its prior state
+    /// (ending `Failed`), each reverse step receipted. Without a probe the
+    /// controller is forward-only (O2).
+    #[must_use]
+    pub fn with_error_budget(mut self, probe: Arc<dyn ErrorBudgetProbe>) -> Self {
+        self.error_probe = Some(probe);
+        self
+    }
+
+    /// Whether the rollout's error budget is set and exceeded by observed errors.
+    fn budget_breached(&self, plan: &RolloutPlan) -> bool {
+        let Some(probe) = &self.error_probe else {
+            return false;
+        };
+        plan.spec.error_budget > 0 && probe.errors(&plan.spec.target) > plan.spec.error_budget
     }
 
     /// The rollout target's size. M3c resolves a `Workload` target to its replica
@@ -181,8 +214,13 @@ impl RolloutController {
         plan: RolloutPlan,
         phase: Phase,
         step: u32,
+        rolled_back: bool,
     ) -> Result<(), ReconcileError> {
-        let desired = RolloutPlanStatus { phase, step };
+        let desired = RolloutPlanStatus {
+            phase,
+            step,
+            rolled_back,
+        };
         if plan.status.as_ref() != Some(&desired) {
             let mut converged = plan;
             converged.status = Some(desired);
@@ -204,13 +242,31 @@ impl RolloutController {
         }
 
         let step = plan.status.as_ref().map_or(0, |s| s.step);
+        let rolling_back = plan.status.as_ref().is_some_and(|s| s.rolled_back);
         let Some(total) = self.target_total(&plan).await? else {
             // Target absent: hold Degraded (fail-closed). Its creation won't wake
             // this informer, so a resync heartbeat re-checks — not a hot requeue
             // spin; the controller is run with `with_resync` for exactly this.
-            self.set_status(plan, Phase::Degraded, step).await?;
+            self.set_status(plan, Phase::Degraded, step, rolling_back)
+                .await?;
             return Ok(Action::Done);
         };
+
+        // O3 — auto-rollback. Once the error budget is breached (or a rollback is
+        // already under way), reverse toward step 0 — the prior state — each
+        // reverse an audited receipt. A rollback in flight never un-reverses even
+        // if the error signal later clears: deterministic, ledger-provable.
+        if rolling_back || self.budget_breached(&plan) {
+            return if step > 0 {
+                self.set_status(plan, Phase::Provisioning, step - 1, true)
+                    .await?;
+                Ok(Action::RequeueAfter(REQUEUE))
+            } else {
+                // Prior state restored; the rollout has failed its budget.
+                self.set_status(plan, Phase::Failed, 0, true).await?;
+                Ok(Action::Done)
+            };
+        }
 
         let progress = rollout_progress(
             plan.spec.strategy,
@@ -220,11 +276,12 @@ impl RolloutController {
             step as usize,
         );
         if progress.complete {
-            self.set_status(plan, Phase::Ready, step).await?;
+            self.set_status(plan, Phase::Ready, step, false).await?;
             return Ok(Action::Done);
         }
         // One bounded, availability-safe step forward, then come back for the next.
-        self.set_status(plan, Phase::Provisioning, step + 1).await?;
+        self.set_status(plan, Phase::Provisioning, step + 1, false)
+            .await?;
         Ok(Action::RequeueAfter(REQUEUE))
     }
 }

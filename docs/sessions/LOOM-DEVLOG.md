@@ -1258,3 +1258,27 @@ deterministic stepper** and a thin reconcile loop that receipts each step.
   maintains availability ✓ (the floor property); each step receipted ✓
   (`receipts_len` grows `>= steps` as the plan reaches `Ready`).
   **Commit:** `LOOM-O2`.
+
+### O3 — Automatic rollback on error-budget breach — DONE
+The rollout controller gains an error budget: when a target's observed errors
+exceed it mid-rollout, the rollout **reverses to its prior state** and ends
+`Failed` — deterministically, every reverse step receipted.
+- **Schema (aog-estate).** `RolloutPlanSpec.error_budget: u32` (`0` disables
+  auto-rollback) and `RolloutPlanStatus.rolled_back: bool` (a rolled-back rollout
+  ends `Failed`, not `Ready`) — both additive `#[serde(default)]`, round-trip clean.
+- **`RolloutController` (rollout.rs).** New `ErrorBudgetProbe` (a sync telemetry
+  read from receipts/meter) and a `with_error_budget(probe)` builder. Each
+  reconcile, before stepping forward, checks `error_budget > 0 && observed >
+  budget`: on a breach — or once a rollback is already under way — it reverses one
+  step toward 0 (each an admitted receipt) and ends `Failed` at step 0. A rollback
+  in flight never un-reverses even if the error signal later clears, so the
+  reversal is deterministic and ledger-provable. Forward-only (O2) with no probe.
+- **Files:** `crates/aog-estate/src/kinds.rs`,
+  `crates/aog-controller/src/{rollout.rs, lib.rs}`;
+  `crates/aog-controller/tests/rollout.rs`, `crates/aog-estate/tests/roundtrip.rs`.
+- **Verify:** `fmt` + `clippy --all-targets --no-deps -D warnings` clean
+  (aog-estate + aog-controller); `cargo test -p aog-estate` **21 passed**,
+  `-p aog-controller` **47 passed** (O3 test: a rollout advances two steps clean,
+  then a budget breach reverses it to step 0 / `Failed` / `rolled_back`).
+  **Gate:** an injected error-budget breach auto-rolls-back deterministically to
+  the prior state ✓. **Commit:** `LOOM-O3`.

@@ -83,7 +83,9 @@ pub use provision::{OPENBAO_FINALIZER, TenantProvisioner};
 pub use queue::{Backoff, WorkQueue};
 pub use revocation::RevocationController;
 pub use rings::TrustRingController;
-pub use rollout::{RolloutController, RolloutProgress, rollout_progress, total_steps};
+pub use rollout::{
+    ErrorBudgetProbe, RolloutController, RolloutProgress, rollout_progress, total_steps,
+};
 pub use runtime::{
     Action, AlwaysLeader, Controller, LeaderGate, ReconcileError, Reconciler, SharedGate, SyncStats,
 };

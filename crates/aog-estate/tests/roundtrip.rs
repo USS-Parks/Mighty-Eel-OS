@@ -156,6 +156,7 @@ fn rollout_plan() -> RolloutPlan {
             strategy: RolloutStrategy::default(),
             max_surge: 1,
             max_unavailable: 0,
+            error_budget: 3,
         },
     )
 }

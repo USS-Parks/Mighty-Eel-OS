@@ -8,13 +8,15 @@
 
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::{Duration, Instant};
 
 use aog_apiserver::AppState;
 use aog_apiserver::auth::Authenticator;
 use aog_apiserver::seal::Sealer;
 use aog_controller::{
-    AlwaysLeader, Controller, EstateClient, Reconciler, RolloutController, SyncStats, total_steps,
+    AlwaysLeader, Controller, ErrorBudgetProbe, EstateClient, Reconciler, RolloutController,
+    SyncStats, total_steps,
 };
 use aog_estate::{
     Kind, Phase, Resource, ResourceObject, RolloutPlan, RolloutPlanSpec, RolloutStrategy, Workload,
@@ -106,6 +108,7 @@ async fn progressive_rollout_advances_to_ready_receipting_each_step() {
                 strategy: RolloutStrategy::Progressive,
                 max_surge: 1,
                 max_unavailable: 1,
+                error_budget: 0,
             },
         )))
         .await
@@ -152,6 +155,7 @@ async fn a_rollout_with_a_missing_target_is_degraded() {
                 strategy: RolloutStrategy::Progressive,
                 max_surge: 1,
                 max_unavailable: 1,
+                error_budget: 0,
             },
         )))
         .await
@@ -172,4 +176,64 @@ async fn a_rollout_with_a_missing_target_is_degraded() {
         .expect("status");
     assert_eq!(status.phase, Phase::Degraded, "no target → no rollout");
     assert_eq!(status.step, 0, "it never advanced");
+}
+
+/// A test error signal the controller reads through [`ErrorBudgetProbe`].
+struct CountProbe(Arc<AtomicU32>);
+
+impl ErrorBudgetProbe for CountProbe {
+    fn errors(&self, _target: &str) -> u32 {
+        self.0.load(Ordering::SeqCst)
+    }
+}
+
+#[tokio::test]
+async fn error_budget_breach_auto_rolls_back_to_prior_state() {
+    let state = app_state("loom-o3-rollback").await;
+    let client = EstateClient::new(state.admission(), state.reader());
+
+    // A 6-replica workload; progressive (window 2 → 3 steps); error budget 2.
+    workload(&client, "gw", 6).await;
+    client
+        .ensure_created(ResourceObject::RolloutPlan(Resource::new(
+            "roll-gw",
+            RolloutPlanSpec {
+                target: "gw".to_owned(),
+                strategy: RolloutStrategy::Progressive,
+                max_surge: 1,
+                max_unavailable: 1,
+                error_budget: 2,
+            },
+        )))
+        .await
+        .unwrap();
+
+    let errors = Arc::new(AtomicU32::new(0));
+    let probe: Arc<dyn ErrorBudgetProbe> = Arc::new(CountProbe(Arc::clone(&errors)));
+    let reconciler = RolloutController::new(client.clone()).with_error_budget(probe);
+    let mut controller = Controller::new(
+        "rollout",
+        state.informer("RolloutPlan/"),
+        reconciler,
+        Arc::new(AlwaysLeader),
+    );
+
+    // Advance two steps cleanly (no errors observed yet).
+    let mut now = Instant::now();
+    controller.sync(now).await.unwrap();
+    now += Duration::from_millis(250);
+    controller.sync(now).await.unwrap();
+    let mid = get_plan(&client, "roll-gw").await.status.expect("status");
+    assert_eq!(mid.step, 2, "the rollout advanced before the breach");
+    assert!(!mid.rolled_back);
+
+    // Breach the budget mid-rollout: the controller must reverse to the prior
+    // state (step 0) and end Failed — deterministically, each reverse receipted.
+    errors.store(5, Ordering::SeqCst);
+    settle(&mut controller).await;
+
+    let after = get_plan(&client, "roll-gw").await.status.expect("status");
+    assert_eq!(after.phase, Phase::Failed, "a breached rollout fails");
+    assert!(after.rolled_back, "it rolled back");
+    assert_eq!(after.step, 0, "reversed all the way to the prior state");
 }
