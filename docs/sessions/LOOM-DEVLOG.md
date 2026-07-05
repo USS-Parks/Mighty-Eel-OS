@@ -1182,3 +1182,52 @@ fail-closed / fail-static, per-action re-auth, never bearer coasting.
   `ad32b26`→`50593f1` (17 commits), **NOT pushed/merged** — awaits Basho.
 - Next milestone: **M3c — orchestration objects + HA** (Phases O + H), then the
   gated **Summit-Conformance** (Phase V).
+
+---
+
+## Phase O — Orchestration objects (`aog-controller` higher-order)
+
+Built on `session/LOOM-4`, branched from `main` at `406fbf6` (the merged M3a+M3b
+tip). One prompt = one focused commit + entry. Live gates (A3.2) for the
+placement-touching prompts are written per prompt and run as a batch at the
+Phase-O boundary against a live OpenBao (recorded there).
+
+### O1 — `Workload` (Deployment analog): replica-set convergence — DONE
+The S7 binding controller becomes the full Deployment analog. Placements are now
+**replica-indexed** — replica `i` of workload `w` is `w-r<i>` — which is what lets
+a node host more than one replica of one workload (packing) and makes scale-down a
+precise "drop the ordinals at or beyond `replicas`".
+- **`deploy.rs` (new) — the pure planner.** `plan_replicas(desired, existing,
+  scheduler, request, snapshots) -> ReplicaPlan { create, delete, short }` is the
+  whole convergence decision, factored out of the OpenBao side so it is
+  deterministic and unit-testable. It runs the attested scheduler (Phase S) once
+  per unfilled ordinal, threading two per-pass signals the scheduler cannot see:
+  **spread** (each node already carrying a replica this pass is fed back as
+  `already_placed_on`, so S6 fills fresh nodes first, then packs) and **capacity**
+  (a node's free slots are decremented locally per placement, so the S2
+  `CapacityFilter` bounds packing to the headroom actually reported; an undeclared
+  slot budget is unbounded). Ring / attestation / readiness stay the scheduler's
+  hard filters — an ordinal with no satisfying node is left `short`, never
+  force-placed, and the caller requeues.
+- **`scheduler.rs` — rewired.** `reconcile_workload` parses live placements to
+  ordinals, plans, then scales **down** first (delete each excess `Placement` and
+  `delete_kv` its runtime token from OpenBao, so the node cannot re-fetch a token
+  for a replica that no longer exists — the running replica is drained by N9;
+  estate-wide token revocation stays R9's `RevocationIntent`) and **up** (mint a
+  scoped token per new ordinal, persist it, create the attested `Placement`
+  through admission, which receipts the binding, K9). Converged passes touch
+  nothing; a lingering shortfall requeues so a later node-join heals it.
+- **Files:** `crates/aog-controller/src/{deploy.rs (new), scheduler.rs, lib.rs}`;
+  `crates/aog-controller/tests/live_deploy.rs (new)`.
+- **Verify:** `fmt` clean; `clippy -p aog-controller --all-targets --no-deps -D
+  warnings` clean; `cargo test -p aog-controller` **35 passed** (8 new planner
+  tests: spread, pack-beyond-nodes, capacity-bounds-and-short, unbounded-packs,
+  scale-down-drops-highest, converged-no-op, no-ready-node-all-short, name round
+  trip). **Live gate (A3.2 — written; runs in the Phase-O live batch):**
+  `live_deploy.rs` — `packs_replicas_beyond_node_count` (3 replicas over 2 nodes →
+  3 verifiable tokens, one node hosting two) and
+  `scale_down_removes_the_dropped_replicas_token` (drop to 1 replica → `gw-r1`
+  gone from the estate and its token no longer fetchable from OpenBao).
+- **Gate:** declaring N replicas converges to N, correctly placed (packing +
+  spread) ✓; scale-down removes the excess and clears its token ✓.
+  **Commit:** `LOOM-O1`.

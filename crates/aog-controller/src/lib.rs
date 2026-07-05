@@ -28,6 +28,11 @@
 //! `Workload` — reconciling its health/readiness and reflecting its placements —
 //! with no change to the gateway's data-path API.
 //!
+//! O1: the replica-set [`deploy`] planner makes the binding controller the full
+//! Deployment analog — replica-indexed placements converge a `Workload` to
+//! exactly its declared `replicas`, packing onto node capacity when replicas
+//! outnumber nodes and dropping the excess (revoking their tokens) on scale-down.
+//!
 //! Trust posture: this crate's read path is the informer (bounded-stale,
 //! resync-recovered, A1.6); its write path is **never** the store directly —
 //! a controller mutates desired state only through the apiserver admission
@@ -37,6 +42,7 @@
 pub mod bundle_store;
 pub mod bundles;
 pub mod capability;
+pub mod deploy;
 pub mod gc;
 pub mod health;
 pub mod intents;
@@ -60,6 +66,7 @@ pub use bundle_store::{
 };
 pub use bundles::PolicyBundleController;
 pub use capability::CapabilityController;
+pub use deploy::{ReplicaPlan, placement_name, plan_replicas, replica_index};
 pub use gc::GarbageCollector;
 pub use health::{HealthProbe, HttpHealthProbe};
 pub use intents::RevocationIndexer;
