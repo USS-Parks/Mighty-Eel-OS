@@ -207,6 +207,19 @@ impl RaftNode {
             .ok_or_else(|| NodeError::Raft("leader elected but not reported".to_owned()))
     }
 
+    /// **Quorum-confirmed** leadership (H2 fencing): performs a ReadIndex
+    /// (openraft `ensure_linearizable`) that only returns `Ok` when a quorum still
+    /// acknowledges this node as leader. A partitioned minority leader — which in
+    /// classic Raft still *believes* it leads — cannot confirm a quorum and
+    /// returns `false`, so it fences and serves no authoritative decision. This is
+    /// the split-brain-safe check the trust path (not the metrics view) must use.
+    pub async fn confirm_leadership(&self, timeout: Duration) -> bool {
+        matches!(
+            tokio::time::timeout(timeout, self.raft.ensure_linearizable()).await,
+            Ok(Ok(_))
+        )
+    }
+
     /// A watch of this node's leadership, updated on every Raft state change — the
     /// H1 wiring a `SharedGate` follows, so losing leadership stops this replica
     /// reconciling on the next pass (fail-closed for action, doctrine I-4).

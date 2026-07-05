@@ -1444,3 +1444,30 @@ election, replication, leader failover, and a leadership-fenced `SharedGate`.
   *old* partitioned leader (classic Raft still has it believe it leads until it
   sees a higher term) is split-brain safety — proven under a real partition in H2.
   **Commit:** `LOOM-H1`.
+
+### H2 — Split-brain fencing (load-bearing) — DONE
+The split-brain hazard H1 exposed — a partitioned leader still *believing* it
+leads — is closed with a quorum-confirmed leadership check.
+- **`RaftNode::confirm_leadership(timeout)` (mod.rs).** A ReadIndex (openraft
+  `ensure_linearizable`) that returns `Ok` only when a quorum still acknowledges
+  this node as leader. A partitioned minority cannot confirm and returns `false` —
+  the split-brain-safe check the trust path uses, **not** the stale metrics view.
+- **The fencing.** A `SharedGate` set from `confirm_leadership` closes on a
+  minority, so its controllers serve no authoritative decision under partition
+  (fail-closed, doctrine I-4). The majority elects a leader that *can* confirm and
+  serves the authoritative estate.
+- **Files:** `crates/aog-store/src/raft/mod.rs`;
+  `crates/aog-controller/tests/split_brain.rs (new)`.
+- **Verify:** `fmt` + `clippy -p aog-store` / `-p aog-controller --all-targets
+  --no-deps -D warnings` clean; the H2 gate test (`split_brain.rs`) **1 passed**:
+  with a **real** injected partition (the `Cluster` severs the leader's RPCs) the
+  minority leader fences (`confirm_leadership` → false) while its stale metrics
+  still call it leader; the majority elects a quorum-confirmed leader; a capability
+  revocation commits across the majority; and the fenced minority — though it still
+  holds the stale `granted` value — confirms no quorum, so it authorizes nothing.
+  **Gate:** injected partition → minority serves no allow ✓; kill switch honored
+  under partition ✓.
+- **Note:** a real transport fault + openraft's real quorum reaction (not a
+  simulated verdict); in-process 3-node cluster (A3.2 — the wire transport is
+  deployment packaging; the correctness it carries is what's pinned).
+  **Commit:** `LOOM-H2`.
