@@ -1122,3 +1122,21 @@ take traffic. Both seams accept an HTTP `/healthz` / `/ready` behind the trait.
   Running; `a_healthy_replica_is_left_running` leaves a live one alone);
   readiness gates traffic ✓ (`readiness_gates_traffic` — only the ready instance
   is a target). **Commit:** `LOOM-N7`.
+
+### N8 — Attestation-liveness — the differentiator — DONE
+`aog-node::attest`: liveness as "is it still the code we trust." `check`
+re-measures a running workload (a pluggable `Measurer` — a TPM / Nitro PCR or an
+image hash) against the measurement sealed at placement; a match is `Intact`, a
+drift **evicts** the workload (driver stop) and returns an `Evicted` verdict
+carrying its runtime token id. `revocation_for` builds a signed, emergency
+`RevocationSnapshot` denying every drifted token — the artifact R9 fans out
+estate-wide and the edge (N6) applies, so the token is denied everywhere. A
+tampered replica is removed and cut off, not merely restarted.
+- **Files:** `crates/aog-node/src/{lib.rs, attest.rs (new)}`.
+- **Verify:** fmt + clippy `-D warnings` clean; **27 tests** pass (2 new).
+- **Gate:** a tampered / drifted workload is evicted and its token denied
+  estate-wide ✓ (`a_drifted_workload_is_evicted_and_revoked`: a drifted
+  measurement stops the workload and puts its token in a signed emergency
+  revocation snapshot that verifies against the anchor — the same snapshot R9
+  distributes and N6 denies on); `an_intact_workload_is_left_running`.
+  **Commit:** `LOOM-N8`.
