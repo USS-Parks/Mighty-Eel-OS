@@ -14,6 +14,7 @@
 
 pub mod attest;
 pub mod containerd;
+pub mod drain;
 pub mod driver;
 pub mod edge;
 pub mod heartbeat;

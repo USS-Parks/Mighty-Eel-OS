@@ -1140,3 +1140,21 @@ tampered replica is removed and cut off, not merely restarted.
   revocation snapshot that verifies against the anchor — the same snapshot R9
   distributes and N6 denies on); `an_intact_workload_is_left_running`.
   **Commit:** `LOOM-N8`.
+
+### N9 — Eviction + drain — DONE
+`aog-node::drain`: `plan_drain(reason, inflight, budget)` decides how to drain an
+instance. A **planned** drain defers when the disruption budget (a
+PodDisruptionBudget-analog) has no room, waits for in-flight authorized calls
+when any remain (they are not dropped), and stops when there are none. A **Tier-0
+revocation** drain is unconditional and immediate — `ForceStopNow`, ignoring both
+in-flight work and the budget (I-9). `execute_drain` applies the action through
+the driver.
+- **Files:** `crates/aog-node/src/{lib.rs, drain.rs (new)}`.
+- **Verify:** fmt + clippy `-D warnings` clean; **33 tests** pass (6 new).
+- **Gate:** a graceful drain completes without dropping in-flight authorized
+  calls ✓ (`a_graceful_drain_with_in_flight_does_not_stop` — the instance stays
+  running while calls are in flight; `a_graceful_drain_with_no_in_flight_stops`);
+  a revocation drain is immediate ✓
+  (`a_revocation_drain_stops_the_instance_immediately`,
+  `..._regardless_of_in_flight_or_budget`); the disruption budget is honoured
+  (`..._defers_when_the_budget_is_exhausted`). **Commit:** `LOOM-N9`.
