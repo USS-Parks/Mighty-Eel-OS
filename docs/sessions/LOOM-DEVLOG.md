@@ -1158,3 +1158,27 @@ the driver.
   (`a_revocation_drain_stops_the_instance_immediately`,
   `..._regardless_of_in_flight_or_budget`); the disruption budget is honoured
   (`..._defers_when_the_budget_is_exhausted`). **Commit:** `LOOM-N9`.
+
+---
+
+**M3b COMPLETE (Phases S + N) — the attested edge.** Phase S: the `aog-scheduler`
+filter→score→bind engine — S1 framework + the fake-metrics defect purge
+(absence-as-optimism inverted to fail-closed), S2 capacity + utilisation, S3 ring,
+S4 the attestation predicate `classification_ceiling ≤ attestation_floor` (the
+differentiator), S5 consolidation, S6 spread/HA, S8 preemption — plus the S7
+`SchedulerController` that binds replicas, mints Capability-scoped runtime tokens,
+and receipts each `Placement` through admission. Phase N: the new `aog-node`
+runtime — verified registration (N1), heartbeat + reschedule-on-death (N2), the
+CRI-shaped driver trait (N3) with process (N4) and containerd (N5) drivers, W5
+offline-safe edge admission (N6), health probes (N7), attestation-liveness
+evict-and-revoke (N8), and graceful / forced drain (N9). Trust posture throughout:
+fail-closed / fail-static, per-action re-auth, never bearer coasting.
+- **Verify:** `fmt --check` clean; each M3b crate clippy `--all-targets --no-deps
+  -D warnings` clean; `cargo check --workspace` clean; **`cargo test --workspace`
+  2000 passed / 2 ignored (180 suites)**. Four live gates green — **S7** (attested
+  binding + scoped token) and **N2** (reschedule-on-death) vs **live OpenBao**;
+  **N5** (containerized lifecycle) vs **docker**; plus the deterministic S/N gates.
+- All on `session/LOOM-3` (off `session/LOOM-2` `23b25ce`), commits
+  `ad32b26`→`50593f1` (17 commits), **NOT pushed/merged** — awaits Basho.
+- Next milestone: **M3c — orchestration objects + HA** (Phases O + H), then the
+  gated **Summit-Conformance** (Phase V).
