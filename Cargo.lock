@@ -184,17 +184,21 @@ dependencies = [
  "aog-apiserver",
  "aog-estate",
  "aog-gateway",
+ "aog-scheduler",
  "aog-store",
  "axum 0.8.9",
  "base64",
  "chrono",
  "fabric-contracts",
  "fabric-crypto",
+ "fabric-proof",
  "fabric-revocation",
  "fabric-token",
+ "hex",
  "reqwest",
  "serde",
  "serde_json",
+ "sha2",
  "thiserror 2.0.18",
  "tokio",
  "wsf-bridge",
@@ -238,6 +242,29 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "wsf-bridge",
+]
+
+[[package]]
+name = "aog-node"
+version = "0.1.0"
+dependencies = [
+ "aog-estate",
+ "chrono",
+ "fabric-cache",
+ "fabric-contracts",
+ "fabric-crypto",
+ "fabric-identity",
+ "fabric-revocation",
+ "fabric-token",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "aog-scheduler"
+version = "0.1.0"
+dependencies = [
+ "aog-estate",
+ "fabric-contracts",
 ]
 
 [[package]]

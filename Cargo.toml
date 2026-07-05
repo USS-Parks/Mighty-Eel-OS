@@ -16,6 +16,8 @@ members = [
     "crates/aog-controller",
     "crates/aog-estate",
     "crates/aog-gateway",
+    "crates/aog-node",
+    "crates/aog-scheduler",
     "crates/aog-store",
     "crates/aog-toolproxy",
     "crates/aogctl",

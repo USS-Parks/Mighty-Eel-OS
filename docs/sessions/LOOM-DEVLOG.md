@@ -555,3 +555,630 @@ replicas could bill a $100 cap ~$N×100. Now the ledger is shared.
   round-trip ✓; single-process behavior unchanged ✓ (gateway suite green);
   concurrent decrement across 3 clients never over-spends a cap (live) ✓.
   **Commit:** `LOOM-X1-R5`.
+
+### R6 — PolicyBundle controller — DONE
+A declared `PolicyBundle` becomes a signed artifact on the channel every
+gateway/node edge polls, and an edge verifies it with the control-plane public
+key **alone** — offline, air-gap-fit. New `bundle_store.rs` (the artifact +
+channel) + `bundles.rs` (the controller).
+- **Sign + distribute.** `sign_bundle` mints a `SignedBundle` — the bundle's
+  `(version, mode, rules)` ML-DSA-signed over its canonical BLAKE3 payload
+  (signature field cleared), the exact shape of a `fabric-revocation` snapshot,
+  reusing `fabric-crypto`'s `Signer`. `BundleStore` is the channel:
+  `OpenBaoBundleStore` publishes to KV-v2 `kv/data/policy-bundles/<name>` (the
+  poll path R3 established), `MemBundleStore` is its in-memory double. The
+  controller signs and publishes, then records `status.distributed_to` = every
+  `Node` + gateway `Workload` the estate declares.
+- **Edge verify + anti-rollback (I-3/I-4/I-8).** `verify_bundle` checks the
+  signature under the public key alone — wrong key, tampered content, or a
+  malformed signature all fail closed. `EdgeBundleCache::accept` is the node's
+  decision: a bad signature is refused, and a validly-signed but **stale**
+  bundle (version `<=` the applied one) is refused too, so a replayed older
+  bundle can never silently downgrade enforcement.
+- **Never regress the channel.** The controller is level-triggered and
+  idempotent — it re-signs/publishes only on real drift (absent, content
+  changed, or a tampered artifact healed) — and refuses to ship a spec whose
+  version is behind the live artifact (`Degraded`, not published; I-4). Rollback
+  is roll-forward to a new signed version; every prior signed artifact stays
+  independently verifiable.
+- **Files:** `crates/aog-controller/{Cargo.toml (fabric-crypto/-proof/-contracts
+  + hex to deps), src/{bundle_store.rs (new), bundles.rs (new), lib.rs},
+  tests/live_bundle.rs (new)}`.
+- **Verify:** clippy `--all-targets --no-deps -D warnings` clean +
+  `--workspace -D warnings -A clippy::pedantic` (CI) clean; **20 passed** across
+  aog-controller with `WSF_OPENBAO_ADDR` set — +3 bundle unit tests
+  (sign→verify round-trip incl. wrong-key/tamper; edge accepts forward, refuses
+  stale replay + forged signature; mem-store publish/fetch/retract) and the
+  **R6 live gate**: a `PolicyBundle` is signed and published to **live** OpenBao
+  KV, an edge fetches it and verifies with the public key alone, a v2 update
+  reaches the edge, a replayed v1 is refused (`Stale`), a stale spec is
+  `Degraded` (channel not downgraded), and a tampered artifact is refused
+  (`BadSignature`); hermetic across repeated runs (channel purged on setup).
+  fmt + `check --workspace` clean.
+- **Gate:** a bundle update reaches all nodes ✓ (`distributed_to` = the estate's
+  nodes + gateways; published to the live poll path); signature verifies at the
+  edge ✓ (public key alone, off-host); stale bundle rejected ✓ (edge
+  anti-rollback + controller no-regress). **Commit:** `LOOM-R6`.
+
+### R7 — ProviderPool / ModelEndpoint controller — DONE
+Provider/model health folded into each pool's schedulable set, so the scheduler
+(Phase S) only ever places on a reachable endpoint. New `health.rs` (the probe)
++ `providers.rs` (the controller).
+- **The probe.** `HealthProbe` answers "is this endpoint reachable now?",
+  fail-closed (I-4). `HttpHealthProbe` is the live impl: a provider with a
+  configured base URL is liveness-GET'd (any non-2xx or transport error =
+  unhealthy); a provider with no URL — a local, air-gapped model with no HTTP
+  surface — falls back to the endpoint's declared `healthy` flag. Base URLs are
+  deployment config, not signed desired-state, so they live in the probe, not
+  the estate.
+- **The fold.** `ProviderPoolController` probes every endpoint and writes
+  `status.healthy` = the schedulable model set; a pool with endpoints but none
+  healthy is `Degraded`, not silently `Ready`. Level-triggered + a resync
+  heartbeat (`with_resync`) re-checks health on a cadence, so a provider that
+  goes down drops out within that SLO and one that recovers rejoins — without
+  any desired-state edit.
+- **Files:** `crates/aog-controller/{src/{health.rs (new), providers.rs (new),
+  lib.rs}, tests/provider_health.rs (new)}`.
+- **Verify:** clippy `--all-targets --no-deps -D warnings` + CI workspace clippy
+  clean; **22 passed** across aog-controller — +2 R7 tests, both **real HTTP** (a
+  live local server stands in for the provider, no mock): flipping it 503 drops
+  both models from the schedulable set on the next resync and marks the pool
+  Degraded, recovery re-adds them (declared `healthy: false` throughout, so the
+  live probe is proven to govern); a provider with no probe URL uses its declared
+  health. fmt + `check --workspace` clean. (No OpenBao: provider health is HTTP
+  liveness, outside the A3.2 live-harness clause; the test runs in the normal CI
+  lane.)
+- **Gate:** an unhealthy provider is removed from the schedulable set within SLO
+  ✓ (real 503 → Degraded/empty on the resync heartbeat; recovery rejoins).
+  **Commit:** `LOOM-R7`.
+
+### R8 — VirtualKey controller — DONE
+A declared `VirtualKey` becomes a resolvable entry at the gateway's
+key-resolution path, so the gateway (G1) turns the presented key into a
+verified, scoped, in-budget trust token — and a change to the key's capability
+is reflected on the gateway's next request, no restart. New `vkeys.rs`.
+- **Resolution write.** The gateway resolves a key by reading
+  `<prefix>/<sha256(key)>` from OpenBao KV and verifying the `token` there
+  against the trust anchor (reused verbatim, not rebuilt). `VirtualKeyController`
+  writes that entry: it reads the `Capability` the key names, mints a trust
+  token carrying its scope + budget + ttl (`fabric_token::issue`, signed by the
+  anchor), and `put`s `{"token": …}` at the key's path. Level-triggered and
+  idempotent — it re-mints only on drift (absent, scope changed, or a tampered
+  entry that no longer verifies).
+- **Fail-closed teardown (I-4).** The controller owns a
+  `loom.aog/virtualkey-kv` finalizer, so a deleted key's entry is **retracted
+  before** the estate object is collected — a removed key stops resolving, never
+  lingers. A key whose capability is missing/terminating is retracted too and
+  marked `Degraded`; it never resolves to a stale token. The kernel models the
+  presented key by the object's name; a secret-key indirection is Phase-W's.
+- **Files:** `crates/aog-controller/{Cargo.toml (fabric-token→deps, +sha2),
+  src/{vkeys.rs (new), lib.rs}, tests/live_vkey.rs (new)}`.
+- **Verify:** clippy `--all-targets --no-deps -D warnings` + CI workspace clippy
+  clean; **23 passed** across aog-controller with `WSF_OPENBAO_ADDR` set —
+  including the **R8 live gate** against **live OpenBao and the real
+  `aog-gateway`**: a key resolves to cap-basic's scope/budget through
+  `Gateway::resolve_and_check`; repointing it at cap-premium (bigger budget, more
+  models, higher classification) is reflected by the **same** gateway instance
+  with no rebuild/restart; deleting the key retracts its entry and the gateway
+  then returns `UnknownKey`; hermetic across runs. fmt + `check --workspace`
+  clean.
+- **Gate:** a key change is reflected at the gateway without restart ✓ (the real
+  gateway resolves the new capability's scope/budget after the edit), plus a
+  deleted key stops resolving (fail-closed retraction). **Commit:** `LOOM-R8`.
+
+### R9 — RevocationIntent controller — DONE
+The kill leg: a declarative `RevocationIntent` fans out to a signed
+`fabric-revocation` snapshot on the channel every gateway replica polls **and**
+on removable media for an air-gapped node — bounded, provable revocation
+(doctrine I-9), effective on every replica and offline. New `revocation.rs`.
+- **Fan-out.** `RevocationController` builds the snapshot as a pure function of
+  the current intents (level-triggered: a dropped or duplicated event cannot
+  skew it): `Token` targets → `revoked_tokens`, `Subject` → `revoked_subjects`
+  (tenant-wide stays the R3 / front-door leg, `Ring` the R4 leg). It signs with
+  the anchor (`fabric-revocation`, reused), publishes `{"snapshot": …}` to the
+  online KV path the gateway's G9 kill switch reads, and writes the same signed
+  artifact to a removable-media file. Idempotent — it republishes only when the
+  revoked set drifts or the live snapshot stops verifying — then acks each
+  covered intent `propagated`.
+- **Complements R2.** R2's indexer is the in-process apiserver front-door kill
+  view; R9 is the data-path + air-gap leg — together they close the loop R2's
+  indexer honestly left for the snapshot channel.
+- **Files:** `crates/aog-controller/{Cargo.toml (fabric-revocation→deps),
+  src/{revocation.rs (new), lib.rs}, tests/live_revocation.rs (new)}`.
+- **Verify:** clippy `--all-targets --no-deps -D warnings` + CI workspace clippy
+  clean; **24 passed** across aog-controller with `WSF_OPENBAO_ADDR` set —
+  including the **R9 live gate** against **live OpenBao and the real
+  `aog-gateway`**: a virtual key resolves (R8), a `RevocationIntent` for its
+  token makes R9 publish the snapshot, and the **same** gateway then denies the
+  key (`Revoked`); the media file — verified **offline with the public key
+  alone** — reports the token revoked; the intent is acknowledged `propagated`;
+  hermetic across runs. fmt + `check --workspace` clean.
+- **Gate:** intent → token denied on every replica ✓ (real gateway kill switch)
+  + on an air-gapped node via media ✓ (offline-verified snapshot). **Commit:**
+  `LOOM-R9`.
+
+---
+
+**Phase R complete (R1–R9).** M3a's reconciliation runtime and its controllers:
+the level-triggered runtime (R1) with finalizers / GC / tenant-teardown (R2);
+then the live-OpenBao Tenant (R3), TrustRing with declarative ring-darkness (R4),
+Capability over the shared lease-based SpendLedger (X1 + R5), PolicyBundle
+distribution (R6), ProviderPool health (R7), VirtualKey resolution (R8), and
+RevocationIntent kill (R9) controllers. Every trust-adjacent leg is proven
+against live OpenBao and, where the gateway is the edge, the real `aog-gateway`.
+Next: the M3a wrap — X2 (`aog-gateway` as a managed `Workload`).
+
+---
+
+## Phase X — Migration / cutover
+
+### X2 — Gateway as a managed `Workload` — DONE
+`aog-gateway` is now a first-class managed `Workload` in the estate, with **no
+change to its data-path API** — an existing OpenAI client is byte-identical
+across the cutover to management. New `workloads.rs` + a gateway ledger seam.
+- **Managed Workload.** `WorkloadController` reconciles a gateway `Workload`: it
+  reflects the `Placement`s bound to it (attested placement stays the Phase-S
+  scheduler's — this controller never mints them) and probes liveness through a
+  `WorkloadProbe` (`HttpWorkloadProbe` GETs the gateway's `/healthz`;
+  `StaticWorkloadProbe` is the M3a default), writing `phase`/`ready_replicas`:
+  unplaced → `Pending`, placed + healthy → `Ready` with its replicas, placed +
+  unhealthy → `Degraded`. Level-triggered, resync-heartbeat-driven.
+- **Ledger seam (no API change).** The gateway's runtime spend ledger is
+  promoted to `Arc<dyn SpendLedger>` (default `LocalSpendLedger`, byte-for-byte
+  the old behavior) with a `with_spend_ledger` swap — the X1 seam realized on the
+  gateway. Honest deferral: the lease-based shared ledger's reserve flow uses a
+  distinct `try_spend` API, not `fold`/`add`; adopting it in the request path is
+  scale-out work that lands with the node runtime running replicas (M3b), not the
+  M3a single-node kernel.
+- **Files:** `crates/aog-gateway/src/lib.rs` (spend seam);
+  `crates/aog-controller/{src/{workloads.rs (new), lib.rs}, tests/managed_gateway.rs (new)}`.
+- **Verify:** clippy `--all-targets --no-deps -D warnings` (both crates) + CI
+  workspace clippy clean; **25 passed** across aog-controller + the full
+  aog-gateway suite green (on clean OpenBao) — including the **X2 live gate**
+  against **live OpenBao and the real gateway OpenAI surface**: a client completes
+  a chat; the gateway is declared a `Workload` + bound by a `Placement` +
+  reconciled to `Ready` / `ready_replicas=1` by the controller probing its live
+  `/healthz`; the **same** client request is byte-identical after — no API change.
+  The `Arc<dyn SpendLedger>` change was proven regression-free by a stash test:
+  the pre-existing `kill_switch` stale-revocation-snapshot flake (a test-hygiene
+  gap, not this change) fails identically with and without it, and the suite is
+  green once the stale record is cleared. fmt + `check --workspace` clean.
+- **Gate:** an existing OpenAI client is unaffected across the cutover ✓
+  (byte-identical response before/after management). **Commit:** `LOOM-X2`.
+
+---
+
+**M3a COMPLETE (Phases K + R + X1–X2).** The Loom kernel: a typed estate over a
+consensus store served by the admission-choke-point apiserver (K); the
+level-triggered reconciliation runtime and its nine controllers (R1–R9); the
+shared lease-based SpendLedger (X1); and `aog-gateway` brought under management
+as a `Workload` (X2). Every trust-adjacent path is proven against live OpenBao,
+and where the gateway is the edge, the real `aog-gateway` — the model proven end
+to end with zero orchestration-scale risk. Next milestone: **M3b — the attested
+edge** (Phase S scheduler + Phase N node runtime).
+
+---
+
+## Phase S — Scheduler (`aog-scheduler`, revived from `mai-scheduler`)
+
+_M3b begins. Branch `session/LOOM-3` off `session/LOOM-2` (`23b25ce`)._
+
+### S1 — Framework + defect purge — DONE
+New crate `crates/aog-scheduler`: the K8s-style **filter → score → bind**
+placement engine (A1.8), revived from `mai-scheduler`'s `Scheduler` /
+`PlacementEngine` shape and rebuilt for the AOG workload domain — with the
+fake-metrics path deleted rather than inherited (A4).
+- **Framework.** Two extension seams. `Filter` is a hard, deny-wins predicate
+  (one `Unfit` removes the node); `Scorer` is a soft preference returning
+  `Option<f64>` where `None` **excludes** the node — the engine never fabricates
+  a missing score (doctrine I-4). `Scheduler` runs every node through the filter
+  chain, scores the survivors, and binds the workload to the highest scorer;
+  a workload with no surviving, scorable node stays `Pending`, never force-placed
+  (A1.8 / the S4 gate). Deterministic: no clock, no RNG; score ties break by node
+  name, so an estate always replays to the same decision. Every decision carries
+  per-node `SignalProvenance` (resource version, reconciled readiness, heartbeat
+  presence, reported allocatable) — the audit trail that ties a placement to real
+  inputs. Binds the estate `Placement`/`Node`/`Workload` types directly; no
+  parallel structs.
+- **Defect purge.** `mai-scheduler`'s metrics are real-feedback-driven, but it
+  carries one anti-pattern — **absence-as-optimism**: an instance with zero
+  telemetry scores as maximally healthy (`metrics/health.rs`: an empty tracker
+  returns `1.0`; `test_empty_tracker_is_healthy`). A defensible cold-start guess
+  for inference routing; a custody breach for attested placement, where an
+  unmeasured — therefore untrusted — node would look fit. The revival inverts it:
+  `NodeSnapshot::from_node` projects a status-less node **fail-closed**
+  (`ready == false`, zero `allocatable`, no heartbeat — a generous *spec*
+  capacity never leaks in as reported *allocatable*), and `ReadinessFilter`
+  rejects any node without reconciled liveness. Absence of a signal can never
+  become a favourable one.
+- **Scope call (honest).** `mai-scheduler` is a separate, parked crate still
+  driving the MAI inference runtime; gutting it is out of Phase-S scope and would
+  risk that path. Per A1.11 (`aog-scheduler` is a **new** crate) and A4 (revived
+  "by deletion-and-rebuild of the fake paths, not by extending them"), the fake
+  path is deleted by not carrying it into the new crate; the anti-pattern is
+  documented in the crate docs and **guarded by a source-audit test** so it
+  cannot creep back.
+- **Live-harness (A3.2) — honest deferral.** S1 is a pure, deterministic decision
+  engine over in-memory estate projections — no OpenBao, no consensus, no node
+  I/O — so its obligations are fully proven by unit + integration tests. The
+  live-multi-node / live-OpenBao gate binds the prompts that actually bind and
+  mint against a real estate (S7 runtime-token mint) and the attested-scheduling
+  breach proof on a real multi-node estate (V6); those land with the node runtime
+  (Phase N).
+- **Files:** `crates/aog-scheduler/{Cargo.toml, src/{lib.rs, types.rs,
+  framework.rs, filters.rs}, tests/no_fabricated_metrics.rs}` (new); `Cargo.toml`
+  (workspace member).
+- **Verify:** `cargo fmt --check` (workspace) clean; `clippy -p aog-scheduler
+  --all-targets --no-deps -D warnings` clean (workspace pedantic); **14 passed**
+  (`cargo test -p aog-scheduler` — 10 unit + 4 gate); `cargo check --workspace`
+  clean (358 crates).
+- **Gate:** no fabricated metric in any code path (audit + test) ✓ — the
+  `source_has_no_fabrication_apis` audit walks `src/` and asserts no RNG /
+  synthetic-generator API appears; the fail-closed test proves a status-less node
+  is never placed and its spec capacity never leaks in; the `None`-score test
+  proves an unscorable node is excluded, not defaulted. Decisions trace to real
+  inputs ✓ — `decision_traces_to_real_signals` asserts the winning decision's
+  `SignalProvenance` mirrors the exact estate `resource_version` / `ready` /
+  heartbeat / `allocatable`. **Commit:** `LOOM-S1`.
+
+### S2 — Capacity + real metrics — DONE
+The scheduler now weighs real node capacity. `NodeSnapshot` carries the node's
+declared total `capacity` (spec) alongside reported `allocatable` (status), so a
+utilisation *fraction* is computable from real signals.
+- **CapacityFilter (hard).** A node that declares a workload-slot budget but
+  reports none free (`capacity.max_workloads > 0 && allocatable.max_workloads ==
+  0`) is saturated and drops out; a node that declares no slot budget is not
+  slot-constrained here (the utilisation scorer still weighs its cpu/mem/gpu).
+- **UtilizationScorer (soft, normalised).** Score = mean free fraction
+  (`allocatable / capacity`) over the dimensions the node declares (cpu, memory,
+  gpu, slots), in `[0,1]` so it composes with S5/S6. Fail-closed on absent
+  signal: a node declaring no total capacity abstains (`None`) rather than
+  inventing a fraction.
+- **Framework correction — scorer abstention.** A `Scorer` returning `None` now
+  **abstains** (contributes nothing) rather than excluding the node. Excluding a
+  safe, placeable node for want of a soft-preference signal is an availability
+  bug, not a fail-closed win; hard exclusion stays the filters' job. The
+  anti-fabrication guarantee is unchanged — absence becomes a neutral `0`
+  contribution, never a favourable value, and a scorer never fabricates.
+- **`attested_scheduler()`.** The wiring the control plane (S7) drives:
+  readiness + capacity filters + the utilisation scorer. `baseline_scheduler()`
+  stays the readiness-only S1 foundation the framework tests pin to.
+- **Files:** `crates/aog-scheduler/src/{types.rs, framework.rs, filters.rs,
+  scorers.rs (new), lib.rs}`, `tests/attested_placement.rs (new)`.
+- **Verify:** fmt + `clippy -p aog-scheduler --all-targets --no-deps -D warnings`
+  clean; **22 tests** pass (16 unit + 4 S1 gate + 2 attested-placement).
+- **Gate:** placement reflects real load; a saturated node is not selected ✓
+  (`saturated_node_is_not_selected`) and the less-loaded of two candidates wins
+  (`less_loaded_node_is_preferred`). **Commit:** `LOOM-S2`.
+
+### S3 — Ring filter (hard) — DONE
+`RingFilter`: a workload places only within its own trust ring
+(`request.ring == node.ring`); a mismatch is `Unfit`, and being a hard filter no
+score can rescue it. Rings are the Trust Manifold isolation boundary — crossing
+one is a sovereignty violation. Wired into `attested_scheduler()` after
+readiness.
+- **Files:** `crates/aog-scheduler/src/{filters.rs, lib.rs}`,
+  `tests/attested_placement.rs`.
+- **Verify:** fmt + clippy `-D warnings` clean; **26 tests** pass.
+- **Gate:** cross-ring placement impossible ✓ — a ring-2 workload against a
+  ring-1-only estate stays Pending (`cross_ring_placement_is_impossible`); a
+  ring-2 node takes it (`same_ring_node_takes_the_workload`). **Commit:**
+  `LOOM-S3`.
+
+### S4 — Attestation predicate (hard) — the differentiator — DONE
+`AttestationFilter`: a workload is placed only where its data-classification
+ceiling is provably held. Two hard conditions:
+- **Ordering.** `classification_ceiling <= node.attestation_floor` — the node is
+  attested to hold at least as sensitive as the workload's data.
+- **Hardware backing.** A sensitive ceiling (`>= Restricted`) additionally
+  requires the floor to be rooted in real hardware — an attestation platform
+  (TPM / Nitro / SEV-SNP) with a recorded PCR. A node that merely *claims* a
+  high floor with no hardware is under-attested; a bare assertion is not
+  attestation (I-4). Public / Internal workloads need no hardware root.
+
+Wired into `attested_scheduler()` after the ring filter. `Classification` is the
+frozen `fabric-contracts` ordinal (Public < Internal < Restricted < Controlled <
+Secret) — no re-declaration.
+- **Air-gap compatibility — honest deferral.** A1.8 also lists air-gap
+  compatibility as a hard predicate, but a workload's air-gap *requirement*
+  derives from its `TrustRing`, not from `WorkloadSpec`, and the scheduler is not
+  handed the ring resource. That match lands when the binding controller (S7)
+  enriches the request from the ring, and at the node edge (N6, which denies
+  cloud routes on an air-gapped node). The node's own `air_gapped` attestation
+  flag is already carried on `NodeSnapshot`. Noted, not skipped.
+- **Files:** `crates/aog-scheduler/src/{filters.rs, lib.rs}`,
+  `tests/attested_placement.rs`.
+- **Verify:** fmt + clippy `-D warnings` clean; **34 tests** pass.
+- **Gate:** a Ring-3 Secret workload is refused on an under-attested node and
+  stays Pending, never force-placed ✓
+  (`ring3_secret_refused_on_underattested_node`,
+  `never_force_placed_on_least_bad_node`); it is placed on a TPM-attested node
+  with a matching floor (`ring3_secret_placed_on_attested_node`). **Commit:**
+  `LOOM-S4`.
+
+### S5 — Budget/ROI (consolidation) scorer — DONE
+`ConsolidationScorer`: prefer bin-packing onto already-used nodes to reduce the
+number of active nodes and the hardware bill — the placement-time, real-signal
+half of the budget/ROI objective. Score = mean *used* fraction
+(`1 - free_fraction`) over the dimensions a node declares, normalised `[0,1]`.
+Shares the `mean_free_fraction` real-telemetry basis with the S2 utilisation
+scorer (they are exact complements), so neither invents a value; a node with no
+declared capacity abstains.
+- **Posture, not default.** Consolidation (pack) is the deliberate opposite of
+  utilisation (spread); wiring both at full weight cancels. So
+  `attested_scheduler()` keeps the spread posture as the safe default for a
+  sovereignty appliance, and `ConsolidationScorer` ships opt-in for
+  cost-optimising operators. Posture selection is the controller's (S7).
+- **Meter coupling — honest deferral.** Spend-weighted ROI (actual dollars /
+  value) is a runtime meter signal the scheduler does not hold at placement time;
+  it folds in when the meter feeds per-node efficiency into the estate. The
+  scheduler does not depend on `aog-gateway`'s meter.
+- **Files:** `crates/aog-scheduler/src/{scorers.rs, lib.rs}`.
+- **Verify:** fmt + clippy `-D warnings` clean; **38 tests** pass.
+- **Gate:** deterministic score from a fixed telemetry fixture ✓
+  (`consolidation_is_deterministic_from_fixture` asserts an exact `0.75` from a
+  fixed `Capacity`; `utilization_and_consolidation_are_complementary` proves the
+  exact complement). **Commit:** `LOOM-S5`.
+
+### S6 — Spread / HA scorer — DONE
+`SpreadScorer`: anti-affinity across nodes for replica resilience. A fresh
+replica scores a node `0.0` if it already hosts a sibling replica of this
+workload, `1.0` otherwise — so replicas spread across the nodes of their ring.
+Replicas share a ring (the ring filter), so anti-affinity is node-wise, not
+ring-wise. The scorer reads a new `ScheduleRequest.already_placed_on` (the nodes
+already hosting this workload's replicas); `from_workload` starts it empty and
+the binding controller enriches it per replica from the estate's `Placement`s
+(S7).
+- Wired into `attested_scheduler()` alongside utilisation — both are the spread
+  posture, so they compose (no cancel).
+- **Files:** `crates/aog-scheduler/src/{types.rs, scorers.rs, filters.rs,
+  framework.rs, lib.rs}`, `tests/attested_placement.rs`.
+- **Verify:** fmt + clippy `-D warnings` clean; **41 tests** pass.
+- **Gate:** replicas of one workload spread across ≥2 nodes when available ✓
+  (`replicas_spread_across_nodes`: replica 2, told its sibling is on `node-a`,
+  lands on `node-b`). **Commit:** `LOOM-S6`.
+
+### S8 — Preemption + priority — DONE (planner; S7 executes it)
+_Built before S7: S7's controller was recon-blocked, and the preemption planner
+is an independent scheduler-lib unit._ `plan_preemption(incoming_priority,
+decision, occupancy)`: when a prior schedule left a workload Pending, a
+higher-priority workload may reclaim room by evicting strictly-lower-priority,
+disruptible occupants.
+- **Only capacity-blocked nodes are targets.** A node is a preemption candidate
+  only if it failed *exactly* the capacity filter and passed every other hard
+  predicate — so a ring- or attestation-mismatched node is never preempted (no
+  hard predicate is violated by preemption).
+- **PDB-analog.** A `Victim` carries a `disruptible` flag the controller computes
+  from its disruption budget; the planner never evicts a protected victim, nor
+  one at equal-or-higher priority. Lowest-priority victim chosen, ties by node
+  name — deterministic.
+- **Inputs, not estate churn.** Priority and occupancy are explicit planner
+  inputs (`incoming_priority`, `NodeOccupancy` / `Victim`), so S8 adds no field to
+  `WorkloadSpec`; the controller adapts estate data to them (as with S6's
+  `already_placed_on`). Executing the plan (drain victims, then bind) is the
+  controller's job (S7); the full disruption budget is Phase O (O7). A workload
+  with no lawful preemption stays Pending — pressure never forces a placement.
+- **Files:** `crates/aog-scheduler/src/{preemption.rs (new), lib.rs}`.
+- **Verify:** fmt + clippy `-D warnings` clean; **46 tests** pass (5 new).
+- **Gate:** preemption honors the PodDisruptionBudget-analog ✓
+  (`respects_disruption_budget`); no hard-predicate (ring) violation during
+  preemption ✓ (`never_targets_a_ring_mismatched_node`); lowest-priority victim
+  chosen, equal/higher never evicted. **Commit:** `LOOM-S8`.
+
+### S7 — Binding + runtime-token mint — DONE (live OpenBao)
+`SchedulerController` (`aog-controller`, a new dep on `aog-scheduler`): reconciles
+each `Workload` on the `"Workload/"` informer and turns its desired replicas into
+attested `Placement`s. Per unplaced replica it runs `attested_scheduler()` over
+the estate's `Node`s — spreading replicas by passing the nodes already placed as
+`already_placed_on` (S6) — mints a runtime `TrustToken` scoped to the workload's
+`Capability` (budget/caveats/routes/models/classification/ttl), persists that
+token to OpenBao for the node to fetch, and creates the `Placement` through the
+admission choke point.
+- **Receipt is automatic.** Every admitted mutation emits a `fabric-proof`
+  receipt (K9); creating the `Placement` through `EstateClient` (as
+  `Principal::system()`) receipts the binding — no separate step. The
+  control-plane sibling of the data-path guarantee (I-5).
+- **Scope + fail-closed.** The token carries exactly the named capability's
+  scope; a missing/terminating capability yields a *minimal* token (less
+  privilege, never broader — I-4). A replica with no attestation-satisfying node
+  stays Pending and requeues; it is never force-placed. Each `Placement` is owned
+  by its workload (owner-ref) so the GC reclaims it on delete (R2/W9).
+- **Separation.** This controller *mints* placements; the X2 `WorkloadController`
+  reflects them into `Workload` status — the seam X2 left open. One replica per
+  node (placement keyed `<workload>-<node>`); multi-replica-per-node is Phase O.
+- **Files:** `crates/aog-controller/{Cargo.toml, src/{lib.rs, scheduler.rs
+  (new)}, tests/live_scheduler.rs (new)}`.
+- **Verify:** fmt + `clippy -p aog-controller --all-targets --no-deps -D warnings`
+  clean; `check --workspace` clean; controller suite **26 passed** (non-live) +
+  the **S7 live gate green vs live OpenBao** (`loom-r3-openbao`, port 8200): a
+  2-replica workload binds across two ready nodes, and the persisted runtime
+  token verifies against the anchor and carries the capability's budget (5000),
+  model set, and classification.
+- **Gate:** a bound workload receives a scoped token; the binding is receipted ✓
+  (`scheduler_binds_replicas_with_scoped_tokens`). **Commit:** `LOOM-S7`.
+
+---
+
+## Phase N — Node / edge runtime (`aog-node`)
+
+### N1 — Node agent + registration — DONE
+New crate `crates/aog-node`. A node joins with a `fabric-identity` leaf signed by
+the trust anchor, plus its declared attestation profile + capacity (the `Node`
+spec). `mint_node_identity` issues the leaf (anchor-signed, binding node name +
+PKI fingerprint, TTL-bounded); `Registrar::admit` verifies a `NodeRegistration`
+against the roster anchor key and refuses — fail-closed — a non-workload
+identity, one that names a different node, or one that does not verify. A node
+that cannot prove its identity does not join.
+- **Files:** `crates/aog-node/{Cargo.toml, src/{lib.rs, registration.rs}}` (new
+  crate) + workspace `Cargo.toml` member.
+- **Verify:** fmt + clippy `-D warnings` clean; **3 tests** pass.
+- **Gate:** a node joins with a verified identity ✓
+  (`an_anchor_signed_identity_joins`); a spoofed node is rejected ✓
+  (`a_spoofed_identity_is_rejected` — a leaf signed by a non-anchor key fails
+  verification; `an_identity_naming_another_node_is_rejected` — subject
+  mismatch). **Commit:** `LOOM-N1`.
+
+### N2 — Heartbeat + status — DONE (live OpenBao)
+Node liveness, both legs. **Node side** (`aog-node::heartbeat`): `heartbeat`
+builds the `NodeStatus` a live node reports (ready, timestamped, advertising free
+`allocatable`); `is_stale` flags a beat aged past its freshness window
+(fail-closed on a missing/unparseable timestamp). **Control side**
+(`aog-controller::NodeController`): a node that reports not-ready, or whose
+heartbeat is stale past the TTL, is marked down — so the scheduler stops choosing
+it (the readiness filter reads the `ready` bool) — and its `Placement`s are
+evicted, so the scheduler re-places those replicas on live nodes.
+- **Files:** `crates/aog-node/src/{lib.rs, heartbeat.rs (new)}`;
+  `crates/aog-controller/{src/{lib.rs, node.rs (new)}, tests/live_node.rs (new)}`.
+- **Verify:** fmt + clippy `-D warnings` clean (both crates); aog-node **7 tests**;
+  aog-controller **27 passed** (non-live) + the **N2 live gate green vs live
+  OpenBao**.
+- **Gate:** a killed node's workload reschedules ✓
+  (`a_killed_node_reschedules_its_workload`): a 2-replica workload placed on
+  node-a + node-b; node-a's heartbeat goes stale; the node controller marks it
+  down and evicts its placement; a fresh scheduler pass re-places the freed
+  replica on the idle live node-c → replicas end on {node-b, node-c}. **Commit:**
+  `LOOM-N2`.
+
+### N3 — Workload driver trait (CRI-shaped) — DONE
+`aog-node::driver`: the pluggable `WorkloadDriver` trait — `start` / `inspect` /
+`stop` over `WorkloadRun` → `WorkloadHandle` / `WorkloadState`. Object-safe, so a
+node holds a `Box<dyn WorkloadDriver>` and swaps process (N4), containerd (N5),
+or wasmtime impls without the rest of the runtime changing. Ships `NoopDriver`
+(a bookkeeping driver for shadow mode X4 and tests).
+- **Files:** `crates/aog-node/src/{lib.rs, driver.rs (new)}`.
+- **Verify:** fmt + clippy `-D warnings` clean; **9 tests** pass.
+- **Gate:** the same workload runs via the trait on two driver impls ✓
+  (`the_same_workload_runs_via_two_drivers` — `NoopDriver` and a stateless
+  `EchoDriver` both start + report Running for the same `WorkloadRun`);
+  `noop_driver_reflects_stop` proves lifecycle tracking. **Commit:** `LOOM-N3`.
+
+### N4 — process / systemd driver — DONE
+`aog-node::driver::ProcessDriver`: runs a workload replica as a real child
+process (`std::process`) — the **air-gap appliance default**, no container
+runtime required. On Linux, production wraps it in a systemd unit for boot
+supervision + restart-on-failure; the lifecycle it provides (start / inspect /
+stop / clean restart) is the same regardless of the service manager on top. A
+restart reaps any prior PID for the name (no leak); `stop` kills + reaps.
+- **Files:** `crates/aog-node/src/driver.rs`.
+- **Verify:** fmt + clippy `-D warnings` clean; **11 tests** pass.
+- **Gate:** a gateway replica has a full process lifecycle with a clean restart ✓
+  (`a_gateway_replica_has_a_process_lifecycle` spawns a real long-running child,
+  reads Running, stops it, then starts + reads Running again under the same
+  name). systemd unit management is the Linux packaging of this same lifecycle —
+  noted, not required on the appliance path. **Commit:** `LOOM-N4`.
+
+### N5 — containerd driver (optional) — DONE (live via docker)
+`aog-node::containerd::ContainerdDriver`: runs a workload replica as a container
+through a containerd-compatible CLI (`nerdctl` / `ctr`; also `docker`, which is
+containerd-backed), behind the same `WorkloadDriver` trait as the process driver
+— so a workload's lifecycle is identical whichever runs it (the N3 parity). On
+the appliance the process driver (N4) is the default; this is for hosts already
+running containerd. Command construction (`run -d --name`, `inspect -f
+{{.State.Running}}`, `rm -f`) is pure and unit-tested; the exec path shells to
+the CLI.
+- **Files:** `crates/aog-node/{src/{lib.rs, containerd.rs (new)},
+  tests/live_containerd.rs (new)}`.
+- **Verify:** fmt + clippy `-D warnings` clean; **15 tests** (incl. 3
+  command-construction unit tests) + the **N5 live gate green via docker**.
+- **Gate:** a containerized workload lifecycle, parity with N4 ✓
+  (`a_containerized_workload_has_a_lifecycle`, env-gated on `LOOM_CONTAINER_CLI`,
+  run here against docker + `alpine`: start → Running → stop → not-Running →
+  clean restart → Running). Skips inert on the air-gap path where no container
+  CLI is configured. **Commit:** `LOOM-N5`.
+
+### N6 — Edge admission + W5 offline-safe cache — DONE
+`aog-node::edge::EdgeAdmission`: the node verifies a runtime token **locally**
+(signature via the anchor key, expiry, revocation snapshot) and narrows the
+route the caller may use to what current connectivity safely allows — the W5
+state machine (`fabric-cache::evaluate` → `route_ceiling`) combined with the
+token's own allowance and the request. Fail-static (I-4): degradation only
+*reduces* privilege, never widens.
+- **Offline-safe.** With the control plane unreachable but within soft TTL →
+  `Degraded` → the node keeps deciding (still cloud); past hard TTL → `Expired`
+  → `LocalOnly`. It never fails to decide; it narrows.
+- **Air-gap (I-8).** An air-gapped node is `AirGapped` → `LocalOnly`, so a cloud
+  request is narrowed to local — cloud denied.
+- **Local auth.** A tampered, expired, or revoked token is denied without any
+  control-plane round-trip (local asymmetric verify + the last-applied
+  `RevocationSnapshot`).
+- **Files:** `crates/aog-node/{Cargo.toml, src/{lib.rs, edge.rs (new)}}`.
+- **Verify:** fmt + clippy `-D warnings` clean; **22 tests** pass (7 new).
+- **Gate:** the node keeps issuing safe, narrowed decisions with the control
+  plane unreachable ✓ (`an_unreachable_but_fresh_node_still_decides`,
+  `a_stale_node_narrows_to_local`); an air-gapped node denies cloud routes ✓
+  (`an_air_gapped_node_denies_cloud`); tampered / expired / revoked tokens denied
+  locally. **Commit:** `LOOM-N6`.
+
+### N7 — Health probes — DONE
+`aog-node::probes`: node supervision. `keep_live(driver, run, handle)` restarts
+an instance the driver reports not-Running (an unhealthy replica is replaced),
+returning the fresh handle; a running one is left untouched. `ready_targets`
+filters instances through a pluggable `ReadinessProbe` — only ready instances
+take traffic. Both seams accept an HTTP `/healthz` / `/ready` behind the trait.
+- **Files:** `crates/aog-node/src/{lib.rs, probes.rs (new)}`.
+- **Verify:** fmt + clippy `-D warnings` clean; **25 tests** pass (3 new).
+- **Gate:** an unhealthy replica is restarted / replaced ✓
+  (`an_unhealthy_replica_is_restarted` — a stopped instance is restarted to
+  Running; `a_healthy_replica_is_left_running` leaves a live one alone);
+  readiness gates traffic ✓ (`readiness_gates_traffic` — only the ready instance
+  is a target). **Commit:** `LOOM-N7`.
+
+### N8 — Attestation-liveness — the differentiator — DONE
+`aog-node::attest`: liveness as "is it still the code we trust." `check`
+re-measures a running workload (a pluggable `Measurer` — a TPM / Nitro PCR or an
+image hash) against the measurement sealed at placement; a match is `Intact`, a
+drift **evicts** the workload (driver stop) and returns an `Evicted` verdict
+carrying its runtime token id. `revocation_for` builds a signed, emergency
+`RevocationSnapshot` denying every drifted token — the artifact R9 fans out
+estate-wide and the edge (N6) applies, so the token is denied everywhere. A
+tampered replica is removed and cut off, not merely restarted.
+- **Files:** `crates/aog-node/src/{lib.rs, attest.rs (new)}`.
+- **Verify:** fmt + clippy `-D warnings` clean; **27 tests** pass (2 new).
+- **Gate:** a tampered / drifted workload is evicted and its token denied
+  estate-wide ✓ (`a_drifted_workload_is_evicted_and_revoked`: a drifted
+  measurement stops the workload and puts its token in a signed emergency
+  revocation snapshot that verifies against the anchor — the same snapshot R9
+  distributes and N6 denies on); `an_intact_workload_is_left_running`.
+  **Commit:** `LOOM-N8`.
+
+### N9 — Eviction + drain — DONE
+`aog-node::drain`: `plan_drain(reason, inflight, budget)` decides how to drain an
+instance. A **planned** drain defers when the disruption budget (a
+PodDisruptionBudget-analog) has no room, waits for in-flight authorized calls
+when any remain (they are not dropped), and stops when there are none. A **Tier-0
+revocation** drain is unconditional and immediate — `ForceStopNow`, ignoring both
+in-flight work and the budget (I-9). `execute_drain` applies the action through
+the driver.
+- **Files:** `crates/aog-node/src/{lib.rs, drain.rs (new)}`.
+- **Verify:** fmt + clippy `-D warnings` clean; **33 tests** pass (6 new).
+- **Gate:** a graceful drain completes without dropping in-flight authorized
+  calls ✓ (`a_graceful_drain_with_in_flight_does_not_stop` — the instance stays
+  running while calls are in flight; `a_graceful_drain_with_no_in_flight_stops`);
+  a revocation drain is immediate ✓
+  (`a_revocation_drain_stops_the_instance_immediately`,
+  `..._regardless_of_in_flight_or_budget`); the disruption budget is honoured
+  (`..._defers_when_the_budget_is_exhausted`). **Commit:** `LOOM-N9`.
+
+---
+
+**M3b COMPLETE (Phases S + N) — the attested edge.** Phase S: the `aog-scheduler`
+filter→score→bind engine — S1 framework + the fake-metrics defect purge
+(absence-as-optimism inverted to fail-closed), S2 capacity + utilisation, S3 ring,
+S4 the attestation predicate `classification_ceiling ≤ attestation_floor` (the
+differentiator), S5 consolidation, S6 spread/HA, S8 preemption — plus the S7
+`SchedulerController` that binds replicas, mints Capability-scoped runtime tokens,
+and receipts each `Placement` through admission. Phase N: the new `aog-node`
+runtime — verified registration (N1), heartbeat + reschedule-on-death (N2), the
+CRI-shaped driver trait (N3) with process (N4) and containerd (N5) drivers, W5
+offline-safe edge admission (N6), health probes (N7), attestation-liveness
+evict-and-revoke (N8), and graceful / forced drain (N9). Trust posture throughout:
+fail-closed / fail-static, per-action re-auth, never bearer coasting.
+- **Verify:** `fmt --check` clean; each M3b crate clippy `--all-targets --no-deps
+  -D warnings` clean; `cargo check --workspace` clean; **`cargo test --workspace`
+  2000 passed / 2 ignored (180 suites)**. Four live gates green — **S7** (attested
+  binding + scoped token) and **N2** (reschedule-on-death) vs **live OpenBao**;
+  **N5** (containerized lifecycle) vs **docker**; plus the deterministic S/N gates.
+- All on `session/LOOM-3` (off `session/LOOM-2` `23b25ce`), commits
+  `ad32b26`→`50593f1` (17 commits), **NOT pushed/merged** — awaits Basho.
+- Next milestone: **M3c — orchestration objects + HA** (Phases O + H), then the
+  gated **Summit-Conformance** (Phase V).
