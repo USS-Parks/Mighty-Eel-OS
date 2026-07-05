@@ -1017,3 +1017,24 @@ that cannot prove its identity does not join.
   (`a_spoofed_identity_is_rejected` — a leaf signed by a non-anchor key fails
   verification; `an_identity_naming_another_node_is_rejected` — subject
   mismatch). **Commit:** `LOOM-N1`.
+
+### N2 — Heartbeat + status — DONE (live OpenBao)
+Node liveness, both legs. **Node side** (`aog-node::heartbeat`): `heartbeat`
+builds the `NodeStatus` a live node reports (ready, timestamped, advertising free
+`allocatable`); `is_stale` flags a beat aged past its freshness window
+(fail-closed on a missing/unparseable timestamp). **Control side**
+(`aog-controller::NodeController`): a node that reports not-ready, or whose
+heartbeat is stale past the TTL, is marked down — so the scheduler stops choosing
+it (the readiness filter reads the `ready` bool) — and its `Placement`s are
+evicted, so the scheduler re-places those replicas on live nodes.
+- **Files:** `crates/aog-node/src/{lib.rs, heartbeat.rs (new)}`;
+  `crates/aog-controller/{src/{lib.rs, node.rs (new)}, tests/live_node.rs (new)}`.
+- **Verify:** fmt + clippy `-D warnings` clean (both crates); aog-node **7 tests**;
+  aog-controller **27 passed** (non-live) + the **N2 live gate green vs live
+  OpenBao**.
+- **Gate:** a killed node's workload reschedules ✓
+  (`a_killed_node_reschedules_its_workload`): a 2-replica workload placed on
+  node-a + node-b; node-a's heartbeat goes stale; the node controller marks it
+  down and evicts its placement; a fresh scheduler pass re-places the freed
+  replica on the idle live node-c → replicas end on {node-b, node-c}. **Commit:**
+  `LOOM-N2`.
