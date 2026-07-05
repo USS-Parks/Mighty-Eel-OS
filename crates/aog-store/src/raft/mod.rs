@@ -245,6 +245,39 @@ impl RaftNode {
         self.node_id
     }
 
+    /// Trigger a Raft snapshot (H3 compaction) and wait until it is built to the
+    /// applied index, so the state machine is captured and the log before it can
+    /// be purged. A node recovers the same estate from the snapshot + the log tail.
+    ///
+    /// # Errors
+    /// [`NodeError::Raft`] if the snapshot cannot be triggered or is not built in
+    /// `timeout`.
+    pub async fn snapshot(&self, timeout: Duration) -> Result<(), NodeError> {
+        let target = self.raft.metrics().borrow().last_applied;
+        self.raft
+            .trigger()
+            .snapshot()
+            .await
+            .map_err(|e| NodeError::Raft(e.to_string()))?;
+        if let Some(target) = target {
+            self.raft
+                .wait(Some(timeout))
+                .metrics(
+                    move |m| m.snapshot.is_some_and(|s| s.index >= target.index),
+                    "snapshot built to the applied index",
+                )
+                .await
+                .map_err(|e| NodeError::Raft(e.to_string()))?;
+        }
+        Ok(())
+    }
+
+    /// The log index of the last snapshot this node has taken, if any (H3).
+    #[must_use]
+    pub fn last_snapshot(&self) -> Option<u64> {
+        self.raft.metrics().borrow().snapshot.map(|s| s.index)
+    }
+
     /// Range the committed state by key prefix.
     ///
     /// # Errors

@@ -1471,3 +1471,28 @@ leads — is closed with a quorum-confirmed leadership check.
   simulated verdict); in-process 3-node cluster (A3.2 — the wire transport is
   deployment packaging; the correctness it carries is what's pinned).
   **Commit:** `LOOM-H2`.
+
+### H3 — Snapshot / compaction / restore — DONE
+A Raft snapshot compacts the state machine; a restore reproduces the exact estate;
+the separate receipt chain stays chained across it.
+- **`RaftNode::snapshot(timeout)` + `last_snapshot()` (mod.rs).** Trigger a Raft
+  snapshot and wait until it is built to the applied index, so the log before it
+  can be purged. A node recovers the same estate from the snapshot + log tail.
+- **Estate restore (aog-store).** `snapshot.rs`: write 20 keys, snapshot, restart
+  from the same dir → the estate is reproduced **exactly** (every key, value, and
+  revision; the global revision preserved).
+- **Receipt-chain continuity (aog-apiserver).** `restore.rs`: because intent
+  (aog-store) and proof (wsf-ledger) are physically separate stores (A1.4), an
+  estate snapshot/restore neither reads nor writes the receipt chain — proven by
+  building a hash-chained receipt ledger, snapshotting/restoring an estate, then
+  showing the receipt chain head is unchanged, its signed pack still verifies
+  off-host with the public key alone, and a post-restore receipt links unbroken
+  onto the pre-restore head.
+- **Files:** `crates/aog-store/src/raft/mod.rs`,
+  `crates/aog-store/tests/snapshot.rs (new)`;
+  `crates/aog-apiserver/tests/restore.rs (new)`.
+- **Verify:** `fmt` + `clippy -p aog-store` / `-p aog-apiserver --all-targets
+  --no-deps -D warnings` clean; `cargo test -p aog-store --test snapshot` **1
+  passed**, `-p aog-apiserver --test restore` **1 passed**. **Gate:** restore from
+  snapshot reproduces the exact estate ✓; receipts remain chained across restore ✓.
+  **Commit:** `LOOM-H3`.
