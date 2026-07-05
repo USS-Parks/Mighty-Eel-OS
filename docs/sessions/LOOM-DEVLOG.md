@@ -1038,3 +1038,16 @@ evicted, so the scheduler re-places those replicas on live nodes.
   down and evicts its placement; a fresh scheduler pass re-places the freed
   replica on the idle live node-c → replicas end on {node-b, node-c}. **Commit:**
   `LOOM-N2`.
+
+### N3 — Workload driver trait (CRI-shaped) — DONE
+`aog-node::driver`: the pluggable `WorkloadDriver` trait — `start` / `inspect` /
+`stop` over `WorkloadRun` → `WorkloadHandle` / `WorkloadState`. Object-safe, so a
+node holds a `Box<dyn WorkloadDriver>` and swaps process (N4), containerd (N5),
+or wasmtime impls without the rest of the runtime changing. Ships `NoopDriver`
+(a bookkeeping driver for shadow mode X4 and tests).
+- **Files:** `crates/aog-node/src/{lib.rs, driver.rs (new)}`.
+- **Verify:** fmt + clippy `-D warnings` clean; **9 tests** pass.
+- **Gate:** the same workload runs via the trait on two driver impls ✓
+  (`the_same_workload_runs_via_two_drivers` — `NoopDriver` and a stateless
+  `EchoDriver` both start + report Running for the same `WorkloadRun`);
+  `noop_driver_reflects_stop` proves lifecycle tracking. **Commit:** `LOOM-N3`.
