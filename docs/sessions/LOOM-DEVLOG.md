@@ -599,3 +599,35 @@ channel) + `bundles.rs` (the controller).
   nodes + gateways; published to the live poll path); signature verifies at the
   edge ✓ (public key alone, off-host); stale bundle rejected ✓ (edge
   anti-rollback + controller no-regress). **Commit:** `LOOM-R6`.
+
+### R7 — ProviderPool / ModelEndpoint controller — DONE
+Provider/model health folded into each pool's schedulable set, so the scheduler
+(Phase S) only ever places on a reachable endpoint. New `health.rs` (the probe)
++ `providers.rs` (the controller).
+- **The probe.** `HealthProbe` answers "is this endpoint reachable now?",
+  fail-closed (I-4). `HttpHealthProbe` is the live impl: a provider with a
+  configured base URL is liveness-GET'd (any non-2xx or transport error =
+  unhealthy); a provider with no URL — a local, air-gapped model with no HTTP
+  surface — falls back to the endpoint's declared `healthy` flag. Base URLs are
+  deployment config, not signed desired-state, so they live in the probe, not
+  the estate.
+- **The fold.** `ProviderPoolController` probes every endpoint and writes
+  `status.healthy` = the schedulable model set; a pool with endpoints but none
+  healthy is `Degraded`, not silently `Ready`. Level-triggered + a resync
+  heartbeat (`with_resync`) re-checks health on a cadence, so a provider that
+  goes down drops out within that SLO and one that recovers rejoins — without
+  any desired-state edit.
+- **Files:** `crates/aog-controller/{src/{health.rs (new), providers.rs (new),
+  lib.rs}, tests/provider_health.rs (new)}`.
+- **Verify:** clippy `--all-targets --no-deps -D warnings` + CI workspace clippy
+  clean; **22 passed** across aog-controller — +2 R7 tests, both **real HTTP** (a
+  live local server stands in for the provider, no mock): flipping it 503 drops
+  both models from the schedulable set on the next resync and marks the pool
+  Degraded, recovery re-adds them (declared `healthy: false` throughout, so the
+  live probe is proven to govern); a provider with no probe URL uses its declared
+  health. fmt + `check --workspace` clean. (No OpenBao: provider health is HTTP
+  liveness, outside the A3.2 live-harness clause; the test runs in the normal CI
+  lane.)
+- **Gate:** an unhealthy provider is removed from the schedulable set within SLO
+  ✓ (real 503 → Degraded/empty on the resync heartbeat; recovery rejoins).
+  **Commit:** `LOOM-R7`.

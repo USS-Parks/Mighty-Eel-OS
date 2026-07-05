@@ -12,6 +12,10 @@
 //! it with the control-plane public key alone and refuses a stale replay
 //! ([`EdgeBundleCache`]).
 //!
+//! R7: the [`ProviderPoolController`] folds live provider/model health
+//! ([`HealthProbe`]) into each pool's schedulable set, so the scheduler only
+//! places on reachable endpoints.
+//!
 //! Trust posture: this crate's read path is the informer (bounded-stale,
 //! resync-recovered, A1.6); its write path is **never** the store directly —
 //! a controller mutates desired state only through the apiserver admission
@@ -22,8 +26,10 @@ pub mod bundle_store;
 pub mod bundles;
 pub mod capability;
 pub mod gc;
+pub mod health;
 pub mod intents;
 pub mod objects;
+pub mod providers;
 pub mod provision;
 pub mod queue;
 pub mod rings;
@@ -38,8 +44,10 @@ pub use bundle_store::{
 pub use bundles::PolicyBundleController;
 pub use capability::CapabilityController;
 pub use gc::GarbageCollector;
+pub use health::{HealthProbe, HttpHealthProbe};
 pub use intents::RevocationIndexer;
 pub use objects::{EstateClient, is_terminating, parse_key};
+pub use providers::ProviderPoolController;
 pub use provision::{OPENBAO_FINALIZER, TenantProvisioner};
 pub use queue::{Backoff, WorkQueue};
 pub use rings::TrustRingController;
