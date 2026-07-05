@@ -1388,3 +1388,23 @@ Cordon a node out of scheduling, then drain it within a disruption budget. New
   cordoned node revokes the drained replica's token in OpenBao. **Gate:**
   maintenance drains within budget ✓; ring guarantees preserved (cordon exclusion
   + unchanged S3 filter) ✓. **Commit:** `LOOM-O7`.
+
+---
+
+**Phase O COMPLETE (O1–O7) — orchestration objects.** Deployment-analog replica
+convergence (O1), progressive/canary/blue-green rollout (O2) with error-budget
+auto-rollback (O3), budget-/ROI-aware autoscaling (O4), MissionContract scope
+enforcement (O5), signed ToolGrant distribution with revoke-halts-every-proxy
+(O6), and disruption-budget node maintenance (O7). All on `session/LOOM-4` (off
+`main` `406fbf6`), commits `5329a7c`→`80ff793` (7 commits).
+- **Verify:** each prompt `fmt` + `clippy -p aog-controller --all-targets
+  --no-deps -D warnings` clean; `cargo test -p aog-controller` **81 passed**
+  (deterministic unit + mock-controller gates for every prompt).
+- **Phase-O live batch (A3.2) — green vs a live OpenBao** (Docker
+  `openbao/openbao server -dev`): O1 `live_deploy` (packing wrote three
+  replica-indexed tokens `gw-r0/r1/r2`; scale-down cleared the dropped token) + O7
+  `live_maintenance` (drain revoked the token) + the S7 `live_scheduler`
+  regression (replica-indexed binding intact) — **4 passed**, confirmed against
+  OpenBao's real KV/approle state, not vacuous skips.
+- NOT pushed/merged — awaits Basho.
+- Next: **Phase H** (H1–H6) — HA, consensus hardening, DR, federation.
