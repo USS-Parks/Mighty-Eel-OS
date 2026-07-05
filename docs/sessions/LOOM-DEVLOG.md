@@ -820,3 +820,33 @@ fake-metrics path deleted rather than inherited (A4).
   inputs ✓ — `decision_traces_to_real_signals` asserts the winning decision's
   `SignalProvenance` mirrors the exact estate `resource_version` / `ready` /
   heartbeat / `allocatable`. **Commit:** `LOOM-S1`.
+
+### S2 — Capacity + real metrics — DONE
+The scheduler now weighs real node capacity. `NodeSnapshot` carries the node's
+declared total `capacity` (spec) alongside reported `allocatable` (status), so a
+utilisation *fraction* is computable from real signals.
+- **CapacityFilter (hard).** A node that declares a workload-slot budget but
+  reports none free (`capacity.max_workloads > 0 && allocatable.max_workloads ==
+  0`) is saturated and drops out; a node that declares no slot budget is not
+  slot-constrained here (the utilisation scorer still weighs its cpu/mem/gpu).
+- **UtilizationScorer (soft, normalised).** Score = mean free fraction
+  (`allocatable / capacity`) over the dimensions the node declares (cpu, memory,
+  gpu, slots), in `[0,1]` so it composes with S5/S6. Fail-closed on absent
+  signal: a node declaring no total capacity abstains (`None`) rather than
+  inventing a fraction.
+- **Framework correction — scorer abstention.** A `Scorer` returning `None` now
+  **abstains** (contributes nothing) rather than excluding the node. Excluding a
+  safe, placeable node for want of a soft-preference signal is an availability
+  bug, not a fail-closed win; hard exclusion stays the filters' job. The
+  anti-fabrication guarantee is unchanged — absence becomes a neutral `0`
+  contribution, never a favourable value, and a scorer never fabricates.
+- **`attested_scheduler()`.** The wiring the control plane (S7) drives:
+  readiness + capacity filters + the utilisation scorer. `baseline_scheduler()`
+  stays the readiness-only S1 foundation the framework tests pin to.
+- **Files:** `crates/aog-scheduler/src/{types.rs, framework.rs, filters.rs,
+  scorers.rs (new), lib.rs}`, `tests/attested_placement.rs (new)`.
+- **Verify:** fmt + `clippy -p aog-scheduler --all-targets --no-deps -D warnings`
+  clean; **22 tests** pass (16 unit + 4 S1 gate + 2 attested-placement).
+- **Gate:** placement reflects real load; a saturated node is not selected ✓
+  (`saturated_node_is_not_selected`) and the less-loaded of two candidates wins
+  (`less_loaded_node_is_preferred`). **Commit:** `LOOM-S2`.

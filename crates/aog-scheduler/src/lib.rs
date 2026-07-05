@@ -22,8 +22,8 @@
 //! [`NodeSnapshot`] is a verbatim projection of a node's reconciled state — a
 //! node that has not reported has `ready == false` and zero allocatable
 //! capacity, honestly, and is filtered out. A [`Scorer`] with no real signal
-//! for a node returns `None`, which *excludes* the node; the framework never
-//! fills the gap with a default. The [`ReadinessFilter`] is the concrete
+//! for a node returns `None` to *abstain* — it never fabricates a value — while
+//! hard exclusion stays a filter's job. The [`ReadinessFilter`] is the concrete
 //! inversion of the deleted defect.
 //!
 //! # The framework grows across Phase S
@@ -38,18 +38,31 @@
 
 pub mod filters;
 pub mod framework;
+pub mod scorers;
 pub mod types;
 
-pub use filters::ReadinessFilter;
+pub use filters::{CapacityFilter, ReadinessFilter};
 pub use framework::{Filter, Scheduler, Scorer};
+pub use scorers::UtilizationScorer;
 pub use types::{
     FilterVerdict, NodeEvaluation, NodeSnapshot, ScheduleOutcome, ScheduleRequest,
     SchedulingDecision, SignalProvenance,
 };
 
-/// The S1 baseline wiring: the readiness foundation, no scorers. Later Phase-S
-/// prompts extend it with the ring (S3) and attestation (S4) filters and the
-/// budget/ROI (S5) and spread/HA (S6) scorers.
+/// The S1 baseline wiring: the readiness foundation only, no capacity or
+/// scorers. Kept as the minimal, stable base the framework's own tests pin to;
+/// [`attested_scheduler`] is the wiring the control plane drives.
 pub fn baseline_scheduler() -> Scheduler {
     Scheduler::new().with_filter(ReadinessFilter)
+}
+
+/// The current Phase-S wiring the binding controller (S7) drives: the hard
+/// filters and soft scorers landed so far — readiness + capacity and the
+/// utilisation scorer (S2) today. The ring (S3) and attestation (S4) filters and
+/// the budget/ROI (S5) and spread/HA (S6) scorers join here as they land.
+pub fn attested_scheduler() -> Scheduler {
+    Scheduler::new()
+        .with_filter(ReadinessFilter)
+        .with_filter(CapacityFilter)
+        .with_scorer(1.0, UtilizationScorer)
 }

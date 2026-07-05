@@ -25,6 +25,9 @@ pub struct NodeSnapshot {
     /// Real liveness, reconciled from heartbeats by the node controller.
     /// `false` when the node has no status yet — fail-closed by construction.
     pub ready: bool,
+    /// The node's declared total capacity (from `spec`). The denominator for a
+    /// real utilisation fraction (S2).
+    pub capacity: Capacity,
     /// Real free capacity the node last reported. `Capacity::default()` (zero)
     /// when it has not reported — zero headroom, honestly, never invented.
     pub allocatable: Capacity,
@@ -45,6 +48,7 @@ impl NodeSnapshot {
             attestation_floor: node.spec.attestation_floor,
             attestation: node.spec.attestation.clone(),
             ready: status.is_some_and(|s| s.ready),
+            capacity: node.spec.capacity,
             allocatable: status.map_or_else(Capacity::default, |s| s.allocatable),
             last_heartbeat: status.and_then(|s| s.last_heartbeat.clone()),
             resource_version: node.metadata.resource_version,
@@ -147,8 +151,9 @@ pub struct NodeEvaluation {
     pub signals: SignalProvenance,
     /// Every filter's verdict, in registration order.
     pub verdicts: Vec<FilterVerdict>,
-    /// `Some` iff the node passed every filter and every scorer produced a real
-    /// score. `None` = filtered out or unscorable — never a fabricated fill-in.
+    /// `Some` composite score iff the node passed every hard filter (abstaining
+    /// scorers contribute nothing; a survivor with no scores ties at `0.0`).
+    /// `None` = filtered out. Never a fabricated fill-in.
     pub score: Option<f64>,
 }
 

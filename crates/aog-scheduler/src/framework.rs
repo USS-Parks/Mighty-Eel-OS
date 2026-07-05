@@ -1,14 +1,14 @@
-//! The filter/score plugin framework (Phase S, S1), revived from
-//! `mai-scheduler`'s `Scheduler`/`PlacementEngine` shape and rebuilt for AOG
-//! workload placement.
+//! The filter/score plugin framework (Phase S), revived from `mai-scheduler`'s
+//! `Scheduler`/`PlacementEngine` shape and rebuilt for AOG workload placement.
 //!
 //! Two extension seams:
 //! - [`Filter`] — a hard, deny-wins predicate. Any `Unfit` removes the node.
 //!   The ring filter (S3) and the attestation predicate (S4) register here.
-//! - [`Scorer`] — a soft preference over survivors. It returns `Option<f64>`:
-//!   `None` means "no real signal to score this node," which *excludes* the
-//!   node. The framework never fabricates a missing score (doctrine I-4). The
-//!   budget/ROI (S5) and spread/HA (S6) scorers register here.
+//! - [`Scorer`] — a soft preference over survivors, returning `Option<f64>`.
+//!   `None` **abstains** (no real signal, so no preference) — it contributes
+//!   nothing and is never replaced by a fabricated value (doctrine I-4). A
+//!   scorer never *excludes* a node; that is a filter's job. The budget/ROI (S5)
+//!   and spread/HA (S6) scorers register here.
 //!
 //! The engine is deterministic: no clock, no RNG. Ties in score break by node
 //! name, so the same estate always yields the same decision (replayability).
@@ -32,9 +32,11 @@ pub trait Scorer: Send + Sync {
     /// Stable name for diagnostics.
     fn name(&self) -> &'static str;
 
-    /// Score `node` for `request` — higher is more preferred. Returns `None`
-    /// when there is no real signal to score on; the node is then excluded, not
-    /// given a fabricated default (doctrine I-4).
+    /// Score `node` for `request` — higher is more preferred. Returns `None` to
+    /// **abstain** when there is no real signal to score on; the framework then
+    /// contributes nothing for this scorer and never fabricates a value in its
+    /// place (doctrine I-4). Abstaining expresses no preference — it does not
+    /// exclude the node; hard exclusion is a [`Filter`]'s job.
     fn score(&self, request: &ScheduleRequest, node: &NodeSnapshot) -> Option<f64>;
 }
 
@@ -80,8 +82,8 @@ impl Scheduler {
     }
 
     /// Evaluate every node through the filter chain, score the survivors, and
-    /// bind the workload to the highest scorer. A workload with no surviving,
-    /// scorable node stays [`ScheduleOutcome::Pending`] — never force-placed.
+    /// bind the workload to the highest scorer. A workload with no surviving node
+    /// stays [`ScheduleOutcome::Pending`] — never force-placed.
     pub fn schedule(
         &self,
         request: &ScheduleRequest,
@@ -121,11 +123,7 @@ impl Scheduler {
             fit &= verdict.is_fit();
             verdicts.push(verdict);
         }
-        let score = if fit {
-            self.score_node(request, node)
-        } else {
-            None
-        };
+        let score = fit.then(|| self.score_node(request, node));
         NodeEvaluation {
             signals,
             verdicts,
@@ -133,20 +131,21 @@ impl Scheduler {
         }
     }
 
-    /// Composite score = Σ weightᵢ · scorerᵢ(node). If any scorer returns `None`
-    /// the node is unscorable and excluded — the engine refuses to invent the
-    /// missing component (doctrine I-4). With no scorers registered every
-    /// survivor scores a neutral `0.0`: filters passed, no preference expressed
-    /// — which is a fact, not a fabricated signal.
-    fn score_node(&self, request: &ScheduleRequest, node: &NodeSnapshot) -> Option<f64> {
-        if self.scorers.is_empty() {
-            return Some(0.0);
-        }
+    /// Composite score = Σ weightᵢ · scorerᵢ(node) over the scorers that produced
+    /// a real score. A scorer returning `None` **abstains** — it contributes
+    /// nothing, and the engine never invents a value in its place (doctrine I-4).
+    /// A filter-surviving node is always placeable, so this always yields a
+    /// score; when no scorer scored it (or none are registered) the node ties at
+    /// a neutral `0.0` — a fact (filters passed, no preference expressed), not a
+    /// fabricated signal. Hard exclusion is the filters' job, not a scorer's.
+    fn score_node(&self, request: &ScheduleRequest, node: &NodeSnapshot) -> f64 {
         let mut total = 0.0;
         for ws in &self.scorers {
-            total += ws.weight * ws.scorer.score(request, node)?;
+            if let Some(component) = ws.scorer.score(request, node) {
+                total += ws.weight * component;
+            }
         }
-        Some(total)
+        total
     }
 
     fn pending_reasons(evaluated: &[NodeEvaluation], node_count: usize) -> Vec<String> {
@@ -162,10 +161,7 @@ impl Scheduler {
             }
         }
         if reasons.is_empty() {
-            reasons.push(
-                "all candidate nodes survived filtering but were unscorable from real signals"
-                    .to_owned(),
-            );
+            reasons.push("no node satisfied all hard filters".to_owned());
         }
         reasons
     }
@@ -184,6 +180,7 @@ mod tests {
             attestation_floor: Classification::Public,
             attestation: AttestationProfile::default(),
             ready,
+            capacity: Capacity::default(),
             allocatable: Capacity::default(),
             last_heartbeat: ready.then(|| "t".to_owned()),
             resource_version: 1,
@@ -220,7 +217,7 @@ mod tests {
         }
     }
 
-    /// Never has a signal to offer — always `None`.
+    /// Never has a signal to offer — always abstains.
     struct NoSignal;
     impl Scorer for NoSignal {
         fn name(&self) -> &'static str {
@@ -254,13 +251,12 @@ mod tests {
     }
 
     #[test]
-    fn none_score_excludes_node() {
+    fn abstaining_scorer_still_places() {
+        // A scorer with no signal abstains; with no filter rejecting it the node
+        // is still placed at a neutral score. Abstention is not exclusion.
         let sched = Scheduler::new().with_scorer(1.0, NoSignal);
         let d = sched.schedule(&req(), &[snap("alpha", true)]);
-        assert!(
-            d.is_pending(),
-            "a node no scorer can score must not be placed"
-        );
+        assert_eq!(d.scheduled_node(), Some("alpha"));
     }
 
     #[test]
