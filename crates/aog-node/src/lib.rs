@@ -12,6 +12,7 @@
 //! extends it (doctrine I-4). Its identity is a `fabric-identity` leaf; a node
 //! that cannot prove it does not join.
 
+pub mod containerd;
 pub mod driver;
 pub mod heartbeat;
 pub mod registration;

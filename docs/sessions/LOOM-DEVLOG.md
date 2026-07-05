@@ -1066,3 +1066,22 @@ restart reaps any prior PID for the name (no leak); `stop` kills + reaps.
   reads Running, stops it, then starts + reads Running again under the same
   name). systemd unit management is the Linux packaging of this same lifecycle —
   noted, not required on the appliance path. **Commit:** `LOOM-N4`.
+
+### N5 — containerd driver (optional) — DONE (live via docker)
+`aog-node::containerd::ContainerdDriver`: runs a workload replica as a container
+through a containerd-compatible CLI (`nerdctl` / `ctr`; also `docker`, which is
+containerd-backed), behind the same `WorkloadDriver` trait as the process driver
+— so a workload's lifecycle is identical whichever runs it (the N3 parity). On
+the appliance the process driver (N4) is the default; this is for hosts already
+running containerd. Command construction (`run -d --name`, `inspect -f
+{{.State.Running}}`, `rm -f`) is pure and unit-tested; the exec path shells to
+the CLI.
+- **Files:** `crates/aog-node/{src/{lib.rs, containerd.rs (new)},
+  tests/live_containerd.rs (new)}`.
+- **Verify:** fmt + clippy `-D warnings` clean; **15 tests** (incl. 3
+  command-construction unit tests) + the **N5 live gate green via docker**.
+- **Gate:** a containerized workload lifecycle, parity with N4 ✓
+  (`a_containerized_workload_has_a_lifecycle`, env-gated on `LOOM_CONTAINER_CLI`,
+  run here against docker + `alpine`: start → Running → stop → not-Running →
+  clean restart → Running). Skips inert on the air-gap path where no container
+  CLI is configured. **Commit:** `LOOM-N5`.
