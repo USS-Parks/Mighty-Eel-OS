@@ -707,3 +707,52 @@ distribution (R6), ProviderPool health (R7), VirtualKey resolution (R8), and
 RevocationIntent kill (R9) controllers. Every trust-adjacent leg is proven
 against live OpenBao and, where the gateway is the edge, the real `aog-gateway`.
 Next: the M3a wrap — X2 (`aog-gateway` as a managed `Workload`).
+
+---
+
+## Phase X — Migration / cutover
+
+### X2 — Gateway as a managed `Workload` — DONE
+`aog-gateway` is now a first-class managed `Workload` in the estate, with **no
+change to its data-path API** — an existing OpenAI client is byte-identical
+across the cutover to management. New `workloads.rs` + a gateway ledger seam.
+- **Managed Workload.** `WorkloadController` reconciles a gateway `Workload`: it
+  reflects the `Placement`s bound to it (attested placement stays the Phase-S
+  scheduler's — this controller never mints them) and probes liveness through a
+  `WorkloadProbe` (`HttpWorkloadProbe` GETs the gateway's `/healthz`;
+  `StaticWorkloadProbe` is the M3a default), writing `phase`/`ready_replicas`:
+  unplaced → `Pending`, placed + healthy → `Ready` with its replicas, placed +
+  unhealthy → `Degraded`. Level-triggered, resync-heartbeat-driven.
+- **Ledger seam (no API change).** The gateway's runtime spend ledger is
+  promoted to `Arc<dyn SpendLedger>` (default `LocalSpendLedger`, byte-for-byte
+  the old behavior) with a `with_spend_ledger` swap — the X1 seam realized on the
+  gateway. Honest deferral: the lease-based shared ledger's reserve flow uses a
+  distinct `try_spend` API, not `fold`/`add`; adopting it in the request path is
+  scale-out work that lands with the node runtime running replicas (M3b), not the
+  M3a single-node kernel.
+- **Files:** `crates/aog-gateway/src/lib.rs` (spend seam);
+  `crates/aog-controller/{src/{workloads.rs (new), lib.rs}, tests/managed_gateway.rs (new)}`.
+- **Verify:** clippy `--all-targets --no-deps -D warnings` (both crates) + CI
+  workspace clippy clean; **25 passed** across aog-controller + the full
+  aog-gateway suite green (on clean OpenBao) — including the **X2 live gate**
+  against **live OpenBao and the real gateway OpenAI surface**: a client completes
+  a chat; the gateway is declared a `Workload` + bound by a `Placement` +
+  reconciled to `Ready` / `ready_replicas=1` by the controller probing its live
+  `/healthz`; the **same** client request is byte-identical after — no API change.
+  The `Arc<dyn SpendLedger>` change was proven regression-free by a stash test:
+  the pre-existing `kill_switch` stale-revocation-snapshot flake (a test-hygiene
+  gap, not this change) fails identically with and without it, and the suite is
+  green once the stale record is cleared. fmt + `check --workspace` clean.
+- **Gate:** an existing OpenAI client is unaffected across the cutover ✓
+  (byte-identical response before/after management). **Commit:** `LOOM-X2`.
+
+---
+
+**M3a COMPLETE (Phases K + R + X1–X2).** The Loom kernel: a typed estate over a
+consensus store served by the admission-choke-point apiserver (K); the
+level-triggered reconciliation runtime and its nine controllers (R1–R9); the
+shared lease-based SpendLedger (X1); and `aog-gateway` brought under management
+as a `Workload` (X2). Every trust-adjacent path is proven against live OpenBao,
+and where the gateway is the edge, the real `aog-gateway` — the model proven end
+to end with zero orchestration-scale risk. Next milestone: **M3b — the attested
+edge** (Phase S scheduler + Phase N node runtime).

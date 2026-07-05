@@ -23,6 +23,8 @@ pub mod surface_anthropic;
 pub mod surface_openai;
 pub mod tokenize;
 
+use std::sync::Arc;
+
 use chrono::{DateTime, Utc};
 use fabric_contracts::TrustToken;
 use fabric_crypto::providers::MlDsa87Verifier;
@@ -77,11 +79,15 @@ pub struct GatewayConfig {
 pub struct Gateway {
     openbao: OpenBaoAuth,
     config: GatewayConfig,
-    /// G9 per-token runtime spend (session-cumulative budget enforcement).
-    /// X1 promoted the ledger behind `fabric_token::spend::SpendLedger`: this
-    /// is the single-process impl, byte-for-byte the old behavior; the
-    /// lease-based shared impl replaces it when replicas scale out (X2).
-    spend: LocalSpendLedger,
+    /// G9 per-token runtime spend (session-cumulative budget enforcement),
+    /// behind the `fabric_token::spend::SpendLedger` trait (X1) so the ledger is
+    /// swappable without touching the data-path API. Defaults to the
+    /// single-process [`LocalSpendLedger`] (byte-for-byte the old behavior); X2
+    /// makes it injectable so a horizontally-scaled deployment can supply a
+    /// shared ledger. (The lease-based reserve flow uses a distinct `try_spend`
+    /// API rather than `fold`/`add`; adopting it in the request path is
+    /// scale-out work that lands with the node runtime running replicas, M3b.)
+    spend: Arc<dyn SpendLedger>,
     /// G9 kill switch: KV path to the signed revocation snapshot. Empty (the
     /// default) disables the check — no snapshot source configured.
     revocation_kv_path: String,
@@ -102,9 +108,18 @@ impl Gateway {
         Self {
             openbao,
             config,
-            spend: LocalSpendLedger::default(),
+            spend: Arc::new(LocalSpendLedger::default()),
             revocation_kv_path: String::new(),
         }
+    }
+
+    /// Swap the runtime spend ledger — e.g. a shared ledger for a horizontally
+    /// scaled estate. The default is the single-process [`LocalSpendLedger`];
+    /// this changes no data-path API (X2).
+    #[must_use]
+    pub fn with_spend_ledger(mut self, spend: Arc<dyn SpendLedger>) -> Self {
+        self.spend = spend;
+        self
     }
 
     /// Set the KV path the kill switch reads the signed revocation snapshot from

@@ -24,6 +24,10 @@
 //! revocation snapshot — online (the gateway kill-switch path) and on removable
 //! media (air-gap) — so a revoked token is denied on every replica and offline.
 //!
+//! X2: the [`WorkloadController`] brings `aog-gateway` under Loom as a managed
+//! `Workload` — reconciling its health/readiness and reflecting its placements —
+//! with no change to the gateway's data-path API.
+//!
 //! Trust posture: this crate's read path is the informer (bounded-stale,
 //! resync-recovered, A1.6); its write path is **never** the store directly —
 //! a controller mutates desired state only through the apiserver admission
@@ -46,6 +50,7 @@ pub mod runtime;
 pub mod teardown;
 pub mod transit;
 pub mod vkeys;
+pub mod workloads;
 
 pub use bundle_store::{
     BundleReject, BundleStore, EdgeBundleCache, MemBundleStore, OpenBaoBundleStore, SignedBundle,
@@ -67,3 +72,4 @@ pub use runtime::{
 };
 pub use teardown::{TENANT_FINALIZER, TenantTeardown};
 pub use vkeys::{VIRTUALKEY_FINALIZER, VirtualKeyController};
+pub use workloads::{HttpWorkloadProbe, StaticWorkloadProbe, WorkloadController, WorkloadProbe};
