@@ -1359,3 +1359,32 @@ channel every proxy polls; revoking one halts the tool on every proxy. New
   republishes a newer set and both proxies deny `calc` while `search` keeps
   working). **Gate:** revoking a ToolGrant halts the tool on every proxy ✓.
   **Commit:** `LOOM-O6`.
+
+### O7 — Disruption budgets + node maintenance — DONE
+Cordon a node out of scheduling, then drain it within a disruption budget. New
+`maintenance.rs`; a one-line cordon exclusion in `scheduler.rs`.
+- **Cordon.** A `Node` labelled `loom.io/unschedulable=true` (`CORDON_LABEL` /
+  `is_cordoned`) is excluded by the scheduler's `node_snapshots` — no schema
+  change — so it takes no new placements and a drained replica is never re-placed
+  back onto it (S7 and the O1 planner share `node_snapshots`).
+- **Disruption-budget drain (`plan_drain`).** Pure and deterministic: per pass it
+  evicts at most `disruption_budget` replicas of any one workload and defers the
+  rest, so a workload never drops more than its budget of replicas at once. A
+  budget of 0 is treated as 1 (a drain must progress).
+- **`MaintenanceController`.** Drains a cordoned node's placements in bounded
+  passes; the scheduler re-places each on another **same-ring** node (the S3 ring
+  filter is unchanged), so ring isolation holds throughout. Each eviction revokes
+  the replica's runtime token via an optional OpenBao seam (mirroring O1
+  scale-down); without it the controller drains estate-only.
+- **Files:** `crates/aog-controller/src/{maintenance.rs (new), scheduler.rs,
+  lib.rs}`; `crates/aog-controller/tests/{maintenance.rs (new),
+  live_maintenance.rs (new)}`.
+- **Verify:** `fmt` + `clippy -p aog-controller --all-targets --no-deps -D
+  warnings` clean; `cargo test -p aog-controller` **81 passed** (6 planner unit
+  tests: budget-per-workload, per-workload-not-per-node, zero-budget-progresses,
+  determinism, empty-node, cordon-label; 2 controller tests: one pass evicts the
+  budget then the node fully drains, uncordoned untouched). **Live gate (A3.2 —
+  written; runs in the Phase-O live batch):** `live_maintenance.rs` — draining a
+  cordoned node revokes the drained replica's token in OpenBao. **Gate:**
+  maintenance drains within budget ✓; ring guarantees preserved (cordon exclusion
+  + unchanged S3 filter) ✓. **Commit:** `LOOM-O7`.

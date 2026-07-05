@@ -52,6 +52,11 @@
 //! revoking a grant drops its tool from the next set, halting the tool's next
 //! call on every proxy (anti-rollback keeps a replay from resurrecting it).
 //!
+//! O7: the [`MaintenanceController`] drains a cordoned ([`is_cordoned`]) node
+//! within a disruption budget ([`plan_drain`]) — at most N replicas of a workload
+//! down per pass — while the scheduler re-places them on same-ring nodes, so a
+//! node is serviced without breaking availability or ring isolation.
+//!
 //! Trust posture: this crate's read path is the informer (bounded-stale,
 //! resync-recovered, A1.6); its write path is **never** the store directly —
 //! a controller mutates desired state only through the apiserver admission
@@ -66,6 +71,7 @@ pub mod deploy;
 pub mod gc;
 pub mod health;
 pub mod intents;
+pub mod maintenance;
 pub mod mission;
 pub mod node;
 pub mod objects;
@@ -97,6 +103,9 @@ pub use deploy::{ReplicaPlan, placement_name, plan_replicas, replica_index};
 pub use gc::GarbageCollector;
 pub use health::{HealthProbe, HttpHealthProbe};
 pub use intents::RevocationIndexer;
+pub use maintenance::{
+    CORDON_LABEL, DrainCandidate, DrainPlan, MaintenanceController, is_cordoned, plan_drain,
+};
 pub use mission::{MissionContractController, MissionRequest, MissionVerdict, mission_allows};
 pub use node::NodeController;
 pub use objects::{EstateClient, is_terminating, parse_key};

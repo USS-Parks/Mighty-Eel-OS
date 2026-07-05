@@ -91,11 +91,15 @@ impl SchedulerController {
         Ok(out)
     }
 
-    /// Project every estate `Node` into a scheduler snapshot.
+    /// Project every schedulable estate `Node` into a scheduler snapshot. A
+    /// cordoned node (O7 maintenance) is excluded, so it takes no new placements
+    /// and a drained replica is never re-placed back onto it.
     async fn node_snapshots(&self) -> Result<Vec<NodeSnapshot>, ReconcileError> {
         let mut snapshots = Vec::new();
         for object in self.client.list(Kind::Node).await? {
-            if let ResourceObject::Node(node) = object {
+            if let ResourceObject::Node(node) = object
+                && !crate::maintenance::is_cordoned(&node.metadata)
+            {
                 snapshots.push(NodeSnapshot::from_node(&node));
             }
         }
