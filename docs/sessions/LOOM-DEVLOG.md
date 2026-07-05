@@ -631,3 +631,37 @@ Provider/model health folded into each pool's schedulable set, so the scheduler
 - **Gate:** an unhealthy provider is removed from the schedulable set within SLO
   ✓ (real 503 → Degraded/empty on the resync heartbeat; recovery rejoins).
   **Commit:** `LOOM-R7`.
+
+### R8 — VirtualKey controller — DONE
+A declared `VirtualKey` becomes a resolvable entry at the gateway's
+key-resolution path, so the gateway (G1) turns the presented key into a
+verified, scoped, in-budget trust token — and a change to the key's capability
+is reflected on the gateway's next request, no restart. New `vkeys.rs`.
+- **Resolution write.** The gateway resolves a key by reading
+  `<prefix>/<sha256(key)>` from OpenBao KV and verifying the `token` there
+  against the trust anchor (reused verbatim, not rebuilt). `VirtualKeyController`
+  writes that entry: it reads the `Capability` the key names, mints a trust
+  token carrying its scope + budget + ttl (`fabric_token::issue`, signed by the
+  anchor), and `put`s `{"token": …}` at the key's path. Level-triggered and
+  idempotent — it re-mints only on drift (absent, scope changed, or a tampered
+  entry that no longer verifies).
+- **Fail-closed teardown (I-4).** The controller owns a
+  `loom.aog/virtualkey-kv` finalizer, so a deleted key's entry is **retracted
+  before** the estate object is collected — a removed key stops resolving, never
+  lingers. A key whose capability is missing/terminating is retracted too and
+  marked `Degraded`; it never resolves to a stale token. The kernel models the
+  presented key by the object's name; a secret-key indirection is Phase-W's.
+- **Files:** `crates/aog-controller/{Cargo.toml (fabric-token→deps, +sha2),
+  src/{vkeys.rs (new), lib.rs}, tests/live_vkey.rs (new)}`.
+- **Verify:** clippy `--all-targets --no-deps -D warnings` + CI workspace clippy
+  clean; **23 passed** across aog-controller with `WSF_OPENBAO_ADDR` set —
+  including the **R8 live gate** against **live OpenBao and the real
+  `aog-gateway`**: a key resolves to cap-basic's scope/budget through
+  `Gateway::resolve_and_check`; repointing it at cap-premium (bigger budget, more
+  models, higher classification) is reflected by the **same** gateway instance
+  with no rebuild/restart; deleting the key retracts its entry and the gateway
+  then returns `UnknownKey`; hermetic across runs. fmt + `check --workspace`
+  clean.
+- **Gate:** a key change is reflected at the gateway without restart ✓ (the real
+  gateway resolves the new capability's scope/budget after the edit), plus a
+  deleted key stops resolving (fail-closed retraction). **Commit:** `LOOM-R8`.

@@ -16,6 +16,10 @@
 //! ([`HealthProbe`]) into each pool's schedulable set, so the scheduler only
 //! places on reachable endpoints.
 //!
+//! R8: the [`VirtualKeyController`] resolves each `VirtualKey` to a token minted
+//! from its `Capability` and writes it to the gateway's key-resolution path, so
+//! a key change is reflected at the gateway (G1) without a restart.
+//!
 //! Trust posture: this crate's read path is the informer (bounded-stale,
 //! resync-recovered, A1.6); its write path is **never** the store directly —
 //! a controller mutates desired state only through the apiserver admission
@@ -36,6 +40,7 @@ pub mod rings;
 pub mod runtime;
 pub mod teardown;
 pub mod transit;
+pub mod vkeys;
 
 pub use bundle_store::{
     BundleReject, BundleStore, EdgeBundleCache, MemBundleStore, OpenBaoBundleStore, SignedBundle,
@@ -55,3 +60,4 @@ pub use runtime::{
     Action, AlwaysLeader, Controller, LeaderGate, ReconcileError, Reconciler, SharedGate, SyncStats,
 };
 pub use teardown::{TENANT_FINALIZER, TenantTeardown};
+pub use vkeys::{VIRTUALKEY_FINALIZER, VirtualKeyController};
