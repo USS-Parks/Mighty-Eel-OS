@@ -20,6 +20,7 @@ wsf-ledger = { path = "../wsf-ledger" }
 mai-compliance = { path = "../../mai-compliance" }
 axum = { workspace = true }
 tokio = { workspace = true }
+serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 uuid = { workspace = true }

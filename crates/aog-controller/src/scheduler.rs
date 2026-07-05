@@ -9,9 +9,13 @@
 //! Pending; it is never force-placed.
 //!
 //! This controller *mints* placements; the X2 `WorkloadController` reflects them
-//! into `Workload` status. One replica per node (a placement is keyed by
-//! `<workload>-<node>`); packing several replicas onto one node is Phase-O work.
+//! into `Workload` status. O1 makes it the full replica-set manager: placements
+//! are replica-indexed (`<workload>-r<ordinal>`, [`crate::deploy`]), so a node
+//! may host more than one replica of one workload (packing), and scale-down is a
+//! precise drop of the ordinals at or beyond the declared `replicas` — each
+//! dropped replica's runtime token revoked from OpenBao as its `Placement` goes.
 
+use std::collections::BTreeMap;
 use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
@@ -28,6 +32,7 @@ use aog_estate::{
 };
 use aog_scheduler::{NodeSnapshot, ScheduleRequest, Scheduler, attested_scheduler};
 
+use crate::deploy::{placement_name, plan_replicas, replica_index};
 use crate::objects::{EstateClient, parse_key};
 use crate::runtime::{Action, ReconcileError, Reconciler};
 
@@ -72,24 +77,29 @@ impl SchedulerController {
         format!("{}/{placement}", self.token_prefix)
     }
 
-    /// The nodes already hosting a replica of `workload` (from its `Placement`s).
-    async fn placed_nodes(&self, workload: &str) -> Result<Vec<String>, ReconcileError> {
-        let mut nodes = Vec::new();
+    /// Every live `Placement` for `workload`, matched by `spec.workload` (the
+    /// authoritative link, independent of the placement's name).
+    async fn existing_placements(&self, workload: &str) -> Result<Vec<Placement>, ReconcileError> {
+        let mut out = Vec::new();
         for object in self.client.list(Kind::Placement).await? {
             if let ResourceObject::Placement(placement) = object
                 && placement.spec.workload == workload
             {
-                nodes.push(placement.spec.node);
+                out.push(placement);
             }
         }
-        Ok(nodes)
+        Ok(out)
     }
 
-    /// Project every estate `Node` into a scheduler snapshot.
+    /// Project every schedulable estate `Node` into a scheduler snapshot. A
+    /// cordoned node (O7 maintenance) is excluded, so it takes no new placements
+    /// and a drained replica is never re-placed back onto it.
     async fn node_snapshots(&self) -> Result<Vec<NodeSnapshot>, ReconcileError> {
         let mut snapshots = Vec::new();
         for object in self.client.list(Kind::Node).await? {
-            if let ResourceObject::Node(node) = object {
+            if let ResourceObject::Node(node) = object
+                && !crate::maintenance::is_cordoned(&node.metadata)
+            {
                 snapshots.push(NodeSnapshot::from_node(&node));
             }
         }
@@ -218,12 +228,40 @@ impl SchedulerController {
         }
 
         let desired = usize::try_from(workload.spec.replicas).unwrap_or(usize::MAX);
-        let mut placed = self.placed_nodes(name).await?;
-        if placed.len() >= desired {
-            return Ok(Action::Done);
+
+        // Index the live placements by their replica ordinal (parsed from the
+        // name) so the planner can decide creates, deletes, and shortfall.
+        let mut by_ordinal: BTreeMap<usize, Placement> = BTreeMap::new();
+        for placement in self.existing_placements(name).await? {
+            if let Some(ordinal) = replica_index(name, &placement.metadata.name) {
+                by_ordinal.insert(ordinal, placement);
+            }
         }
+        let existing_nodes: BTreeMap<usize, String> = by_ordinal
+            .iter()
+            .map(|(ordinal, placement)| (*ordinal, placement.spec.node.clone()))
+            .collect();
 
         let snapshots = self.node_snapshots().await?;
+        let request = ScheduleRequest::from_workload(&workload);
+        let plan = plan_replicas(
+            desired,
+            &existing_nodes,
+            &self.scheduler,
+            &request,
+            &snapshots,
+        );
+
+        // Converged — nothing to add or remove. A lingering shortfall (no free
+        // node) still requeues so a later node join heals it.
+        if !plan.mutates() {
+            return if plan.short > 0 {
+                Ok(Action::RequeueAfter(REQUEUE))
+            } else {
+                Ok(Action::Done)
+            };
+        }
+
         let cap = self.resolve_capability(&workload).await?;
         let vault = self
             .openbao
@@ -231,36 +269,39 @@ impl SchedulerController {
             .await
             .map_err(|e| ReconcileError(e.to_string()))?;
 
-        while placed.len() < desired {
-            let mut request = ScheduleRequest::from_workload(&workload);
-            request.already_placed_on = placed.clone();
-            let decision = self.scheduler.schedule(&request, &snapshots);
-            let Some(node) = decision.scheduled_node() else {
-                break; // no attestation-satisfying node — the rest stay Pending
-            };
-            if placed.iter().any(|n| n.as_str() == node) {
-                break; // best node already hosts a replica; no distinct node free
+        // Scale down first: free capacity before packing. Each dropped replica's
+        // runtime token is deleted from OpenBao (revoked) and its `Placement`
+        // removed; the node runtime drains the replica (N9).
+        for ordinal in &plan.delete {
+            if let Some(placement) = by_ordinal.get(ordinal) {
+                let pname = placement.metadata.name.clone();
+                // An already-absent token is convergence, not error.
+                let _ = self
+                    .openbao
+                    .delete_kv(&vault, &self.token_path(&pname))
+                    .await;
+                self.client.delete(Kind::Placement, &pname).await?;
             }
-            let node = node.to_owned();
-            let placement_name = format!("{name}-{node}");
-            let token_id = format!("rt:{placement_name}");
+        }
+
+        // Scale up: mint a scoped runtime token per new ordinal, persist it to
+        // OpenBao for the node to fetch, and create the attested `Placement`
+        // through admission (which receipts the binding, K9).
+        for (ordinal, node) in &plan.create {
+            let pname = placement_name(name, *ordinal);
+            let token_id = format!("rt:{pname}");
             let token = self.mint_runtime_token(&token_id, &workload, cap.as_ref())?;
             self.openbao
-                .put_kv_data(
-                    &vault,
-                    &self.token_path(&placement_name),
-                    json!({ "token": token }),
-                )
+                .put_kv_data(&vault, &self.token_path(&pname), json!({ "token": token }))
                 .await
                 .map_err(|e| ReconcileError(e.to_string()))?;
-            let placement = Self::build_placement(&workload, &placement_name, &node, &token_id);
+            let placement = Self::build_placement(&workload, &pname, node, &token_id);
             self.client
                 .ensure_created(ResourceObject::Placement(placement))
                 .await?;
-            placed.push(node);
         }
 
-        if placed.len() < desired {
+        if plan.short > 0 {
             Ok(Action::RequeueAfter(REQUEUE))
         } else {
             Ok(Action::Done)

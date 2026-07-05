@@ -594,6 +594,11 @@ pub struct RolloutPlanSpec {
     pub max_surge: u32,
     #[serde(default)]
     pub max_unavailable: u32,
+    /// Max target errors tolerated mid-rollout before auto-rollback (O3). `0`
+    /// disables auto-rollback; `>0` is the error budget the rollback controller
+    /// enforces from receipts/meter telemetry.
+    #[serde(default)]
+    pub error_budget: u32,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -602,6 +607,10 @@ pub struct RolloutPlanStatus {
     pub phase: Phase,
     #[serde(default)]
     pub step: u32,
+    /// Set once the error budget was breached and the rollout reversed to its
+    /// prior state (O3). A rolled-back rollout ends `Failed`, not `Ready`.
+    #[serde(default)]
+    pub rolled_back: bool,
 }
 
 impl EstateKind for RolloutPlanSpec {

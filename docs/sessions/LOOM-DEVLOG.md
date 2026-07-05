@@ -1182,3 +1182,406 @@ fail-closed / fail-static, per-action re-auth, never bearer coasting.
   `ad32b26`→`50593f1` (17 commits), **NOT pushed/merged** — awaits Basho.
 - Next milestone: **M3c — orchestration objects + HA** (Phases O + H), then the
   gated **Summit-Conformance** (Phase V).
+
+---
+
+## Phase O — Orchestration objects (`aog-controller` higher-order)
+
+Built on `session/LOOM-4`, branched from `main` at `406fbf6` (the merged M3a+M3b
+tip). One prompt = one focused commit + entry. Live gates (A3.2) for the
+placement-touching prompts are written per prompt and run as a batch at the
+Phase-O boundary against a live OpenBao (recorded there).
+
+### O1 — `Workload` (Deployment analog): replica-set convergence — DONE
+The S7 binding controller becomes the full Deployment analog. Placements are now
+**replica-indexed** — replica `i` of workload `w` is `w-r<i>` — which is what lets
+a node host more than one replica of one workload (packing) and makes scale-down a
+precise "drop the ordinals at or beyond `replicas`".
+- **`deploy.rs` (new) — the pure planner.** `plan_replicas(desired, existing,
+  scheduler, request, snapshots) -> ReplicaPlan { create, delete, short }` is the
+  whole convergence decision, factored out of the OpenBao side so it is
+  deterministic and unit-testable. It runs the attested scheduler (Phase S) once
+  per unfilled ordinal, threading two per-pass signals the scheduler cannot see:
+  **spread** (each node already carrying a replica this pass is fed back as
+  `already_placed_on`, so S6 fills fresh nodes first, then packs) and **capacity**
+  (a node's free slots are decremented locally per placement, so the S2
+  `CapacityFilter` bounds packing to the headroom actually reported; an undeclared
+  slot budget is unbounded). Ring / attestation / readiness stay the scheduler's
+  hard filters — an ordinal with no satisfying node is left `short`, never
+  force-placed, and the caller requeues.
+- **`scheduler.rs` — rewired.** `reconcile_workload` parses live placements to
+  ordinals, plans, then scales **down** first (delete each excess `Placement` and
+  `delete_kv` its runtime token from OpenBao, so the node cannot re-fetch a token
+  for a replica that no longer exists — the running replica is drained by N9;
+  estate-wide token revocation stays R9's `RevocationIntent`) and **up** (mint a
+  scoped token per new ordinal, persist it, create the attested `Placement`
+  through admission, which receipts the binding, K9). Converged passes touch
+  nothing; a lingering shortfall requeues so a later node-join heals it.
+- **Files:** `crates/aog-controller/src/{deploy.rs (new), scheduler.rs, lib.rs}`;
+  `crates/aog-controller/tests/live_deploy.rs (new)`.
+- **Verify:** `fmt` clean; `clippy -p aog-controller --all-targets --no-deps -D
+  warnings` clean; `cargo test -p aog-controller` **35 passed** (8 new planner
+  tests: spread, pack-beyond-nodes, capacity-bounds-and-short, unbounded-packs,
+  scale-down-drops-highest, converged-no-op, no-ready-node-all-short, name round
+  trip). **Live gate (A3.2 — written; runs in the Phase-O live batch):**
+  `live_deploy.rs` — `packs_replicas_beyond_node_count` (3 replicas over 2 nodes →
+  3 verifiable tokens, one node hosting two) and
+  `scale_down_removes_the_dropped_replicas_token` (drop to 1 replica → `gw-r1`
+  gone from the estate and its token no longer fetchable from OpenBao).
+- **Gate:** declaring N replicas converges to N, correctly placed (packing +
+  spread) ✓; scale-down removes the excess and clears its token ✓.
+  **Commit:** `LOOM-O1`.
+
+### O2 — Rollout controller (progressive / canary / blue-green) — DONE
+A `RolloutPlan` is advanced through availability-safe steps by a **pure,
+deterministic stepper** and a thin reconcile loop that receipts each step.
+- **`rollout.rs` (new) — the stepper.** `rollout_progress(strategy, total,
+  max_surge, max_unavailable, step) -> { updated, unavailable, complete }` is the
+  whole decision — no clock, no estate read (A1.12 bar-5 determinism). The
+  **availability floor** `available >= total - max_unavailable` holds at *every*
+  step because `unavailable <= max_unavailable` by construction. Progressive
+  cycles a window = surge + unavailable per step; canary validates a small first
+  cohort then the rest; blue-green stands the new set up beside the old and
+  switches atomically (zero downtime). `total_steps` gives the terminal step.
+- **`RolloutController`.** Resolves the target `Workload`'s replica count, asks
+  the stepper where the rollout is, and writes the next `status.step` (an admitted
+  update → a receipt, K9) until `complete` → `Ready`. A missing target holds
+  `Degraded` (fail-closed), re-checked on the resync heartbeat, never a phantom
+  rollout. Physical replica replacement is O1 placement + N9 drain; O2 owns the
+  order, the pace, and the receipt trail.
+- **Files:** `crates/aog-controller/src/{rollout.rs (new), lib.rs}`;
+  `crates/aog-controller/tests/rollout.rs (new)`.
+- **Verify:** `fmt` + `clippy -p aog-controller --all-targets --no-deps -D
+  warnings` clean; `cargo test -p aog-controller` **46 passed** (7 stepper unit
+  tests incl. an exhaustive availability-floor property over every strategy ×
+  total × surge × unavailable × step; 2 controller tests). **Gate:** rollout
+  maintains availability ✓ (the floor property); each step receipted ✓
+  (`receipts_len` grows `>= steps` as the plan reaches `Ready`).
+  **Commit:** `LOOM-O2`.
+
+### O3 — Automatic rollback on error-budget breach — DONE
+The rollout controller gains an error budget: when a target's observed errors
+exceed it mid-rollout, the rollout **reverses to its prior state** and ends
+`Failed` — deterministically, every reverse step receipted.
+- **Schema (aog-estate).** `RolloutPlanSpec.error_budget: u32` (`0` disables
+  auto-rollback) and `RolloutPlanStatus.rolled_back: bool` (a rolled-back rollout
+  ends `Failed`, not `Ready`) — both additive `#[serde(default)]`, round-trip clean.
+- **`RolloutController` (rollout.rs).** New `ErrorBudgetProbe` (a sync telemetry
+  read from receipts/meter) and a `with_error_budget(probe)` builder. Each
+  reconcile, before stepping forward, checks `error_budget > 0 && observed >
+  budget`: on a breach — or once a rollback is already under way — it reverses one
+  step toward 0 (each an admitted receipt) and ends `Failed` at step 0. A rollback
+  in flight never un-reverses even if the error signal later clears, so the
+  reversal is deterministic and ledger-provable. Forward-only (O2) with no probe.
+- **Files:** `crates/aog-estate/src/kinds.rs`,
+  `crates/aog-controller/src/{rollout.rs, lib.rs}`;
+  `crates/aog-controller/tests/rollout.rs`, `crates/aog-estate/tests/roundtrip.rs`.
+- **Verify:** `fmt` + `clippy --all-targets --no-deps -D warnings` clean
+  (aog-estate + aog-controller); `cargo test -p aog-estate` **21 passed**,
+  `-p aog-controller` **47 passed** (O3 test: a rollout advances two steps clean,
+  then a budget breach reverses it to step 0 / `Failed` / `rolled_back`).
+  **Gate:** an injected error-budget breach auto-rolls-back deterministically to
+  the prior state ✓. **Commit:** `LOOM-O3`.
+
+### O4 — Budget-/ROI-aware autoscaler — DONE
+The autoscaler scales a `Workload` on **load and economics together**, not load
+alone. New `autoscale.rs`.
+- **The pure decision.** `autoscale(current, AutoscaleSignals { utilization,
+  budget_headroom, roi }, AutoscalePolicy) -> ScaleDecision` — no clock, no RNG.
+  Saturated + affordable → `ScaleUp`; saturated but out of budget or at the ceiling
+  → `RecommendHardware` (never overspend — the load needs hardware, not more
+  replicas on the same tier); budget-inefficient (ROI ≤ floor) → `ScaleDown`; idle
+  → consolidate `ScaleDown`; else `Hold`. Never below `min_replicas`. Saturation
+  outranks low ROI (an overloaded workload's immediate need is capacity).
+- **`AutoscaleController`.** Reads a real signal snapshot via the `AutoscaleProbe`
+  seam (fed by node utilization + the gateway meter / SpendLedger) and applies
+  scale up/down by writing `Workload.spec.replicas` (the HPA pattern — O1 then
+  converges placements to match). No telemetry → hold (fail-closed, I-4).
+  `RecommendHardware` is an operator/console decision, not automatic capacity
+  fabrication (the gateway ROI recommender already surfaces it for humans).
+- **Files:** `crates/aog-controller/src/{autoscale.rs (new), lib.rs}`;
+  `crates/aog-controller/tests/autoscale.rs (new)`.
+- **Verify:** `fmt` + `clippy -p aog-controller --all-targets --no-deps -D
+  warnings` clean; `cargo test -p aog-controller` **58 passed** (9 pure-decision
+  unit tests: up, out-of-budget → hardware, ceiling → hardware, idle,
+  budget-inefficient, steady hold, min floor, saturation-outranks-ROI,
+  determinism; 2 controller tests: one pass scales up on saturation, one
+  consolidates on idle). **Gate:** scale decisions from a fixed fixture are
+  deterministic and budget-respecting ✓. **Commit:** `LOOM-O4`.
+
+### O5 — MissionContract operator — DONE
+The mission scope envelope becomes concrete authority, and a run cannot exceed it.
+New `mission.rs`.
+- **Enforcement (`mission_allows`).** Pure, fail-closed: an agent bound to a
+  `MissionContract` may take an action only if the tool is in `allowed_tools`, the
+  system (when the contract restricts systems — empty = unrestricted) is in
+  `allowed_systems`, and `calls_used < call_ceiling`. Out-of-scope or over-budget
+  → `Deny`. The monetary `spend` budget rides the derived grant's credential (the
+  existing SpendLedger), enforced where spend is.
+- **Materialization (`MissionContractController`).** Reconciles a contract into
+  one owned `ToolGrant` per allowed tool (scoped to `allowed_systems`, owned by
+  the contract so the GC cascades), pruning grants for withdrawn tools. A tool
+  outside the contract has no grant, so O6's toolproxy can never mint a credential
+  the mission did not sanction. A spent contract (`calls_used >= call_ceiling`)
+  is `Failed`; otherwise `Ready`.
+- **Files:** `crates/aog-controller/src/{mission.rs (new), lib.rs}`;
+  `crates/aog-controller/tests/mission.rs (new)`.
+- **Verify:** `fmt` + `clippy -p aog-controller --all-targets --no-deps -D
+  warnings` clean; `cargo test -p aog-controller` **67 passed** (7 enforcement
+  unit tests: in-scope allow, tool/system out-of-scope deny, restricted-but-no-
+  system deny, unrestricted-allows-any, call-ceiling deny, valid derived label
+  names; 2 controller tests: materialize exactly the allowed-tool grants, prune on
+  shrink). **Gate:** an agent cannot exceed its MissionContract scope/budget ✓.
+  **Commit:** `LOOM-O5`.
+
+### O6 — ToolGrant orchestration — DONE
+The declarative `ToolGrant`s become a signed, versioned active-grant set on the
+channel every proxy polls; revoking one halts the tool on every proxy. New
+`toolgrants.rs`.
+- **The signed set + edge cache.** `SignedGrantSet` (version + sorted
+  `GrantEntry { tool, systems }`) is ML-DSA-signed over its canonical payload
+  (signature cleared), exactly like an R6 policy bundle, so a proxy verifies it
+  offline with the control-plane public key alone. `EdgeGrantCache::accept`
+  refuses a bad signature and an anti-rollback stale set (version ≤ applied — a
+  replay cannot resurrect a revoked grant); `allows(tool)` / `allows_system` is
+  the per-call enforcement point.
+- **`ToolGrantController`.** Compiles every live (non-terminating) `ToolGrant`
+  into the set and publishes it to the `GrantStore` channel (`MemGrantStore` + the
+  OpenBao poll path in production), advancing the version only on real change. A
+  deleted or terminating grant is excluded → the next set omits its tool → the
+  proxy denies its next call. Complements O5, which owns the grants' lifecycle.
+- **Files:** `crates/aog-controller/src/{toolgrants.rs (new), lib.rs}`;
+  `crates/aog-controller/tests/toolgrants.rs (new)`.
+- **Verify:** `fmt` + `clippy -p aog-controller --all-targets --no-deps -D
+  warnings` clean; `cargo test -p aog-controller` **72 passed** (4 unit tests:
+  verify + allow, wrong-key refused, stale replay refused, revocation drops the
+  tool; 1 controller test: two proxies both allow `calc`, then deleting its grant
+  republishes a newer set and both proxies deny `calc` while `search` keeps
+  working). **Gate:** revoking a ToolGrant halts the tool on every proxy ✓.
+  **Commit:** `LOOM-O6`.
+
+### O7 — Disruption budgets + node maintenance — DONE
+Cordon a node out of scheduling, then drain it within a disruption budget. New
+`maintenance.rs`; a one-line cordon exclusion in `scheduler.rs`.
+- **Cordon.** A `Node` labelled `loom.io/unschedulable=true` (`CORDON_LABEL` /
+  `is_cordoned`) is excluded by the scheduler's `node_snapshots` — no schema
+  change — so it takes no new placements and a drained replica is never re-placed
+  back onto it (S7 and the O1 planner share `node_snapshots`).
+- **Disruption-budget drain (`plan_drain`).** Pure and deterministic: per pass it
+  evicts at most `disruption_budget` replicas of any one workload and defers the
+  rest, so a workload never drops more than its budget of replicas at once. A
+  budget of 0 is treated as 1 (a drain must progress).
+- **`MaintenanceController`.** Drains a cordoned node's placements in bounded
+  passes; the scheduler re-places each on another **same-ring** node (the S3 ring
+  filter is unchanged), so ring isolation holds throughout. Each eviction revokes
+  the replica's runtime token via an optional OpenBao seam (mirroring O1
+  scale-down); without it the controller drains estate-only.
+- **Files:** `crates/aog-controller/src/{maintenance.rs (new), scheduler.rs,
+  lib.rs}`; `crates/aog-controller/tests/{maintenance.rs (new),
+  live_maintenance.rs (new)}`.
+- **Verify:** `fmt` + `clippy -p aog-controller --all-targets --no-deps -D
+  warnings` clean; `cargo test -p aog-controller` **81 passed** (6 planner unit
+  tests: budget-per-workload, per-workload-not-per-node, zero-budget-progresses,
+  determinism, empty-node, cordon-label; 2 controller tests: one pass evicts the
+  budget then the node fully drains, uncordoned untouched). **Live gate (A3.2 —
+  written; runs in the Phase-O live batch):** `live_maintenance.rs` — draining a
+  cordoned node revokes the drained replica's token in OpenBao. **Gate:**
+  maintenance drains within budget ✓; ring guarantees preserved (cordon exclusion
+  + unchanged S3 filter) ✓. **Commit:** `LOOM-O7`.
+
+---
+
+**Phase O COMPLETE (O1–O7) — orchestration objects.** Deployment-analog replica
+convergence (O1), progressive/canary/blue-green rollout (O2) with error-budget
+auto-rollback (O3), budget-/ROI-aware autoscaling (O4), MissionContract scope
+enforcement (O5), signed ToolGrant distribution with revoke-halts-every-proxy
+(O6), and disruption-budget node maintenance (O7). All on `session/LOOM-4` (off
+`main` `406fbf6`), commits `5329a7c`→`80ff793` (7 commits).
+- **Verify:** each prompt `fmt` + `clippy -p aog-controller --all-targets
+  --no-deps -D warnings` clean; `cargo test -p aog-controller` **81 passed**
+  (deterministic unit + mock-controller gates for every prompt).
+- **Phase-O live batch (A3.2) — green vs a live OpenBao** (Docker
+  `openbao/openbao server -dev`): O1 `live_deploy` (packing wrote three
+  replica-indexed tokens `gw-r0/r1/r2`; scale-down cleared the dropped token) + O7
+  `live_maintenance` (drain revoked the token) + the S7 `live_scheduler`
+  regression (replica-indexed binding intact) — **4 passed**, confirmed against
+  OpenBao's real KV/approle state, not vacuous skips.
+- NOT pushed/merged — awaits Basho.
+- Next: **Phase H** (H1–H6) — HA, consensus hardening, DR, federation.
+
+---
+
+## Phase H — HA, consensus hardening, DR, federation
+
+### H1 — Multi-node Raft (≥3-node control plane) — DONE
+K3's single-node openraft node is promoted to a real multi-node control plane:
+election, replication, leader failover, and a leadership-fenced `SharedGate`.
+- **`raft/cluster.rs` (new) — the multi-node transport.** A `Cluster` registry of
+  peer `Raft` handles; `ClusterNetwork` routes openraft's `append_entries` /
+  `vote` / `install_snapshot` RPCs by direct call to the target — **real** openraft
+  consensus across ≥3 in-process nodes. An `isolated` set injects a partition (a
+  node in it neither sends nor receives RPCs), the seam H2 uses.
+- **`RaftNode` (mod.rs).** Generalized `build<N>` over any network; `join` onto a
+  `Cluster` (registers the handle so peers reach it); `initialize` + `add_learner`
+  + `change_membership` to form the cluster; `is_leader` / `current_leader` /
+  `wait_for_leader`; and a `leadership()` watch.
+- **`SharedGate::follow` (aog-controller runtime).** Drives a controller's gate
+  from a node's `leadership()` watch, so only the leader reconciles — leadership is
+  fenced to the gate, not assumed.
+- **Files:** `crates/aog-store/src/raft/{cluster.rs (new), mod.rs}`;
+  `crates/aog-controller/src/runtime.rs`; `crates/aog-controller/tests/ha.rs (new)`.
+- **Verify:** `fmt` + `clippy -p aog-store` / `-p aog-controller --all-targets
+  --no-deps -D warnings` clean; `cargo test -p aog-store` **7 passed** (K3 intact),
+  `-p aog-controller` **82 passed**. H1 gate test (`ha.rs`): a 3-node cluster forms
+  and replicates a committed write to both followers; partitioning the leader
+  triggers a **re-election within SLO** among the survivors, the committed write
+  **survives with zero loss**, the new leader commits a fresh write, and the
+  `SharedGate` follows to the new leader. **Gate:** leader loss → new leader within
+  SLO, zero committed-state loss ✓.
+- **Scope note (honest):** an in-process 3-node cluster running real openraft
+  consensus with a real leader partition — genuine election/replication/commit, not
+  simulated. The over-the-wire mTLS transport is deployment packaging; fencing the
+  *old* partitioned leader (classic Raft still has it believe it leads until it
+  sees a higher term) is split-brain safety — proven under a real partition in H2.
+  **Commit:** `LOOM-H1`.
+
+### H2 — Split-brain fencing (load-bearing) — DONE
+The split-brain hazard H1 exposed — a partitioned leader still *believing* it
+leads — is closed with a quorum-confirmed leadership check.
+- **`RaftNode::confirm_leadership(timeout)` (mod.rs).** A ReadIndex (openraft
+  `ensure_linearizable`) that returns `Ok` only when a quorum still acknowledges
+  this node as leader. A partitioned minority cannot confirm and returns `false` —
+  the split-brain-safe check the trust path uses, **not** the stale metrics view.
+- **The fencing.** A `SharedGate` set from `confirm_leadership` closes on a
+  minority, so its controllers serve no authoritative decision under partition
+  (fail-closed, doctrine I-4). The majority elects a leader that *can* confirm and
+  serves the authoritative estate.
+- **Files:** `crates/aog-store/src/raft/mod.rs`;
+  `crates/aog-controller/tests/split_brain.rs (new)`.
+- **Verify:** `fmt` + `clippy -p aog-store` / `-p aog-controller --all-targets
+  --no-deps -D warnings` clean; the H2 gate test (`split_brain.rs`) **1 passed**:
+  with a **real** injected partition (the `Cluster` severs the leader's RPCs) the
+  minority leader fences (`confirm_leadership` → false) while its stale metrics
+  still call it leader; the majority elects a quorum-confirmed leader; a capability
+  revocation commits across the majority; and the fenced minority — though it still
+  holds the stale `granted` value — confirms no quorum, so it authorizes nothing.
+  **Gate:** injected partition → minority serves no allow ✓; kill switch honored
+  under partition ✓.
+- **Note:** a real transport fault + openraft's real quorum reaction (not a
+  simulated verdict); in-process 3-node cluster (A3.2 — the wire transport is
+  deployment packaging; the correctness it carries is what's pinned).
+  **Commit:** `LOOM-H2`.
+
+### H3 — Snapshot / compaction / restore — DONE
+A Raft snapshot compacts the state machine; a restore reproduces the exact estate;
+the separate receipt chain stays chained across it.
+- **`RaftNode::snapshot(timeout)` + `last_snapshot()` (mod.rs).** Trigger a Raft
+  snapshot and wait until it is built to the applied index, so the log before it
+  can be purged. A node recovers the same estate from the snapshot + log tail.
+- **Estate restore (aog-store).** `snapshot.rs`: write 20 keys, snapshot, restart
+  from the same dir → the estate is reproduced **exactly** (every key, value, and
+  revision; the global revision preserved).
+- **Receipt-chain continuity (aog-apiserver).** `restore.rs`: because intent
+  (aog-store) and proof (wsf-ledger) are physically separate stores (A1.4), an
+  estate snapshot/restore neither reads nor writes the receipt chain — proven by
+  building a hash-chained receipt ledger, snapshotting/restoring an estate, then
+  showing the receipt chain head is unchanged, its signed pack still verifies
+  off-host with the public key alone, and a post-restore receipt links unbroken
+  onto the pre-restore head.
+- **Files:** `crates/aog-store/src/raft/mod.rs`,
+  `crates/aog-store/tests/snapshot.rs (new)`;
+  `crates/aog-apiserver/tests/restore.rs (new)`.
+- **Verify:** `fmt` + `clippy -p aog-store` / `-p aog-apiserver --all-targets
+  --no-deps -D warnings` clean; `cargo test -p aog-store --test snapshot` **1
+  passed**, `-p aog-apiserver --test restore` **1 passed**. **Gate:** restore from
+  snapshot reproduces the exact estate ✓; receipts remain chained across restore ✓.
+  **Commit:** `LOOM-H3`.
+
+### H4 — Backup + DR runbook — DONE
+An encrypted estate backup + a documented cold-restore runbook, proven by a DR
+drill that restores from a cold backup by the runbook alone.
+- **`aog_apiserver::backup` (new module).** `backup_estate(entries, data_key)`
+  serializes the estate's committed `key→value` content and **envelope-seals** it
+  (AES-256-GCM under a 32-byte DR data key, `fabric-envelope`) — ciphertext at
+  rest, safe for removable media. `restore_estate(blob, data_key)` unseals it back
+  to entries; a wrong key, tampered blob, or a seal made for another purpose (AAD)
+  all fail closed. The data key is escrowed (OpenBao Transit-wrapped in prod,
+  operator escrow air-gapped), never stored beside the backup.
+- **Runbook.** `docs/LOOM-DR-RUNBOOK.md` — take-a-backup + cold-restore procedures
+  (recover key from escrow → read blob from media → unseal → bootstrap fresh node →
+  re-apply → verify → re-form HA), plus the intent/proof store separation (the
+  receipt ledger recovers from its own segments, H3).
+- **Files:** `crates/aog-apiserver/src/{backup.rs (new), lib.rs}`,
+  `crates/aog-apiserver/Cargo.toml` (+serde);
+  `crates/aog-apiserver/tests/dr_drill.rs (new)`; `docs/LOOM-DR-RUNBOOK.md (new)`.
+- **Verify:** `fmt` + `clippy -p aog-apiserver --all-targets --no-deps -D warnings`
+  clean; `cargo test -p aog-apiserver` **35 passed** (3 backup unit tests:
+  round-trip, ciphertext-at-rest, wrong-key-fails-closed; the DR drill). **DR drill
+  (`dr_drill.rs`):** back up a 12-key estate sealed, delete the primary stores
+  entirely, then cold-restore from the sealed blob on "media" + the escrowed key
+  into a fresh node — the content is reproduced by the runbook steps alone and the
+  blob is confirmed ciphertext at rest. **Gate:** full DR drill from cold backup
+  succeeds by the runbook alone ✓. **Commit:** `LOOM-H4`.
+
+### H5 — Air-gap federation (signed removable-media snapshots) — DONE
+New crate `aog-federation`: a source estate federates policy + revocation to an
+air-gapped peer by a **signed snapshot on media**, verifiable offline, no network.
+- **`FederationSnapshot`.** Carries a monotonic `version`, the `source` id, the
+  `FederatedPolicy`s a peer adopts (PolicyBundle content) and the
+  `FederatedRevocation`s it honors (RevocationIntent targets), ML-DSA-signed over
+  its canonical payload (signature cleared). `to_media` / `from_media` are the byte
+  serialization written to / read from removable media; a snapshot never carries a
+  secret (names, not credentials — the peer resolves those from its own OpenBao).
+- **`Peer`.** The receiving air-gapped estate: verifies a snapshot with the
+  source's public key **alone** (offline), refuses a bad signature and an
+  anti-rollback stale replay (version ≤ applied — a replay cannot re-apply a
+  superseded policy or un-revoke a token), and on accept returns the policies +
+  revocations to apply and advances the applied version.
+- **Files:** `crates/aog-federation/{Cargo.toml, src/lib.rs}` (new crate);
+  workspace member + `Cargo.lock`.
+- **Verify:** `fmt` + `clippy -p aog-federation --all-targets --no-deps -D
+  warnings` clean; `cargo test -p aog-federation` **4 passed**: a policy + a
+  revocation are signed at site-a, serialized to media bytes, and — with only the
+  bytes crossing — verified offline by the peer with the public key alone and
+  applied; a wrong source key, a tampered snapshot, and a stale replay are each
+  refused. **Gate:** a policy + a revocation cross an air gap on media and apply
+  verifiably, no network ✓. **Commit:** `LOOM-H5`.
+
+### H6 — Production guard — DONE
+The base WSF dev-fixture guard is reused and extended with Loom's HA + signed-
+bundle requirements, so an insecure deployment fails closed in production.
+- **`loom_production_guard` (wsf-hardening).** Runs the base `production_guard`
+  (dev OpenBao root token, plaintext HTTP transport, weak/uniform HMAC key) and
+  adds, in production: `single_node_quorum` (a control plane with `< 3` Raft voters
+  is not HA) and `unsigned_bundle` (an unsigned policy bundle). Empty =
+  production-ready; a no-op in Dev. `assert_loom_production_ready` errors with the
+  violations.
+- **Files:** `crates/wsf-hardening/src/lib.rs`;
+  `crates/wsf-hardening/tests/loom_guard.rs (new)`.
+- **Verify:** `fmt` + `clippy -p wsf-hardening --all-targets --no-deps -D warnings`
+  clean; `cargo test -p wsf-hardening` **10 passed** (H6: dev no-op, prod-ready
+  passes, single-node quorum blocked, unsigned bundle blocked, dev-OpenBao fixture
+  blocked via the reused base guard). **Gate:** prod guard blocks any dev fixture /
+  single-node quorum ✓. **Commit:** `LOOM-H6`.
+
+---
+
+**Phase H COMPLETE (H1–H6) — HA, consensus hardening, DR, federation.** Multi-node
+Raft with leader failover + a leadership-fenced SharedGate (H1), quorum-confirmed
+split-brain fencing under a real partition (H2), snapshot/compaction/restore with
+receipt-chain continuity (H3), an envelope-sealed backup + DR runbook + cold-drill
+(H4), signed removable-media air-gap federation (H5, new `aog-federation`), and the
+Loom production guard (H6). All on `session/LOOM-4` (off `main` `406fbf6`), commits
+`b736dc5`→`LOOM-H6`.
+- **Verify:** each prompt `fmt` + `clippy --all-targets --no-deps -D warnings`
+  clean; per-crate tests green. Consensus proofs (H1/H2) run **real openraft** over
+  an in-process ≥3-node cluster with **real partitions** injected at the transport;
+  the over-the-wire mTLS transport is deployment packaging (Phase V will exercise
+  the containerized multi-node harness end to end).
+
+**M3c COMPLETE (Phases O + H).** Orchestration objects (O1–O7) + HA/consensus/DR/
+federation (H1–H6), 13 prompts, all gated green, on `session/LOOM-4`. Phase-O live
+gates ran green vs a live OpenBao (Docker). NOT pushed/merged — awaits Basho.
+Next milestone: **Summit-Conformance (Phase V)** — the gated "Kubernetes-grade"
+proof (conformance suite + chaos/soak/scale + the containerized split-brain &
+kill-switch-under-scale harness).

@@ -28,18 +28,51 @@
 //! `Workload` — reconciling its health/readiness and reflecting its placements —
 //! with no change to the gateway's data-path API.
 //!
+//! O1: the replica-set [`deploy`] planner makes the binding controller the full
+//! Deployment analog — replica-indexed placements converge a `Workload` to
+//! exactly its declared `replicas`, packing onto node capacity when replicas
+//! outnumber nodes and dropping the excess (revoking their tokens) on scale-down.
+//!
+//! O2: the [`RolloutController`] advances a `RolloutPlan` through
+//! availability-safe steps (progressive / canary / blue-green) via a pure,
+//! deterministic stepper whose availability floor is provable, receipting each
+//! step through admission. O3 folds an error budget into the same controller:
+//! a breach reverses the rollout to its prior state (`Failed`), each step audited.
+//!
+//! O4: the [`AutoscaleController`] scales a `Workload` on load **and** economics
+//! via the pure [`autoscale`] decision — saturated+affordable → up, saturated+
+//! broke → recommend hardware, idle → consolidate, budget-inefficient → down.
+//!
+//! O5: the [`MissionContractController`] materializes a mission scope envelope
+//! into owned `ToolGrant`s, and the pure [`mission_allows`] gate denies any agent
+//! action outside the contract's tools/systems or past its call ceiling.
+//!
+//! O6: the [`ToolGrantController`] compiles the live `ToolGrant`s into a signed,
+//! versioned active-grant set every `aog-toolproxy` polls ([`EdgeGrantCache`]);
+//! revoking a grant drops its tool from the next set, halting the tool's next
+//! call on every proxy (anti-rollback keeps a replay from resurrecting it).
+//!
+//! O7: the [`MaintenanceController`] drains a cordoned ([`is_cordoned`]) node
+//! within a disruption budget ([`plan_drain`]) — at most N replicas of a workload
+//! down per pass — while the scheduler re-places them on same-ring nodes, so a
+//! node is serviced without breaking availability or ring isolation.
+//!
 //! Trust posture: this crate's read path is the informer (bounded-stale,
 //! resync-recovered, A1.6); its write path is **never** the store directly —
 //! a controller mutates desired state only through the apiserver admission
 //! chain (`aog-apiserver`), so every controller action is validated, sealed,
 //! and receipted like any other caller's (A1.7, doctrine I-3/I-5).
 
+pub mod autoscale;
 pub mod bundle_store;
 pub mod bundles;
 pub mod capability;
+pub mod deploy;
 pub mod gc;
 pub mod health;
 pub mod intents;
+pub mod maintenance;
+pub mod mission;
 pub mod node;
 pub mod objects;
 pub mod providers;
@@ -47,22 +80,33 @@ pub mod provision;
 pub mod queue;
 pub mod revocation;
 pub mod rings;
+pub mod rollout;
 pub mod runtime;
 pub mod scheduler;
 pub mod teardown;
+pub mod toolgrants;
 pub mod transit;
 pub mod vkeys;
 pub mod workloads;
 
+pub use autoscale::{
+    AutoscaleController, AutoscalePolicy, AutoscaleProbe, AutoscaleSignals, ScaleDecision,
+    ScaleReason, autoscale,
+};
 pub use bundle_store::{
     BundleReject, BundleStore, EdgeBundleCache, MemBundleStore, OpenBaoBundleStore, SignedBundle,
     sign_bundle, verify_bundle,
 };
 pub use bundles::PolicyBundleController;
 pub use capability::CapabilityController;
+pub use deploy::{ReplicaPlan, placement_name, plan_replicas, replica_index};
 pub use gc::GarbageCollector;
 pub use health::{HealthProbe, HttpHealthProbe};
 pub use intents::RevocationIndexer;
+pub use maintenance::{
+    CORDON_LABEL, DrainCandidate, DrainPlan, MaintenanceController, is_cordoned, plan_drain,
+};
+pub use mission::{MissionContractController, MissionRequest, MissionVerdict, mission_allows};
 pub use node::NodeController;
 pub use objects::{EstateClient, is_terminating, parse_key};
 pub use providers::ProviderPoolController;
@@ -70,10 +114,17 @@ pub use provision::{OPENBAO_FINALIZER, TenantProvisioner};
 pub use queue::{Backoff, WorkQueue};
 pub use revocation::RevocationController;
 pub use rings::TrustRingController;
+pub use rollout::{
+    ErrorBudgetProbe, RolloutController, RolloutProgress, rollout_progress, total_steps,
+};
 pub use runtime::{
     Action, AlwaysLeader, Controller, LeaderGate, ReconcileError, Reconciler, SharedGate, SyncStats,
 };
 pub use scheduler::SchedulerController;
 pub use teardown::{TENANT_FINALIZER, TenantTeardown};
+pub use toolgrants::{
+    EdgeGrantCache, GrantEntry, GrantReject, GrantStore, MemGrantStore, SignedGrantSet,
+    ToolGrantController, sign_grants, verify_grants,
+};
 pub use vkeys::{VIRTUALKEY_FINALIZER, VirtualKeyController};
 pub use workloads::{HttpWorkloadProbe, StaticWorkloadProbe, WorkloadController, WorkloadProbe};
