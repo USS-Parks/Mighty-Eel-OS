@@ -6,6 +6,7 @@
 //! [`NoopDriver`] (a bookkeeping driver for shadow mode and tests).
 
 use std::collections::HashMap;
+use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
 
 /// What the node needs to run one workload replica (projected from its estate
@@ -104,6 +105,76 @@ impl WorkloadDriver for NoopDriver {
     }
 }
 
+/// N4 — the process driver: it runs a workload replica as a real child process.
+/// This is the **air-gap appliance default** — no container runtime required. On
+/// Linux, production wraps it in a systemd unit for boot-time supervision and
+/// restart-on-failure; the lifecycle this driver provides (start / inspect /
+/// stop / clean restart) is the same regardless of the service manager on top.
+#[derive(Debug, Default)]
+pub struct ProcessDriver {
+    instances: Mutex<HashMap<String, Child>>,
+}
+
+impl WorkloadDriver for ProcessDriver {
+    fn name(&self) -> &'static str {
+        "process"
+    }
+
+    fn start(&self, run: &WorkloadRun) -> Result<WorkloadHandle, DriverError> {
+        let Some((program, args)) = run.command.split_first() else {
+            return Err(DriverError::Start {
+                name: run.name.clone(),
+                reason: "empty command".to_owned(),
+            });
+        };
+        let mut instances = self.instances.lock().expect("process driver lock");
+        // Reap any prior instance under this name so a restart never leaks a PID.
+        if let Some(mut old) = instances.remove(&run.name) {
+            let _ = old.kill();
+            let _ = old.wait();
+        }
+        let child = Command::new(program)
+            .args(args)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .map_err(|e| DriverError::Start {
+                name: run.name.clone(),
+                reason: e.to_string(),
+            })?;
+        let instance_id = child.id().to_string();
+        instances.insert(run.name.clone(), child);
+        Ok(WorkloadHandle {
+            name: run.name.clone(),
+            instance_id,
+        })
+    }
+
+    fn inspect(&self, handle: &WorkloadHandle) -> Result<WorkloadState, DriverError> {
+        let mut instances = self.instances.lock().expect("process driver lock");
+        let Some(child) = instances.get_mut(&handle.name) else {
+            return Ok(WorkloadState::Exited(0)); // not tracked — already stopped
+        };
+        match child.try_wait() {
+            Ok(Some(status)) => Ok(WorkloadState::Exited(status.code().unwrap_or(-1))),
+            Ok(None) => Ok(WorkloadState::Running),
+            Err(e) => Err(DriverError::Inspect {
+                name: handle.name.clone(),
+                reason: e.to_string(),
+            }),
+        }
+    }
+
+    fn stop(&self, handle: &WorkloadHandle) -> Result<(), DriverError> {
+        let mut instances = self.instances.lock().expect("process driver lock");
+        if let Some(mut child) = instances.remove(&handle.name) {
+            let _ = child.kill(); // ignore "already exited"
+            let _ = child.wait(); // reap the zombie
+        }
+        Ok(())
+    }
+}
+
 /// A workload driver operation failed.
 #[derive(Debug, thiserror::Error)]
 pub enum DriverError {
@@ -190,5 +261,62 @@ mod tests {
             driver.inspect(&handle).expect("inspect"),
             WorkloadState::Running
         );
+    }
+
+    /// A long-running child, portable across the test host's OS. Killed by the
+    /// test, so it never runs to completion.
+    fn sleeper(name: &str) -> WorkloadRun {
+        let command = if cfg!(windows) {
+            vec![
+                "ping".to_owned(),
+                "-n".to_owned(),
+                "30".to_owned(),
+                "127.0.0.1".to_owned(),
+            ]
+        } else {
+            vec!["sleep".to_owned(), "30".to_owned()]
+        };
+        WorkloadRun {
+            name: name.to_owned(),
+            image: None,
+            command,
+        }
+    }
+
+    #[test]
+    fn a_gateway_replica_has_a_process_lifecycle() {
+        let driver = ProcessDriver::default();
+        let run = sleeper("gw-node-a");
+
+        let handle = driver.start(&run).expect("start");
+        assert_eq!(
+            driver.inspect(&handle).expect("inspect"),
+            WorkloadState::Running
+        );
+
+        driver.stop(&handle).expect("stop");
+        assert_ne!(
+            driver.inspect(&handle).expect("inspect"),
+            WorkloadState::Running
+        );
+
+        // Clean restart under the same name.
+        let restarted = driver.start(&run).expect("restart");
+        assert_eq!(
+            driver.inspect(&restarted).expect("inspect"),
+            WorkloadState::Running
+        );
+        driver.stop(&restarted).expect("stop");
+    }
+
+    #[test]
+    fn an_empty_command_fails_to_start() {
+        let driver = ProcessDriver::default();
+        let run = WorkloadRun {
+            name: "x".to_owned(),
+            image: None,
+            command: vec![],
+        };
+        assert!(matches!(driver.start(&run), Err(DriverError::Start { .. })));
     }
 }

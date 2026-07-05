@@ -1051,3 +1051,18 @@ or wasmtime impls without the rest of the runtime changing. Ships `NoopDriver`
   (`the_same_workload_runs_via_two_drivers` — `NoopDriver` and a stateless
   `EchoDriver` both start + report Running for the same `WorkloadRun`);
   `noop_driver_reflects_stop` proves lifecycle tracking. **Commit:** `LOOM-N3`.
+
+### N4 — process / systemd driver — DONE
+`aog-node::driver::ProcessDriver`: runs a workload replica as a real child
+process (`std::process`) — the **air-gap appliance default**, no container
+runtime required. On Linux, production wraps it in a systemd unit for boot
+supervision + restart-on-failure; the lifecycle it provides (start / inspect /
+stop / clean restart) is the same regardless of the service manager on top. A
+restart reaps any prior PID for the name (no leak); `stop` kills + reaps.
+- **Files:** `crates/aog-node/src/driver.rs`.
+- **Verify:** fmt + clippy `-D warnings` clean; **11 tests** pass.
+- **Gate:** a gateway replica has a full process lifecycle with a clean restart ✓
+  (`a_gateway_replica_has_a_process_lifecycle` spawns a real long-running child,
+  reads Running, stops it, then starts + reads Running again under the same
+  name). systemd unit management is the Linux packaging of this same lifecycle —
+  noted, not required on the appliance path. **Commit:** `LOOM-N4`.
