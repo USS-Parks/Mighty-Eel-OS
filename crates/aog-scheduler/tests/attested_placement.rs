@@ -96,3 +96,42 @@ fn less_loaded_node_is_preferred() {
         attested_scheduler().schedule(&ScheduleRequest::from_workload(&workload()), &[busy, idle]);
     assert_eq!(decision.scheduled_node(), Some("idle"));
 }
+
+/// A ready node in a given ring with ample capacity.
+fn ring_node(name: &str, ring: u8) -> NodeSnapshot {
+    let mut n = Node::new(
+        name,
+        NodeSpec {
+            ring,
+            attestation_floor: Classification::Secret,
+            attestation: AttestationProfile::default(),
+            capacity: slots(4),
+        },
+    );
+    n.status = Some(NodeStatus {
+        ready: true,
+        last_heartbeat: Some("2026-07-04T00:00:00Z".to_owned()),
+        allocatable: slots(4),
+        ..NodeStatus::default()
+    });
+    NodeSnapshot::from_node(&n)
+}
+
+#[test]
+fn cross_ring_placement_is_impossible() {
+    // The only node is ring 1; a ring-2 workload cannot be placed on it.
+    let mut wl = workload();
+    wl.spec.ring = 2;
+    let decision =
+        attested_scheduler().schedule(&ScheduleRequest::from_workload(&wl), &[ring_node("r1", 1)]);
+    assert!(decision.is_pending());
+}
+
+#[test]
+fn same_ring_node_takes_the_workload() {
+    let mut wl = workload();
+    wl.spec.ring = 2;
+    let decision =
+        attested_scheduler().schedule(&ScheduleRequest::from_workload(&wl), &[ring_node("r2", 2)]);
+    assert_eq!(decision.scheduled_node(), Some("r2"));
+}

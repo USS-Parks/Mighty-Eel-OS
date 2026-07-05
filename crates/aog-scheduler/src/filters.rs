@@ -61,6 +61,32 @@ impl Filter for CapacityFilter {
     }
 }
 
+/// Hard filter: a workload is placed only within its own trust ring (S3). Rings
+/// are the Trust Manifold's isolation boundary; crossing one is a sovereignty
+/// violation, so a ring mismatch is `Unfit`, full stop — no score can rescue it.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct RingFilter;
+
+impl Filter for RingFilter {
+    fn name(&self) -> &'static str {
+        "ring"
+    }
+
+    fn filter(&self, request: &ScheduleRequest, node: &NodeSnapshot) -> FilterVerdict {
+        if request.ring == node.ring {
+            FilterVerdict::Fit
+        } else {
+            FilterVerdict::unfit(
+                "ring",
+                format!(
+                    "workload ring {} does not match node ring {}",
+                    request.ring, node.ring
+                ),
+            )
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -140,5 +166,22 @@ mod tests {
     fn undeclared_slot_capacity_is_not_filtered() {
         // A node that declares no slot budget is not rejected on slots.
         assert!(CapacityFilter.filter(&req(), &cap_snap(0, 0)).is_fit());
+    }
+
+    #[test]
+    fn matching_ring_is_fit() {
+        let mut node = snap(true, true);
+        node.ring = 2;
+        let mut request = req();
+        request.ring = 2;
+        assert!(RingFilter.filter(&request, &node).is_fit());
+    }
+
+    #[test]
+    fn ring_mismatch_is_unfit() {
+        let node = snap(true, true); // ring 1
+        let mut request = req();
+        request.ring = 3;
+        assert!(!RingFilter.filter(&request, &node).is_fit());
     }
 }

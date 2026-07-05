@@ -850,3 +850,17 @@ utilisation *fraction* is computable from real signals.
 - **Gate:** placement reflects real load; a saturated node is not selected ✓
   (`saturated_node_is_not_selected`) and the less-loaded of two candidates wins
   (`less_loaded_node_is_preferred`). **Commit:** `LOOM-S2`.
+
+### S3 — Ring filter (hard) — DONE
+`RingFilter`: a workload places only within its own trust ring
+(`request.ring == node.ring`); a mismatch is `Unfit`, and being a hard filter no
+score can rescue it. Rings are the Trust Manifold isolation boundary — crossing
+one is a sovereignty violation. Wired into `attested_scheduler()` after
+readiness.
+- **Files:** `crates/aog-scheduler/src/{filters.rs, lib.rs}`,
+  `tests/attested_placement.rs`.
+- **Verify:** fmt + clippy `-D warnings` clean; **26 tests** pass.
+- **Gate:** cross-ring placement impossible ✓ — a ring-2 workload against a
+  ring-1-only estate stays Pending (`cross_ring_placement_is_impossible`); a
+  ring-2 node takes it (`same_ring_node_takes_the_workload`). **Commit:**
+  `LOOM-S3`.
