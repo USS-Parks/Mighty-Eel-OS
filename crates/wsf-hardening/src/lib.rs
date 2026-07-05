@@ -168,6 +168,64 @@ pub fn assert_production_ready(cfg: &DeploymentConfig) -> Result<(), Vec<GuardVi
     }
 }
 
+/// The Loom control-plane facts the prod guard checks beyond the base
+/// [`DeploymentConfig`] (H6): the Raft voter count (a single-node quorum is not HA)
+/// and whether the policy bundles it would serve are signed.
+#[derive(Debug, Clone)]
+pub struct LoomDeployment<'a> {
+    /// The base WSF deployment config (OpenBao transport/token, HMAC key).
+    pub config: &'a DeploymentConfig,
+    /// Number of Raft voters in the control plane — must be `>= 3` in production.
+    pub voter_count: usize,
+    /// Whether every policy bundle to be served is signed.
+    pub bundles_signed: bool,
+}
+
+/// The Loom production guard (H6): the base WSF dev-fixture guard
+/// ([`production_guard`]) **plus** Loom's HA and signed-bundle requirements —
+/// reject a single-node quorum and an unsigned bundle in production. Empty =
+/// production-ready. A no-op in [`DeployMode::Dev`].
+#[must_use]
+pub fn loom_production_guard(deployment: &LoomDeployment) -> Vec<GuardViolation> {
+    let mut violations = production_guard(deployment.config);
+    if deployment.config.mode != DeployMode::Production {
+        return violations;
+    }
+    if deployment.voter_count < 3 {
+        violations.push(GuardViolation {
+            code: "single_node_quorum",
+            detail: format!(
+                "production consensus needs at least 3 voters; found {}",
+                deployment.voter_count
+            ),
+        });
+    }
+    if !deployment.bundles_signed {
+        violations.push(GuardViolation {
+            code: "unsigned_bundle",
+            detail: "an unsigned policy bundle is not allowed in production".to_string(),
+        });
+    }
+    violations
+}
+
+/// Guard the Loom deployment, returning `Err` with the violations if it is not
+/// production-ready.
+///
+/// # Errors
+/// The list of [`GuardViolation`]s when any dev fixture, a single-node quorum, or
+/// an unsigned bundle is present.
+pub fn assert_loom_production_ready(
+    deployment: &LoomDeployment,
+) -> Result<(), Vec<GuardViolation>> {
+    let violations = loom_production_guard(deployment);
+    if violations.is_empty() {
+        Ok(())
+    } else {
+        Err(violations)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

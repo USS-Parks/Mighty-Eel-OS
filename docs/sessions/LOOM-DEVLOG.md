@@ -1546,3 +1546,42 @@ air-gapped peer by a **signed snapshot on media**, verifiable offline, no networ
   applied; a wrong source key, a tampered snapshot, and a stale replay are each
   refused. **Gate:** a policy + a revocation cross an air gap on media and apply
   verifiably, no network ✓. **Commit:** `LOOM-H5`.
+
+### H6 — Production guard — DONE
+The base WSF dev-fixture guard is reused and extended with Loom's HA + signed-
+bundle requirements, so an insecure deployment fails closed in production.
+- **`loom_production_guard` (wsf-hardening).** Runs the base `production_guard`
+  (dev OpenBao root token, plaintext HTTP transport, weak/uniform HMAC key) and
+  adds, in production: `single_node_quorum` (a control plane with `< 3` Raft voters
+  is not HA) and `unsigned_bundle` (an unsigned policy bundle). Empty =
+  production-ready; a no-op in Dev. `assert_loom_production_ready` errors with the
+  violations.
+- **Files:** `crates/wsf-hardening/src/lib.rs`;
+  `crates/wsf-hardening/tests/loom_guard.rs (new)`.
+- **Verify:** `fmt` + `clippy -p wsf-hardening --all-targets --no-deps -D warnings`
+  clean; `cargo test -p wsf-hardening` **10 passed** (H6: dev no-op, prod-ready
+  passes, single-node quorum blocked, unsigned bundle blocked, dev-OpenBao fixture
+  blocked via the reused base guard). **Gate:** prod guard blocks any dev fixture /
+  single-node quorum ✓. **Commit:** `LOOM-H6`.
+
+---
+
+**Phase H COMPLETE (H1–H6) — HA, consensus hardening, DR, federation.** Multi-node
+Raft with leader failover + a leadership-fenced SharedGate (H1), quorum-confirmed
+split-brain fencing under a real partition (H2), snapshot/compaction/restore with
+receipt-chain continuity (H3), an envelope-sealed backup + DR runbook + cold-drill
+(H4), signed removable-media air-gap federation (H5, new `aog-federation`), and the
+Loom production guard (H6). All on `session/LOOM-4` (off `main` `406fbf6`), commits
+`b736dc5`→`LOOM-H6`.
+- **Verify:** each prompt `fmt` + `clippy --all-targets --no-deps -D warnings`
+  clean; per-crate tests green. Consensus proofs (H1/H2) run **real openraft** over
+  an in-process ≥3-node cluster with **real partitions** injected at the transport;
+  the over-the-wire mTLS transport is deployment packaging (Phase V will exercise
+  the containerized multi-node harness end to end).
+
+**M3c COMPLETE (Phases O + H).** Orchestration objects (O1–O7) + HA/consensus/DR/
+federation (H1–H6), 13 prompts, all gated green, on `session/LOOM-4`. Phase-O live
+gates ran green vs a live OpenBao (Docker). NOT pushed/merged — awaits Basho.
+Next milestone: **Summit-Conformance (Phase V)** — the gated "Kubernetes-grade"
+proof (conformance suite + chaos/soak/scale + the containerized split-brain &
+kill-switch-under-scale harness).
