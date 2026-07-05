@@ -184,6 +184,7 @@ dependencies = [
  "aog-apiserver",
  "aog-estate",
  "aog-gateway",
+ "aog-scheduler",
  "aog-store",
  "axum 0.8.9",
  "base64",

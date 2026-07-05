@@ -964,3 +964,35 @@ disruptible occupants.
   (`respects_disruption_budget`); no hard-predicate (ring) violation during
   preemption ✓ (`never_targets_a_ring_mismatched_node`); lowest-priority victim
   chosen, equal/higher never evicted. **Commit:** `LOOM-S8`.
+
+### S7 — Binding + runtime-token mint — DONE (live OpenBao)
+`SchedulerController` (`aog-controller`, a new dep on `aog-scheduler`): reconciles
+each `Workload` on the `"Workload/"` informer and turns its desired replicas into
+attested `Placement`s. Per unplaced replica it runs `attested_scheduler()` over
+the estate's `Node`s — spreading replicas by passing the nodes already placed as
+`already_placed_on` (S6) — mints a runtime `TrustToken` scoped to the workload's
+`Capability` (budget/caveats/routes/models/classification/ttl), persists that
+token to OpenBao for the node to fetch, and creates the `Placement` through the
+admission choke point.
+- **Receipt is automatic.** Every admitted mutation emits a `fabric-proof`
+  receipt (K9); creating the `Placement` through `EstateClient` (as
+  `Principal::system()`) receipts the binding — no separate step. The
+  control-plane sibling of the data-path guarantee (I-5).
+- **Scope + fail-closed.** The token carries exactly the named capability's
+  scope; a missing/terminating capability yields a *minimal* token (less
+  privilege, never broader — I-4). A replica with no attestation-satisfying node
+  stays Pending and requeues; it is never force-placed. Each `Placement` is owned
+  by its workload (owner-ref) so the GC reclaims it on delete (R2/W9).
+- **Separation.** This controller *mints* placements; the X2 `WorkloadController`
+  reflects them into `Workload` status — the seam X2 left open. One replica per
+  node (placement keyed `<workload>-<node>`); multi-replica-per-node is Phase O.
+- **Files:** `crates/aog-controller/{Cargo.toml, src/{lib.rs, scheduler.rs
+  (new)}, tests/live_scheduler.rs (new)}`.
+- **Verify:** fmt + `clippy -p aog-controller --all-targets --no-deps -D warnings`
+  clean; `check --workspace` clean; controller suite **26 passed** (non-live) +
+  the **S7 live gate green vs live OpenBao** (`loom-r3-openbao`, port 8200): a
+  2-replica workload binds across two ready nodes, and the persisted runtime
+  token verifies against the anchor and carries the capability's budget (5000),
+  model set, and classification.
+- **Gate:** a bound workload receives a scoped token; the binding is receipted ✓
+  (`scheduler_binds_replicas_with_scoped_tokens`). **Commit:** `LOOM-S7`.

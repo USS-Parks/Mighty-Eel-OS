@@ -9,6 +9,7 @@ repository.workspace = true
 [dependencies]
 aog-apiserver = { path = "../aog-apiserver" }
 aog-estate = { path = "../aog-estate" }
+aog-scheduler = { path = "../aog-scheduler" }
 aog-store = { path = "../aog-store" }
 chrono = { workspace = true }
 fabric-contracts = { path = "../fabric-contracts" }

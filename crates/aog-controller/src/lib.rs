@@ -47,6 +47,7 @@ pub mod queue;
 pub mod revocation;
 pub mod rings;
 pub mod runtime;
+pub mod scheduler;
 pub mod teardown;
 pub mod transit;
 pub mod vkeys;
@@ -70,6 +71,7 @@ pub use rings::TrustRingController;
 pub use runtime::{
     Action, AlwaysLeader, Controller, LeaderGate, ReconcileError, Reconciler, SharedGate, SyncStats,
 };
+pub use scheduler::SchedulerController;
 pub use teardown::{TENANT_FINALIZER, TenantTeardown};
 pub use vkeys::{VIRTUALKEY_FINALIZER, VirtualKeyController};
 pub use workloads::{HttpWorkloadProbe, StaticWorkloadProbe, WorkloadController, WorkloadProbe};
