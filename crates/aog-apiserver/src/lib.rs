@@ -14,6 +14,7 @@
 
 pub mod admission;
 pub mod auth;
+pub mod backup;
 pub mod codec;
 pub mod convert;
 pub mod error;

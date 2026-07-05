@@ -1496,3 +1496,29 @@ the separate receipt chain stays chained across it.
   passed**, `-p aog-apiserver --test restore` **1 passed**. **Gate:** restore from
   snapshot reproduces the exact estate ✓; receipts remain chained across restore ✓.
   **Commit:** `LOOM-H3`.
+
+### H4 — Backup + DR runbook — DONE
+An encrypted estate backup + a documented cold-restore runbook, proven by a DR
+drill that restores from a cold backup by the runbook alone.
+- **`aog_apiserver::backup` (new module).** `backup_estate(entries, data_key)`
+  serializes the estate's committed `key→value` content and **envelope-seals** it
+  (AES-256-GCM under a 32-byte DR data key, `fabric-envelope`) — ciphertext at
+  rest, safe for removable media. `restore_estate(blob, data_key)` unseals it back
+  to entries; a wrong key, tampered blob, or a seal made for another purpose (AAD)
+  all fail closed. The data key is escrowed (OpenBao Transit-wrapped in prod,
+  operator escrow air-gapped), never stored beside the backup.
+- **Runbook.** `docs/LOOM-DR-RUNBOOK.md` — take-a-backup + cold-restore procedures
+  (recover key from escrow → read blob from media → unseal → bootstrap fresh node →
+  re-apply → verify → re-form HA), plus the intent/proof store separation (the
+  receipt ledger recovers from its own segments, H3).
+- **Files:** `crates/aog-apiserver/src/{backup.rs (new), lib.rs}`,
+  `crates/aog-apiserver/Cargo.toml` (+serde);
+  `crates/aog-apiserver/tests/dr_drill.rs (new)`; `docs/LOOM-DR-RUNBOOK.md (new)`.
+- **Verify:** `fmt` + `clippy -p aog-apiserver --all-targets --no-deps -D warnings`
+  clean; `cargo test -p aog-apiserver` **35 passed** (3 backup unit tests:
+  round-trip, ciphertext-at-rest, wrong-key-fails-closed; the DR drill). **DR drill
+  (`dr_drill.rs`):** back up a 12-key estate sealed, delete the primary stores
+  entirely, then cold-restore from the sealed blob on "media" + the escrowed key
+  into a fresh node — the content is reproduced by the runbook steps alone and the
+  blob is confirmed ciphertext at rest. **Gate:** full DR drill from cold backup
+  succeeds by the runbook alone ✓. **Commit:** `LOOM-H4`.
