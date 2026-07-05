@@ -244,6 +244,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "aog-scheduler"
+version = "0.1.0"
+dependencies = [
+ "aog-estate",
+ "fabric-contracts",
+]
+
+[[package]]
 name = "aog-store"
 version = "0.1.0"
 dependencies = [

@@ -1,0 +1,18 @@
+[package]
+name = "aog-scheduler"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+aog-estate = { path = "../aog-estate" }
+fabric-contracts = { path = "../fabric-contracts" }
+
+[dev-dependencies]
+aog-estate = { path = "../aog-estate" }
+fabric-contracts = { path = "../fabric-contracts" }
+
+[lints]
+workspace = true

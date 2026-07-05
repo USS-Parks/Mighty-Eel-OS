@@ -756,3 +756,67 @@ as a `Workload` (X2). Every trust-adjacent path is proven against live OpenBao,
 and where the gateway is the edge, the real `aog-gateway` — the model proven end
 to end with zero orchestration-scale risk. Next milestone: **M3b — the attested
 edge** (Phase S scheduler + Phase N node runtime).
+
+---
+
+## Phase S — Scheduler (`aog-scheduler`, revived from `mai-scheduler`)
+
+_M3b begins. Branch `session/LOOM-3` off `session/LOOM-2` (`23b25ce`)._
+
+### S1 — Framework + defect purge — DONE
+New crate `crates/aog-scheduler`: the K8s-style **filter → score → bind**
+placement engine (A1.8), revived from `mai-scheduler`'s `Scheduler` /
+`PlacementEngine` shape and rebuilt for the AOG workload domain — with the
+fake-metrics path deleted rather than inherited (A4).
+- **Framework.** Two extension seams. `Filter` is a hard, deny-wins predicate
+  (one `Unfit` removes the node); `Scorer` is a soft preference returning
+  `Option<f64>` where `None` **excludes** the node — the engine never fabricates
+  a missing score (doctrine I-4). `Scheduler` runs every node through the filter
+  chain, scores the survivors, and binds the workload to the highest scorer;
+  a workload with no surviving, scorable node stays `Pending`, never force-placed
+  (A1.8 / the S4 gate). Deterministic: no clock, no RNG; score ties break by node
+  name, so an estate always replays to the same decision. Every decision carries
+  per-node `SignalProvenance` (resource version, reconciled readiness, heartbeat
+  presence, reported allocatable) — the audit trail that ties a placement to real
+  inputs. Binds the estate `Placement`/`Node`/`Workload` types directly; no
+  parallel structs.
+- **Defect purge.** `mai-scheduler`'s metrics are real-feedback-driven, but it
+  carries one anti-pattern — **absence-as-optimism**: an instance with zero
+  telemetry scores as maximally healthy (`metrics/health.rs`: an empty tracker
+  returns `1.0`; `test_empty_tracker_is_healthy`). A defensible cold-start guess
+  for inference routing; a custody breach for attested placement, where an
+  unmeasured — therefore untrusted — node would look fit. The revival inverts it:
+  `NodeSnapshot::from_node` projects a status-less node **fail-closed**
+  (`ready == false`, zero `allocatable`, no heartbeat — a generous *spec*
+  capacity never leaks in as reported *allocatable*), and `ReadinessFilter`
+  rejects any node without reconciled liveness. Absence of a signal can never
+  become a favourable one.
+- **Scope call (honest).** `mai-scheduler` is a separate, parked crate still
+  driving the MAI inference runtime; gutting it is out of Phase-S scope and would
+  risk that path. Per A1.11 (`aog-scheduler` is a **new** crate) and A4 (revived
+  "by deletion-and-rebuild of the fake paths, not by extending them"), the fake
+  path is deleted by not carrying it into the new crate; the anti-pattern is
+  documented in the crate docs and **guarded by a source-audit test** so it
+  cannot creep back.
+- **Live-harness (A3.2) — honest deferral.** S1 is a pure, deterministic decision
+  engine over in-memory estate projections — no OpenBao, no consensus, no node
+  I/O — so its obligations are fully proven by unit + integration tests. The
+  live-multi-node / live-OpenBao gate binds the prompts that actually bind and
+  mint against a real estate (S7 runtime-token mint) and the attested-scheduling
+  breach proof on a real multi-node estate (V6); those land with the node runtime
+  (Phase N).
+- **Files:** `crates/aog-scheduler/{Cargo.toml, src/{lib.rs, types.rs,
+  framework.rs, filters.rs}, tests/no_fabricated_metrics.rs}` (new); `Cargo.toml`
+  (workspace member).
+- **Verify:** `cargo fmt --check` (workspace) clean; `clippy -p aog-scheduler
+  --all-targets --no-deps -D warnings` clean (workspace pedantic); **14 passed**
+  (`cargo test -p aog-scheduler` — 10 unit + 4 gate); `cargo check --workspace`
+  clean (358 crates).
+- **Gate:** no fabricated metric in any code path (audit + test) ✓ — the
+  `source_has_no_fabrication_apis` audit walks `src/` and asserts no RNG /
+  synthetic-generator API appears; the fail-closed test proves a status-less node
+  is never placed and its spec capacity never leaks in; the `None`-score test
+  proves an unscorable node is excluded, not defaulted. Decisions trace to real
+  inputs ✓ — `decision_traces_to_real_signals` asserts the winning decision's
+  `SignalProvenance` mirrors the exact estate `resource_version` / `ready` /
+  heartbeat / `allocatable`. **Commit:** `LOOM-S1`.
