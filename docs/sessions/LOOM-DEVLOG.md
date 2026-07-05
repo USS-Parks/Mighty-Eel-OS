@@ -665,3 +665,45 @@ is reflected on the gateway's next request, no restart. New `vkeys.rs`.
 - **Gate:** a key change is reflected at the gateway without restart ✓ (the real
   gateway resolves the new capability's scope/budget after the edit), plus a
   deleted key stops resolving (fail-closed retraction). **Commit:** `LOOM-R8`.
+
+### R9 — RevocationIntent controller — DONE
+The kill leg: a declarative `RevocationIntent` fans out to a signed
+`fabric-revocation` snapshot on the channel every gateway replica polls **and**
+on removable media for an air-gapped node — bounded, provable revocation
+(doctrine I-9), effective on every replica and offline. New `revocation.rs`.
+- **Fan-out.** `RevocationController` builds the snapshot as a pure function of
+  the current intents (level-triggered: a dropped or duplicated event cannot
+  skew it): `Token` targets → `revoked_tokens`, `Subject` → `revoked_subjects`
+  (tenant-wide stays the R3 / front-door leg, `Ring` the R4 leg). It signs with
+  the anchor (`fabric-revocation`, reused), publishes `{"snapshot": …}` to the
+  online KV path the gateway's G9 kill switch reads, and writes the same signed
+  artifact to a removable-media file. Idempotent — it republishes only when the
+  revoked set drifts or the live snapshot stops verifying — then acks each
+  covered intent `propagated`.
+- **Complements R2.** R2's indexer is the in-process apiserver front-door kill
+  view; R9 is the data-path + air-gap leg — together they close the loop R2's
+  indexer honestly left for the snapshot channel.
+- **Files:** `crates/aog-controller/{Cargo.toml (fabric-revocation→deps),
+  src/{revocation.rs (new), lib.rs}, tests/live_revocation.rs (new)}`.
+- **Verify:** clippy `--all-targets --no-deps -D warnings` + CI workspace clippy
+  clean; **24 passed** across aog-controller with `WSF_OPENBAO_ADDR` set —
+  including the **R9 live gate** against **live OpenBao and the real
+  `aog-gateway`**: a virtual key resolves (R8), a `RevocationIntent` for its
+  token makes R9 publish the snapshot, and the **same** gateway then denies the
+  key (`Revoked`); the media file — verified **offline with the public key
+  alone** — reports the token revoked; the intent is acknowledged `propagated`;
+  hermetic across runs. fmt + `check --workspace` clean.
+- **Gate:** intent → token denied on every replica ✓ (real gateway kill switch)
+  + on an air-gapped node via media ✓ (offline-verified snapshot). **Commit:**
+  `LOOM-R9`.
+
+---
+
+**Phase R complete (R1–R9).** M3a's reconciliation runtime and its controllers:
+the level-triggered runtime (R1) with finalizers / GC / tenant-teardown (R2);
+then the live-OpenBao Tenant (R3), TrustRing with declarative ring-darkness (R4),
+Capability over the shared lease-based SpendLedger (X1 + R5), PolicyBundle
+distribution (R6), ProviderPool health (R7), VirtualKey resolution (R8), and
+RevocationIntent kill (R9) controllers. Every trust-adjacent leg is proven
+against live OpenBao and, where the gateway is the edge, the real `aog-gateway`.
+Next: the M3a wrap — X2 (`aog-gateway` as a managed `Workload`).

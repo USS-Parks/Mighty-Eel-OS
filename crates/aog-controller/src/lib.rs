@@ -20,6 +20,10 @@
 //! from its `Capability` and writes it to the gateway's key-resolution path, so
 //! a key change is reflected at the gateway (G1) without a restart.
 //!
+//! R9: the [`RevocationController`] fans each `RevocationIntent` out to a signed
+//! revocation snapshot — online (the gateway kill-switch path) and on removable
+//! media (air-gap) — so a revoked token is denied on every replica and offline.
+//!
 //! Trust posture: this crate's read path is the informer (bounded-stale,
 //! resync-recovered, A1.6); its write path is **never** the store directly —
 //! a controller mutates desired state only through the apiserver admission
@@ -36,6 +40,7 @@ pub mod objects;
 pub mod providers;
 pub mod provision;
 pub mod queue;
+pub mod revocation;
 pub mod rings;
 pub mod runtime;
 pub mod teardown;
@@ -55,6 +60,7 @@ pub use objects::{EstateClient, is_terminating, parse_key};
 pub use providers::ProviderPoolController;
 pub use provision::{OPENBAO_FINALIZER, TenantProvisioner};
 pub use queue::{Backoff, WorkQueue};
+pub use revocation::RevocationController;
 pub use rings::TrustRingController;
 pub use runtime::{
     Action, AlwaysLeader, Controller, LeaderGate, ReconcileError, Reconciler, SharedGate, SyncStats,
