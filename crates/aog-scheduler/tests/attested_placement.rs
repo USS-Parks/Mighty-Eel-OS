@@ -233,3 +233,27 @@ fn never_force_placed_on_least_bad_node() {
     );
     assert!(decision.is_pending());
 }
+
+#[test]
+fn replicas_spread_across_nodes() {
+    // Two ready, ample-capacity nodes in the same ring. A second replica whose
+    // sibling is already on the first node lands on the other node.
+    let nodes = vec![ring_node("node-a", 1), ring_node("node-b", 1)];
+    let scheduler = attested_scheduler();
+
+    let first = scheduler
+        .schedule(&ScheduleRequest::from_workload(&workload()), &nodes)
+        .scheduled_node()
+        .expect("replica 1 placed")
+        .to_owned();
+
+    let mut replica2 = ScheduleRequest::from_workload(&workload());
+    replica2.already_placed_on = vec![first.clone()];
+    let second = scheduler
+        .schedule(&replica2, &nodes)
+        .scheduled_node()
+        .expect("replica 2 placed")
+        .to_owned();
+
+    assert_ne!(first, second, "replicas must spread across different nodes");
+}

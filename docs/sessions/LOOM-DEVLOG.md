@@ -919,3 +919,21 @@ declared capacity abstains.
   (`consolidation_is_deterministic_from_fixture` asserts an exact `0.75` from a
   fixed `Capacity`; `utilization_and_consolidation_are_complementary` proves the
   exact complement). **Commit:** `LOOM-S5`.
+
+### S6 — Spread / HA scorer — DONE
+`SpreadScorer`: anti-affinity across nodes for replica resilience. A fresh
+replica scores a node `0.0` if it already hosts a sibling replica of this
+workload, `1.0` otherwise — so replicas spread across the nodes of their ring.
+Replicas share a ring (the ring filter), so anti-affinity is node-wise, not
+ring-wise. The scorer reads a new `ScheduleRequest.already_placed_on` (the nodes
+already hosting this workload's replicas); `from_workload` starts it empty and
+the binding controller enriches it per replica from the estate's `Placement`s
+(S7).
+- Wired into `attested_scheduler()` alongside utilisation — both are the spread
+  posture, so they compose (no cancel).
+- **Files:** `crates/aog-scheduler/src/{types.rs, scorers.rs, filters.rs,
+  framework.rs, lib.rs}`, `tests/attested_placement.rs`.
+- **Verify:** fmt + clippy `-D warnings` clean; **41 tests** pass.
+- **Gate:** replicas of one workload spread across ≥2 nodes when available ✓
+  (`replicas_spread_across_nodes`: replica 2, told its sibling is on `node-a`,
+  lands on `node-b`). **Commit:** `LOOM-S6`.

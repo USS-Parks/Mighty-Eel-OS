@@ -68,16 +68,23 @@ pub struct ScheduleRequest {
     /// Its data-classification ceiling — must be `<=` the node's attestation
     /// floor to be placed (S4).
     pub classification_ceiling: Classification,
+    /// Nodes already hosting a replica of this workload (from existing
+    /// `Placement`s). The spread scorer (S6) uses it for anti-affinity. Empty for
+    /// the first replica; the binding controller enriches it per replica.
+    pub already_placed_on: Vec<String>,
 }
 
 impl ScheduleRequest {
-    /// Project a real [`Workload`] into a placement request.
+    /// Project a real [`Workload`] into a placement request. `already_placed_on`
+    /// starts empty — a single `Workload` does not carry its own placements; the
+    /// binding controller fills it per replica from the estate (S6/S7).
     pub fn from_workload(workload: &Workload) -> Self {
         Self {
             workload_name: workload.metadata.name.clone(),
             workload_kind: workload.spec.workload_kind,
             ring: workload.spec.ring,
             classification_ceiling: workload.spec.classification_ceiling,
+            already_placed_on: Vec::new(),
         }
     }
 }

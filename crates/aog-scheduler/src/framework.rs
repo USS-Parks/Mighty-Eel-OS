@@ -193,6 +193,7 @@ mod tests {
             workload_kind: WorkloadKind::Gateway,
             ring: 1,
             classification_ceiling: Classification::Public,
+            already_placed_on: Vec::new(),
         }
     }
 

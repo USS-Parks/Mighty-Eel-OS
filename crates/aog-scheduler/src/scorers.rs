@@ -79,6 +79,29 @@ impl Scorer for ConsolidationScorer {
     }
 }
 
+/// Spread replicas for HA (S6): anti-affinity across nodes. A node already
+/// hosting a replica of this workload scores `0.0`; a node hosting none scores
+/// `1.0` — so a fresh replica prefers a node its siblings are not on, spreading
+/// the workload across the nodes of its ring. Composes with the utilisation
+/// (spread) posture. Replicas of one workload share a ring (the ring filter),
+/// so anti-affinity is across nodes, not rings.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct SpreadScorer;
+
+impl Scorer for SpreadScorer {
+    fn name(&self) -> &'static str {
+        "spread"
+    }
+
+    fn score(&self, request: &ScheduleRequest, node: &NodeSnapshot) -> Option<f64> {
+        let hosts_sibling = request
+            .already_placed_on
+            .iter()
+            .any(|placed| placed == &node.name);
+        Some(if hosts_sibling { 0.0 } else { 1.0 })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -105,6 +128,7 @@ mod tests {
             workload_kind: WorkloadKind::Gateway,
             ring: 1,
             classification_ceiling: Classification::Public,
+            already_placed_on: Vec::new(),
         }
     }
 
@@ -237,5 +261,20 @@ mod tests {
     fn consolidation_abstains_without_capacity() {
         let node = snap(Capacity::default(), Capacity::default());
         assert!(ConsolidationScorer.score(&req(), &node).is_none());
+    }
+
+    #[test]
+    fn spread_penalises_a_node_hosting_a_sibling() {
+        let mut request = req();
+        request.already_placed_on = vec!["n".to_owned()];
+        let node = snap(Capacity::default(), Capacity::default()); // name "n"
+        assert!(SpreadScorer.score(&request, &node).expect("scores") < 0.5);
+    }
+
+    #[test]
+    fn spread_prefers_a_fresh_node() {
+        let node = snap(Capacity::default(), Capacity::default());
+        let score = SpreadScorer.score(&req(), &node).expect("scores");
+        assert!((score - 1.0).abs() < 1e-9);
     }
 }
