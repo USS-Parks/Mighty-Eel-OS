@@ -1108,3 +1108,17 @@ token's own allowance and the request. Fail-static (I-4): degradation only
   `a_stale_node_narrows_to_local`); an air-gapped node denies cloud routes ✓
   (`an_air_gapped_node_denies_cloud`); tampered / expired / revoked tokens denied
   locally. **Commit:** `LOOM-N6`.
+
+### N7 — Health probes — DONE
+`aog-node::probes`: node supervision. `keep_live(driver, run, handle)` restarts
+an instance the driver reports not-Running (an unhealthy replica is replaced),
+returning the fresh handle; a running one is left untouched. `ready_targets`
+filters instances through a pluggable `ReadinessProbe` — only ready instances
+take traffic. Both seams accept an HTTP `/healthz` / `/ready` behind the trait.
+- **Files:** `crates/aog-node/src/{lib.rs, probes.rs (new)}`.
+- **Verify:** fmt + clippy `-D warnings` clean; **25 tests** pass (3 new).
+- **Gate:** an unhealthy replica is restarted / replaced ✓
+  (`an_unhealthy_replica_is_restarted` — a stopped instance is restarted to
+  Running; `a_healthy_replica_is_left_running` leaves a live one alone);
+  readiness gates traffic ✓ (`readiness_gates_traffic` — only the ready instance
+  is a target). **Commit:** `LOOM-N7`.

@@ -16,4 +16,5 @@ pub mod containerd;
 pub mod driver;
 pub mod edge;
 pub mod heartbeat;
+pub mod probes;
 pub mod registration;
