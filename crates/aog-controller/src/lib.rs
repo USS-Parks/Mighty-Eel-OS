@@ -43,6 +43,10 @@
 //! via the pure [`autoscale`] decision — saturated+affordable → up, saturated+
 //! broke → recommend hardware, idle → consolidate, budget-inefficient → down.
 //!
+//! O5: the [`MissionContractController`] materializes a mission scope envelope
+//! into owned `ToolGrant`s, and the pure [`mission_allows`] gate denies any agent
+//! action outside the contract's tools/systems or past its call ceiling.
+//!
 //! Trust posture: this crate's read path is the informer (bounded-stale,
 //! resync-recovered, A1.6); its write path is **never** the store directly —
 //! a controller mutates desired state only through the apiserver admission
@@ -57,6 +61,7 @@ pub mod deploy;
 pub mod gc;
 pub mod health;
 pub mod intents;
+pub mod mission;
 pub mod node;
 pub mod objects;
 pub mod providers;
@@ -86,6 +91,7 @@ pub use deploy::{ReplicaPlan, placement_name, plan_replicas, replica_index};
 pub use gc::GarbageCollector;
 pub use health::{HealthProbe, HttpHealthProbe};
 pub use intents::RevocationIndexer;
+pub use mission::{MissionContractController, MissionRequest, MissionVerdict, mission_allows};
 pub use node::NodeController;
 pub use objects::{EstateClient, is_terminating, parse_key};
 pub use providers::ProviderPoolController;

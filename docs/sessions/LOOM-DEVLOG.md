@@ -1308,3 +1308,28 @@ alone. New `autoscale.rs`.
   determinism; 2 controller tests: one pass scales up on saturation, one
   consolidates on idle). **Gate:** scale decisions from a fixed fixture are
   deterministic and budget-respecting ✓. **Commit:** `LOOM-O4`.
+
+### O5 — MissionContract operator — DONE
+The mission scope envelope becomes concrete authority, and a run cannot exceed it.
+New `mission.rs`.
+- **Enforcement (`mission_allows`).** Pure, fail-closed: an agent bound to a
+  `MissionContract` may take an action only if the tool is in `allowed_tools`, the
+  system (when the contract restricts systems — empty = unrestricted) is in
+  `allowed_systems`, and `calls_used < call_ceiling`. Out-of-scope or over-budget
+  → `Deny`. The monetary `spend` budget rides the derived grant's credential (the
+  existing SpendLedger), enforced where spend is.
+- **Materialization (`MissionContractController`).** Reconciles a contract into
+  one owned `ToolGrant` per allowed tool (scoped to `allowed_systems`, owned by
+  the contract so the GC cascades), pruning grants for withdrawn tools. A tool
+  outside the contract has no grant, so O6's toolproxy can never mint a credential
+  the mission did not sanction. A spent contract (`calls_used >= call_ceiling`)
+  is `Failed`; otherwise `Ready`.
+- **Files:** `crates/aog-controller/src/{mission.rs (new), lib.rs}`;
+  `crates/aog-controller/tests/mission.rs (new)`.
+- **Verify:** `fmt` + `clippy -p aog-controller --all-targets --no-deps -D
+  warnings` clean; `cargo test -p aog-controller` **67 passed** (7 enforcement
+  unit tests: in-scope allow, tool/system out-of-scope deny, restricted-but-no-
+  system deny, unrestricted-allows-any, call-ceiling deny, valid derived label
+  names; 2 controller tests: materialize exactly the allowed-tool grants, prune on
+  shrink). **Gate:** an agent cannot exceed its MissionContract scope/budget ✓.
+  **Commit:** `LOOM-O5`.
