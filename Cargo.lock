@@ -218,6 +218,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "aog-federation"
+version = "0.1.0"
+dependencies = [
+ "aog-estate",
+ "fabric-contracts",
+ "fabric-crypto",
+ "fabric-proof",
+ "hex",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "aog-gateway"
 version = "0.1.0"
 dependencies = [

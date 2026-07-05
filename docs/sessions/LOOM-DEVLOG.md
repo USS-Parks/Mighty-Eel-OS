@@ -1522,3 +1522,27 @@ drill that restores from a cold backup by the runbook alone.
   into a fresh node — the content is reproduced by the runbook steps alone and the
   blob is confirmed ciphertext at rest. **Gate:** full DR drill from cold backup
   succeeds by the runbook alone ✓. **Commit:** `LOOM-H4`.
+
+### H5 — Air-gap federation (signed removable-media snapshots) — DONE
+New crate `aog-federation`: a source estate federates policy + revocation to an
+air-gapped peer by a **signed snapshot on media**, verifiable offline, no network.
+- **`FederationSnapshot`.** Carries a monotonic `version`, the `source` id, the
+  `FederatedPolicy`s a peer adopts (PolicyBundle content) and the
+  `FederatedRevocation`s it honors (RevocationIntent targets), ML-DSA-signed over
+  its canonical payload (signature cleared). `to_media` / `from_media` are the byte
+  serialization written to / read from removable media; a snapshot never carries a
+  secret (names, not credentials — the peer resolves those from its own OpenBao).
+- **`Peer`.** The receiving air-gapped estate: verifies a snapshot with the
+  source's public key **alone** (offline), refuses a bad signature and an
+  anti-rollback stale replay (version ≤ applied — a replay cannot re-apply a
+  superseded policy or un-revoke a token), and on accept returns the policies +
+  revocations to apply and advances the applied version.
+- **Files:** `crates/aog-federation/{Cargo.toml, src/lib.rs}` (new crate);
+  workspace member + `Cargo.lock`.
+- **Verify:** `fmt` + `clippy -p aog-federation --all-targets --no-deps -D
+  warnings` clean; `cargo test -p aog-federation` **4 passed**: a policy + a
+  revocation are signed at site-a, serialized to media bytes, and — with only the
+  bytes crossing — verified offline by the peer with the public key alone and
+  applied; a wrong source key, a tampered snapshot, and a stale replay are each
+  refused. **Gate:** a policy + a revocation cross an air gap on media and apply
+  verifiably, no network ✓. **Commit:** `LOOM-H5`.

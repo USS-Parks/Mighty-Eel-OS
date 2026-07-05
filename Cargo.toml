@@ -15,6 +15,7 @@ members = [
     "crates/aog-approvals",
     "crates/aog-controller",
     "crates/aog-estate",
+    "crates/aog-federation",
     "crates/aog-gateway",
     "crates/aog-node",
     "crates/aog-scheduler",
