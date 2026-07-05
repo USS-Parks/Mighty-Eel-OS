@@ -38,11 +38,13 @@
 
 pub mod filters;
 pub mod framework;
+pub mod preemption;
 pub mod scorers;
 pub mod types;
 
 pub use filters::{AttestationFilter, CapacityFilter, ReadinessFilter, RingFilter};
 pub use framework::{Filter, Scheduler, Scorer};
+pub use preemption::{NodeOccupancy, PreemptionPlan, Victim, plan_preemption};
 pub use scorers::{ConsolidationScorer, SpreadScorer, UtilizationScorer};
 pub use types::{
     FilterVerdict, NodeEvaluation, NodeSnapshot, ScheduleOutcome, ScheduleRequest,

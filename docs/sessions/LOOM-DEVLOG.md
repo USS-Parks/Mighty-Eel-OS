@@ -937,3 +937,30 @@ the binding controller enriches it per replica from the estate's `Placement`s
 - **Gate:** replicas of one workload spread across ≥2 nodes when available ✓
   (`replicas_spread_across_nodes`: replica 2, told its sibling is on `node-a`,
   lands on `node-b`). **Commit:** `LOOM-S6`.
+
+### S8 — Preemption + priority — DONE (planner; S7 executes it)
+_Built before S7: S7's controller was recon-blocked, and the preemption planner
+is an independent scheduler-lib unit._ `plan_preemption(incoming_priority,
+decision, occupancy)`: when a prior schedule left a workload Pending, a
+higher-priority workload may reclaim room by evicting strictly-lower-priority,
+disruptible occupants.
+- **Only capacity-blocked nodes are targets.** A node is a preemption candidate
+  only if it failed *exactly* the capacity filter and passed every other hard
+  predicate — so a ring- or attestation-mismatched node is never preempted (no
+  hard predicate is violated by preemption).
+- **PDB-analog.** A `Victim` carries a `disruptible` flag the controller computes
+  from its disruption budget; the planner never evicts a protected victim, nor
+  one at equal-or-higher priority. Lowest-priority victim chosen, ties by node
+  name — deterministic.
+- **Inputs, not estate churn.** Priority and occupancy are explicit planner
+  inputs (`incoming_priority`, `NodeOccupancy` / `Victim`), so S8 adds no field to
+  `WorkloadSpec`; the controller adapts estate data to them (as with S6's
+  `already_placed_on`). Executing the plan (drain victims, then bind) is the
+  controller's job (S7); the full disruption budget is Phase O (O7). A workload
+  with no lawful preemption stays Pending — pressure never forces a placement.
+- **Files:** `crates/aog-scheduler/src/{preemption.rs (new), lib.rs}`.
+- **Verify:** fmt + clippy `-D warnings` clean; **46 tests** pass (5 new).
+- **Gate:** preemption honors the PodDisruptionBudget-analog ✓
+  (`respects_disruption_budget`); no hard-predicate (ring) violation during
+  preemption ✓ (`never_targets_a_ring_mismatched_node`); lowest-priority victim
+  chosen, equal/higher never evicted. **Commit:** `LOOM-S8`.
