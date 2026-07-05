@@ -36,7 +36,12 @@
 //! O2: the [`RolloutController`] advances a `RolloutPlan` through
 //! availability-safe steps (progressive / canary / blue-green) via a pure,
 //! deterministic stepper whose availability floor is provable, receipting each
-//! step through admission.
+//! step through admission. O3 folds an error budget into the same controller:
+//! a breach reverses the rollout to its prior state (`Failed`), each step audited.
+//!
+//! O4: the [`AutoscaleController`] scales a `Workload` on load **and** economics
+//! via the pure [`autoscale`] decision — saturated+affordable → up, saturated+
+//! broke → recommend hardware, idle → consolidate, budget-inefficient → down.
 //!
 //! Trust posture: this crate's read path is the informer (bounded-stale,
 //! resync-recovered, A1.6); its write path is **never** the store directly —
@@ -44,6 +49,7 @@
 //! chain (`aog-apiserver`), so every controller action is validated, sealed,
 //! and receipted like any other caller's (A1.7, doctrine I-3/I-5).
 
+pub mod autoscale;
 pub mod bundle_store;
 pub mod bundles;
 pub mod capability;
@@ -66,6 +72,10 @@ pub mod transit;
 pub mod vkeys;
 pub mod workloads;
 
+pub use autoscale::{
+    AutoscaleController, AutoscalePolicy, AutoscaleProbe, AutoscaleSignals, ScaleDecision,
+    ScaleReason, autoscale,
+};
 pub use bundle_store::{
     BundleReject, BundleStore, EdgeBundleCache, MemBundleStore, OpenBaoBundleStore, SignedBundle,
     sign_bundle, verify_bundle,

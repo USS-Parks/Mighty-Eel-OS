@@ -1282,3 +1282,29 @@ exceed it mid-rollout, the rollout **reverses to its prior state** and ends
   then a budget breach reverses it to step 0 / `Failed` / `rolled_back`).
   **Gate:** an injected error-budget breach auto-rolls-back deterministically to
   the prior state ✓. **Commit:** `LOOM-O3`.
+
+### O4 — Budget-/ROI-aware autoscaler — DONE
+The autoscaler scales a `Workload` on **load and economics together**, not load
+alone. New `autoscale.rs`.
+- **The pure decision.** `autoscale(current, AutoscaleSignals { utilization,
+  budget_headroom, roi }, AutoscalePolicy) -> ScaleDecision` — no clock, no RNG.
+  Saturated + affordable → `ScaleUp`; saturated but out of budget or at the ceiling
+  → `RecommendHardware` (never overspend — the load needs hardware, not more
+  replicas on the same tier); budget-inefficient (ROI ≤ floor) → `ScaleDown`; idle
+  → consolidate `ScaleDown`; else `Hold`. Never below `min_replicas`. Saturation
+  outranks low ROI (an overloaded workload's immediate need is capacity).
+- **`AutoscaleController`.** Reads a real signal snapshot via the `AutoscaleProbe`
+  seam (fed by node utilization + the gateway meter / SpendLedger) and applies
+  scale up/down by writing `Workload.spec.replicas` (the HPA pattern — O1 then
+  converges placements to match). No telemetry → hold (fail-closed, I-4).
+  `RecommendHardware` is an operator/console decision, not automatic capacity
+  fabrication (the gateway ROI recommender already surfaces it for humans).
+- **Files:** `crates/aog-controller/src/{autoscale.rs (new), lib.rs}`;
+  `crates/aog-controller/tests/autoscale.rs (new)`.
+- **Verify:** `fmt` + `clippy -p aog-controller --all-targets --no-deps -D
+  warnings` clean; `cargo test -p aog-controller` **58 passed** (9 pure-decision
+  unit tests: up, out-of-budget → hardware, ceiling → hardware, idle,
+  budget-inefficient, steady hold, min floor, saturation-outranks-ROI,
+  determinism; 2 controller tests: one pass scales up on saturation, one
+  consolidates on idle). **Gate:** scale decisions from a fixed fixture are
+  deterministic and budget-respecting ✓. **Commit:** `LOOM-O4`.
