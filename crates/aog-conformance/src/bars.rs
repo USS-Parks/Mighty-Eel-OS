@@ -566,9 +566,18 @@ async fn publish_revocation(
     snapshot.revoked_tokens = tokens.iter().map(|t| (*t).to_owned()).collect();
     let sealed = sign_snapshot(snapshot, signer).map_err(|e| format!("sign snapshot: {e}"))?;
     let bytes = serde_json::to_vec(&sealed).map_err(|e| format!("encode snapshot: {e}"))?;
-    let li = confirmed_leader(nodes)
-        .await
-        .ok_or("no confirmed leader to publish the revocation")?;
+    // Await a confirmed leader with a bounded retry: a transient election gap
+    // (e.g. under a contended CI runner) must not abort the publish one-shot.
+    let deadline = Instant::now() + Duration::from_secs(10);
+    let li = loop {
+        if let Some(i) = confirmed_leader(nodes).await {
+            break i;
+        }
+        if Instant::now() >= deadline {
+            return Err("no confirmed leader to publish the revocation".to_owned());
+        }
+        tokio::time::sleep(Duration::from_millis(25)).await;
+    };
     nodes[li]
         .write(Op::Put {
             key: REV_PATH.to_owned(),

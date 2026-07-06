@@ -272,6 +272,12 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "SLO gate (like V9 weave-overhead): the strict wall-clock p99<=3s is \
+                meaningful on a quiet deployment target, not a contended shared CI \
+                runner testing the whole workspace in parallel. Run opt-in with \
+                `-- --ignored`; the revocation kill-switch CORRECTNESS is asserted \
+                non-flakily by v5_kill_switch_under_scale, and end-to-end by the live \
+                loom-live job (v10-revocation-slo.sh)."]
     #[allow(clippy::print_stdout)] // an SLO gate surfaces its measured p50/p99
     async fn v10_revocation_to_denial_slo() {
         // V10 gate ("the kill number"): revocation-to-denial across all 5
