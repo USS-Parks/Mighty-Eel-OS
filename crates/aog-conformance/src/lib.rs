@@ -152,13 +152,16 @@ pub async fn run() -> ConformanceReport {
     // under estate scale — asserted here at a modest in-suite scale; the full
     // aggressive-profile gate (5 replicas × 100 objects) runs in `v5_*`.
     let kill_switch = bars::kill_switch_under_scale(3, 20).await;
+    // Bar 6 (V8): N replicas reconcile M workloads within SLO — modest in-suite
+    // scale here; the aggressive profile (5 × 100) runs in `v8_*`.
+    let scale = bars::scale_target(3, 20).await;
     let mut reports = vec![
         asserted(BarId::IdempotentReconcile, idempotent),
         asserted(BarId::LinearizableWrites, linearizable),
         pending(BarId::SplitBrainSafety, "V4"),
         pending(BarId::SelfHealing, "V7"),
         pending(BarId::RolloutDeterminism, "V7"),
-        pending(BarId::ScaleTarget, "V8"),
+        asserted(BarId::ScaleTarget, scale),
         asserted(BarId::KillSwitchUnderScale, kill_switch),
     ];
     let any_fail = reports.iter().any(|b| b.status == BarStatus::Fail);
@@ -257,5 +260,14 @@ mod tests {
             result.is_ok(),
             "V5 kill-switch-under-scale failed: {result:?}"
         );
+    }
+
+    #[tokio::test]
+    async fn v8_scale_target() {
+        // V8 gate (bar 6): 5 control-plane replicas ingest + reconcile 100
+        // workloads to convergence within SLO, and every object replicates to
+        // every node (aggressive profile: 5 nodes, 100 workloads).
+        let result = crate::bars::scale_target(5, 100).await;
+        assert!(result.is_ok(), "V8 scale target failed: {result:?}");
     }
 }

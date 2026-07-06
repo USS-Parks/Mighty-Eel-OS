@@ -717,3 +717,78 @@ pub async fn kill_switch_under_scale(replicas: u64, workloads: usize) -> Result<
         "under {workloads} estate objects, a signed revocation replicated to all {replicas} replicas; every replica denied the revoked token and admitted a live one, and a rogue-signed snapshot failed closed on all — no replica missed the kill"
     ))
 }
+
+/// Bar 6 (V8) — scale target: `replicas` control-plane nodes reconcile `workloads`
+/// objects within SLO. Ingest `workloads` Workload objects through the leader,
+/// drive a level-triggered controller over all of them to convergence, and prove
+/// every object replicated to **every** node — real openraft replication + the
+/// real `aog-controller` reconcile runtime at the aggressive-profile scale.
+pub async fn scale_target(replicas: u64, workloads: usize) -> Result<String, String> {
+    const PREFIX: &str = "Workload/";
+    // A generous convergence budget: in-process durable Raft is milliseconds per
+    // object, so this SLO is never the bottleneck — it exists to catch a stall.
+    let slo = Duration::from_secs(120);
+
+    let (_cluster, nodes) = spawn_cluster(replicas, "loom-conformance-scale").await?;
+    let li = confirmed_leader(&nodes)
+        .await
+        .ok_or("no confirmed leader to load the estate")?;
+    let leader = Arc::clone(&nodes[li]);
+
+    // Ingest M workloads through the leader; time the commit throughput.
+    let ingest_start = Instant::now();
+    for i in 0..workloads {
+        put(&leader, &format!("{PREFIX}scale-{i:05}"), "spec").await?;
+    }
+    let ingest = ingest_start.elapsed();
+
+    // Reconcile every object to convergence (a fresh controller lists all M and
+    // settles) — "M workloads reconcile within SLO".
+    let recorder = Recorder::new(Arc::clone(&leader));
+    let mut controller = Controller::new(
+        "scale",
+        leader.informer(PREFIX),
+        recorder.clone(),
+        Arc::new(AlwaysLeader),
+    );
+    let reconcile_start = Instant::now();
+    settle(&mut controller).await?;
+    let reconcile = reconcile_start.elapsed();
+    let observed = recorder.recorded().len();
+    if observed < workloads {
+        return Err(format!(
+            "the controller reconciled only {observed}/{workloads} workloads within {reconcile:?}"
+        ));
+    }
+
+    // Scale replication: every object readable on EVERY node — the N-node fan-out.
+    for (i, node) in nodes.iter().enumerate() {
+        let mut missing = 0usize;
+        for w in 0..workloads {
+            if node
+                .get(&format!("{PREFIX}scale-{w:05}"))
+                .await
+                .map_err(|e| format!("scale read failed: {e:?}"))?
+                .is_none()
+            {
+                missing += 1;
+            }
+        }
+        if missing > 0 {
+            return Err(format!(
+                "replica {} is missing {missing}/{workloads} objects — incomplete replication under scale",
+                i as u64 + 1
+            ));
+        }
+    }
+
+    if reconcile > slo {
+        return Err(format!(
+            "reconcile of {workloads} workloads took {reconcile:?} > SLO {slo:?}"
+        ));
+    }
+
+    Ok(format!(
+        "{workloads} workloads across {replicas} replicas: ingested in {ingest:?}, reconciled to convergence in {reconcile:?} (< {slo:?} SLO), and every object is readable on every replica — scale target met"
+    ))
+}
