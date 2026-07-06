@@ -35,9 +35,13 @@ done
 
 major_resp=""
 if [ -n "$maj" ]; then
-  major_resp="$(write_to "$maj" Workload/v4-major)"
+  major_resp="$(write_to "$maj" Workload/v4-major 2>/dev/null || true)"
 fi
-minor_resp="$(write_to cp1 Workload/v4-minor)"
+# The isolated minority either refuses fast ("no leader") or, if cp1 still knows a
+# now-unreachable leader, its forward hangs until curl's --max-time — both mean
+# "did not commit". Tolerate the failure (|| true) so `set -e` does not abort the
+# gate; the assertions below (major must be Applied, minor must not) are the judge.
+minor_resp="$(write_to cp1 Workload/v4-minor 2>/dev/null || true)"
 echo "  majority ($maj) write: $major_resp"
 echo "  minority (cp1) write:  $minor_resp"
 

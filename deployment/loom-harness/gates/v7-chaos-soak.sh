@@ -41,21 +41,28 @@ while [ "$i" -lt "$ROUNDS" ]; do
   eval "victim=\${$(( (i % 5) + 1 ))}"
   echo "== round $i: kill $victim =="
   part partition "$victim"
-  sleep 4
 
+  # Poll (bounded) for a re-elected leader among the reachable majority: a fresh
+  # election after killing the leader can take a few seconds, more on a loaded
+  # runner, so a single-shot check would flake.
   leader=""
-  for s in $CPS; do
-    [ "$s" = "$victim" ] && continue
-    case "$(leader_of "$s")" in *'"is_leader":true'*) leader="$s"; break ;; esac
+  ld=$(( $(date +%s) + 20 ))
+  while [ "$(date +%s)" -le "$ld" ]; do
+    for s in $CPS; do
+      [ "$s" = "$victim" ] && continue
+      case "$(leader_of "$s" 2>/dev/null || true)" in *'"is_leader":true'*) leader="$s"; break ;; esac
+    done
+    [ -n "$leader" ] && break
+    sleep 1
   done
   if [ -z "$leader" ]; then
-    echo "  FAIL: no leader re-emerged after killing $victim" >&2
+    echo "  FAIL: no leader re-emerged within 20s after killing $victim" >&2
     part heal "$victim"
     exit 1
   fi
 
   key="RolloutPlan/v7-step-$i"
-  resp="$(write_to "$leader" "$key" '[86,55]')"
+  resp="$(write_to "$leader" "$key" '[86,55]' 2>/dev/null || true)"
   case "$resp" in
     *Applied*) echo "  step $i committed via $leader (self-healed)" ;;
     *) echo "  FAIL: step $i did not commit: $resp" >&2; part heal "$victim"; exit 1 ;;
