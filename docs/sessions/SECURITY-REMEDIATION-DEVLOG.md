@@ -94,4 +94,40 @@ Findings: AF-001/002/003/004/006/007 -> CONTAINED (network exposure removed;
 root fixes land in their phases). AF-005 untouched (its contain step is 0.5).
 AS-001 (floating images) not addressed here — owned by Q7.
 
+Commit: `6daa146`.
+
+### 0.3 — Route inventory + privilege matrix
+
+Objective: a machine-readable inventory of every WSF/AOG/MAI entry point with its
+auth/tenant/audit posture, plus a gate that fails when a new privileged route has
+no policy row.
+
+Surface (read-only enumeration cross-checked against the WSF router read): 79
+production HTTP routes — wsf-api (9, the unauthenticated privileged plane),
+aog-gateway (10, per-handler virtual-key `authorize()`), mai-api (60, global
+`X-IM-Auth-Token` middleware + per-route `check_permission`; health/metrics
+exempt) — plus ~20 mai-api gRPC methods, SSE (`/v1/chat/completions` stream),
+WebSocket (`/v1/ws`, post-upgrade auth), and local CLI (mai-admin, mai-api
+validate, wsf-seed).
+
+Deliverables:
+- `.integrity/route-policy.tsv` — 79-row machine-readable HTTP policy file,
+  derived from the live route extraction so it is provably complete.
+- `.integrity/scripts/route-policy-check.sh` — perl-based, multi-line aware,
+  tests/benches/mocks excluded; asserts every source route has a policy row.
+- `.integrity/hooks/pre-push` — invokes the gate next to the no-slop full scan.
+- `docs/scans/SECURITY-ROUTE-INVENTORY.md` — human inventory + privilege matrix
+  (HTTP/gRPC/SSE/WS/CLI), with the WSF no-auth findings and the
+  `/v1/auth/exchange_token` stub + `/v1/ws` post-upgrade flags called out.
+
+Verify: gate exit 0 on the current tree (79/79 declared). Negative control:
+dropping the `/v1/tokens/attenuate` row makes the gate exit 1 and name the
+undeclared route; restoring returns exit 0. Evidence:
+`test-evidence/security-remediation/M0/route-inventory/`.
+
+Notes: no GitHub Actions workflow exists (`.github/` is empty), so the gate rides
+the pre-push hook (the repo's Layer-3 owner), not a CI YAML; the script is
+CI-portable. The automated gate covers axum HTTP route literals; gRPC/SSE/WS/CLI
+are inventoried but not yet auto-gated (F-phase hardening).
+
 Commit: (pending — this change set).
