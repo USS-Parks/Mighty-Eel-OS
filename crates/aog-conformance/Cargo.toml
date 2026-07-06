@@ -7,6 +7,7 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+aog-controller = { path = "../aog-controller" }
 aog-store = { path = "../aog-store" }
 serde = { workspace = true }
 serde_json = { workspace = true }

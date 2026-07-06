@@ -5,12 +5,12 @@
 //! themselves; passing it is the gate to *claim* "Kubernetes-grade" externally
 //! (A1.12 bar 8 / A5).
 //!
-//! V1 lands the framework and the runnable suite and asserts bar 2 (linearizable
-//! control-plane writes) green in-process against the real `aog-store` Raft state
-//! machine. Every other bar is registered against the Phase-V prompt that
-//! implements it on the live multi-node harness and is reported `pending` — never
-//! as a pass it did not run (CANON §11: honest, tracked). No bar is reported
-//! green without an executed check.
+//! Bars 1 (idempotent reconciliation) and 2 (linearizable control-plane writes)
+//! are asserted green in-process against the real `aog-store` Raft state machine
+//! and `aog-controller` reconcile runtime. Every other bar is registered against
+//! the Phase-V prompt that implements it on the live multi-node harness and is
+//! reported `pending` — never as a pass it did not run (CANON §11: honest,
+//! tracked). No bar is reported green without an executed check.
 
 mod bars;
 
@@ -138,9 +138,10 @@ fn asserted(id: BarId, result: Result<String, String>) -> BarReport {
 
 /// Run the conformance suite against the in-process reference estate.
 pub async fn run() -> ConformanceReport {
+    let idempotent = bars::idempotent_reconcile(48, 0x0BAD_F00D).await;
     let linearizable = bars::linearizable_writes().await;
     let mut reports = vec![
-        pending(BarId::IdempotentReconcile, "V2"),
+        asserted(BarId::IdempotentReconcile, idempotent),
         asserted(BarId::LinearizableWrites, linearizable),
         pending(BarId::SplitBrainSafety, "V4"),
         pending(BarId::SelfHealing, "V7"),
@@ -184,10 +185,43 @@ mod tests {
             "bar 2 (linearizable writes) asserted green: {}",
             lin.detail
         );
-        // V1 asserts one bar; the rest are registered pending their Phase-V owner.
+        let idem = report
+            .bars
+            .iter()
+            .find(|b| b.id == BarId::IdempotentReconcile)
+            .expect("bar 1 is registered");
+        assert_eq!(
+            idem.status,
+            BarStatus::Pass,
+            "bar 1 (idempotent reconciliation) asserted green: {}",
+            idem.detail
+        );
+        // The remaining bars are registered pending their Phase-V owner.
         assert!(
             report.pending >= 1,
             "later bars are registered against their Phase-V prompt"
+        );
+    }
+
+    #[tokio::test]
+    async fn v2_reconcile_idempotency_fuzz_converges() {
+        // V2 gate (standard lane): 500 randomized delivery histories (reorder /
+        // duplicate / overflow-drop) converge to one authoritative end state.
+        let result = crate::bars::idempotent_reconcile(500, 0x00C0_FFEE).await;
+        assert!(result.is_ok(), "V2 idempotency fuzz diverged: {result:?}");
+    }
+
+    /// The full V2 gate — 10^4 histories. Heavy (durable Raft writes per history,
+    /// ~minutes), so it runs in the opt-in nightly/CI lane like the workspace's
+    /// other heavy tests; the standard lane above runs 500. Not a silent cap
+    /// (Doctrine D8): the full count is here and runnable with `-- --ignored`.
+    #[tokio::test]
+    #[ignore = "nightly: 10^4-history fuzz (~minutes); standard lane runs 500"]
+    async fn v2_reconcile_idempotency_fuzz_full_10k() {
+        let result = crate::bars::idempotent_reconcile(10_000, 0x00C0_FFEE).await;
+        assert!(
+            result.is_ok(),
+            "V2 idempotency fuzz diverged at 10^4: {result:?}"
         );
     }
 }

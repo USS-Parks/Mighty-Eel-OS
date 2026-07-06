@@ -1631,3 +1631,28 @@ customer or CI lane can gate on it directly.
   --no-deps -D warnings` clean; `cargo test -p aog-conformance` **1 passed** (suite
   green, bar 2 asserted). **Gate:** suite green on the reference estate; each bar
   carries an assertion or its owning prompt ✓. **Commit:** `LOOM-V1`.
+
+### V2 — Reconcile idempotency fuzz (bar 1) — DONE
+Extends the R1 replay gate (three fixed delivery histories) to a reproducible
+fuzz over the real `aog-controller` reconcile runtime: a fixed base estate is
+reconciled to convergence, then a fixed late history (update + delete + create)
+is delivered under randomized modes — events reordered, duplicated, and
+occasionally genuinely dropped by overflowing the watch buffer (a foreign prefix,
+so the Loom end state is untouched) forcing the controller to re-list. Every
+history must converge to the store's one authoritative end state.
+- **`crates/aog-conformance/src/bars.rs`.** `idempotent_reconcile(histories, seed)`
+  over a real `RaftNode` + `Controller` + a level-triggered `Recorder` reconciler
+  (the R1 pattern), driven by a deterministic SplitMix64 PRNG so a divergence is
+  reported with its exact seed + history index. Bar 1 wired into the suite
+  (`run()` asserts it at 48 histories); `aog-controller` added as a dependency.
+- **Standard lane:** `v2_reconcile_idempotency_fuzz_converges` runs **500**
+  randomized histories (reorder + duplicate + overflow-drop), green in **46 s**;
+  zero divergence.
+- **Full gate:** `v2_reconcile_idempotency_fuzz_full_10k` runs the plan's **10⁴**
+  histories; `#[ignore]` (durable Raft writes, ~minutes) so routine `cargo test`
+  stays fast — run in the opt-in nightly/CI lane with `-- --ignored`. Not a silent
+  cap (Doctrine D8): the full count is in the tree and runnable.
+- **Verify:** `cargo fmt` clean; `cargo clippy -p aog-conformance --all-targets
+  --no-deps -D warnings` clean; standard-lane tests green (suite + 500-history
+  fuzz, 46 s). **Gate:** randomized drop/dup/reorder histories converge; zero
+  divergent end-states ✓ (500 in-lane; 10⁴ nightly). **Commit:** `LOOM-V2`.
