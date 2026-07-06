@@ -1686,3 +1686,34 @@ in-flight ambiguity raises the counter above acks.
   46.8 s** (suite incl. in-suite fault check + 500-fuzz + V3 gate). **Gate:**
   concurrent clients under fault injection; no linearizability violation ✓.
   **Commit:** `LOOM-V3`.
+
+---
+
+## Phase V — Harness sub-milestone (VH) — the containerized multi-node estate
+
+V1–V3 prove the consistency bars in-process (real openraft + real transport faults).
+A3.2 requires the partition/kill/scale gates (V4/V5/V7/V8/V10) on a **live
+containerized** multi-node harness with **real network partitions**. That harness
+must be built: the Loom control plane had no wire transport (a single-node no-op
+network only) and no node daemons — the "deployment packaging" the plan defers to
+Phase V. VH1–VH6 build it, then the gates run on it.
+
+### VH1 — Raft wire transport (`aog-wire`) — DONE
+The over-the-wire counterpart of the in-process `ClusterNetwork`: consensus now
+carries over a real socket.
+- **`aog-store` seam:** `RaftNode::start_with_network<N: RaftNetworkFactory>` (build a
+  node on a caller-supplied transport) + `RaftNode::raft()` (the openraft handle the
+  wire server serves and the daemon drives membership through).
+- **`crates/aog-wire` (new):** `WireNetwork` `RaftNetworkFactory` reaches each peer
+  over HTTP at the URL in its `BasicNode` addr, JSON-serializing openraft's
+  `append_entries`/`vote`/`install_snapshot` and lifting a peer's `RaftError` into
+  `RPCError::RemoteError` (transport failure → `Unreachable`). `router(Arc<RaftNode>)`
+  serves `/raft/{append-entries,vote,install-snapshot}`; `serve(node, addr)` binds.
+- **Gate:** a 3-node cluster over loopback sockets (not the in-process `Cluster`)
+  initializes, promotes learners to voters over the wire, elects a leader, and a
+  committed leader write replicates to both followers across sockets ✓
+  (`cargo test -p aog-wire` 1 passed, 3.34 s).
+- **mTLS deferred to VH5:** sender-constraint per doctrine I-3 layers on where
+  per-node certs are generated; VH1 proves the consensus carries correctly first.
+- **Verify:** fmt + clippy (`aog-wire` + `aog-store`) `--all-targets --no-deps -D
+  warnings` clean; wire-consensus test green. **Commit:** `LOOM-VH1`.

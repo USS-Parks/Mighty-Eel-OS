@@ -61,6 +61,24 @@ impl RaftNode {
         Self::build(node_id, dir, SingleNodeNetwork).await
     }
 
+    /// Start the node over `dir` wired to a caller-supplied `network` factory —
+    /// the seam for the over-the-wire mTLS transport (the containerized multi-node
+    /// harness). Does not initialize a cluster; drive membership via
+    /// [`raft`](Self::raft) with `BasicNode` addresses carrying peer URLs.
+    ///
+    /// # Errors
+    /// [`NodeError`] on storage or raft construction failure.
+    pub async fn start_with_network<N>(
+        node_id: NodeId,
+        dir: impl AsRef<Path>,
+        network: N,
+    ) -> Result<Self, NodeError>
+    where
+        N: RaftNetworkFactory<TypeConfig>,
+    {
+        Self::build(node_id, dir, network).await
+    }
+
     /// Start the node over `dir` wired to `network` — the no-peer stub for K3, a
     /// [`Cluster`] network for H1.
     async fn build<N>(node_id: NodeId, dir: impl AsRef<Path>, network: N) -> Result<Self, NodeError>
@@ -243,6 +261,15 @@ impl RaftNode {
     #[must_use]
     pub fn id(&self) -> NodeId {
         self.node_id
+    }
+
+    /// This node's openraft handle — the surface the wire transport's server side
+    /// serves (`append_entries` / `vote` / `install_snapshot`) and the daemon
+    /// drives membership through (`initialize` / `add_learner` / `change_membership`
+    /// with `BasicNode` peer URLs). Cheap to clone.
+    #[must_use]
+    pub fn raft(&self) -> Raft<TypeConfig> {
+        self.raft.clone()
     }
 
     /// Trigger a Raft snapshot (H3 compaction) and wait until it is built to the
