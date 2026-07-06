@@ -130,4 +130,33 @@ the pre-push hook (the repo's Layer-3 owner), not a CI YAML; the script is
 CI-portable. The automated gate covers axum HTTP route literals; gRPC/SSE/WS/CLI
 are inventoried but not yet auto-gated (F-phase hardening).
 
+Commit: `edc9021`.
+
+### 0.4 — Adversarial regression fixtures
+
+Objective: freeze a deterministic regression identifier per finding, with a
+quarantined harness asserting current vulnerable behavior (product tests flip to
+repaired behavior in-phase). No `#[ignore]` (§0.5).
+
+Reading fabric-token pinned AF-001 exactly: `attenuate()` checks monotonicity on
+routes/models/classification/budget/expiry but never verifies the parent
+signature and never constrains tenant_id, roles, service_identity, or
+revocation_status. So a fabricated/unsigned/wrong-key parent yields a signed
+child (signer oracle), a valid parent can be widened on roles/tenant, and a
+revoked parent still attenuates (AF-006).
+
+Delivered:
+- `crates/fabric-token/Cargo.toml`: `security-regression` feature (off by default).
+- `crates/fabric-token/tests/security_regression.rs`: 5 feature-gated fixtures
+  (REG-AF-001 unsigned / wrong-key / role-widening / tenant-swap, REG-AF-006
+  revoked-parent) asserting the current vulnerable behavior.
+- `docs/scans/SECURITY-REGRESSION-REGISTRY.md`: deterministic id per finding
+  (AF-001..007); AF-001 + AF-006 implemented, AF-002/003/004/007 reserved for A/E/B/L.
+
+Verify: fmt PASS; harness `--features security-regression` PASS (5 fixtures);
+default `cargo test -p fabric-token` runs 0 of them (quarantined); clippy PASS.
+Evidence: `test-evidence/security-remediation/M0/adversarial-fixtures/`.
+
+Gate: every AF finding has a deterministic regression identifier (registry).
+
 Commit: (pending — this change set).
