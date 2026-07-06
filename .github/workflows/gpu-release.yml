@@ -65,7 +65,7 @@ jobs:
       release_version: ${{ steps.version.outputs.value }}
       release_commit: ${{ steps.version.outputs.commit }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -102,7 +102,7 @@ jobs:
         continue-on-error: true
 
       - name: Upload readiness report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: readiness-report-${{ github.run_number }}
@@ -116,7 +116,7 @@ jobs:
     timeout-minutes: 45
     needs: [gpu-build]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Probe Ollama (best-effort)
@@ -137,12 +137,12 @@ jobs:
     timeout-minutes: 60
     needs: [gpu-build]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -173,7 +173,7 @@ jobs:
             ${extra}
 
       - name: Upload benchmark artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: benchmark-results-${{ github.run_number }}
@@ -191,13 +191,13 @@ jobs:
     needs: [gpu-build, gpu-integration, gpu-benchmarks]
     if: ${{ github.event.inputs.skip_package != 'true' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Build .deb
         run: scripts/build-package.sh --version "${{ needs.gpu-build.outputs.release_version }}"
       - name: Upload .deb artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: mai-deb-${{ github.run_number }}
           path: build/package-staging/**/*.deb
@@ -211,11 +211,11 @@ jobs:
     needs: [gpu-build, gpu-integration, gpu-benchmarks, gpu-package]
     if: always() && needs.gpu-build.result == 'success'
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v7
         with:
           path: bundle-input/
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Assemble release bundle
@@ -226,7 +226,7 @@ jobs:
             --input bundle-input \
             --output build/release-bundle
       - name: Upload release bundle
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-bundle-${{ needs.gpu-build.outputs.release_commit }}
           path: build/release-bundle/

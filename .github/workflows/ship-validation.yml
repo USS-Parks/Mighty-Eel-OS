@@ -45,8 +45,8 @@ jobs:
     name: Forbidden Term Scan
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Scan production crates for forbidden symbols
@@ -56,7 +56,7 @@ jobs:
     name: Ship Profile Validator
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Install protobuf compiler
@@ -100,7 +100,7 @@ jobs:
     name: mai-admin Backup Round-trip
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Install protobuf compiler
@@ -112,8 +112,8 @@ jobs:
     name: Package Layout Validation
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Stage package layout (no cargo build, no .deb)
@@ -127,8 +127,8 @@ jobs:
     name: mypy --strict (SDK)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Install dependencies
@@ -147,10 +147,10 @@ jobs:
     timeout-minutes: 90
     needs: [forbidden-term-scan, ship-validator, mai-admin-backup, package-build-validate, mypy-strict-sdk]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Install protobuf compiler
@@ -171,7 +171,7 @@ jobs:
         run: pytest adapters/ mai-sdk-python/ -v --ignore=**/test_integration*
       - name: Upload nightly artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: nightly-${{ github.run_number }}
           path: |

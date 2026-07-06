@@ -22,7 +22,7 @@ jobs:
     name: Config & DevOps Gates
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Verify lock-file parity
         run: bash scripts/verify-lock-parity.sh .
@@ -37,7 +37,7 @@ jobs:
     name: Rust Quality Gates
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -72,7 +72,7 @@ jobs:
     name: Supply-Chain & Advisories (cargo-audit + cargo-deny)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -103,7 +103,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [rust-check]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Install protobuf compiler
@@ -163,9 +163,9 @@ jobs:
     name: Python Quality Gates
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -194,7 +194,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [rust-check]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Install protobuf compiler
@@ -210,7 +210,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [rust-check]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Install protobuf compiler
@@ -225,7 +225,7 @@ jobs:
   #   runs-on: [self-hosted, gpu]
   #   needs: [rust-check]
   #   steps:
-  #     - uses: actions/checkout@v4
+  #     - uses: actions/checkout@v5
   #     - uses: dtolnay/rust-toolchain@stable
   #     - uses: Swatinem/rust-cache@v2
   #     - name: Verify Ollama is running
@@ -242,10 +242,10 @@ jobs:
   #   runs-on: [self-hosted, gpu]
   #   needs: [rust-check]
   #   steps:
-  #     - uses: actions/checkout@v4
+  #     - uses: actions/checkout@v5
   #     - uses: dtolnay/rust-toolchain@stable
   #     - uses: Swatinem/rust-cache@v2
-  #     - uses: actions/setup-python@v5
+  #     - uses: actions/setup-python@v6
   #       with:
   #         python-version: "3.12"
   #     - name: Run benchmarks
@@ -258,7 +258,7 @@ jobs:
   #       run: python3 tests/benchmarks/bench_compare.py compare
   #       continue-on-error: true
   #     - name: Upload benchmark results
-  #       uses: actions/upload-artifact@v4
+  #       uses: actions/upload-artifact@v7
   #       with:
   #         name: benchmark-results
   #         path: tests/benchmarks/results/
