@@ -31,5 +31,13 @@ if [ -x "$SLOP_SCAN" ]; then
   "$SLOP_SCAN" full >&2 || FAIL=1
 fi
 
+# Security route-inventory gate — every production HTTP route must carry a policy
+# row in .integrity/route-policy.tsv, so a new privileged endpoint cannot ship
+# undeclared. Fail-open only if perl is missing (the script reports that itself).
+ROUTE_CHECK="$(git rev-parse --show-toplevel)/.integrity/scripts/route-policy-check.sh"
+if [ -f "$ROUTE_CHECK" ]; then
+  bash "$ROUTE_CHECK" >&2 || FAIL=1
+fi
+
 [ "$FAIL" -eq 0 ] || { echo "pre-push (canon): gate failed." >&2; exit 1; }
 exit 0
