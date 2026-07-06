@@ -1808,13 +1808,38 @@ The runnable daemons, containerized: one image carrying both `aogd` and `aog-nod
   `Config("AOG_NODE_NAME is required")`). Both daemons run in the slim runtime.
   **Commit:** `LOOM-VH4`.
 
+### VH5 — containerized 5+5 estate — DONE (VH5b trust hardening tracked below)
+The live multi-node estate the Phase-V gates run on: five `aogd` control-plane nodes
+form a Raft cluster over the `aog-wire` transport in Docker, and five `aog-noded`
+edges register + heartbeat into it — one `docker compose up` brings the whole thing
+up formed.
+- **`deployment/loom-harness/` (new): `docker-compose.yml` + `cluster-init.sh` +
+  `README.md`.** 5× `aogd` (cp1..cp5, one Raft voter each) + 5× `aog-noded`
+  (edge1..edge5) + dev OpenBao, all from the VH4 `loom-harness:vh4` image (no rebuild
+  — one image, one binary per service). A one-shot `cluster-init` forms the cluster
+  from cp1 (initialize → add-learner ×4 over the wire → change-membership), gated on
+  every cp being `/healthz`-healthy; the edges self-register once it completes. cp1's
+  admin API is published on host `:4601`. YAML anchors keep the cp/edge definitions
+  DRY; the init script is `\r`-stripped before `sh` so a CRLF checkout can't break it.
+- **Verify / gate (live, `docker compose up -d --wait`):** all 11 containers reach
+  healthy; `cluster-init` forms the 5-voter cluster and reports `leader = 1`;
+  `cp1/admin/leader` confirms an elected leader; and **all 5 edges read back `Ready`**
+  from the control-plane store via `cp1/admin/get Node/edge{1..5}` — a real
+  containerized consensus + registration estate over sockets. **Commit:** `LOOM-VH5`.
+- **VH5b — trust hardening (NEXT, not in this commit):** authenticated `aog-apiserver`
+  CRUD (via a `pub AppState::from_raft` seam), per-node mTLS on the `aog-wire`
+  transport (doctrine I-3), and the OpenBao-provisioned anchor + `Sealer`/
+  `Authenticator`. Until VH5b the admin API is unauthenticated and the wire transport
+  is plain HTTP (consistent with VH2/VH3); the estate topology + OpenBao service are
+  in place for it.
+
 ---
 
-**Harness progress: VH1–VH4 done.** Wire transport (VH1), the control-plane daemon
-(VH2), the edge/worker daemon (VH3), and a slim container image carrying both (VH4)
-are done — the daemons run over sockets and in Docker. **Next: VH5** — the 5-CP +
-5-edge `docker-compose` estate + OpenBao + per-node mTLS certs, and the VH5 trust
-hookup (authenticated `aog-apiserver` CRUD via a new `AppState::from_raft` seam +
-`Sealer`/`Authenticator` + OpenBao mount) → VH6 real network-partition tooling; then
-the live gates (V4 split-brain / V5 kill-under-scale / V7 chaos+soak / V8 scale / V10
-revocation SLO) run on that estate.
+**Harness progress: VH1–VH5 done** (VH5b trust hardening pending). The wire transport
+(VH1), control-plane daemon (VH2), edge daemon (VH3), container image (VH4), and the
+live 5-CP + 5-edge Docker estate (VH5) are up — consensus forms and edges register
+over real sockets in containers. **Next: VH6** — real network-partition tooling
+(`docker network` disconnect/heal) over that estate; then the live gates (V4
+split-brain / V5 kill-under-scale / V7 chaos+soak / V8 scale / V10 revocation SLO),
+plus the in-process V6 (attested scheduling) / V9 (weave overhead). VH5b (auth CRUD +
+mTLS + OpenBao anchor) hardens the trust surface in parallel.

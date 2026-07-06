@@ -1,0 +1,141 @@
+name: loom-harness
+
+# Loom Phase-V conformance estate (VH5): a 5-node aogd control plane (Raft over the
+# aog-wire transport) + 5 aog-noded edges + OpenBao (dev), from the VH4
+# loom-harness image. `cluster-init` forms the 5-voter cluster from cp1; the edges
+# self-register once it completes. This is the live estate the V4/V5/V7/V8/V10 gates
+# run on. Dev-mode OpenBao — NOT production.
+
+x-aogd: &aogd
+  image: loom-harness:vh4
+  command: ["/usr/local/bin/aogd"]
+  healthcheck:
+    test: ["CMD", "curl", "-sf", "http://127.0.0.1:4600/healthz"]
+    interval: 2s
+    timeout: 2s
+    retries: 40
+  restart: unless-stopped
+
+x-edge: &edge
+  image: loom-harness:vh4
+  command: ["/usr/local/bin/aog-noded"]
+  healthcheck:
+    test: ["CMD", "curl", "-sf", "http://127.0.0.1:5600/healthz"]
+    interval: 2s
+    timeout: 2s
+    retries: 40
+  restart: unless-stopped
+
+services:
+  openbao:
+    image: openbao/openbao:latest
+    cap_add: [IPC_LOCK]
+    command: server -dev -dev-root-token-id=root -dev-listen-address=0.0.0.0:8200
+    healthcheck:
+      test: ["CMD", "bao", "status", "-address=http://127.0.0.1:8200"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  cp1:
+    <<: *aogd
+    environment:
+      AOGD_NODE_ID: "1"
+      AOGD_DATA_DIR: "/tmp/aogd"
+      AOGD_LISTEN: "0.0.0.0:4600"
+      AOGD_ADVERTISE: "http://cp1:4600"
+    ports: ["4601:4600"]
+
+  cp2:
+    <<: *aogd
+    environment:
+      AOGD_NODE_ID: "2"
+      AOGD_DATA_DIR: "/tmp/aogd"
+      AOGD_LISTEN: "0.0.0.0:4600"
+      AOGD_ADVERTISE: "http://cp2:4600"
+
+  cp3:
+    <<: *aogd
+    environment:
+      AOGD_NODE_ID: "3"
+      AOGD_DATA_DIR: "/tmp/aogd"
+      AOGD_LISTEN: "0.0.0.0:4600"
+      AOGD_ADVERTISE: "http://cp3:4600"
+
+  cp4:
+    <<: *aogd
+    environment:
+      AOGD_NODE_ID: "4"
+      AOGD_DATA_DIR: "/tmp/aogd"
+      AOGD_LISTEN: "0.0.0.0:4600"
+      AOGD_ADVERTISE: "http://cp4:4600"
+
+  cp5:
+    <<: *aogd
+    environment:
+      AOGD_NODE_ID: "5"
+      AOGD_DATA_DIR: "/tmp/aogd"
+      AOGD_LISTEN: "0.0.0.0:4600"
+      AOGD_ADVERTISE: "http://cp5:4600"
+
+  cluster-init:
+    image: loom-harness:vh4
+    command: ["sh", "-c", "tr -d '\\r' < /init/cluster-init.sh | sh"]
+    volumes: ["./cluster-init.sh:/init/cluster-init.sh:ro"]
+    depends_on:
+      cp1: { condition: service_healthy }
+      cp2: { condition: service_healthy }
+      cp3: { condition: service_healthy }
+      cp4: { condition: service_healthy }
+      cp5: { condition: service_healthy }
+    restart: "no"
+
+  edge1:
+    <<: *edge
+    environment:
+      AOG_NODE_NAME: "edge1"
+      AOG_NODE_CONTROL_PLANE: "http://cp1:4600"
+      AOG_NODE_LISTEN: "0.0.0.0:5600"
+      AOG_NODE_HEARTBEAT_SECS: "2"
+    depends_on:
+      cluster-init: { condition: service_completed_successfully }
+
+  edge2:
+    <<: *edge
+    environment:
+      AOG_NODE_NAME: "edge2"
+      AOG_NODE_CONTROL_PLANE: "http://cp1:4600"
+      AOG_NODE_LISTEN: "0.0.0.0:5600"
+      AOG_NODE_HEARTBEAT_SECS: "2"
+    depends_on:
+      cluster-init: { condition: service_completed_successfully }
+
+  edge3:
+    <<: *edge
+    environment:
+      AOG_NODE_NAME: "edge3"
+      AOG_NODE_CONTROL_PLANE: "http://cp1:4600"
+      AOG_NODE_LISTEN: "0.0.0.0:5600"
+      AOG_NODE_HEARTBEAT_SECS: "2"
+    depends_on:
+      cluster-init: { condition: service_completed_successfully }
+
+  edge4:
+    <<: *edge
+    environment:
+      AOG_NODE_NAME: "edge4"
+      AOG_NODE_CONTROL_PLANE: "http://cp1:4600"
+      AOG_NODE_LISTEN: "0.0.0.0:5600"
+      AOG_NODE_HEARTBEAT_SECS: "2"
+    depends_on:
+      cluster-init: { condition: service_completed_successfully }
+
+  edge5:
+    <<: *edge
+    environment:
+      AOG_NODE_NAME: "edge5"
+      AOG_NODE_CONTROL_PLANE: "http://cp1:4600"
+      AOG_NODE_LISTEN: "0.0.0.0:5600"
+      AOG_NODE_HEARTBEAT_SECS: "2"
+    depends_on:
+      cluster-init: { condition: service_completed_successfully }
