@@ -27,6 +27,9 @@ jobs:
       - name: Verify lock-file parity
         run: bash scripts/verify-lock-parity.sh .
 
+      - name: Security route-policy gate
+        run: bash .integrity/scripts/route-policy-check.sh
+
       - name: Lint Dockerfile (hadolint)
         uses: hadolint/hadolint-action@v3.1.0
         with:
