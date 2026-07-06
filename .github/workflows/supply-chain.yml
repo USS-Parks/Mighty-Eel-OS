@@ -38,9 +38,13 @@ jobs:
       id-token: write # cosign keyless (OIDC)
     env:
       REGISTRY: ghcr.io
-      IMAGE: ghcr.io/${{ github.repository }}/im-appliance
     steps:
       - uses: actions/checkout@v4
+
+      - name: Set lowercase image name
+        # ghcr / Docker require a lowercase repository; github.repository keeps the
+        # org's original case (USS-Parks), so lowercase it before any build/push.
+        run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}/im-appliance" >> "$GITHUB_ENV"
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
