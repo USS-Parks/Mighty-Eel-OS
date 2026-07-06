@@ -893,3 +893,120 @@ pub async fn revocation_to_denial_slo(replicas: u64, iterations: usize) -> Resul
         "revocation-to-denial across {replicas} replicas over {iterations} revocations: p50 {p50:?}, p99 {p99:?}, worst {worst:?} — all ≤ {slo:?} SLO; a stale snapshot fails closed (I-9)"
     ))
 }
+
+/// V7 — chaos + soak (control-plane self-healing + rollout determinism under
+/// continuous chaos). On a `replicas`-node estate, run `rounds` kill/heal cycles:
+/// each round isolates one random node (never a quorum), commits a deterministic
+/// rollout step through a confirmed leader (the fenced node serves none), then
+/// heals the node. Prove every round that a leader re-emerges within SLO and the
+/// healed node rejoins and catches up; prove at the end that every replica
+/// converged to the ONE deterministic rollout end state with no acknowledged
+/// write lost — self-healing + determinism under chaos.
+///
+/// Test-only, like V9/V10: the control-plane leg of bars 4/5 on real openraft. The
+/// data-plane leg (the scheduler evicting a dead node's `Placement`s and
+/// re-placing them, minting/revoking runtime tokens in OpenBao) is the live
+/// estate's — `deployment/loom-harness/gates/v7-chaos-soak.sh` plus the
+/// `live_node` / `live_scheduler` controller tests — so bars 4/5 stay registered
+/// against V7 rather than asserted here.
+#[cfg(test)]
+pub async fn chaos_soak(replicas: u64, rounds: usize, seed: u64) -> Result<String, String> {
+    let heal_slo = Duration::from_secs(10);
+    let (cluster, nodes) = spawn_cluster(replicas, "loom-conformance-chaossoak").await?;
+    let mut prng = SplitMix64::new(seed);
+    // The deterministic rollout: step r sets its key to v{r}. The end state is a
+    // pure function of `rounds`, independent of which node was killed when.
+    let mut rollout: Vec<(String, String)> = Vec::with_capacity(rounds);
+
+    for r in 0..rounds {
+        // Kill one node (isolate exactly one — quorum is never broken).
+        let victim = prng.below(replicas) + 1;
+        let vi = usize::try_from(victim - 1).unwrap_or(0);
+        cluster.isolate(victim);
+
+        // Self-healing #1: a leader re-emerges within SLO despite the kill.
+        let deadline = Instant::now() + heal_slo;
+        let li = loop {
+            if let Some(i) = confirmed_leader(&nodes).await {
+                break i;
+            }
+            if Instant::now() >= deadline {
+                return Err(format!(
+                    "round {r}: no leader re-emerged within {heal_slo:?} after killing node {victim}"
+                ));
+            }
+            tokio::time::sleep(Duration::from_millis(25)).await;
+        };
+
+        // Commit the deterministic rollout step through the confirmed leader.
+        let key = format!("RolloutPlan/step-{r:04}");
+        let value = format!("v{r}");
+        let resp = nodes[li]
+            .write(Op::Put {
+                key: key.clone(),
+                value: value.clone().into_bytes(),
+                expected: Precondition::Any,
+            })
+            .await
+            .map_err(|e| format!("round {r}: rollout step write failed: {e:?}"))?;
+        if !matches!(resp, RaftResponse::Applied { .. }) {
+            return Err(format!("round {r}: rollout step not applied: {resp:?}"));
+        }
+        rollout.push((key.clone(), value.clone()));
+
+        // Heal the killed node.
+        cluster.heal(victim);
+
+        // Self-healing #2: the healed node rejoins and catches up to the latest
+        // committed step within SLO (Raft log order => latest implies all prior).
+        let deadline = Instant::now() + heal_slo;
+        loop {
+            let got = nodes[vi]
+                .get(&key)
+                .await
+                .map_err(|e| format!("round {r}: catch-up read failed: {e:?}"))?;
+            if got.map(|v| v.value) == Some(value.clone().into_bytes()) {
+                break;
+            }
+            if Instant::now() >= deadline {
+                return Err(format!(
+                    "round {r}: healed node {victim} did not catch up to step {r} within {heal_slo:?}"
+                ));
+            }
+            tokio::time::sleep(Duration::from_millis(25)).await;
+        }
+    }
+
+    // Determinism + durability: heal all, let a stable leader form, then assert
+    // EVERY replica holds EVERY acknowledged step at its exact value — the one
+    // deterministic end state, no lost update from any kill.
+    cluster.heal_all();
+    let deadline = Instant::now() + heal_slo;
+    while confirmed_leader(&nodes).await.is_none() {
+        if Instant::now() >= deadline {
+            return Err("no stable leader after healing the estate".to_owned());
+        }
+        tokio::time::sleep(Duration::from_millis(25)).await;
+    }
+    for (idx, node) in nodes.iter().enumerate() {
+        for (k, v) in &rollout {
+            let got = node
+                .get(k)
+                .await
+                .map_err(|e| format!("final read failed: {e:?}"))?;
+            match got {
+                Some(ver) if ver.value == v.as_bytes() => {}
+                other => {
+                    return Err(format!(
+                        "replica {} diverged: step {k} = {other:?}, want {v} — a kill lost or corrupted committed state",
+                        idx as u64 + 1
+                    ));
+                }
+            }
+        }
+    }
+
+    Ok(format!(
+        "{rounds} kill/heal cycles on {replicas} replicas: a leader re-emerged within {heal_slo:?} each round, every killed node rejoined and caught up, and all replicas converged to the identical {rounds}-step rollout end state — self-healing + deterministic under chaos, no committed loss"
+    ))
+}

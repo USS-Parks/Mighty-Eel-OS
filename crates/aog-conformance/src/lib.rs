@@ -286,4 +286,19 @@ mod tests {
             "V10 revocation-to-denial SLO failed: {result:?}"
         );
     }
+
+    #[tokio::test]
+    #[allow(clippy::print_stdout)] // a soak gate surfaces its result summary
+    async fn v7_chaos_soak() {
+        // V7 gate (control-plane leg of bars 4/5): a 5-node estate survives a
+        // soak of 12 kill/heal cycles — a leader re-emerges within SLO each round,
+        // every killed node rejoins + catches up, and all replicas converge to the
+        // one deterministic rollout end state (no committed loss). The data-plane
+        // workload-reschedule leg is the live estate's (v7-chaos-soak.sh).
+        let result = crate::bars::chaos_soak(5, 12, 0x0C1A_05EE).await;
+        if let Ok(detail) = &result {
+            println!("V7: {detail}");
+        }
+        assert!(result.is_ok(), "V7 chaos+soak failed: {result:?}");
+    }
 }
