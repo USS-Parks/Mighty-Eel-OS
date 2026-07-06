@@ -13,5 +13,11 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
 
+[dev-dependencies]
+fabric-token = { path = "../fabric-token" }
+fabric-crypto = { path = "../fabric-crypto" }
+fabric-contracts = { path = "../fabric-contracts" }
+chrono = { workspace = true }
+
 [lints]
 workspace = true

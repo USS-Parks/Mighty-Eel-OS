@@ -184,6 +184,10 @@ version = "0.1.0"
 dependencies = [
  "aog-controller",
  "aog-store",
+ "chrono",
+ "fabric-contracts",
+ "fabric-crypto",
+ "fabric-token",
  "serde",
  "serde_json",
  "tokio",
