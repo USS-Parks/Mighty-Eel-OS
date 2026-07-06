@@ -125,10 +125,17 @@ dropping the `/v1/tokens/attenuate` row makes the gate exit 1 and name the
 undeclared route; restoring returns exit 0. Evidence:
 `test-evidence/security-remediation/M0/route-inventory/`.
 
-Notes: no GitHub Actions workflow exists (`.github/` is empty), so the gate rides
-the pre-push hook (the repo's Layer-3 owner), not a CI YAML; the script is
-CI-portable. The automated gate covers axum HTTP route literals; gRPC/SSE/WS/CLI
-are inventoried but not yet auto-gated (F-phase hardening).
+Notes: the gate is wired into GitHub Actions (`.github/workflows/ci.yml`,
+config-check job) and the pre-push hook. The automated gate covers axum HTTP route
+literals; gRPC/SSE/WS/CLI are inventoried but not yet auto-gated (F-phase).
+
+Correction (2026-07-06): the original 0.3 wrap wrongly claimed no CI exists —
+`.github/workflows/` holds 7 workflows (ci.yml, commit-msg-check, ship-validation,
+supply-chain, gpu-release, lamprey-validation, pages) both at the `6ffaaee`
+baseline and on main, including a live-OpenBao + Moto `wsf-live` gate. The error
+came from a `Glob('.github/**/*')` that does not list dot-directories, asserted
+without cross-checking `git ls-tree` / `ls` / `gh`. The route gate is now wired
+into ci.yml (this commit) in addition to pre-push.
 
 Commit: `edc9021`.
 

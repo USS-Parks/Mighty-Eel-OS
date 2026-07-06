@@ -75,4 +75,4 @@ Not network-reachable; each requires a local profile / backup path.
 
 - **Enforced now:** the 79-route HTTP policy file + pre-push gate — a new `.route(...)` with no policy row fails the push.
 - **Inventoried, not yet auto-gated:** gRPC methods, SSE, WebSocket, CLI. The gate is scoped to axum HTTP route literals; extending it to tonic services and clap subcommands is future hardening (F-phase).
-- **No GitHub Actions CI exists** in this repo (`.github/` is empty); all Layer-3 enforcement is via `core.hooksPath` hooks. The route gate rides pre-push next to the no-slop scan, and the script is CI-portable if a workflow is added later.
+- **Enforcement points:** the gate runs in GitHub Actions (`.github/workflows/ci.yml`, `config-check` job) and at pre-push (beside the no-slop scan). The repo has a full CI suite — `ci.yml` (check / clippy `-D warnings` / fmt / test / cargo-audit / cargo-deny), a live-OpenBao + Moto trust gate (`wsf-live`), plus ship-validation / supply-chain / commit-msg-check workflows — on top of the `core.hooksPath` hook layer.

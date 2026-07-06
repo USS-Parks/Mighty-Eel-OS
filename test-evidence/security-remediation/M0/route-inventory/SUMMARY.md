@@ -7,9 +7,8 @@ extraction, so it is provably complete against source).
 - Positive (current tree): `route-policy: OK — 79 routes declared`. exit 0.
 - Negative control: dropped the `/v1/tokens/attenuate` row -> gate exit 1 naming
   the undeclared route (`+ /v1/tokens/attenuate`). Restored -> exit 0.
-- Enforcement: wired at pre-push (`.integrity/hooks/pre-push`) beside the no-slop
-  full-tree scan. No GitHub Actions workflow exists in this repo (`.github/` empty);
-  the script is CI-portable if one is added.
+- Enforcement: GitHub Actions (`.github/workflows/ci.yml`, `config-check` job) plus
+  the pre-push hook (`.integrity/hooks/pre-push`) beside the no-slop full-tree scan.
 
 Extraction: perl slurp-mode (multi-line aware), scanning `crates/wsf-api`,
 `crates/aog-gateway`, `crates/aog-approvals`, `crates/aog-toolproxy`, `mai-api`;
