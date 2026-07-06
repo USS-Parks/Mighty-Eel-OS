@@ -1585,3 +1585,49 @@ gates ran green vs a live OpenBao (Docker). NOT pushed/merged — awaits Basho.
 Next milestone: **Summit-Conformance (Phase V)** — the gated "Kubernetes-grade"
 proof (conformance suite + chaos/soak/scale + the containerized split-brain &
 kill-switch-under-scale harness).
+
+---
+
+## Phase V — Summit-Conformance (the gated "as good as Kubernetes" proof)
+
+**Milestone:** Summit-Conformance — the final M3 milestone; green Phase V is the
+precondition to claim "Kubernetes-grade, woven" externally (addendum A1.12 bar 8 /
+A5). STS approved 2026-07-05 (full V1–V11, aggressive profile). Worktree
+`session/LOOM-5` off `main` `259737a` (M3c).
+
+**V-start targets (fixed now so V8/V9/V10 are falsifiable, per A4) — aggressive:**
+- Control plane: **5** Raft voters. Edge nodes: **5** `aog-node`. Workloads: **100**.
+- V9 weave-overhead: **p99 ≤ 1 ms** (all per-action checks live; met by local
+  crypto, never by skipping a check — Doctrine I-3).
+- V10 revocation-to-denial ("the kill number"): **p99 ≤ 3 s** across all replicas;
+  a replica past freshness-TTL fails closed (Doctrine I-9 / RC-KILL).
+- Governing contract: `AOG-WSF-ROBUSTNESS-AND-ZERO-TRUST-DOCTRINE.md` (I-1..I-9);
+  the D9 RC suite lands at V11.
+- Extended no-mock-only (A3.2): the consensus / scheduling / admission /
+  node-lifecycle / kill-under-scale bars each ship ≥1 test against a live
+  ≥3-CP + ≥2-node Docker harness + live OpenBao with **real** partitions — the
+  5+5 estate is the aggressive-profile harness.
+
+### V1 — `aog-conformance` suite — DONE
+The executable conformance framework + runnable suite: the analog of the K8s
+conformance tests, scoped to AOG kinds. `run()` executes the A1.12 bars against a
+reference estate and returns a serializable `ConformanceReport`; the
+`aog-conformance` bin emits it as JSON and exits non-zero on any failure, so a
+customer or CI lane can gate on it directly.
+- **`crates/aog-conformance` (new).** `BarId` (A1.12 bars 1–8), `BarStatus`
+  {Pass, Fail, Pending}, `BarReport`, `ConformanceReport` (`is_green` /
+  `is_summit_ready`). Bar 2 (linearizable writes) is asserted green in-process
+  against the real `aog-store` Raft state machine: two compare-and-sets pinned to
+  one base revision — the first commits (`RaftResponse::Applied`), the second is
+  rejected stale (`RaftResponse::Rejected`), the committed value is the winner's,
+  and the global revision advances by exactly one. No lost update.
+- **Honest coverage (CANON §11):** the remaining bars are *registered* against the
+  Phase-V prompt that implements them on the live harness (bar 1 → V2, bar 3 → V4,
+  bar 7 → V5, bars 4/5 → V7, bar 6 → V8) and reported `pending` — never a pass the
+  suite did not run. `is_summit_ready()` requires zero pending (A5).
+- **Files:** `crates/aog-conformance/{Cargo.toml, src/lib.rs, src/bars.rs,
+  src/main.rs}`; workspace member added.
+- **Verify:** `cargo fmt` clean; `cargo clippy -p aog-conformance --all-targets
+  --no-deps -D warnings` clean; `cargo test -p aog-conformance` **1 passed** (suite
+  green, bar 2 asserted). **Gate:** suite green on the reference estate; each bar
+  carries an assertion or its owning prompt ✓. **Commit:** `LOOM-V1`.
