@@ -1833,13 +1833,26 @@ up formed.
   is plain HTTP (consistent with VH2/VH3); the estate topology + OpenBao service are
   in place for it.
 
+### VH6 — real network-partition tooling — DONE
+The substrate the partition gates need: cut any set of estate services off the compose
+network — a real partition, all peer connectivity gone — and heal them back.
+- **`deployment/loom-harness/partition.sh` (new).** `partition <svc>...` /
+  `heal <svc>...` over `docker network disconnect`/`connect`. The heal restores the
+  compose **service alias** (`--alias <svc>`): a plain `docker network connect` rejoins
+  the container but drops the `<service>` DNS name, so peers still can't resolve it —
+  the heal would silently half-work. (Caught in verification, fixed.) Cut nodes are
+  observed via `docker exec` (bypasses the network), never a published port.
+- **Verify / gate (live estate):** before — cp1 reaches cp5 (`/healthz`, exit 0);
+  after `partition cp5` — cp1 → cp5 is unreachable (curl exit 6, name unresolvable);
+  after `heal cp5` (alias restored) — cp1 → cp5 recovers within ~1 s. Real partition +
+  clean reconverge. **Commit:** `LOOM-VH6`.
+
 ---
 
-**Harness progress: VH1–VH5 done** (VH5b trust hardening pending). The wire transport
-(VH1), control-plane daemon (VH2), edge daemon (VH3), container image (VH4), and the
-live 5-CP + 5-edge Docker estate (VH5) are up — consensus forms and edges register
-over real sockets in containers. **Next: VH6** — real network-partition tooling
-(`docker network` disconnect/heal) over that estate; then the live gates (V4
-split-brain / V5 kill-under-scale / V7 chaos+soak / V8 scale / V10 revocation SLO),
-plus the in-process V6 (attested scheduling) / V9 (weave overhead). VH5b (auth CRUD +
+**Harness progress: VH1–VH6 done** (VH5b trust hardening pending). The full harness is
+built: wire transport (VH1), control-plane daemon (VH2), edge daemon (VH3), container
+image (VH4), the live 5-CP + 5-edge Docker estate (VH5), and real network-partition
+tooling (VH6). **Next: the gates** — V4 split-brain, V5 kill-under-scale, V7
+chaos+soak, V8 scale, V10 revocation-SLO on the live estate, plus in-process V6
+(attested scheduling) / V9 (weave overhead) and the V11 D9 RC suite. VH5b (auth CRUD +
 mTLS + OpenBao anchor) hardens the trust surface in parallel.
