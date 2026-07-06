@@ -270,4 +270,20 @@ mod tests {
         let result = crate::bars::scale_target(5, 100).await;
         assert!(result.is_ok(), "V8 scale target failed: {result:?}");
     }
+
+    #[tokio::test]
+    #[allow(clippy::print_stdout)] // an SLO gate surfaces its measured p50/p99
+    async fn v10_revocation_to_denial_slo() {
+        // V10 gate ("the kill number"): revocation-to-denial across all 5
+        // replicas has p99 <= 3s over 100 revocations, and a replica past its
+        // snapshot freshness window fails closed (doctrine I-9 / RC-KILL).
+        let result = crate::bars::revocation_to_denial_slo(5, 100).await;
+        if let Ok(detail) = &result {
+            println!("V10: {detail}");
+        }
+        assert!(
+            result.is_ok(),
+            "V10 revocation-to-denial SLO failed: {result:?}"
+        );
+    }
 }

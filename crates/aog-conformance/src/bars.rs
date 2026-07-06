@@ -792,3 +792,104 @@ pub async fn scale_target(replicas: u64, workloads: usize) -> Result<String, Str
         "{workloads} workloads across {replicas} replicas: ingested in {ingest:?}, reconciled to convergence in {reconcile:?} (< {slo:?} SLO), and every object is readable on every replica — scale target met"
     ))
 }
+
+/// Nearest-rank percentile `p` (1..=100) over an ascending-sorted slice. Integer
+/// math — no float casts, so it is exact and clippy-clean.
+#[cfg(test)]
+fn percentile(sorted: &[Duration], p: usize) -> Duration {
+    if sorted.is_empty() {
+        return Duration::ZERO;
+    }
+    let rank = (sorted.len() * p).div_ceil(100).max(1);
+    sorted[rank.min(sorted.len()) - 1]
+}
+
+/// V10 — revocation-to-denial SLO ("the kill number"). Over `iterations` rounds
+/// on a `replicas`-node estate, publish a signed revocation through the leader and
+/// time how long until **every** replica's kill switch denies the token, reading
+/// its own Raft-replicated committed state. The gate is p99 ≤ 3 s across all
+/// replicas (aggressive profile); a replica past its snapshot's freshness window
+/// fails closed even for a live token (doctrine I-9 / RC-KILL).
+///
+/// Test-only, like the V9 weave-overhead gate: an SLO measurement, not one of the
+/// A1.12 correctness bars the shipped suite (`run`) asserts.
+#[cfg(test)]
+pub async fn revocation_to_denial_slo(replicas: u64, iterations: usize) -> Result<String, String> {
+    let slo = Duration::from_secs(3);
+
+    let (_cluster, nodes) = spawn_cluster(replicas, "loom-conformance-revslo").await?;
+    let anchor = RustCryptoMlDsa87::generate("loom-estate-anchor")
+        .map_err(|e| format!("anchor keygen failed: {e}"))?;
+    let anchor_pk = anchor.public_key().to_vec();
+
+    let mut samples: Vec<Duration> = Vec::with_capacity(iterations);
+    for i in 0..iterations {
+        let token = format!("tok-round-{i:05}");
+        let now = Utc::now();
+        let expires = now + ChronoDuration::days(3650);
+
+        // The kill number: from just before publish until every replica denies.
+        let t0 = Instant::now();
+        publish_revocation(&nodes, &anchor, &[&token], now, expires).await?;
+        let hard_cap = t0 + Duration::from_secs(30);
+        loop {
+            let mut all_denied = true;
+            for node in &nodes {
+                if kill_switch(node, &anchor_pk, &token, now).await? != KillDecision::DenyRevoked {
+                    all_denied = false;
+                    break;
+                }
+            }
+            if all_denied {
+                break;
+            }
+            if Instant::now() >= hard_cap {
+                return Err(format!(
+                    "round {i}: the revocation was not denied on every replica within 30 s"
+                ));
+            }
+            tokio::time::sleep(Duration::from_millis(2)).await;
+        }
+        samples.push(t0.elapsed());
+    }
+
+    samples.sort_unstable();
+    let p50 = percentile(&samples, 50);
+    let p99 = percentile(&samples, 99);
+    let worst = *samples.last().unwrap_or(&Duration::ZERO);
+
+    // I-9 freshness fail-closed: publish a snapshot already past its expiry; every
+    // replica must then deny even a live (un-revoked) token — a stale replica
+    // cannot prove non-revocation, so it fails closed.
+    let past = Utc::now();
+    let issued = past - ChronoDuration::hours(2);
+    let expired = past - ChronoDuration::hours(1);
+    publish_revocation(&nodes, &anchor, &[], issued, expired).await?;
+    for (i, node) in nodes.iter().enumerate() {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            if kill_switch(node, &anchor_pk, "tok-live", past).await?
+                == KillDecision::DenyFailClosed
+            {
+                break;
+            }
+            if Instant::now() >= deadline {
+                return Err(format!(
+                    "replica {} did not fail closed on a stale snapshot (I-9)",
+                    i as u64 + 1
+                ));
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    }
+
+    if p99 > slo {
+        return Err(format!(
+            "revocation-to-denial p99 {p99:?} exceeds the {slo:?} SLO (p50 {p50:?}, worst {worst:?}) over {iterations} revocations across {replicas} replicas"
+        ));
+    }
+
+    Ok(format!(
+        "revocation-to-denial across {replicas} replicas over {iterations} revocations: p50 {p50:?}, p99 {p99:?}, worst {worst:?} — all ≤ {slo:?} SLO; a stale snapshot fails closed (I-9)"
+    ))
+}
