@@ -3,19 +3,24 @@
 //! pass or `Err(detail)` on fail — never a panic, so the suite always produces a
 //! full report.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::future::Future;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use aog_controller::{Action, AlwaysLeader, Controller, ReconcileError, Reconciler};
-use aog_store::raft::RaftNode;
 use aog_store::raft::types::RaftResponse;
+use aog_store::raft::{Cluster, RaftNode};
 use aog_store::{Op, Precondition};
 
-/// A fresh, empty scratch dir for a single check's Raft state.
+/// A fresh, unique scratch dir for a single check's Raft state — unique per call
+/// (process id + a monotonic counter) so concurrently-running tests never share a
+/// redb file, which would fail to acquire its lock.
 fn scratch(name: &str) -> std::path::PathBuf {
-    let dir = std::env::temp_dir().join(name);
+    static SEQ: AtomicU64 = AtomicU64::new(0);
+    let seq = SEQ.fetch_add(1, Ordering::Relaxed);
+    let dir = std::env::temp_dir().join(format!("{name}-{}-{seq}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     dir
 }
@@ -313,5 +318,172 @@ pub async fn idempotent_reconcile(histories: usize, seed: u64) -> Result<String,
 
     Ok(format!(
         "{histories} randomized delivery histories (reorder + duplicate + {overflow_runs} overflow-drop) all converged to the one authoritative end state; zero divergence"
+    ))
+}
+
+/// The index (into `nodes`) of a node that currently confirms quorum leadership,
+/// or `None` if none can right now (e.g. mid-election). A confirmed leader is
+/// authoritative — a fenced minority never confirms — so writing only here makes
+/// a stale allow impossible by construction.
+async fn confirmed_leader(nodes: &[Arc<RaftNode>]) -> Option<usize> {
+    for (i, node) in nodes.iter().enumerate() {
+        if node.confirm_leadership(Duration::from_millis(200)).await {
+            return Some(i);
+        }
+    }
+    None
+}
+
+fn parse_counter(bytes: &[u8]) -> Option<u64> {
+    std::str::from_utf8(bytes).ok().and_then(|s| s.parse().ok())
+}
+
+/// Bar 2 deepened (V3) — linearizability under concurrent clients + fault
+/// injection (Jepsen-style). `clients` tasks race compare-and-set *increments* of
+/// one counter through a real 3-node Raft cluster while a fault task repeatedly
+/// isolates then heals a single node (never a majority), forcing real leader
+/// failovers. Each committed increment is acknowledged. The register invariant:
+/// **acknowledged increments must be ≤ the final counter** — a lost update or a
+/// stale allow would push acks above the counter; only benign ambiguous in-flight
+/// commits raise the counter above acks. Clients write solely to a
+/// quorum-confirmed leader, so a fenced minority never serves an allow.
+pub async fn linearizable_under_faults(
+    clients: usize,
+    attempts: usize,
+    seed: u64,
+) -> Result<String, String> {
+    const KEY: &str = "Counter/linearizability";
+
+    let dir = scratch("loom-conformance-linearizability");
+    let cluster = Arc::new(Cluster::new());
+    let mut nodes: Vec<Arc<RaftNode>> = Vec::with_capacity(3);
+    for id in 1..=3u64 {
+        nodes.push(Arc::new(
+            RaftNode::join(id, dir.join(format!("n{id}")), &cluster)
+                .await
+                .map_err(|e| format!("node {id} join failed: {e:?}"))?,
+        ));
+    }
+    nodes[0]
+        .initialize(BTreeSet::from([1]))
+        .await
+        .map_err(|e| format!("initialize failed: {e:?}"))?;
+    nodes[0]
+        .wait_for_leader(Duration::from_secs(10))
+        .await
+        .map_err(|e| format!("no leader: {e:?}"))?;
+    nodes[0]
+        .add_learner(2)
+        .await
+        .map_err(|e| format!("add learner 2: {e:?}"))?;
+    nodes[0]
+        .add_learner(3)
+        .await
+        .map_err(|e| format!("add learner 3: {e:?}"))?;
+    nodes[0]
+        .change_membership(BTreeSet::from([1, 2, 3]))
+        .await
+        .map_err(|e| format!("change membership: {e:?}"))?;
+
+    // Seed the counter at 0 on the authoritative leader.
+    {
+        let li = confirmed_leader(&nodes)
+            .await
+            .ok_or("no confirmed leader to seed the counter")?;
+        nodes[li]
+            .write(Op::Put {
+                key: KEY.to_owned(),
+                value: b"0".to_vec(),
+                expected: Precondition::Absent,
+            })
+            .await
+            .map_err(|e| format!("seed write failed: {e:?}"))?;
+    }
+
+    // Concurrent CAS-increment clients.
+    let mut client_handles = Vec::with_capacity(clients);
+    for _ in 0..clients {
+        let nodes_c: Vec<Arc<RaftNode>> = nodes.clone();
+        client_handles.push(tokio::spawn(async move {
+            let mut acks = 0u64;
+            for _ in 0..attempts {
+                let Some(li) = confirmed_leader(&nodes_c).await else {
+                    tokio::time::sleep(Duration::from_millis(5)).await;
+                    continue;
+                };
+                let leader = &nodes_c[li];
+                let Ok(Some(cur)) = leader.get(KEY).await else {
+                    continue;
+                };
+                let Some(n) = parse_counter(&cur.value) else {
+                    continue;
+                };
+                let resp = leader
+                    .write(Op::Put {
+                        key: KEY.to_owned(),
+                        value: (n + 1).to_string().into_bytes(),
+                        expected: Precondition::Revision(cur.mod_revision),
+                    })
+                    .await;
+                if matches!(resp, Ok(RaftResponse::Applied { .. })) {
+                    acks += 1;
+                }
+            }
+            acks
+        }));
+    }
+
+    // A fault task isolates then heals a single node repeatedly (never a majority),
+    // forcing real leader failovers while the clients race.
+    let fault_cluster = Arc::clone(&cluster);
+    let fault = tokio::spawn(async move {
+        let mut prng = SplitMix64::new(seed);
+        for _ in 0..10 {
+            let victim = prng.below(3) + 1;
+            fault_cluster.isolate(victim);
+            tokio::time::sleep(Duration::from_millis(40)).await;
+            fault_cluster.heal(victim);
+            tokio::time::sleep(Duration::from_millis(25)).await;
+        }
+    });
+
+    // Collect acknowledged increments and let the faults finish.
+    let mut total_acks = 0u64;
+    for h in client_handles {
+        total_acks += h
+            .await
+            .map_err(|e| format!("client task panicked: {e:?}"))?;
+    }
+    fault
+        .await
+        .map_err(|e| format!("fault task panicked: {e:?}"))?;
+
+    // Heal, let a stable leader form, and read the final committed counter.
+    cluster.heal_all();
+    let start = Instant::now();
+    let final_n = loop {
+        if let Some(i) = confirmed_leader(&nodes).await {
+            match nodes[i].get(KEY).await {
+                Ok(Some(v)) => {
+                    break parse_counter(&v.value).ok_or("counter is not a number")?;
+                }
+                Ok(None) => return Err("counter key vanished".to_owned()),
+                Err(e) => return Err(format!("final read failed: {e:?}")),
+            }
+        }
+        if start.elapsed() >= Duration::from_secs(10) {
+            return Err("no confirmed leader after healing".to_owned());
+        }
+        tokio::time::sleep(Duration::from_millis(25)).await;
+    };
+
+    if total_acks > final_n {
+        return Err(format!(
+            "linearizability violation: {total_acks} acknowledged increments exceed the final counter {final_n} — a lost update or a stale allow occurred"
+        ));
+    }
+    let ambiguous = final_n - total_acks;
+    Ok(format!(
+        "{clients} concurrent CAS-increment clients under injected partitions and real leader failovers: {total_acks} acknowledged increments ≤ final counter {final_n} — no lost update, no stale allow ({ambiguous} benign ambiguous in-flight commits)"
     ))
 }

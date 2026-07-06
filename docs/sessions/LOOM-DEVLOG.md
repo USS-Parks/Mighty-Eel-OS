@@ -1656,3 +1656,33 @@ history must converge to the store's one authoritative end state.
   --no-deps -D warnings` clean; standard-lane tests green (suite + 500-history
   fuzz, 46 s). **Gate:** randomized drop/dup/reorder histories converge; zero
   divergent end-states ✓ (500 in-lane; 10⁴ nightly). **Commit:** `LOOM-V2`.
+
+### V2 — 10⁴ confirmation
+The full 10⁴-history idempotency fuzz (`v2_reconcile_idempotency_fuzz_full_10k`,
+`#[ignore]`) ran green: **1 passed in 1655.90 s (~27.6 min), zero divergence** across
+10,000 randomized reorder/duplicate/overflow-drop delivery histories. The plan's V2
+gate is confirmed at full scale; routine runs use the 500-history standard lane.
+
+### V3 — Linearizability under faults, Jepsen-style (bar 2 deepened) — DONE
+Deepens bar 2 (V1's deterministic CAS) to linearizability under concurrent clients +
+real fault injection. `linearizable_under_faults(clients, attempts, seed)`: N client
+tasks race compare-and-set *increments* of one counter through a real 3-node Raft
+cluster while a fault task repeatedly isolates then heals a single node (never a
+majority), forcing real leader failovers. Clients write only to a quorum-confirmed
+leader (`confirm_leadership`), so a fenced minority never serves an allow. The
+register invariant — **acknowledged increments ≤ final counter** — catches a lost
+update or a stale allow (either would push acks above the counter); only benign
+in-flight ambiguity raises the counter above acks.
+- **Files:** `crates/aog-conformance/src/bars.rs` (`linearizable_under_faults`,
+  `confirmed_leader`, `parse_counter`); wired into suite bar 2 in `lib.rs` at a
+  modest in-suite scale (3 clients × 15). Dedicated gate
+  `v3_linearizability_under_faults` at 4 clients × 60.
+- **Test-isolation fix:** `scratch()` now yields a unique dir per call (pid +
+  monotonic counter) so concurrently-run tests never share a redb file — a latent
+  bug (fixed dir names) that surfaced once all bars ran in parallel; also hardens
+  V1/V2.
+- **Verify:** `cargo fmt` clean; `cargo clippy -p aog-conformance --all-targets
+  --no-deps -D warnings` clean; **all standard tests green (3 passed, 1 ignored) in
+  46.8 s** (suite incl. in-suite fault check + 500-fuzz + V3 gate). **Gate:**
+  concurrent clients under fault injection; no linearizability violation ✓.
+  **Commit:** `LOOM-V3`.

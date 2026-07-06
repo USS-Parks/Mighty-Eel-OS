@@ -139,7 +139,15 @@ fn asserted(id: BarId, result: Result<String, String>) -> BarReport {
 /// Run the conformance suite against the in-process reference estate.
 pub async fn run() -> ConformanceReport {
     let idempotent = bars::idempotent_reconcile(48, 0x0BAD_F00D).await;
-    let linearizable = bars::linearizable_writes().await;
+    // Bar 2: the deterministic CAS proof, then linearizability under concurrent
+    // clients + injected partitions (V3) at a modest in-suite scale.
+    let linearizable = match bars::linearizable_writes().await {
+        Ok(seq) => match bars::linearizable_under_faults(3, 15, 0x0A11_5EED).await {
+            Ok(conc) => Ok(format!("{seq}; under concurrency + faults, {conc}")),
+            Err(e) => Err(e),
+        },
+        Err(e) => Err(e),
+    };
     let mut reports = vec![
         asserted(BarId::IdempotentReconcile, idempotent),
         asserted(BarId::LinearizableWrites, linearizable),
@@ -223,5 +231,14 @@ mod tests {
             result.is_ok(),
             "V2 idempotency fuzz diverged at 10^4: {result:?}"
         );
+    }
+
+    #[tokio::test]
+    async fn v3_linearizability_under_faults() {
+        // V3 gate: concurrent CAS-increment clients under injected partitions and
+        // real leader failovers; acknowledged increments must be <= the final
+        // counter (no lost update, no stale allow).
+        let result = crate::bars::linearizable_under_faults(4, 60, 0x0A11_5EED).await;
+        assert!(result.is_ok(), "V3 linearizability violation: {result:?}");
     }
 }
