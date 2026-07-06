@@ -1878,3 +1878,18 @@ the majority commits. Doctrine I-4 / addendum H2 (A1.12 bar 3).
   majority (cp4) write → `{"Applied":{"revision":1103}}`; isolated cp1 write → `raft:
   has to forward request to: None, None` (no authoritative allow); post-heal all five
   report leader = 4. **V4 PASS.** **Commit:** `LOOM-V4`.
+
+### Post-review revisions (harness robustness) — DONE
+A critical read-through of the VH2–VH5 build surfaced two robustness gaps; both fixed
+and re-verified on the live estate.
+- **Leader-transparent admin writes (`crates/aogd/src/admin.rs`).** A write to a
+  follower was refused (openraft *ForwardToLeader*), so a client had to know which node
+  led — and an `aog-noded` edge hardcoded to `cp1` would silently stop heartbeating the
+  moment leadership moved off `cp1`. The admin `write` handler now forwards one hop to
+  the current leader (looked up from the Raft membership), guarded by an
+  `x-loom-forwarded` header so it cannot loop. *Verified live:* writes to each follower
+  `cp2..cp5` return `{"Applied":…}` (forwarded); edges stay 5/5 Ready regardless of
+  which node leads; the VH2 in-process gate + `clippy -D warnings` stay green.
+- **`cluster-init.sh` retries.** Each membership call retries with backoff (10× / 1 s)
+  so a transient hiccup can't abort formation under `set -e`. *Verified:* the estate
+  re-formed clean on the image-rebuild restart. **Commit:** `LOOM-REV1`.

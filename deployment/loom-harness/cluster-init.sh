@@ -6,8 +6,16 @@ set -eu
 
 CP1="http://cp1:4600"
 
-post() { # path json
-  curl -sf -X POST "$CP1$1" -H 'content-type: application/json' -d "$2" >/dev/null
+post() { # path json — retry with backoff; a transient hiccup must not abort formation
+  n=0
+  until curl -sf -X POST "$CP1$1" -H 'content-type: application/json' -d "$2" >/dev/null 2>&1; do
+    n=$((n + 1))
+    [ "$n" -ge 10 ] && {
+      echo "POST $1 still failing after $n tries" >&2
+      return 1
+    }
+    sleep 1
+  done
 }
 
 # cp health already gates this service (depends_on), but re-confirm the admin
