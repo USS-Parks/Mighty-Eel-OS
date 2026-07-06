@@ -286,6 +286,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "aog-noded"
+version = "0.1.0"
+dependencies = [
+ "aog-estate",
+ "aog-node",
+ "aogd",
+ "axum 0.8.9",
+ "chrono",
+ "fabric-contracts",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "aog-scheduler"
 version = "0.1.0"
 dependencies = [

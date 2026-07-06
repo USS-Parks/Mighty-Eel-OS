@@ -19,6 +19,7 @@ members = [
     "crates/aog-federation",
     "crates/aog-gateway",
     "crates/aog-node",
+    "crates/aog-noded",
     "crates/aog-scheduler",
     "crates/aog-store",
     "crates/aog-toolproxy",

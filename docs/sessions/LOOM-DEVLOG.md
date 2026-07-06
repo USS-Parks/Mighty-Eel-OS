@@ -1755,12 +1755,45 @@ mechanism VH1 exercised only from a test; VH2 is the daemon that exposes it.
   `/admin/leader`), and a committed leader write replicates to both followers — each
   read back through its own admin `get` ✓. **Commit:** `LOOM-VH2`.
 
+### VH3 — `aog-noded` edge/worker node daemon — DONE
+The worker side of the estate, made runnable: where VH2 runs the control plane, VH3
+runs the edge. `aog-noded` registers its `Node` with the control plane over the wire
+and heartbeats, so the control plane sees edges join and stay `Ready` — the N1/N2
+lifecycle over real sockets.
+- **`crates/aog-noded` (new, lib + bin).** `NodeAgent::new` builds the node's `Node`
+  (ring + attestation floor + capacity) and an `aogd::Client` to a control-plane
+  `aogd`; `report()` writes the `Node` with a fresh `Ready` heartbeat
+  (`aog_node::heartbeat::heartbeat`, N2) through the admin API (`Op::Put Node/<name>`,
+  last-writer-wins on its own key — the first call registers, each later call
+  heartbeats); `serve()` registers, then heartbeats on an interval while serving
+  `/healthz`. `NodeConfig::from_env` (`AOG_NODE_NAME` / `_CONTROL_PLANE` / `_LISTEN`
+  + optional `_TENANT` / `_RING` / `_HEARTBEAT_SECS`) drives the binary.
+- **Registration path (honest scope).** VH3 writes the `Node` through VH2's
+  unauthenticated admin API (raw store `Op`), consistent with VH2 deferring the trust
+  surface to VH5. The identity-verified path already built in Phase N
+  (`aog-node::registration` — anchor-signed leaf + `Registrar::admit`) wires in at
+  VH5 with per-node certs + OpenBao, alongside the authenticated `aog-apiserver` CRUD;
+  VH3 proves the edge joins and holds liveness over sockets first. Workload execution
+  (Placement watch + the N4 process driver) rides the same daemon in a later step.
+- **Reuse, no rebuild.** `aog-node` (`heartbeat`), `aog-estate`
+  (`Node`/`NodeSpec`/`NodeStatus`/`Capacity`), and `aogd::Client` (the wire admin
+  client VH2 built) — the node daemon is glue, not new mechanism.
+- **Files:** `crates/aog-noded/{Cargo.toml, src/{lib,main}.rs, tests/edge.rs}`;
+  workspace member added.
+- **Verify:** `cargo fmt -p aog-noded --check` clean; `cargo clippy -p aog-noded
+  --all-targets --no-deps -D warnings` clean; `cargo test -p aog-noded` **1 passed**
+  (the gate, 0.88 s); `cargo check --workspace` clean (additive, 0 regressions).
+- **Gate:** a bootstrapped `aogd` control plane + three `aog-noded` edge daemons on
+  loopback — each edge writes its `Node` and heartbeats through the admin API — and
+  the control plane sees all three `Ready` and **not stale** (`is_stale` false), read
+  back from its store ✓. **Commit:** `LOOM-VH3`.
+
 ---
 
-**Harness progress: VH1–VH2 done.** The wire transport (VH1) and the node daemon
-that runs on it (VH2) exist; a multi-node control plane now forms and replicates
-over sockets, driven through the daemon's admin API. Next: **VH3** — the `aog-node`
-edge daemon (the Ring-1/2/3 worker side) → VH4 Dockerfile → VH5 5+5 Compose +
-OpenBao + per-node mTLS certs → VH6 real network-partition tooling; then the live
+**Harness progress: VH1–VH3 done.** Wire transport (VH1), the control-plane daemon
+(VH2), and the edge/worker daemon (VH3) are all runnable; a control plane forms +
+replicates and edges register + heartbeat, all over real sockets. **Next: VH4** — the
+Dockerfile(s) for `aogd` + `aog-noded` → VH5 5+5 Compose + OpenBao + per-node mTLS
+certs (the long image build) → VH6 real network-partition tooling; then the live
 gates (V4 split-brain / V5 kill-under-scale / V7 chaos+soak / V8 scale / V10
 revocation SLO) run on that estate.
