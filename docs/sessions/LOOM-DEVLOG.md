@@ -1717,3 +1717,50 @@ carries over a real socket.
   per-node certs are generated; VH1 proves the consensus carries correctly first.
 - **Verify:** fmt + clippy (`aog-wire` + `aog-store`) `--all-targets --no-deps -D
   warnings` clean; wire-consensus test green. **Commit:** `LOOM-VH1`.
+
+### VH2 — `aogd` control-plane node daemon — DONE
+The runnable node daemon that turns VH1's wire transport into a *driveable* control
+plane: a `RaftNode` on `aog-wire` plus a thin admin API the containerized
+conformance harness (VH4+) forms and steers a cluster through. Membership is the
+mechanism VH1 exercised only from a test; VH2 is the daemon that exposes it.
+- **`crates/aogd` (new, lib + bin).** `Daemon::start` opens a `RaftNode` on the
+  `WireNetwork` transport (recover-only — it forms no cluster); `Daemon::app` merges
+  `aog-wire`'s Raft peer routes (`/raft/*`) with the admin router into one axum app.
+  `Config::from_env` (`AOGD_NODE_ID` / `AOGD_DATA_DIR` / `AOGD_LISTEN` + optional
+  `AOGD_ADVERTISE`, default `http://<listen>`) drives the `aogd` binary; it logs via
+  `tracing` (the workspace denies `print_*`).
+- **Admin API (`src/admin.rs`).** `POST /admin/{initialize,add-learner,change-membership,write,get}`
+  + `GET /admin/leader` + `GET /healthz`. Membership operations carry each peer's
+  real URL and are issued against the raw openraft handle (`RaftNode::raft()`): the
+  `RaftNode::{initialize,add_learner,change_membership}` wrappers address peers by an
+  empty id-only `BasicNode` — correct for the in-process `Cluster`, but the wire
+  transport reaches a peer by the URL in its `BasicNode`, so the daemon supplies it.
+  A node/raft failure is a fail-closed `500` carrying its reason (never a silent
+  success; doctrine D7).
+- **`Client` (`src/client.rs`).** The async harness client (form cluster / write /
+  get / leader / healthz); a non-2xx is surfaced as `ClientError::Status`, never
+  swallowed. The lib re-exports the store vocabulary a driver needs
+  (`Op`/`Precondition`/`Versioned`/`RaftResponse`).
+- **Deferred to VH5 (honest scope).** mTLS / sender-constraint (I-3), the
+  authenticated `aog-apiserver` CRUD, `Sealer`/`Authenticator` keys, and the OpenBao
+  mount. VH2 proves the cluster forms and replicates over real sockets end to end
+  through the daemon; the trust surface constrains that mechanism next.
+- **Files:** `crates/aogd/{Cargo.toml, src/{lib,api,admin,client,main}.rs,
+  tests/daemon.rs}`; workspace member added.
+- **Verify:** `cargo fmt -p aogd --check` clean; `cargo clippy -p aogd --all-targets
+  --no-deps -D warnings` clean; `cargo test -p aogd` **1 passed** (the gate, 1.52 s);
+  `cargo check --workspace` clean (additive, 0 regressions).
+- **Gate:** three `aogd` daemons on loopback, driven **only through the admin API**,
+  initialize, promote learners to voters over the wire, elect a leader (reported via
+  `/admin/leader`), and a committed leader write replicates to both followers — each
+  read back through its own admin `get` ✓. **Commit:** `LOOM-VH2`.
+
+---
+
+**Harness progress: VH1–VH2 done.** The wire transport (VH1) and the node daemon
+that runs on it (VH2) exist; a multi-node control plane now forms and replicates
+over sockets, driven through the daemon's admin API. Next: **VH3** — the `aog-node`
+edge daemon (the Ring-1/2/3 worker side) → VH4 Dockerfile → VH5 5+5 Compose +
+OpenBao + per-node mTLS certs → VH6 real network-partition tooling; then the live
+gates (V4 split-brain / V5 kill-under-scale / V7 chaos+soak / V8 scale / V10
+revocation SLO) run on that estate.

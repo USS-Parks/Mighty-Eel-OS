@@ -179,6 +179,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "aog-conformance"
+version = "0.1.0"
+dependencies = [
+ "aog-controller",
+ "aog-store",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "aog-controller"
 version = "0.1.0"
 dependencies = [
@@ -311,6 +322,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "aog-wire"
+version = "0.1.0"
+dependencies = [
+ "aog-store",
+ "axum 0.8.9",
+ "openraft",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "aogctl"
 version = "0.1.0"
 dependencies = [
@@ -324,6 +348,22 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.18",
  "tokio",
+]
+
+[[package]]
+name = "aogd"
+version = "0.1.0"
+dependencies = [
+ "aog-store",
+ "aog-wire",
+ "axum 0.8.9",
+ "openraft",
+ "reqwest",
+ "serde",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
