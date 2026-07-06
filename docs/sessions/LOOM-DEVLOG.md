@@ -1856,3 +1856,25 @@ tooling (VH6). **Next: the gates** — V4 split-brain, V5 kill-under-scale, V7
 chaos+soak, V8 scale, V10 revocation-SLO on the live estate, plus in-process V6
 (attested scheduling) / V9 (weave overhead) and the V11 D9 RC suite. VH5b (auth CRUD +
 mTLS + OpenBao anchor) hardens the trust surface in parallel.
+
+---
+
+## Phase V — Live gates (on the VH1–VH6 harness)
+
+The gates run against the live containerized estate (`deployment/loom-harness/`,
+`docker compose up -d --wait`); each is a committed script under
+`deployment/loom-harness/gates/`, exit 0 on PASS.
+
+### V4 — split-brain safety — PASS
+Real partition on the live 5-node estate (not a simulated one): the minority fences,
+the majority commits. Doctrine I-4 / addendum H2 (A1.12 bar 3).
+- **`deployment/loom-harness/gates/v4-split-brain.sh` (new).** Uses the VH6 tooling to
+  `partition cp1 cp2` (a 2-of-5 minority) off the control-plane network, then asserts
+  against the live estate via `docker exec`: the majority {cp3,cp4,cp5} (a quorum)
+  keeps a leader and a write to it **commits**; a write to the isolated minority node
+  cp1 does **not** commit (no leader — it forwards to `None`); then `heal` and the
+  cluster reconverges to one leader.
+- **Verify / gate (ran on the live estate, `bash …/v4-split-brain.sh`, exit 0):**
+  majority (cp4) write → `{"Applied":{"revision":1103}}`; isolated cp1 write → `raft:
+  has to forward request to: None, None` (no authoritative allow); post-heal all five
+  report leader = 4. **V4 PASS.** **Commit:** `LOOM-V4`.
