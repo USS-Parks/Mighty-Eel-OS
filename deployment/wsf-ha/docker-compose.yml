@@ -27,7 +27,8 @@ services:
     volumes:
       - openbao-data:/openbao/data
       - ./tls:/openbao/tls:ro
-    ports: ["8200:8200"]
+    # Trust core is internal-only: reachable by WSF services over the compose
+    # network, never host-published. Front it with your own authenticated ingress.
     restart: unless-stopped
 
   postgres:
@@ -60,8 +61,12 @@ services:
       WSF_MODE: production
       WSF_PG_URL: postgres://wsf@postgres/wsf
       WSF_OBJECTSTORE_URL: http://objectstore:9000
+      # Bind the internal compose network so replicas sit behind the load
+      # balancer. NOT host-published: the privileged routes (token issue /
+      # attenuate, seal / unseal, credential exchange, receipts) must reach the
+      # host only through an authenticated ingress, never a raw port mapping.
+      WSF_LISTEN: 0.0.0.0:8300
     depends_on: [openbao, postgres, objectstore]
-    ports: ["8300:8300"]
     deploy:
       replicas: 2
     restart: unless-stopped

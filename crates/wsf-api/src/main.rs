@@ -94,7 +94,10 @@ async fn run() -> Result<(), String> {
     let region = env_or("WSF_AWS_REGION", "us-east-1");
     let aws_endpoint = env_or("WSF_AWS_ENDPOINT", "https://sts.amazonaws.com");
     let cred_path = env_or("WSF_BROKER_CRED_PATH", "kv/data/broker/aws-root");
-    let listen = env_or("WSF_LISTEN", "0.0.0.0:8300");
+    // The privileged trust plane must not bind a public interface by default:
+    // loopback unless an operator explicitly widens WSF_LISTEN behind an
+    // authenticated ingress. The demo/appliance composes set WSF_LISTEN themselves.
+    let listen = env_or("WSF_LISTEN", "127.0.0.1:8300");
 
     let state = AppState {
         bridge: Arc::new(TrustBridge::new(

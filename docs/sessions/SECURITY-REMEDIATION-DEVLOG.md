@@ -57,4 +57,41 @@ Crate to finding map recorded for the trust-boundary phases:
 - AF-007 `crates/wsf-ledger`
 
 Verify: fmt clean; check green; clippy red on the pre-existing AQ-001 only; tests green.
+Commit: `21efec1`.
+
+### 0.2 — Emergency WSF exposure containment
+
+Objective: stop unauthenticated host access to the privileged WSF trust plane
+before the real authentication fix (Phase A) — contain by network exposure, not
+by new auth logic.
+
+Found: the code default and all three deployment composes exposed the privileged
+plane. `crates/wsf-api/src/main.rs` defaulted `WSF_LISTEN` to `0.0.0.0:8300`;
+`deployment/wsf-ha` (production/HA) host-published wsf-api (8300) and openbao
+(8200); `deployment/appliance` + `deployment/shadow` (dev-mode root-token demos)
+published wsf-api / gateway / console / openbao on 0.0.0.0.
+
+Changed:
+- main.rs default bind 0.0.0.0:8300 -> 127.0.0.1:8300 (production fail-safe;
+  explicit WSF_LISTEN widens it behind an ingress).
+- wsf-ha: removed the wsf-api + openbao host ports; wsf-api sets
+  WSF_LISTEN=0.0.0.0:8300 to bind the internal compose network for the LB only.
+- appliance + shadow: all host ports loopback-bound (127.0.0.1); headers marked
+  insecure opt-in demos.
+
+Verify: fmt PASS; cargo check --workspace PASS; clippy -p wsf-api PASS (no new
+lint; AQ-001 in mai-core still owned by Q1); test -p wsf-api PASS (0 crate-local
+tests; workspace suite was green at baseline, re-run at the M0 close). YAML valid
+for all three composes. Evidence: test-evidence/security-remediation/M0/containment/.
+
+Gate: an unauthenticated host request cannot reach token issue/attenuate, seal/
+unseal, credential exchange, or receipts in the production/HA posture — those
+routes are no longer host-published (static + config proof). The live black-box
+proof rides the Phase-A ingress gate (A5), once the authenticated ingress exists
+and images are built.
+
+Findings: AF-001/002/003/004/006/007 -> CONTAINED (network exposure removed;
+root fixes land in their phases). AF-005 untouched (its contain step is 0.5).
+AS-001 (floating images) not addressed here — owned by Q7.
+
 Commit: (pending — this change set).
