@@ -187,6 +187,7 @@ dependencies = [
  "chrono",
  "fabric-contracts",
  "fabric-crypto",
+ "fabric-revocation",
  "fabric-token",
  "serde",
  "serde_json",

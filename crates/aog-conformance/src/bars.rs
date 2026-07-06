@@ -13,6 +13,10 @@ use aog_controller::{Action, AlwaysLeader, Controller, ReconcileError, Reconcile
 use aog_store::raft::types::RaftResponse;
 use aog_store::raft::{Cluster, RaftNode};
 use aog_store::{Op, Precondition};
+use chrono::{DateTime, Duration as ChronoDuration, Utc};
+use fabric_crypto::Signer;
+use fabric_crypto::providers::{MlDsa87Verifier, RustCryptoMlDsa87};
+use fabric_revocation::{RevocationSnapshot, sign as sign_snapshot, verify as verify_snapshot};
 
 /// A fresh, unique scratch dir for a single check's Raft state — unique per call
 /// (process id + a monotonic counter) so concurrently-running tests never share a
@@ -485,5 +489,231 @@ pub async fn linearizable_under_faults(
     let ambiguous = final_n - total_acks;
     Ok(format!(
         "{clients} concurrent CAS-increment clients under injected partitions and real leader failovers: {total_acks} acknowledged increments ≤ final counter {final_n} — no lost update, no stale allow ({ambiguous} benign ambiguous in-flight commits)"
+    ))
+}
+
+// ---------------------------------------------------------------------------
+// Live-estate substrate shared by V5 / V7 / V8 / V10: a real, in-process,
+// multi-voter openraft cluster (the analog of the containerized 5-CP estate)
+// plus the signed-revocation kill switch every control-plane replica polls.
+// ---------------------------------------------------------------------------
+
+/// Spawn an `n`-voter in-process Raft cluster over one shared [`Cluster`]
+/// transport: each node runs real openraft (election, replication, commit), so a
+/// gate exercises the same consensus the live 5-CP estate does, in one process.
+/// Returns the transport handle (for fault injection) and the nodes, index 0 ==
+/// node 1. The caller drives writes through a [`confirmed_leader`].
+async fn spawn_cluster(n: u64, label: &str) -> Result<(Arc<Cluster>, Vec<Arc<RaftNode>>), String> {
+    let dir = scratch(label);
+    let cluster = Arc::new(Cluster::new());
+    let mut nodes: Vec<Arc<RaftNode>> = Vec::with_capacity(usize::try_from(n).unwrap_or(0));
+    for id in 1..=n {
+        nodes.push(Arc::new(
+            RaftNode::join(id, dir.join(format!("n{id}")), &cluster)
+                .await
+                .map_err(|e| format!("node {id} join failed: {e:?}"))?,
+        ));
+    }
+    nodes[0]
+        .initialize(BTreeSet::from([1]))
+        .await
+        .map_err(|e| format!("initialize failed: {e:?}"))?;
+    nodes[0]
+        .wait_for_leader(Duration::from_secs(10))
+        .await
+        .map_err(|e| format!("no leader: {e:?}"))?;
+    for id in 2..=n {
+        nodes[0]
+            .add_learner(id)
+            .await
+            .map_err(|e| format!("add learner {id}: {e:?}"))?;
+    }
+    nodes[0]
+        .change_membership((1..=n).collect())
+        .await
+        .map_err(|e| format!("change membership: {e:?}"))?;
+    Ok((cluster, nodes))
+}
+
+/// The KV key every gateway/control-plane replica's kill switch polls for the
+/// signed estate revocation snapshot (the R9 online path, on the Raft store).
+const REV_PATH: &str = "wsf/revocation/estate";
+
+/// A replica's kill-switch verdict on a presented token. Fail-closed (doctrine
+/// I-9): a missing, unverifiable, or stale snapshot denies rather than guesses.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum KillDecision {
+    Allow,
+    DenyRevoked,
+    DenyFailClosed,
+}
+
+/// Publish a signed revocation snapshot (revoking `tokens`) through the confirmed
+/// leader, so Raft replicates it to every replica's kill switch. `issued`/
+/// `expires` set the freshness window the replicas honor (I-9).
+async fn publish_revocation(
+    nodes: &[Arc<RaftNode>],
+    signer: &dyn Signer,
+    tokens: &[&str],
+    issued: DateTime<Utc>,
+    expires: DateTime<Utc>,
+) -> Result<(), String> {
+    let mut snapshot = RevocationSnapshot::new(
+        "loom-estate-revocation",
+        issued.to_rfc3339(),
+        expires.to_rfc3339(),
+    );
+    snapshot.revoked_tokens = tokens.iter().map(|t| (*t).to_owned()).collect();
+    let sealed = sign_snapshot(snapshot, signer).map_err(|e| format!("sign snapshot: {e}"))?;
+    let bytes = serde_json::to_vec(&sealed).map_err(|e| format!("encode snapshot: {e}"))?;
+    let li = confirmed_leader(nodes)
+        .await
+        .ok_or("no confirmed leader to publish the revocation")?;
+    nodes[li]
+        .write(Op::Put {
+            key: REV_PATH.to_owned(),
+            value: bytes,
+            expected: Precondition::Any,
+        })
+        .await
+        .map_err(|e| format!("publish write failed: {e:?}"))?;
+    Ok(())
+}
+
+/// Model one replica's kill switch reading its OWN committed state: pull the
+/// snapshot from `REV_PATH`, verify it under the estate `anchor_pk`, honor its
+/// freshness window at `now`, then check `token`. Every failure path denies.
+async fn kill_switch(
+    node: &RaftNode,
+    anchor_pk: &[u8],
+    token: &str,
+    now: DateTime<Utc>,
+) -> Result<KillDecision, String> {
+    let Some(v) = node
+        .get(REV_PATH)
+        .await
+        .map_err(|e| format!("kill-switch read failed: {e:?}"))?
+    else {
+        // No snapshot on this replica: it cannot prove the token is *not* revoked.
+        return Ok(KillDecision::DenyFailClosed);
+    };
+    let snapshot: RevocationSnapshot =
+        serde_json::from_slice(&v.value).map_err(|e| format!("snapshot decode failed: {e}"))?;
+    if verify_snapshot(&snapshot, &MlDsa87Verifier, anchor_pk).is_err() {
+        return Ok(KillDecision::DenyFailClosed); // tampered / wrong anchor
+    }
+    match DateTime::parse_from_rfc3339(&snapshot.expires_at) {
+        Ok(exp) if now <= exp.with_timezone(&Utc) => {}
+        _ => return Ok(KillDecision::DenyFailClosed), // stale (I-9)
+    }
+    if snapshot.is_token_revoked(token) {
+        Ok(KillDecision::DenyRevoked)
+    } else {
+        Ok(KillDecision::Allow)
+    }
+}
+
+/// Wait (bounded) until every replica's committed state carries a snapshot at
+/// `REV_PATH` — the revocation has fanned out to the whole estate.
+async fn await_replicated(nodes: &[Arc<RaftNode>], timeout: Duration) -> Result<(), String> {
+    let deadline = Instant::now() + timeout;
+    loop {
+        let mut present = 0usize;
+        for node in nodes {
+            let got = node
+                .get(REV_PATH)
+                .await
+                .map_err(|e| format!("replication read failed: {e:?}"))?;
+            present += usize::from(got.is_some());
+        }
+        if present == nodes.len() {
+            return Ok(());
+        }
+        if Instant::now() >= deadline {
+            return Err("revocation snapshot did not replicate to every replica".to_owned());
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+}
+
+/// Bar 7 (V5) — kill-switch-under-scale. Under estate scale (a store populated
+/// with `workloads` objects), a published revocation halts the next call on
+/// **every** replica: each of the `replicas` control-plane nodes, reading its own
+/// Raft-replicated committed state, denies the revoked token and still admits a
+/// live one — no replica misses the kill, and a snapshot that does not verify
+/// under the estate anchor fails closed (doctrine I-9). Real openraft replication
+/// + a real signed `fabric-revocation` snapshot under a real ML-DSA-87 anchor.
+pub async fn kill_switch_under_scale(replicas: u64, workloads: usize) -> Result<String, String> {
+    const REVOKED: &str = "tok-compromised";
+    const LIVE: &str = "tok-healthy";
+
+    let (_cluster, nodes) = spawn_cluster(replicas, "loom-conformance-killswitch").await?;
+    let anchor = RustCryptoMlDsa87::generate("loom-estate-anchor")
+        .map_err(|e| format!("anchor keygen failed: {e}"))?;
+    let anchor_pk = anchor.public_key().to_vec();
+
+    // Scale: populate the estate with `workloads` objects — the load the kill
+    // switch must stay correct under (bar 7 is kill-switch-*under-scale*).
+    {
+        let li = confirmed_leader(&nodes)
+            .await
+            .ok_or("no confirmed leader to load the estate")?;
+        for i in 0..workloads {
+            put(&nodes[li], &format!("Workload/scale-{i:05}"), "spec").await?;
+        }
+    }
+
+    // Publish the kill through the leader; wait for it to reach every replica.
+    let now = Utc::now();
+    let expires = now + ChronoDuration::days(3650);
+    publish_revocation(&nodes, &anchor, &[REVOKED], now, expires).await?;
+    await_replicated(&nodes, Duration::from_secs(10)).await?;
+
+    // Every replica must land the kill: revoked denied, live still admitted.
+    for (i, node) in nodes.iter().enumerate() {
+        let id = i as u64 + 1;
+        match kill_switch(node, &anchor_pk, REVOKED, now).await? {
+            KillDecision::DenyRevoked => {}
+            other => {
+                return Err(format!(
+                    "replica {id} missed the kill: the revoked token resolved to {other:?} (want DenyRevoked) — a replica served an authoritative allow"
+                ));
+            }
+        }
+        match kill_switch(node, &anchor_pk, LIVE, now).await? {
+            KillDecision::Allow => {}
+            other => {
+                return Err(format!(
+                    "replica {id} wrongly denied a live token → {other:?} (want Allow) — the kill switch is not a precise filter"
+                ));
+            }
+        }
+    }
+
+    // Adversarial: a snapshot signed by a rogue anchor must fail closed on every
+    // replica — the kill switch never trusts an unverified snapshot.
+    let rogue = RustCryptoMlDsa87::generate("rogue-anchor").map_err(|e| format!("{e}"))?;
+    publish_revocation(&nodes, &rogue, &[REVOKED], now, expires).await?;
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    for (i, node) in nodes.iter().enumerate() {
+        // Re-read may briefly lag; poll this replica until it reflects the rogue
+        // snapshot, then assert it fails closed under the real anchor.
+        let deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            if kill_switch(node, &anchor_pk, LIVE, now).await? == KillDecision::DenyFailClosed {
+                break;
+            }
+            if Instant::now() >= deadline {
+                return Err(format!(
+                    "replica {} trusted a rogue-signed snapshot (did not fail closed)",
+                    i as u64 + 1
+                ));
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    }
+
+    Ok(format!(
+        "under {workloads} estate objects, a signed revocation replicated to all {replicas} replicas; every replica denied the revoked token and admitted a live one, and a rogue-signed snapshot failed closed on all — no replica missed the kill"
     ))
 }

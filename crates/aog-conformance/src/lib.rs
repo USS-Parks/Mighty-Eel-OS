@@ -148,6 +148,10 @@ pub async fn run() -> ConformanceReport {
         },
         Err(e) => Err(e),
     };
+    // Bar 7 (V5): a published revocation halts the next call on every replica,
+    // under estate scale — asserted here at a modest in-suite scale; the full
+    // aggressive-profile gate (5 replicas × 100 objects) runs in `v5_*`.
+    let kill_switch = bars::kill_switch_under_scale(3, 20).await;
     let mut reports = vec![
         asserted(BarId::IdempotentReconcile, idempotent),
         asserted(BarId::LinearizableWrites, linearizable),
@@ -155,7 +159,7 @@ pub async fn run() -> ConformanceReport {
         pending(BarId::SelfHealing, "V7"),
         pending(BarId::RolloutDeterminism, "V7"),
         pending(BarId::ScaleTarget, "V8"),
-        pending(BarId::KillSwitchUnderScale, "V5"),
+        asserted(BarId::KillSwitchUnderScale, kill_switch),
     ];
     let any_fail = reports.iter().any(|b| b.status == BarStatus::Fail);
     reports.push(BarReport {
@@ -240,5 +244,18 @@ mod tests {
         // counter (no lost update, no stale allow).
         let result = crate::bars::linearizable_under_faults(4, 60, 0x0A11_5EED).await;
         assert!(result.is_ok(), "V3 linearizability violation: {result:?}");
+    }
+
+    #[tokio::test]
+    async fn v5_kill_switch_under_scale() {
+        // V5 gate (bar 7): under a 100-object estate, a signed revocation halts
+        // the next call on every one of the 5 control-plane replicas, a live
+        // token is still admitted, and a rogue-signed snapshot fails closed
+        // (aggressive profile: 5 replicas, 100 workloads).
+        let result = crate::bars::kill_switch_under_scale(5, 100).await;
+        assert!(
+            result.is_ok(),
+            "V5 kill-switch-under-scale failed: {result:?}"
+        );
     }
 }
