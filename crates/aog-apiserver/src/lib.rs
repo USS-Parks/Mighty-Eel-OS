@@ -66,7 +66,7 @@ impl AppState {
         sealer: Sealer,
     ) -> Result<Self, NodeError> {
         let raft = Arc::new(RaftNode::bootstrap(node_id, dir).await?);
-        Ok(Self::from_node(raft, authenticator, sealer))
+        Ok(Self::from_raft(raft, authenticator, sealer))
     }
 
     /// Recover an existing estate under `dir` (no cluster init).
@@ -80,10 +80,15 @@ impl AppState {
         sealer: Sealer,
     ) -> Result<Self, NodeError> {
         let raft = Arc::new(RaftNode::start(node_id, dir).await?);
-        Ok(Self::from_node(raft, authenticator, sealer))
+        Ok(Self::from_raft(raft, authenticator, sealer))
     }
 
-    fn from_node(raft: Arc<RaftNode>, authenticator: Authenticator, sealer: Sealer) -> Self {
+    /// Wrap an already-running Raft node in authenticated API state — the VH5b
+    /// seam. It lets the wire-transport control-plane daemon (`aogd`) serve the
+    /// authenticated CRUD surface over the very node it drives consensus on,
+    /// rather than a separately bootstrapped one.
+    #[must_use]
+    pub fn from_raft(raft: Arc<RaftNode>, authenticator: Authenticator, sealer: Sealer) -> Self {
         Self {
             admission: Arc::new(Admission::new(Arc::clone(&raft), sealer)),
             reader: StoreReader::new(raft),
@@ -151,12 +156,14 @@ impl AppState {
     }
 }
 
-/// Build the control-plane router over shared [`AppState`]. The `/apis/**` routes
-/// are wrapped by the K6 authentication middleware; `/healthz` and `/readyz` stay
-/// open (unauthenticated liveness/readiness).
+/// The authenticated CRUD surface alone: the `/apis/**` routes wrapped by the K6
+/// authentication middleware, with `state` applied. Split out so a host that has
+/// its own health/liveness surface — the wire-transport daemon `aogd` (VH5b) —
+/// can merge just the authenticated CRUD over its own node without a `/healthz`
+/// route collision.
 #[allow(clippy::needless_pass_by_value)]
-pub fn router(state: AppState) -> Router {
-    let api = Router::new()
+pub fn api_router(state: AppState) -> Router {
+    Router::new()
         .route(
             "/apis/aog.islandmountain.io/v1/{kind}",
             get(handlers::list).post(handlers::create),
@@ -170,12 +177,18 @@ pub fn router(state: AppState) -> Router {
         .route_layer(middleware::from_fn_with_state(
             state.clone(),
             auth::require_token,
-        ));
+        ))
+        .with_state(state)
+}
+
+/// Build the control-plane router over shared [`AppState`]. The `/apis/**` routes
+/// are wrapped by the K6 authentication middleware; `/healthz` and `/readyz` stay
+/// open (unauthenticated liveness/readiness).
+pub fn router(state: AppState) -> Router {
     Router::new()
         .route("/healthz", get(healthz))
         .route("/readyz", get(readyz))
-        .merge(api)
-        .with_state(state)
+        .merge(api_router(state))
 }
 
 /// Serve the control-plane API on `listener` until shutdown.

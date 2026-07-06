@@ -8,9 +8,12 @@
 //! these over the wire are the containerized multi-node estate the Phase-V
 //! partition / kill / scale gates (V4/V5/V7/V8/V10) run on.
 //!
-//! Authentication, envelope sealing, and the full `aog-apiserver` CRUD are the
-//! trust surface; they arrive with per-node certs + OpenBao at VH5. VH2 proves the
-//! daemon forms and drives a cluster over real sockets first.
+//! VH5b lands the trust surface's first leg: when an anchor public key is
+//! provisioned (`AOGD_ANCHOR_PUBKEY`), the daemon also serves the **authenticated**
+//! `aog-apiserver` CRUD over its own node via [`aog_apiserver::AppState::from_raft`]
+//! — every `/apis/**` request must carry a valid trust token (K6), fail-closed.
+//! Per-node mTLS on the wire and OpenBao-provisioned anchors are the remaining
+//! VH5b legs; the VH2 wire + admin surface still runs when no anchor is set.
 
 pub mod admin;
 pub mod api;
@@ -20,6 +23,9 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use aog_apiserver::AppState;
+use aog_apiserver::auth::Authenticator;
+use aog_apiserver::seal::Sealer;
 use aog_store::raft::RaftNode;
 use aog_store::raft::types::NodeId;
 use aog_wire::WireNetwork;
@@ -53,6 +59,11 @@ pub struct Config {
     /// The base URL peers and the harness use to reach this node — the address
     /// carried in cluster membership (defaults to `http://<listen>`).
     pub advertise: String,
+    /// The WSF trust-anchor public key (raw ML-DSA-87 bytes) every presented token
+    /// must verify under. When set, the daemon serves the **authenticated**
+    /// `aog-apiserver` CRUD surface (VH5b); when `None`, only the VH2 wire + admin
+    /// surface is served.
+    pub anchor_pubkey: Option<Vec<u8>>,
 }
 
 impl Config {
@@ -75,11 +86,20 @@ impl Config {
             .map_err(|e| DaemonError::Config(format!("AOGD_LISTEN: {e}")))?;
         let advertise =
             std::env::var("AOGD_ADVERTISE").unwrap_or_else(|_| format!("http://{listen}"));
+        // Optional VH5b trust anchor: hex-encoded ML-DSA-87 public key.
+        let anchor_pubkey = match std::env::var("AOGD_ANCHOR_PUBKEY") {
+            Ok(hex_str) => Some(
+                hex::decode(hex_str.trim())
+                    .map_err(|e| DaemonError::Config(format!("AOGD_ANCHOR_PUBKEY: {e}")))?,
+            ),
+            Err(_) => None,
+        };
         Ok(Self {
             node_id,
             data_dir,
             listen,
             advertise,
+            anchor_pubkey,
         })
     }
 }
@@ -89,6 +109,8 @@ impl Config {
 pub struct Daemon {
     node: Arc<RaftNode>,
     advertise: String,
+    /// Authenticated API state (VH5b), present when an anchor was provisioned.
+    state: Option<AppState>,
 }
 
 impl Daemon {
@@ -98,19 +120,43 @@ impl Daemon {
     /// # Errors
     /// [`DaemonError::Node`] on storage or raft construction failure.
     pub async fn start(config: Config) -> Result<Self, DaemonError> {
-        let node =
+        let node = Arc::new(
             RaftNode::start_with_network(config.node_id, &config.data_dir, WireNetwork::new())
-                .await?;
+                .await?,
+        );
+        // VH5b: when an anchor public key is provisioned, serve the authenticated
+        // aog-apiserver CRUD over this very node (the `from_raft` seam). Fail closed
+        // on a bad sealer. Absent an anchor, only the VH2 wire + admin surface runs.
+        let state = match config.anchor_pubkey {
+            Some(pubkey) => {
+                let authenticator = Authenticator::new(pubkey);
+                let sealer =
+                    Sealer::generate().map_err(|e| DaemonError::Config(format!("sealer: {e}")))?;
+                Some(AppState::from_raft(
+                    Arc::clone(&node),
+                    authenticator,
+                    sealer,
+                ))
+            }
+            None => None,
+        };
         Ok(Self {
-            node: Arc::new(node),
+            node,
             advertise: config.advertise,
+            state,
         })
     }
 
     /// The combined axum app: the `aog-wire` Raft peer endpoints (`/raft/*`) merged
     /// with the admin API (`/admin/*`, `/healthz`).
     pub fn app(&self) -> Router {
-        aog_wire::router(Arc::clone(&self.node)).merge(admin::router(Arc::clone(&self.node)))
+        let mut app =
+            aog_wire::router(Arc::clone(&self.node)).merge(admin::router(Arc::clone(&self.node)));
+        // VH5b: the authenticated CRUD surface, when an anchor is provisioned.
+        if let Some(state) = &self.state {
+            app = app.merge(aog_apiserver::api_router(state.clone()));
+        }
+        app
     }
 
     /// This daemon's Raft node handle.

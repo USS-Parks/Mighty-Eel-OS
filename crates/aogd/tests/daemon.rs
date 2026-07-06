@@ -66,6 +66,7 @@ async fn three_aogd_daemons_form_consensus_through_the_admin_api() {
             data_dir: base.join(format!("n{id}")),
             listen,
             advertise: urls[i].clone(),
+            anchor_pubkey: None,
         })
         .await
         .unwrap();

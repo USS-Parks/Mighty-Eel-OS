@@ -376,12 +376,20 @@ dependencies = [
 name = "aogd"
 version = "0.1.0"
 dependencies = [
+ "aog-apiserver",
  "aog-store",
  "aog-wire",
  "axum 0.8.9",
+ "base64",
+ "chrono",
+ "fabric-contracts",
+ "fabric-crypto",
+ "fabric-token",
+ "hex",
  "openraft",
  "reqwest",
  "serde",
+ "serde_json",
  "thiserror 2.0.18",
  "tokio",
  "tracing",

@@ -18,14 +18,24 @@ path = "src/lib.rs"
 [dependencies]
 aog-store = { path = "../aog-store" }
 aog-wire = { path = "../aog-wire" }
+aog-apiserver = { path = "../aog-apiserver" }
 openraft = { version = "0.9", features = ["serde", "storage-v2"] }
 axum = { workspace = true }
+hex = "0.4"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 serde = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
+
+[dev-dependencies]
+fabric-token = { path = "../fabric-token" }
+fabric-crypto = { path = "../fabric-crypto" }
+fabric-contracts = { path = "../fabric-contracts" }
+base64 = "0.22"
+chrono = { workspace = true }
+serde_json = { workspace = true }
 
 [lints]
 workspace = true
