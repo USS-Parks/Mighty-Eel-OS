@@ -1788,12 +1788,33 @@ lifecycle over real sockets.
   the control plane sees all three `Ready` and **not stale** (`is_stale` false), read
   back from its store ✓. **Commit:** `LOOM-VH3`.
 
+### VH4 — harness container image — DONE
+The runnable daemons, containerized: one image carrying both `aogd` and `aog-noded`
+— the unit VH5's Compose estate schedules.
+- **`deployment/loom-harness/Dockerfile` (new).** Multi-stage, on the
+  `deployment/appliance/Dockerfile` pattern (not a new invention): `rust:1-bookworm`
+  builder (its buildpack-deps base already carries `pkg-config`/`libssl-dev` for the
+  `ring`/`openssl-sys` edge), `cargo build --release -p aogd -p aog-noded --bins`,
+  then a `debian:bookworm-slim` runtime with `ca-certificates` + `curl` (compose
+  healthchecks) and a non-root `loom` user. Registry + `target/` BuildKit cache
+  mounts speed VH5 rebuilds; the binaries are copied out of the cached target into
+  `/out` (a cache mount is not part of the image layer). No `ENTRYPOINT` — the
+  harness Compose sets the command per service (`aogd` / `aog-noded`); default CMD is
+  `aogd`.
+- **Files:** `deployment/loom-harness/Dockerfile` (new).
+- **Verify / gate:** `docker build` green (image `loom-harness:vh4` exported); smoke —
+  an `aogd` container boots and serves `/healthz` → `ok` (logs: `aogd started
+  node_id=1`), and the `aog-noded` binary executes (fails fast, config-gated:
+  `Config("AOG_NODE_NAME is required")`). Both daemons run in the slim runtime.
+  **Commit:** `LOOM-VH4`.
+
 ---
 
-**Harness progress: VH1–VH3 done.** Wire transport (VH1), the control-plane daemon
-(VH2), and the edge/worker daemon (VH3) are all runnable; a control plane forms +
-replicates and edges register + heartbeat, all over real sockets. **Next: VH4** — the
-Dockerfile(s) for `aogd` + `aog-noded` → VH5 5+5 Compose + OpenBao + per-node mTLS
-certs (the long image build) → VH6 real network-partition tooling; then the live
-gates (V4 split-brain / V5 kill-under-scale / V7 chaos+soak / V8 scale / V10
+**Harness progress: VH1–VH4 done.** Wire transport (VH1), the control-plane daemon
+(VH2), the edge/worker daemon (VH3), and a slim container image carrying both (VH4)
+are done — the daemons run over sockets and in Docker. **Next: VH5** — the 5-CP +
+5-edge `docker-compose` estate + OpenBao + per-node mTLS certs, and the VH5 trust
+hookup (authenticated `aog-apiserver` CRUD via a new `AppState::from_raft` seam +
+`Sealer`/`Authenticator` + OpenBao mount) → VH6 real network-partition tooling; then
+the live gates (V4 split-brain / V5 kill-under-scale / V7 chaos+soak / V8 scale / V10
 revocation SLO) run on that estate.
