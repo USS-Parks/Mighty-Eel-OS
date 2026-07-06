@@ -1928,3 +1928,108 @@ a hard filter no scheduling pressure can bend. In-process (no Docker).
   preemption candidate, and the binding write is CAS-guarded — noted, not force-tested.
 - **Verify / gate:** `cargo test -p aog-scheduler --test v6_attested_breach` → **4
   passed**; clippy `-D warnings` clean. **V6 PASS.** **Commit:** `LOOM-V6`.
+
+---
+
+## Phase V — Live gates continued: V5 / V8 / V10 / V7 (this session)
+
+**Session/environment note.** This session runs in the CoWork **Linux** sandbox
+(`/home/user/im-mighty-eel-mai` on ext4 `/dev/vda`, **not** the `/sessions/*/mnt/`
+Windows-sync layer), so the `safe-edit` truncation failure mode does not apply — kept the
+hygiene anyway (read-back after writes, `git diff --stat` before staging, individual
+staging, no `git add -A`, `verify-tree.sh`), recorded per 0.1's precedent. (`verify-tree`'s
+brace check is a line-based `grep -c` heuristic that false-positives on K&R closers; the
+compiler is the brace authority, and character counts stayed balanced throughout.) Docker
+is present but **Docker Hub egress is policy-blocked** by the agent proxy (403 on every
+image pull — `docker/dockerfile`, `rust`, `debian`, `openbao`, `moto`), so the
+containerized 5+5 estate cannot be built or run here.
+
+Consequent disposition (same honesty class as V9's target-env note): each remaining live
+gate ships **both** a live-estate script (the A3.2 artifact under
+`deployment/loom-harness/gates/`, runs on a Docker-capable host / the dev box / CI)
+**and** an in-process `aog-conformance` bar on a **real multi-voter openraft cluster**
+that **is run green here** — the executable evidence. The in-process bars use real
+openraft replication + real ML-DSA-87 `fabric-crypto` anchors + real `fabric-revocation`
+signed snapshots; the kill switch is modeled as each replica reading its own
+Raft-committed `REV_PATH`, verifying under the estate anchor, honoring freshness, then
+checking the token — the gateway path minus the OpenBao transport.
+
+### V5 — kill-switch-under-scale (bar 7) — PASS
+Under estate scale, a published revocation halts the next call on **every** replica.
+- **`crates/aog-conformance/src/bars.rs` (`kill_switch_under_scale`, plus the shared
+  `spawn_cluster` / `kill_switch` / `publish_revocation` / `await_replicated` helpers).**
+  A real 5-voter openraft cluster; the estate is scaled to 100 `Workload` objects; a real
+  ML-DSA-87-signed `fabric-revocation` snapshot is published through the confirmed leader
+  and Raft-replicated. Every replica, reading its own committed `REV_PATH`, denies the
+  revoked token and admits a live one; a rogue-anchor-signed snapshot fails closed on
+  every replica (I-9). Wired into the suite (bar 7 `pending → asserted`, modest in-suite
+  scale); the dedicated `v5_kill_switch_under_scale` runs the aggressive profile (5 × 100).
+- **Live companion:** `deployment/loom-harness/gates/v5-kill-switch-under-scale.sh` — the
+  revocation must reach every CP replica's committed state under 100-object scale.
+- **Verify / gate:** `cargo test -p aog-conformance --lib v5_kill_switch_under_scale` →
+  **1 passed** (5 × 100); suite green with bar 7 asserted; clippy `--all-targets
+  --no-deps -D warnings` clean; fmt clean. **V5 PASS.** **Commit:** `LOOM-V5`.
+
+### V8 — scale target (bar 6) — PASS
+N replicas reconcile M workloads within SLO.
+- **`crates/aog-conformance/src/bars.rs` (`scale_target`).** 100 `Workload` objects
+  ingested through the leader, the real `aog-controller` reconcile runtime driven over all
+  of them to convergence, and every object proven readable on every replica — the N-node
+  fan-out. Bar 6 `pending → asserted` (modest in-suite); dedicated `v8_scale_target` at
+  5 × 100.
+- **Live companion:** `deployment/loom-harness/gates/v8-scale.sh` — ingest 100 workloads,
+  assert completeness across all five CPs (the within-SLO reconcile timing is the
+  in-process bar's, where wall-clock is the estate's, not the harness's docker-exec).
+- **Verify / gate:** `cargo test -p aog-conformance --lib v8_scale_target` → **1 passed**;
+  suite green with bar 6 asserted; clippy clean; fmt clean. **V8 PASS.** **Commit:**
+  `LOOM-V8`.
+
+### V10 — revocation-to-denial SLO ("the kill number") — PASS (p99 ≈ 0.37 s « 3 s)
+- **`crates/aog-conformance/src/bars.rs` (`revocation_to_denial_slo`, `#[cfg(test)]`).**
+  Over 100 rounds on a 5-voter estate, publish a signed revocation through the leader and
+  time until **every** replica's kill switch denies the token; nearest-rank p50/p99
+  (integer math, no float casts). Plus the I-9 freshness leg: a snapshot past its expiry
+  makes every replica fail closed even for a live token.
+- **Measured here:** **p50 ≈ 0.20 s, p99 ≈ 0.37 s, worst ≈ 0.38 s** over 100 revocations
+  across 5 replicas — comfortably under the **3 s** kill number (the ~0.2 s floor is the
+  leader-confirmation handshake, honestly in-path). A stale snapshot fails closed.
+  Test-only like V9 (an SLO gate, not an A1.12 bar).
+- **Live companion:** `deployment/loom-harness/gates/v10-revocation-slo.sh` — the strict
+  p99 ≤ 3 s is the in-process gate's (wall-clock is the estate's); the script proves the
+  fan-out reaches every CP end-to-end.
+- **Verify / gate:** `cargo test -p aog-conformance --lib v10_revocation_to_denial_slo` →
+  **1 passed** (p99 ≈ 0.37 s « 3 s); clippy clean; fmt clean. **V10 PASS.** **Commit:**
+  `LOOM-V10`.
+
+### V7 — chaos + soak (bars 4/5, control-plane leg) — PASS
+- **`crates/aog-conformance/src/bars.rs` (`chaos_soak`, `#[cfg(test)]`).** The V4/H1
+  cluster pattern extended to a soak: 12 kill/heal cycles on a 5-voter estate; each round
+  isolates a random node (never a quorum), commits a deterministic rollout step through a
+  confirmed leader (the fenced node serves none), heals the node, and asserts a leader
+  re-emerged within SLO + the healed node caught up; at the end every replica has
+  converged to the one deterministic rollout end state with **no committed loss** —
+  self-healing + rollout determinism under chaos. Measured: 12 cycles on 5 replicas, a
+  leader re-emerged within 10 s each round, every killed node rejoined and caught up, all
+  5 converged to the identical 12-step end state.
+- **Scope (CANON §11).** This is the **control-plane** leg of bars 4/5. The **data-plane**
+  leg (the scheduler evicting a dead node's `Placement`s and re-placing them,
+  minting/revoking runtime tokens in OpenBao) needs live OpenBao, so it stays the live
+  estate's (`v7-chaos-soak.sh` + the existing `live_node` / `live_scheduler` controller
+  tests); bars 4 (SelfHealing) / 5 (RolloutDeterminism) stay registered **pending**
+  against V7 rather than flipped green off a partial proof.
+- **Live companion:** `deployment/loom-harness/gates/v7-chaos-soak.sh` — real network
+  partitions (VH6 tooling) over a soak, per-round recovery + final determinism.
+- **Verify / gate:** `cargo test -p aog-conformance --lib v7_chaos_soak` → **1 passed**
+  (5 replicas, 12 cycles); clippy clean; fmt clean. **V7 PASS.** **Commit:** `LOOM-V7`.
+
+---
+
+**Phase V status after this session.** V1–V3 (consistency bars, in-process) ✓ · V4
+(split-brain, live) ✓ · V5 (kill-switch-under-scale) ✓ · V6 (attested scheduling) ✓ · V8
+(scale) ✓ · V9 (weave overhead, target-env) ✓ · V10 (revocation SLO, p99 ≈ 0.37 s) ✓ · V7
+(chaos+soak, control-plane leg) ✓. The `aog-conformance` suite now asserts bars 1, 2, 6, 7
++ suite-executable; bars 3 (V4, proven live) and 4/5 (V7 data-plane leg) remain registered
+**pending** their live/OpenBao owners, so `is_summit_ready()` (zero pending) stays gated on
+the live estate — honest per A5. **Remaining for full Summit-Conformance:** run the four
+new live scripts on a Docker-capable host (Docker Hub egress is policy-blocked here), and
+the **V11 D9 RC suite** (the aggregate release-candidate run).
