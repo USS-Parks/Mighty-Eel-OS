@@ -3,7 +3,12 @@ name: aog-wsf-appliance
 # One-command AOG/WSF appliance (D1): OpenBao trust core + the WSF trust plane
 # (wsf-api) + the AOG gateway + the console, with Postgres + MinIO reserved for
 # service state / evidence, and a mock local model so a governed request
-# completes end-to-end. Dev-mode OpenBao — NOT production. See README.md.
+# completes end-to-end.
+#
+# INSECURE OPT-IN DEMO, NOT production: dev-mode OpenBao with a root token and no
+# authenticated principal in front of the privileged trust plane. Host ports are
+# loopback-bound (127.0.0.1) so the stack is reachable only from this machine,
+# never the LAN. See README.md.
 
 services:
   # ── Trust core ──────────────────────────────────────────────────────────
@@ -11,7 +16,7 @@ services:
     image: openbao/openbao:latest
     cap_add: [IPC_LOCK]
     command: server -dev -dev-root-token-id=root -dev-listen-address=0.0.0.0:8200
-    ports: ["8200:8200"]
+    ports: ["127.0.0.1:8200:8200"]
     healthcheck:
       test: ["CMD", "bao", "status", "-address=http://127.0.0.1:8200"]
       interval: 3s
@@ -68,7 +73,7 @@ services:
       WSF_LISTEN: 0.0.0.0:8300
       WSF_AWS_ENDPOINT: https://sts.amazonaws.com
     volumes: ["seed-data:/seed:ro"]
-    ports: ["8081:8300"]
+    ports: ["127.0.0.1:8081:8300"]
     depends_on:
       seed: { condition: service_completed_successfully }
 
@@ -81,7 +86,7 @@ services:
       AOG_LOCAL_BASE: http://mock-llm:8000
       AOG_MODE: shadow
     volumes: ["seed-data:/seed:ro"]
-    ports: ["8080:8080"]
+    ports: ["127.0.0.1:8080:8080"]
     depends_on:
       seed: { condition: service_completed_successfully }
       mock-llm: { condition: service_started }
@@ -92,7 +97,7 @@ services:
       context: ../..
       dockerfile: deployment/appliance/Dockerfile.console
     image: islandmountain/aog-wsf-console:latest
-    ports: ["8088:80"]
+    ports: ["127.0.0.1:8088:80"]
     depends_on: [wsf-api, aog-gateway]
 
 volumes:
