@@ -1912,3 +1912,19 @@ by OS scheduling jitter, not crypto.
   claimed green on this Windows dev host**. The harness + real numbers are in the tree
   (`-- --ignored`); default `cargo test -p aog-conformance` stays green (V1–V3 pass, V9
   ignored). **Commit:** `LOOM-V9`.
+
+### V6 — attested-scheduling breach — PASS
+The A1.8 differentiator, adversarially: a Ring-3 Secret workload is never placed on an
+under-attested node — the S4 predicate (`classification_ceiling ≤ attestation_floor`) is
+a hard filter no scheduling pressure can bend. In-process (no Docker).
+- **`crates/aog-scheduler/tests/v6_attested_breach.rs` (new).** Attempts every
+  `schedule()`-reachable avenue against `attested_scheduler()`: **pressure** (the one
+  attested node saturated, an under-attested node roomy → must not relieve pressure); a
+  **fleet of unfit flavors** (floor too low / no hardware root / TPM-without-measurement /
+  wide-open, all roomy → none chosen); **fill-the-ring** (the only attested node is
+  out-of-ring → stays Pending, attestation not relaxed); plus a **control** proving a
+  properly attested in-ring node still takes it. Preemption (S8) and races are
+  structurally excluded — an under-attested node is filtered out before it can be a
+  preemption candidate, and the binding write is CAS-guarded — noted, not force-tested.
+- **Verify / gate:** `cargo test -p aog-scheduler --test v6_attested_breach` → **4
+  passed**; clippy `-D warnings` clean. **V6 PASS.** **Commit:** `LOOM-V6`.
