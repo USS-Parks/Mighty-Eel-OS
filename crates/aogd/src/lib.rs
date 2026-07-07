@@ -8,16 +8,21 @@
 //! these over the wire are the containerized multi-node estate the Phase-V
 //! partition / kill / scale gates (V4/V5/V7/V8/V10) run on.
 //!
-//! VH5b lands the trust surface's first leg: when an anchor public key is
-//! provisioned (`AOGD_ANCHOR_PUBKEY`), the daemon also serves the **authenticated**
-//! `aog-apiserver` CRUD over its own node via [`aog_apiserver::AppState::from_raft`]
-//! — every `/apis/**` request must carry a valid trust token (K6), fail-closed.
-//! Per-node mTLS on the wire and OpenBao-provisioned anchors are the remaining
-//! VH5b legs; the VH2 wire + admin surface still runs when no anchor is set.
+//! VH5b lands the trust surface. When trust material is provisioned, the daemon
+//! also serves the **authenticated** `aog-apiserver` CRUD over its own node via
+//! [`aog_apiserver::AppState::from_raft`] — every `/apis/**` request must carry a
+//! valid trust token (K6), fail-closed. The anchor arrives one of two ways: a raw
+//! env public key (`AOGD_ANCHOR_PUBKEY`, VH5b-a), or — taking precedence —
+//! OpenBao-custodied trust material read at startup (`AOGD_OPENBAO_*`, VH5b-c; see
+//! [`provision`]), which also custodies the field-seal data key + child-mint signer
+//! so sealed state is stable and shared across the estate. Per-node wire mTLS is
+//! VH5b-b ([`aog_wire::tls`]). The VH2 wire + admin surface still runs when no
+//! anchor is set.
 
 pub mod admin;
 pub mod api;
 pub mod client;
+pub mod provision;
 
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -61,9 +66,28 @@ pub struct Config {
     pub advertise: String,
     /// The WSF trust-anchor public key (raw ML-DSA-87 bytes) every presented token
     /// must verify under. When set, the daemon serves the **authenticated**
-    /// `aog-apiserver` CRUD surface (VH5b); when `None`, only the VH2 wire + admin
-    /// surface is served.
+    /// `aog-apiserver` CRUD surface (VH5b-a); when `None`, only the VH2 wire + admin
+    /// surface is served. Ignored when `openbao` is set (that takes precedence).
     pub anchor_pubkey: Option<Vec<u8>>,
+    /// OpenBao coordinates for reading the daemon's trust material at startup
+    /// (VH5b-c). When set, the anchor **and** the field-seal key + signer come from
+    /// the KV-v2 record at `trust_path`, taking precedence over `anchor_pubkey`.
+    pub openbao: Option<OpenBaoTrust>,
+}
+
+/// OpenBao coordinates for provisioning a node's trust material (VH5b-c). The
+/// daemon logs in with the AppRole credential and reads one KV-v2 record — the
+/// WSF anchor plus the field-seal data key and child-mint signer.
+#[derive(Debug, Clone)]
+pub struct OpenBaoTrust {
+    /// OpenBao address, e.g. `http://openbao:8200`.
+    pub address: String,
+    /// AppRole role_id for this node.
+    pub role_id: String,
+    /// AppRole secret_id (pre-provisioned).
+    pub secret_id: String,
+    /// KV-v2 API path of the trust record, e.g. `kv/data/loom/trust`.
+    pub trust_path: String,
 }
 
 impl Config {
@@ -86,12 +110,25 @@ impl Config {
             .map_err(|e| DaemonError::Config(format!("AOGD_LISTEN: {e}")))?;
         let advertise =
             std::env::var("AOGD_ADVERTISE").unwrap_or_else(|_| format!("http://{listen}"));
-        // Optional VH5b trust anchor: hex-encoded ML-DSA-87 public key.
+        // Optional VH5b-a trust anchor: hex-encoded ML-DSA-87 public key.
         let anchor_pubkey = match std::env::var("AOGD_ANCHOR_PUBKEY") {
             Ok(hex_str) => Some(
                 hex::decode(hex_str.trim())
                     .map_err(|e| DaemonError::Config(format!("AOGD_ANCHOR_PUBKEY: {e}")))?,
             ),
+            Err(_) => None,
+        };
+        // Optional VH5b-c OpenBao trust source. When the address is set the
+        // AppRole credential is required; the trust path defaults to the estate
+        // convention. Takes precedence over AOGD_ANCHOR_PUBKEY at start.
+        let openbao = match std::env::var("AOGD_OPENBAO_ADDR") {
+            Ok(address) => Some(OpenBaoTrust {
+                address,
+                role_id: required("AOGD_OPENBAO_ROLE_ID")?,
+                secret_id: required("AOGD_OPENBAO_SECRET_ID")?,
+                trust_path: std::env::var("AOGD_OPENBAO_TRUST_PATH")
+                    .unwrap_or_else(|_| "kv/data/loom/trust".to_owned()),
+            }),
             Err(_) => None,
         };
         Ok(Self {
@@ -100,6 +137,7 @@ impl Config {
             listen,
             advertise,
             anchor_pubkey,
+            openbao,
         })
     }
 }
@@ -124,21 +162,29 @@ impl Daemon {
             RaftNode::start_with_network(config.node_id, &config.data_dir, WireNetwork::new())
                 .await?,
         );
-        // VH5b: when an anchor public key is provisioned, serve the authenticated
-        // aog-apiserver CRUD over this very node (the `from_raft` seam). Fail closed
-        // on a bad sealer. Absent an anchor, only the VH2 wire + admin surface runs.
-        let state = match config.anchor_pubkey {
-            Some(pubkey) => {
-                let authenticator = Authenticator::new(pubkey);
-                let sealer =
-                    Sealer::generate().map_err(|e| DaemonError::Config(format!("sealer: {e}")))?;
-                Some(AppState::from_raft(
-                    Arc::clone(&node),
-                    authenticator,
-                    sealer,
-                ))
-            }
-            None => None,
+        // VH5b: when trust material is provisioned, serve the authenticated
+        // aog-apiserver CRUD over this very node (the `from_raft` seam), fail-closed.
+        // Precedence: OpenBao-custodied material (VH5b-c) over the env anchor +
+        // ephemeral kernel sealer (VH5b-a). Absent both, only the VH2 wire + admin
+        // surface runs.
+        let state = if let Some(bao) = &config.openbao {
+            let material = provision::from_openbao(bao).await?;
+            Some(AppState::from_raft(
+                Arc::clone(&node),
+                material.authenticator,
+                material.sealer,
+            ))
+        } else if let Some(pubkey) = config.anchor_pubkey {
+            let authenticator = Authenticator::new(pubkey);
+            let sealer =
+                Sealer::generate().map_err(|e| DaemonError::Config(format!("sealer: {e}")))?;
+            Some(AppState::from_raft(
+                Arc::clone(&node),
+                authenticator,
+                sealer,
+            ))
+        } else {
+            None
         };
         Ok(Self {
             node,
