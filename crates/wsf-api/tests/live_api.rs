@@ -229,6 +229,11 @@ async fn sdk_round_trips_every_endpoint() {
             TENANT,
             &["clinician"],
         )),
+        grants: Arc::new(wsf_api::grants::StaticGrants::single_dev(
+            TENANT,
+            "aws-readonly",
+            "arn:aws:iam::000000000000:role/wsf-api",
+        )),
     };
 
     let app = wsf_api::router(state);
@@ -300,11 +305,11 @@ async fn sdk_round_trips_every_endpoint() {
         .expect("unseal");
     assert_eq!(plaintext, b"phi payload");
 
-    // Credential exchange (Moto STS).
+    // Credential exchange (Moto STS) — via a tenant-scoped grant id, not a raw ARN.
     let creds = sdk
         .exchange(&ExchangeReq {
             token: token.clone(),
-            role_arn: "arn:aws:iam::000000000000:role/wsf-api".to_string(),
+            grant_id: "aws-readonly".to_string(),
         })
         .await
         .expect("exchange");

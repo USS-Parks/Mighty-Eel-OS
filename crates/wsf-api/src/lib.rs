@@ -14,6 +14,7 @@
 
 pub mod auth;
 pub mod client;
+pub mod grants;
 pub mod policy;
 
 use std::sync::{Arc, Mutex};
@@ -29,6 +30,7 @@ use auth::{WsfAuthenticator, require_principal};
 use base64::Engine;
 use chrono::Utc;
 use fabric_crypto::providers::MlDsa87Verifier;
+use grants::GrantStore;
 use policy::TenantPolicyStore;
 use serde::{Deserialize, Serialize};
 use wsf_bridge::{IssueTokenRequest, TrustBridge};
@@ -58,6 +60,9 @@ pub struct AppState {
     /// Server-side tenant issuance policy (plan A3). Bounds what any principal
     /// may be granted; the caller supplies intent, never authority.
     pub policy: Arc<dyn TenantPolicyStore>,
+    /// Server-side cloud-credential grants (plan B1/B2). Resolves a tenant-scoped
+    /// grant_id to an approved cloud identity; the caller never submits a raw ARN.
+    pub grants: Arc<dyn GrantStore>,
 }
 
 /// Mount all routes over `state`.
@@ -184,13 +189,16 @@ pub struct UnsealResp {
     pub plaintext_b64: String,
 }
 
-/// Credential-exchange request.
+/// Credential-exchange request (plan B1). Carries a tenant-scoped `grant_id`,
+/// never a raw cloud identity: `deny_unknown_fields` means a smuggled `role_arn`
+/// is a 422, not honored (closes AF-004's raw-ARN input).
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ExchangeReq {
-    /// The verified trust token.
+    /// The verified trust token authorizing the exchange.
     pub token: TrustToken,
-    /// The cloud role ARN to assume.
-    pub role_arn: String,
+    /// The server-side grant to exercise (resolved to a cloud identity by policy).
+    pub grant_id: String,
 }
 
 /// Credential-exchange response (ephemeral scoped creds).
@@ -583,15 +591,39 @@ async fn unseal(
 
 async fn exchange(
     State(s): State<AppState>,
+    Extension(principal): Extension<WsfPrincipal>,
     Json(req): Json<ExchangeReq>,
 ) -> Result<Json<ExchangeResp>, ApiError> {
+    // B1/B2: the cloud identity is resolved server-side from a tenant-scoped
+    // grant — the caller never names a role ARN. A grant is scoped to the
+    // authenticated principal's tenant, and the presented token must belong to
+    // that same tenant (no cross-tenant brokering).
+    if !principal.is_for(Audience::Wsf) {
+        return Err(ApiError::new(
+            StatusCode::FORBIDDEN,
+            "principal is not authenticated for the WSF plane",
+        ));
+    }
+    if req.token.tenant_id != principal.tenant_id {
+        return Err(ApiError::new(
+            StatusCode::FORBIDDEN,
+            "token tenant does not match the authenticated principal",
+        ));
+    }
+    let grant = s
+        .grants
+        .grant_for(&principal.tenant_id, &req.grant_id)
+        .ok_or_else(|| {
+            ApiError::new(StatusCode::FORBIDDEN, "no such cloud grant for this tenant")
+        })?;
+
     let creds = s
         .broker
         .broker_credentials(
             &req.token,
             &MlDsa87Verifier,
             &s.token_public_key,
-            &req.role_arn,
+            &grant.role_arn,
             Utc::now(),
         )
         .await

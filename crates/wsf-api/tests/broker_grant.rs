@@ -1,10 +1,9 @@
-//! T7 live gate — issue → attenuate → verify plus the AF-001 adversarial cases,
-//! black-box against the real WSF API + live OpenBao bridge.
+//! B6 live gate — credential exchange is grant-scoped, never raw-ARN
+//! (AF-004). Black-box against the real WSF API + live OpenBao + Moto STS.
 //!
-//! Env-gated on `WSF_OPENBAO_ADDR`. Proves the fix end-to-end over HTTP, not
-//! only at the unit level: a forged/tampered parent is refused (403), a widening
-//! restriction is refused (422), and a valid narrowing yields a child whose
-//! identity is inherited from the authenticated parent.
+//! Env-gated on `WSF_OPENBAO_ADDR` (+ Moto at 127.0.0.1:5566). Proves: an
+//! approved grant brokers scoped creds; a smuggled `role_arn` is rejected
+//! (422, deny_unknown_fields); an unknown/cross-tenant grant is denied (403).
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
 use std::sync::{Arc, Mutex};
@@ -15,14 +14,16 @@ use reqwest::{Client, Method, StatusCode};
 use serde_json::{Value, json};
 use wsf_api::AppState;
 use wsf_api::auth::LocalDevAuthenticator;
+use wsf_api::grants::StaticGrants;
 use wsf_api::policy::StaticTenantPolicies;
 use wsf_bridge::{BridgeConfig, OpenBaoAuth, OpenBaoConfig, TrustBridge};
 use wsf_broker::{AwsStsBroker, BrokerConfig};
 use wsf_ledger::Ledger;
 use wsf_seal::{SealService, SealServiceConfig};
 
-const ROLE: &str = "wsf-atten-test";
-const TENANT: &str = "wsf-atten-tenant";
+const ROLE: &str = "wsf-grant-test";
+const TENANT: &str = "wsf-grant-tenant";
+const APPROVED_ARN: &str = "arn:aws:iam::000000000000:role/approved";
 
 fn openbao_addr() -> Option<String> {
     std::env::var("WSF_OPENBAO_ADDR").ok()
@@ -73,13 +74,14 @@ async fn provision(c: &Client, addr: &str, tok: &str) -> (String, String) {
         Some(json!({"type":"kv","options":{"version":"2"}})),
     )
     .await;
+    let policy = "path \"kv/data/tenants/*\" { capabilities=[\"read\"] }\npath \"kv/data/broker/*\" { capabilities=[\"read\"] }";
     bao(
         c,
         addr,
         tok,
         Method::PUT,
-        "sys/policies/acl/wsf-atten-test",
-        Some(json!({ "policy": "path \"kv/data/tenants/*\" { capabilities=[\"read\"] }" })),
+        "sys/policies/acl/wsf-grant-test",
+        Some(json!({ "policy": policy })),
     )
     .await;
     bao(
@@ -88,7 +90,7 @@ async fn provision(c: &Client, addr: &str, tok: &str) -> (String, String) {
         tok,
         Method::POST,
         &format!("auth/approle/role/{ROLE}"),
-        Some(json!({"token_policies":"default,wsf-atten-test","token_ttl":"15m"})),
+        Some(json!({"token_policies":"default,wsf-grant-test","token_ttl":"15m"})),
     )
     .await;
     let attrs = json!({
@@ -103,6 +105,16 @@ async fn provision(c: &Client, addr: &str, tok: &str) -> (String, String) {
         Method::POST,
         &format!("kv/data/tenants/{TENANT}"),
         Some(json!({ "data": { "attributes": attrs.to_string() } })),
+    )
+    .await;
+    // Broker root creds for Moto STS.
+    bao(
+        c,
+        addr,
+        tok,
+        Method::POST,
+        "kv/data/broker/aws-root",
+        Some(json!({ "data": { "access_key_id": "test", "secret_access_key": "test" } })),
     )
     .await;
     let rid: Value = serde_json::from_str(
@@ -135,9 +147,9 @@ async fn provision(c: &Client, addr: &str, tok: &str) -> (String, String) {
 }
 
 #[tokio::test]
-async fn issue_attenuate_verify_and_adversarial_parents() {
+async fn exchange_is_grant_scoped_not_raw_arn() {
     let Some(addr) = openbao_addr() else {
-        eprintln!("SKIP attenuate_live: set WSF_OPENBAO_ADDR (T7 live gate)");
+        eprintln!("SKIP broker_grant: set WSF_OPENBAO_ADDR (B6 live gate)");
         return;
     };
     let c = Client::new();
@@ -151,15 +163,13 @@ async fn issue_attenuate_verify_and_adversarial_parents() {
         .unwrap()
     };
 
-    let bridge_signer = Arc::new(RustCryptoMlDsa87::generate("wsf-atten-bridge").unwrap());
+    let bridge_signer = Arc::new(RustCryptoMlDsa87::generate("wsf-grant-bridge").unwrap());
     let anchor = bridge_signer.public_key().to_vec();
-    // Keep a handle to mint an anchor-signed *legacy* parent (T6) below.
-    let anchor_signer = bridge_signer.clone();
     let state = AppState {
         bridge: Arc::new(TrustBridge::new(
             ob(),
             bridge_signer,
-            BridgeConfig::new("2026.07.atten", vec![6u8; 32]),
+            BridgeConfig::new("2026.07.grant", vec![3u8; 32]),
         )),
         broker: Arc::new(AwsStsBroker::new(
             ob(),
@@ -172,19 +182,24 @@ async fn issue_attenuate_verify_and_adversarial_parents() {
         )),
         seal: Arc::new(SealService::new(
             ob(),
-            Arc::new(RustCryptoMlDsa87::generate("wsf-atten-seal").unwrap()),
+            Arc::new(RustCryptoMlDsa87::generate("wsf-grant-seal").unwrap()),
             SealServiceConfig {
-                transit_key: "wsf-atten-dek".into(),
+                transit_key: "wsf-grant-dek".into(),
                 token_public_key: anchor.clone(),
             },
         )),
         ledger: Arc::new(Mutex::new(Ledger::new(Arc::new(
-            RustCryptoMlDsa87::generate("wsf-atten-ledger").unwrap(),
+            RustCryptoMlDsa87::generate("wsf-grant-ledger").unwrap(),
         )))),
         token_public_key: Arc::new(anchor),
         auth: Arc::new(LocalDevAuthenticator::for_wsf(TENANT)),
         policy: Arc::new(StaticTenantPolicies::single_dev(TENANT, &["clinician"])),
-        grants: Arc::new(wsf_api::grants::StaticGrants::new()),
+        // One approved grant for this tenant.
+        grants: Arc::new(StaticGrants::single_dev(
+            TENANT,
+            "aws-approved",
+            APPROVED_ARN,
+        )),
     };
     let app = wsf_api::router(state);
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -192,8 +207,7 @@ async fn issue_attenuate_verify_and_adversarial_parents() {
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
 
     let http = Client::new();
-
-    // Issue a real parent token via the live handler.
+    // Issue a token with a resource caveat so the session policy is non-empty.
     let issued: Value = http
         .post(format!("{base}/v1/tokens/issue"))
         .json(&json!({ "requested_roles": ["clinician"] }))
@@ -203,109 +217,48 @@ async fn issue_attenuate_verify_and_adversarial_parents() {
         .json()
         .await
         .expect("issue json");
-    let parent = issued["token"].clone();
-    assert_eq!(parent["tenant_id"], TENANT);
+    let token = issued["token"].clone();
 
-    let attenuate = |body: Value| {
+    let exchange = |body: Value| {
         let http = http.clone();
-        let url = format!("{base}/v1/tokens/attenuate");
+        let url = format!("{base}/v1/credentials/exchange");
         async move {
             http.post(url)
                 .json(&body)
                 .send()
                 .await
-                .expect("attenuate req")
+                .expect("exchange req")
         }
     };
 
-    // 1. Valid narrowing → 200; child inherits the parent's tenant/subject.
-    let ok = attenuate(json!({
-        "parent": parent,
-        "restrictions": { "new_token_id": "child-1", "allowed_routes": [] }
-    }))
-    .await;
-    assert_eq!(ok.status(), StatusCode::OK, "valid attenuation succeeds");
-    let child: Value = ok.json().await.unwrap();
-    assert_eq!(child["token"]["tenant_id"], TENANT, "child inherits tenant");
-    assert_eq!(
-        child["token"]["attenuation"]["parent_id"],
-        parent["token_id"]
-    );
+    // 1. Approved grant → 200 with scoped creds.
+    let ok = exchange(json!({ "token": token, "grant_id": "aws-approved" })).await;
+    assert_eq!(ok.status(), StatusCode::OK, "approved grant brokers creds");
+    let creds: Value = ok.json().await.unwrap();
+    assert!(!creds["access_key_id"].as_str().unwrap_or("").is_empty());
 
-    // 2. Verify the child end-to-end.
-    let ver: Value = http
-        .post(format!("{base}/v1/tokens/verify"))
-        .json(&json!({ "token": child["token"] }))
-        .send()
-        .await
-        .unwrap()
-        .json()
-        .await
-        .unwrap();
-    assert_eq!(ver["valid"], true, "attenuated child verifies");
-
-    // 3. Tampered parent (mutate a field after signing) → 403: lineage can't be forged.
-    let mut tampered = parent.clone();
-    tampered["roles"] = json!(["clinician", "admin"]);
-    let t = attenuate(json!({
-        "parent": tampered,
-        "restrictions": { "new_token_id": "child-2" }
+    // 2. A smuggled raw role_arn is rejected outright (422) — the caller cannot
+    //    name a cloud identity anymore (the AF-004 input is gone).
+    let raw = exchange(json!({
+        "token": token,
+        "role_arn": "arn:aws:iam::999999999999:role/attacker"
     }))
     .await;
     assert_eq!(
-        t.status(),
-        StatusCode::FORBIDDEN,
-        "tampered parent is refused"
-    );
-
-    // 4. Forged parent signed by an attacker key (not the anchor) → 403.
-    let attacker = RustCryptoMlDsa87::generate("attacker").unwrap();
-    let mut forged: fabric_contracts::TrustToken = serde_json::from_value(parent.clone()).unwrap();
-    forged.token_id = "forged".into();
-    let forged = fabric_token::issue(forged, &attacker).unwrap();
-    let f = attenuate(json!({
-        "parent": forged,
-        "restrictions": { "new_token_id": "child-3" }
-    }))
-    .await;
-    assert_eq!(
-        f.status(),
-        StatusCode::FORBIDDEN,
-        "attacker-signed parent is refused"
-    );
-
-    // 5. Widening restriction (role the parent lacks) → 422.
-    let w = attenuate(json!({
-        "parent": parent,
-        "restrictions": { "new_token_id": "child-4", "roles": ["admin"] }
-    }))
-    .await;
-    assert_eq!(
-        w.status(),
+        raw.status(),
         StatusCode::UNPROCESSABLE_ENTITY,
-        "widening is refused"
+        "raw role_arn is rejected"
     );
 
-    // 6. T6: a validly anchor-signed *legacy* parent (bundle != the bridge's
-    //    current) may not be attenuated — no v1 attenuation.
-    let mut legacy: fabric_contracts::TrustToken = serde_json::from_value(parent.clone()).unwrap();
-    legacy.token_id = "legacy-parent".into();
-    legacy.trust_bundle_version = "2020.legacy.v1".into();
-    let legacy = fabric_token::issue(legacy, anchor_signer.as_ref()).unwrap();
-    let l = attenuate(json!({
-        "parent": legacy,
-        "restrictions": { "new_token_id": "child-5" }
-    }))
-    .await;
-    // The handler denies legacy by default (no migration flag): the version
-    // policy in verify_in_context refuses it (403) before the child is built.
+    // 3. An unknown grant id is denied (403) — no adjacent/guessed grant works.
+    let unknown = exchange(json!({ "token": token, "grant_id": "aws-admin" })).await;
     assert_eq!(
-        l.status(),
+        unknown.status(),
         StatusCode::FORBIDDEN,
-        "legacy (v1) parent is refused (T6 deny-by-default)"
+        "unknown grant is denied"
     );
 
     println!(
-        "T7 live gate PASSED against {addr}: issue→attenuate→verify; forged/tampered parent 403; widening 422; legacy parent 403 (T6)"
+        "B6 live gate PASSED against {addr}: grant-scoped exchange; raw ARN 422; unknown grant 403"
     );
 }

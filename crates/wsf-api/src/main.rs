@@ -136,6 +136,21 @@ async fn run() -> Result<(), String> {
         ))
     };
 
+    // B1/B2 cloud grants. Production loads signed / OpenBao-custodied mappings;
+    // the dev fallback maps a single grant id to a role ARN if configured.
+    let cloud_grants: Arc<dyn wsf_api::grants::GrantStore> = {
+        let tenant = env_or("WSF_DEV_TENANT", "local-dev-tenant");
+        match (
+            std::env::var("WSF_DEV_GRANT_ID"),
+            std::env::var("WSF_DEV_GRANT_ROLE_ARN"),
+        ) {
+            (Ok(gid), Ok(arn)) => {
+                Arc::new(wsf_api::grants::StaticGrants::single_dev(tenant, gid, arn))
+            }
+            _ => Arc::new(wsf_api::grants::StaticGrants::new()),
+        }
+    };
+
     let state = AppState {
         bridge: Arc::new(TrustBridge::new(
             new_openbao()?,
@@ -159,6 +174,7 @@ async fn run() -> Result<(), String> {
         token_public_key: Arc::new(anchor),
         auth: authenticator,
         policy: issuance_policy,
+        grants: cloud_grants,
     };
 
     let app = wsf_api::router(state);
