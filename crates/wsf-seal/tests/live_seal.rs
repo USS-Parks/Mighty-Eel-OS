@@ -78,17 +78,21 @@ async fn provision(c: &Client, addr: &str, tok: &str) -> (String, String) {
         Some(json!({"type":"transit"})),
     )
     .await;
-    bao(
-        c,
-        addr,
-        tok,
-        Method::POST,
-        &format!("transit/keys/{TRANSIT_KEY}"),
-        Some(json!({"type":"aes256-gcm96"})),
-    )
-    .await;
+    // E2: one Transit key per tenant (`<base>-<tenant>`), so a tenant's wrapped
+    // material can only be unwrapped under its own key.
+    for tenant in ["tenant-a", "tenant-b"] {
+        bao(
+            c,
+            addr,
+            tok,
+            Method::POST,
+            &format!("transit/keys/{TRANSIT_KEY}-{tenant}"),
+            Some(json!({"type":"aes256-gcm96"})),
+        )
+        .await;
+    }
     let policy = format!(
-        "path \"transit/encrypt/{TRANSIT_KEY}\" {{ capabilities=[\"update\"] }}\npath \"transit/decrypt/{TRANSIT_KEY}\" {{ capabilities=[\"update\"] }}"
+        "path \"transit/encrypt/{TRANSIT_KEY}-*\" {{ capabilities=[\"update\"] }}\npath \"transit/decrypt/{TRANSIT_KEY}-*\" {{ capabilities=[\"update\"] }}"
     );
     bao(
         c,

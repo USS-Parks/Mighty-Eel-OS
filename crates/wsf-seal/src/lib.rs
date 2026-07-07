@@ -205,6 +205,20 @@ impl SealService {
         self.signer.public_key()
     }
 
+    /// The per-tenant OpenBao Transit key that wraps a tenant's data keys (plan
+    /// E2). Each tenant gets its own key (`<base>-<tenant>`), so tenant A's
+    /// wrapped material cannot be unwrapped under tenant B's key even at the
+    /// crypto layer — and an OpenBao policy can scope each tenant's role to only
+    /// its own key. An empty tenant falls back to the base key (legacy).
+    #[must_use]
+    pub fn transit_key_for(&self, tenant_id: &str) -> String {
+        if tenant_id.is_empty() {
+            self.config.transit_key.clone()
+        } else {
+            format!("{}-{}", self.config.transit_key, tenant_id)
+        }
+    }
+
     /// A snapshot of the receipt chain links, for verification / ledger ingest.
     #[must_use]
     pub fn receipt_links(&self) -> Vec<ChainLink> {
@@ -273,9 +287,11 @@ impl SealService {
         let vault_token = self.openbao.login().await?;
         let mut data_key = [0u8; 32];
         rand::RngCore::fill_bytes(&mut rand::thread_rng(), &mut data_key);
+        // E2: wrap the data key under the sealing tenant's own Transit key.
+        let transit_key = self.transit_key_for(&req.token.tenant_id);
         let data_key_wrapped = self
             .openbao
-            .transit_encrypt(&vault_token, &self.config.transit_key, &data_key)
+            .transit_encrypt(&vault_token, &transit_key, &data_key)
             .await?;
 
         let previous_hash = self.receipts.lock().expect("receipts lock").head_hex();
@@ -365,13 +381,13 @@ impl SealService {
         }
 
         let vault_token = self.openbao.login().await?;
+        // E2: unwrap under the *envelope binding's* tenant key. E4 has already
+        // proven the presenting token belongs to that tenant, so this both fails
+        // closed at the app layer and isolates the crypto to the tenant's key.
+        let transit_key = self.transit_key_for(&envelope.binding.tenant_id);
         let key_bytes = self
             .openbao
-            .transit_decrypt(
-                &vault_token,
-                &self.config.transit_key,
-                &envelope.seal.data_key_wrapped,
-            )
+            .transit_decrypt(&vault_token, &transit_key, &envelope.seal.data_key_wrapped)
             .await?;
         let data_key: [u8; 32] = key_bytes.try_into().map_err(|_| SealError::DataKeySize)?;
 

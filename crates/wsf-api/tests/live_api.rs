@@ -88,18 +88,19 @@ async fn provision(c: &Client, addr: &str, tok: &str) -> (String, String) {
         Some(json!({"type":"transit"})),
     )
     .await;
+    // E2: per-tenant Transit key for the sealing tenant.
     bao(
         c,
         addr,
         tok,
         Method::POST,
-        &format!("transit/keys/{TRANSIT_KEY}"),
+        &format!("transit/keys/{TRANSIT_KEY}-{TENANT}"),
         Some(json!({"type":"aes256-gcm96"})),
     )
     .await;
 
     let policy = format!(
-        "path \"kv/data/tenants/*\" {{ capabilities=[\"read\"] }}\npath \"kv/data/broker/*\" {{ capabilities=[\"read\"] }}\npath \"transit/encrypt/{TRANSIT_KEY}\" {{ capabilities=[\"update\"] }}\npath \"transit/decrypt/{TRANSIT_KEY}\" {{ capabilities=[\"update\"] }}"
+        "path \"kv/data/tenants/*\" {{ capabilities=[\"read\"] }}\npath \"kv/data/broker/*\" {{ capabilities=[\"read\"] }}\npath \"transit/encrypt/{TRANSIT_KEY}-*\" {{ capabilities=[\"update\"] }}\npath \"transit/decrypt/{TRANSIT_KEY}-*\" {{ capabilities=[\"update\"] }}"
     );
     bao(
         c,
