@@ -369,4 +369,55 @@ is carried but not yet enforced (no token audience field until Phase A/W matures
 
 Evidence: `test-evidence/security-remediation/M1/phase-E/`.
 
+Commit: `7dd5f64`.
+
+---
+
+## Phase B — Cloud credential broker confinement (AF-004)
+
+### B1–B3 — named grant contract + server-side grant policy + AWS least privilege
+
+Objective: stop the credential broker from assuming a caller-chosen role. The
+caller names a tenant-scoped grant; the broker resolves it to an approved role,
+actions, resources, region, and TTL server-side.
+
+Root cause (confirmed reading `wsf-broker`): `broker_credentials(token, .., role_arn, ..)`
+verified the token, then assumed **whatever role ARN the caller named** (only the
+session-policy *resources* were scoped, never the role itself). The exchange DTO
+carried a raw `role_arn`.
+
+Contract (B1): `wsf-api` `ExchangeReq.role_arn` → `grant_id` (a tenant-scoped
+named grant). The public API cannot submit a raw cloud identity.
+
+Grant policy (B2/B3):
+- `wsf-broker::GrantMapping` (tenant, approved role ARN, allowed actions, resource
+  prefixes, region, max TTL) + `GrantPolicy` (named grants; empty ⇒ fail closed).
+  `AwsStsBroker::with_grants`.
+- `broker_credentials(.., grant_id, ..)`: after the token verifies, `resolve()`s
+  the grant — **unknown or cross-tenant ⇒ `GrantDenied` before any AWS/OpenBao
+  call**. The session policy is the grant's actions on its resources, narrowed by
+  the token's resource caveats; the duration is capped by the grant's max TTL; the
+  assumed role is the grant's, not the caller's.
+
+Verify (offline — grant resolution precedes OpenBao/STS):
+- `cargo fmt --check` PASS; `cargo check --workspace` PASS (exit 0);
+  `cargo clippy -p wsf-broker -p wsf-api --all-targets -D warnings -A pedantic` PASS.
+- `cargo test -p wsf-broker` PASS (18): `unknown_grant_is_denied` +
+  `cross_tenant_grant_is_denied` (→ `GrantDenied` before AWS);
+  `session_policy_scopes_to_the_grant`, `token_caveat_narrows_the_grant`,
+  `session_policy_denies_all_when_grant_has_no_resources`; token-reject / expiry
+  preserved.
+
+Regression: REG-AF-004-arbitrary-role flips to REPAIRED.
+
+Findings: AF-004 CONTAINED → **FIXED** (root controls + offline proof).
+
+Deferred (honest): B2 signed/OpenBao-custodied grant loading (the broker binary
+starts with an empty policy ⇒ every exchange fails closed until grants are wired);
+B4 GCP/Azure named-grant parity (their brokers are unchanged this phase); B5
+credential zeroization audit; live B6 Moto/GCP/Azure gate (→ PROVEN). The
+`live_localstack` + `live_api` gates were migrated to the grant model.
+
+Evidence: `test-evidence/security-remediation/M1/phase-B/`.
+
 Commit: (this change set).

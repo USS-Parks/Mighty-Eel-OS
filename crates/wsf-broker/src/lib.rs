@@ -1,15 +1,17 @@
 //! `wsf-broker` — exchange a verified WSF trust token for ephemeral, scoped
 //! cloud credentials (the net-new "sovereign STS broker").
 //!
-//! AWS first: verify the token → read the broker's root credentials from OpenBao
-//! (never exposed) → STS `AssumeRole` with an **inline session policy** narrowed
-//! to the token's `ResourcePrefix` caveats → return temporary credentials whose
-//! duration tracks the token's remaining TTL. GCP (W7) and Azure (W8) follow the
-//! same shape.
+//! AWS first: verify the token → resolve the request's **tenant-scoped named
+//! grant** (the caller never names a raw role ARN — AF-004) → read the broker's
+//! root credentials from OpenBao (never exposed) → STS `AssumeRole` on the grant's
+//! approved role with an **inline session policy** of the grant's actions on its
+//! resources, further narrowed by the token's `ResourcePrefix` caveats → return
+//! temporary credentials whose duration tracks the token TTL, capped by the
+//! grant's max TTL. GCP (W7) and Azure (W8) follow the same shape.
 //!
 //! Fail-closed on trust: a token that does not verify, is revoked, or has expired
-//! is refused **before** any AWS call. A token that carries no resource scope
-//! brokers a deny-all session policy (no standing access).
+//! is refused **before** any AWS call; an unknown or cross-tenant grant is denied;
+//! and a grant/caveat scope that resolves to nothing brokers a deny-all policy.
 
 pub mod azure;
 pub mod error;
@@ -62,23 +64,92 @@ impl BrokerConfig {
     }
 }
 
+/// A tenant-scoped, server-side mapping from a named grant to the cloud identity
+/// it authorizes. The public API selects a grant by id; it never names a raw role
+/// ARN (AF-004). Loaded from signed / OpenBao-custodied policy in production.
+#[derive(Debug, Clone)]
+pub struct GrantMapping {
+    /// Tenant that owns this grant.
+    pub tenant_id: String,
+    /// The approved role ARN to assume — server-side, never caller-supplied.
+    pub role_arn: String,
+    /// Allowed actions (e.g. `s3:GetObject`); empty ⇒ deny-all.
+    pub actions: Vec<String>,
+    /// Allowed resource ARNs / prefixes; empty ⇒ deny-all.
+    pub resource_prefixes: Vec<String>,
+    /// Optional region constraint (else the broker default).
+    pub region: Option<String>,
+    /// Maximum session TTL (seconds); the effective duration never exceeds it.
+    pub max_ttl_secs: i64,
+}
+
+/// The server-side grant policy: the named grants a broker will honor. Empty by
+/// default — an unknown grant is denied (fail closed).
+#[derive(Debug, Clone, Default)]
+pub struct GrantPolicy {
+    grants: std::collections::HashMap<String, GrantMapping>,
+}
+
+impl GrantPolicy {
+    /// An empty policy (every grant denied until one is registered).
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Builder: register `mapping` under `grant_id`.
+    #[must_use]
+    pub fn with_grant(mut self, grant_id: impl Into<String>, mapping: GrantMapping) -> Self {
+        self.grants.insert(grant_id.into(), mapping);
+        self
+    }
+
+    /// Resolve a grant for the token's tenant, or deny. The grant must exist and
+    /// be owned by that tenant — a token cannot borrow another tenant's grant.
+    ///
+    /// # Errors
+    /// [`BrokerError::GrantDenied`] if the grant is unknown or cross-tenant.
+    pub fn resolve(&self, grant_id: &str, tenant_id: &str) -> Result<&GrantMapping, BrokerError> {
+        let mapping = self
+            .grants
+            .get(grant_id)
+            .ok_or_else(|| BrokerError::GrantDenied(format!("unknown grant '{grant_id}'")))?;
+        if mapping.tenant_id != tenant_id {
+            return Err(BrokerError::GrantDenied(
+                "grant is not owned by the token's tenant".to_string(),
+            ));
+        }
+        Ok(mapping)
+    }
+}
+
 /// The AWS STS credential broker.
 pub struct AwsStsBroker {
     openbao: OpenBaoAuth,
     http: reqwest::Client,
     config: BrokerConfig,
+    grant_policy: GrantPolicy,
 }
 
 impl AwsStsBroker {
     /// Assemble a broker from an OpenBao client (root-cred custody), an HTTP
-    /// client, and config.
+    /// client, and config. The grant policy starts empty (every grant denied);
+    /// install one with [`with_grants`](AwsStsBroker::with_grants).
     #[must_use]
     pub fn new(openbao: OpenBaoAuth, http: reqwest::Client, config: BrokerConfig) -> Self {
         Self {
             openbao,
             http,
             config,
+            grant_policy: GrantPolicy::new(),
         }
+    }
+
+    /// Builder: install the server-side grant policy (tenant → approved identity).
+    #[must_use]
+    pub fn with_grants(mut self, grant_policy: GrantPolicy) -> Self {
+        self.grant_policy = grant_policy;
+        self
     }
 
     /// Exchange a verified trust token for scoped temporary AWS credentials.
@@ -93,32 +164,44 @@ impl AwsStsBroker {
         token: &TrustToken,
         verifier: &dyn Verifier,
         public_key: &[u8],
-        role_arn: &str,
+        grant_id: &str,
         now: DateTime<Utc>,
     ) -> Result<TemporaryCredentials, BrokerError> {
         // 1. Fail closed on trust before touching AWS.
         verify_token(token, verifier, public_key, now)?;
 
-        // 2. Fetch the broker's root credentials from OpenBao (never exposed).
+        // 2. Resolve the named grant server-side (AF-004): the caller never names a
+        //    raw role ARN; the grant maps its tenant + scope to an approved role.
+        let mapping = self.grant_policy.resolve(grant_id, &token.tenant_id)?;
+
+        // 3. Fetch the broker's root credentials from OpenBao (never exposed).
         let root = self.fetch_root_credentials().await?;
 
-        // 3. Duration tracks the token TTL, clamped to the STS window.
+        // 4. Duration tracks the token TTL, clamped to the STS window AND the
+        //    grant's maximum TTL.
+        let window_max = self
+            .config
+            .max_duration_secs
+            .min(mapping.max_ttl_secs)
+            .max(self.config.min_duration_secs);
         let duration = clamp_duration(
             self.config.min_duration_secs,
-            self.config.max_duration_secs,
+            window_max,
             &token.expires_at,
             now,
         )?;
 
-        // 4. Session policy narrowed to the token's resource scope.
-        let policy = build_session_policy(token);
+        // 5. Session policy: the grant's actions on its resources, narrowed by the
+        //    token's resource caveats.
+        let policy = build_session_policy(mapping, token);
 
-        // 5. AssumeRole.
+        // 6. AssumeRole the grant's approved role (its region if it pins one).
+        let region = mapping.region.as_deref().unwrap_or(&self.config.region);
         let (amz_date, datestamp) = amz_timestamps(now);
         let params = sts::AssumeRoleParams {
             endpoint: &self.config.sts_endpoint,
-            region: &self.config.region,
-            role_arn,
+            region,
+            role_arn: &mapping.role_arn,
             session_name: &session_name(token),
             session_policy: &policy,
             duration_secs: duration,
@@ -156,25 +239,41 @@ impl AwsStsBroker {
     }
 }
 
-/// Build an inline STS session policy scoping the assumed role to the token's
-/// `ResourcePrefix` caveats. With no resource caveats it denies everything
-/// (fail closed — a token with no scope brokers no standing access).
+/// Build an inline STS session policy: the **grant's** approved actions on its
+/// approved resources, further narrowed by the token's `ResourcePrefix` caveats
+/// (a caveat can only shrink the grant, never widen it). Fails closed to deny-all
+/// when the grant has no actions/resources or the caveats exclude everything.
 #[must_use]
-pub fn build_session_policy(token: &TrustToken) -> String {
-    let resources: Vec<&str> = token
+pub fn build_session_policy(mapping: &GrantMapping, token: &TrustToken) -> String {
+    let caveats: Vec<&str> = token
         .attenuation
         .caveats
         .iter()
         .filter(|c| c.caveat_type == CaveatType::ResourcePrefix)
         .map(|c| c.value.as_str())
         .collect();
-    if resources.is_empty() {
+    let resources: Vec<&str> = if caveats.is_empty() {
+        mapping
+            .resource_prefixes
+            .iter()
+            .map(String::as_str)
+            .collect()
+    } else {
+        mapping
+            .resource_prefixes
+            .iter()
+            .map(String::as_str)
+            .filter(|r| caveats.iter().any(|c| r.starts_with(c)))
+            .collect()
+    };
+    if resources.is_empty() || mapping.actions.is_empty() {
         return r#"{"Version":"2012-10-17","Statement":[{"Sid":"WsfNoScope","Effect":"Deny","Action":"*","Resource":"*"}]}"#
             .to_string();
     }
     let resource_json = serde_json::to_string(&resources).unwrap_or_else(|_| "[]".into());
+    let action_json = serde_json::to_string(&mapping.actions).unwrap_or_else(|_| "[]".into());
     format!(
-        r#"{{"Version":"2012-10-17","Statement":[{{"Sid":"WsfScopedResources","Effect":"Allow","Action":"*","Resource":{resource_json}}}]}}"#
+        r#"{{"Version":"2012-10-17","Statement":[{{"Sid":"WsfGrantScoped","Effect":"Allow","Action":{action_json},"Resource":{resource_json}}}]}}"#
     )
 }
 
@@ -286,42 +385,116 @@ mod tests {
         }
     }
 
+    fn grant(resources: Vec<&str>) -> GrantMapping {
+        GrantMapping {
+            tenant_id: "tenant-a".to_string(),
+            role_arn: "arn:aws:iam::0:role/wsf-approved".to_string(),
+            actions: vec!["s3:GetObject".to_string()],
+            resource_prefixes: resources.iter().map(|s| (*s).to_string()).collect(),
+            region: None,
+            max_ttl_secs: 3600,
+        }
+    }
+
     #[test]
-    fn session_policy_scopes_to_resource_caveats() {
-        let tok = token_with(
-            vec![
-                resource_caveat("arn:aws:s3:::wsf-demo/*"),
-                resource_caveat("arn:aws:s3:::wsf-shared/reports/*"),
-            ],
-            "2026-07-03T12:15:00Z",
-        );
-        let policy = build_session_policy(&tok);
+    fn session_policy_scopes_to_the_grant() {
+        // No token caveats → the grant's full approved resources + actions.
+        let tok = token_with(vec![], "2026-07-03T12:15:00Z");
+        let m = grant(vec![
+            "arn:aws:s3:::wsf-demo/*",
+            "arn:aws:s3:::wsf-shared/reports/*",
+        ]);
+        let policy = build_session_policy(&m, &tok);
         assert!(policy.contains("\"Effect\":\"Allow\""));
+        assert!(policy.contains("s3:GetObject"));
         assert!(policy.contains("arn:aws:s3:::wsf-demo/*"));
-        assert!(policy.contains("arn:aws:s3:::wsf-shared/reports/*"));
-        // A resource NOT granted is outside the policy → implicitly denied.
         assert!(!policy.contains("arn:aws:s3:::other-bucket"));
     }
 
     #[test]
-    fn session_policy_denies_all_without_scope() {
+    fn token_caveat_narrows_the_grant() {
+        // The grant allows two prefixes; the token's caveat permits only one.
+        let tok = token_with(
+            vec![resource_caveat("arn:aws:s3:::wsf-demo/")],
+            "2026-07-03T12:15:00Z",
+        );
+        let m = grant(vec![
+            "arn:aws:s3:::wsf-demo/reports/*",
+            "arn:aws:s3:::wsf-other/*",
+        ]);
+        let policy = build_session_policy(&m, &tok);
+        assert!(policy.contains("arn:aws:s3:::wsf-demo/reports/*"));
+        assert!(!policy.contains("wsf-other"));
+    }
+
+    #[test]
+    fn session_policy_denies_all_when_grant_has_no_resources() {
         let tok = token_with(vec![], "2026-07-03T12:15:00Z");
-        let policy = build_session_policy(&tok);
+        let policy = build_session_policy(&grant(vec![]), &tok);
         assert!(policy.contains("\"Effect\":\"Deny\""));
         assert!(policy.contains("\"Resource\":\"*\""));
     }
 
-    #[test]
-    fn non_resource_caveats_do_not_widen_scope() {
-        let tok = token_with(
-            vec![Caveat {
-                caveat_type: CaveatType::ToolAllowlist,
-                value: "s3:GetObject".to_string(),
-            }],
-            "2026-07-03T12:15:00Z",
+    #[tokio::test]
+    async fn unknown_grant_is_denied() {
+        let signer = RustCryptoMlDsa87::generate("k").unwrap();
+        let tok = fabric_token::issue(token_with(vec![], "2099-01-01T00:00:00Z"), &signer).unwrap();
+        // Empty grant policy → any grant id is unknown.
+        let broker = AwsStsBroker::new(
+            OpenBaoAuth::new(wsf_bridge::OpenBaoConfig::new(
+                "http://127.0.0.1:1",
+                "r",
+                "s",
+            ))
+            .unwrap(),
+            reqwest::Client::new(),
+            BrokerConfig::new("us-east-1", "http://127.0.0.1:1", "kv/data/broker/aws-root"),
         );
-        // No ResourcePrefix caveats → deny-all (fail closed).
-        assert!(build_session_policy(&tok).contains("\"Effect\":\"Deny\""));
+        let err = broker
+            .broker_credentials(
+                &tok,
+                &MlDsa87Verifier,
+                signer.public_key(),
+                "nope",
+                Utc::now(),
+            )
+            .await
+            .unwrap_err();
+        assert!(matches!(err, BrokerError::GrantDenied(_)));
+    }
+
+    #[tokio::test]
+    async fn cross_tenant_grant_is_denied() {
+        let signer = RustCryptoMlDsa87::generate("k").unwrap();
+        // token_with is tenant-a; the grant is owned by tenant-b.
+        let tok = fabric_token::issue(token_with(vec![], "2099-01-01T00:00:00Z"), &signer).unwrap();
+        let mut m = grant(vec!["arn:aws:s3:::b/*"]);
+        m.tenant_id = "tenant-b".to_string();
+        let broker = AwsStsBroker::new(
+            OpenBaoAuth::new(wsf_bridge::OpenBaoConfig::new(
+                "http://127.0.0.1:1",
+                "r",
+                "s",
+            ))
+            .unwrap(),
+            reqwest::Client::new(),
+            BrokerConfig::new("us-east-1", "http://127.0.0.1:1", "kv/data/broker/aws-root"),
+        )
+        .with_grants(GrantPolicy::new().with_grant("g1", m));
+        let err = broker
+            .broker_credentials(
+                &tok,
+                &MlDsa87Verifier,
+                signer.public_key(),
+                "g1",
+                Utc::now(),
+            )
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(err, BrokerError::GrantDenied(_)),
+            "cross-tenant grant must be denied, got {err:?}"
+        );
     }
 
     #[test]

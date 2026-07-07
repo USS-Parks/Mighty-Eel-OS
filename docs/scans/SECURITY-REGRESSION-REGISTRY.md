@@ -21,7 +21,7 @@ fix, in the product suite) → PROVEN (a live-service gate confirms end-to-end).
 | REG-AF-006-revoked-parent | AF-006 | a revoked parent mints no child (`ParentRevoked`) | REPAIRED (Phase T) | fabric-token suite |
 | REG-AF-002-caller-subject | AF-002 | issuance refuses an unauthenticated caller (401) and copies tenant/subject/roles from the verified principal, not the body | REPAIRED (Phase A) | wsf-api auth_gate |
 | REG-AF-003-cross-tenant-unseal | AF-003 | cross-tenant / cross-owner / unbound-v1 unseal is refused before Transit; the binding is signed + AAD-bound | REPAIRED (Phase E) | wsf-seal tenant_binding + fabric-envelope |
-| REG-AF-004-arbitrary-role | AF-004 | exchange assumes a caller-chosen `role_arn` | PHASE B | wsf-broker |
+| REG-AF-004-arbitrary-role | AF-004 | the caller names a tenant-scoped grant, not a role ARN; an unknown or cross-tenant grant is denied before AWS | REPAIRED (Phase B) | wsf-broker |
 | REG-AF-007-unfiltered-receipts | AF-007 | receipt query returns cross-tenant entries | PHASE L | wsf-ledger / wsf-api |
 
 Every finding has a deterministic identifier (gate §0.4). AF-001 is REPAIRED with

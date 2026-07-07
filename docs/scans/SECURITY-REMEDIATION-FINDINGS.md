@@ -17,7 +17,7 @@ documentation or mock-only tests where a live boundary exists (plan §0.4).
 | AF-001 | Critical | Attenuation signs attacker-constructed children without authenticating or fully constraining the parent | `fabric-token::attenuate`, WSF attenuation route | FIXED (T1–T4; live T7 → PROVEN deferred) |
 | AF-002 | High | Public WSF route issues signed tokens for caller-selected subjects and roles | WSF router, principal derivation, bridge issuance | FIXED (A1–A3; live A5 → PROVEN deferred) |
 | AF-003 | High | Envelope unseal lacks tenant/subject binding | envelope contract, AAD/thread, seal service | FIXED (E1/E3/E4; E2 per-tenant Transit + live E7 → deferred) |
-| AF-004 | High | Credential broker accepts caller-selected AWS role | broker policy, role/action/resource binding | CONTAINED (0.2) |
+| AF-004 | High | Credential broker accepts caller-selected AWS role | broker policy, role/action/resource binding | FIXED (B1–B3; B4 GCP/Azure + live B6 → deferred) |
 | AF-005 | High | Production readiness certifies uninitialized / plaintext-capable vaults | vault builder, ZFS initialization, readiness | OPEN |
 | AF-006 | Medium | WSF privileged consumers ignore signed revocation snapshots | token verification context, snapshot store | CONTAINED (0.2); attenuate-path leg FIXED (T); consumer wiring → R |
 | AF-007 | Medium | Receipt ledger is unauthenticated and not tenant-filtered | ledger query authz, tenant index | CONTAINED (0.2) |

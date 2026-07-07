@@ -9,6 +9,10 @@ pub enum BrokerError {
     /// The presented trust token is expired.
     #[error("trust token expired")]
     TokenExpired,
+    /// The requested named grant is unknown, ambiguous, or not owned by the
+    /// token's tenant (AF-004: no caller-selected cloud identity).
+    #[error("grant denied: {0}")]
+    GrantDenied(String),
     /// An OpenBao interaction failed (root-credential custody).
     #[error("openbao: {0}")]
     OpenBao(#[from] wsf_bridge::OpenBaoError),

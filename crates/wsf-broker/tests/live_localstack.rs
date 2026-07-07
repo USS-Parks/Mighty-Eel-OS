@@ -17,7 +17,7 @@ use fabric_crypto::providers::{MlDsa87Verifier, RustCryptoMlDsa87};
 use reqwest::{Client, Method};
 use serde_json::json;
 use wsf_bridge::{OpenBaoAuth, OpenBaoConfig};
-use wsf_broker::{AwsStsBroker, BrokerConfig};
+use wsf_broker::{AwsStsBroker, BrokerConfig, GrantMapping, GrantPolicy};
 
 const ROLE: &str = "wsf-broker-test";
 const CRED_PATH: &str = "kv/data/broker/aws-root";
@@ -198,7 +198,18 @@ async fn broker_scopes_credentials_against_localstack() {
         openbao,
         Client::new(),
         BrokerConfig::new("us-east-1", &aws, CRED_PATH),
-    );
+    )
+    .with_grants(GrantPolicy::new().with_grant(
+        "wsf-demo",
+        GrantMapping {
+            tenant_id: "tenant-a".to_string(),
+            role_arn: "arn:aws:iam::000000000000:role/wsf-demo".to_string(),
+            actions: vec!["s3:GetObject".to_string()],
+            resource_prefixes: vec!["arn:aws:s3:::wsf-demo/*".to_string()],
+            region: None,
+            max_ttl_secs: 3600,
+        },
+    ));
 
     let signer = RustCryptoMlDsa87::generate("wsf-broker-test-key").unwrap();
     let token = signed_token(&signer);
@@ -209,7 +220,7 @@ async fn broker_scopes_credentials_against_localstack() {
             &token,
             &MlDsa87Verifier,
             signer.public_key(),
-            "arn:aws:iam::000000000000:role/wsf-demo",
+            "wsf-demo",
             now,
         )
         .await

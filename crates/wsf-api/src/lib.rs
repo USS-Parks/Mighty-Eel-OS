@@ -182,13 +182,14 @@ pub struct UnsealResp {
     pub plaintext_b64: String,
 }
 
-/// Credential-exchange request.
+/// Credential-exchange request. The caller names a tenant-scoped grant, never a
+/// raw cloud role ARN (AF-004); the broker resolves it to an approved identity.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExchangeReq {
     /// The verified trust token.
     pub token: TrustToken,
-    /// The cloud role ARN to assume.
-    pub role_arn: String,
+    /// The tenant-scoped named grant to exercise.
+    pub grant_id: String,
 }
 
 /// Credential-exchange response (ephemeral scoped creds).
@@ -381,12 +382,14 @@ async fn exchange(
             &req.token,
             &MlDsa87Verifier,
             &s.token_public_key,
-            &req.role_arn,
+            &req.grant_id,
             Utc::now(),
         )
         .await
         .map_err(|e| match e {
-            wsf_broker::BrokerError::TokenRejected(_) | wsf_broker::BrokerError::TokenExpired => {
+            wsf_broker::BrokerError::TokenRejected(_)
+            | wsf_broker::BrokerError::TokenExpired
+            | wsf_broker::BrokerError::GrantDenied(_) => {
                 ApiError::new(StatusCode::FORBIDDEN, e.to_string())
             }
             _ => ApiError::new(StatusCode::BAD_GATEWAY, e.to_string()),

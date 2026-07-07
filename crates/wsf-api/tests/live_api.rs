@@ -19,7 +19,7 @@ use wsf_api::auth::SignedIdentityAuthenticator;
 use wsf_api::client::WsfClient;
 use wsf_api::{AppState, ExchangeReq, IssueReq, SealReq, UnsealReq};
 use wsf_bridge::{BridgeConfig, OpenBaoAuth, OpenBaoConfig, TrustBridge};
-use wsf_broker::{AwsStsBroker, BrokerConfig};
+use wsf_broker::{AwsStsBroker, BrokerConfig, GrantMapping, GrantPolicy};
 use wsf_ledger::Ledger;
 use wsf_seal::{LabelSpec, SealService, SealServiceConfig};
 
@@ -209,11 +209,24 @@ async fn sdk_round_trips_every_endpoint() {
             bridge_signer.clone(),
             BridgeConfig::new("2026.07.03.api", vec![5u8; 32]),
         )),
-        broker: Arc::new(AwsStsBroker::new(
-            ob(),
-            Client::new(),
-            BrokerConfig::new("us-east-1", &aws, CRED_PATH),
-        )),
+        broker: Arc::new(
+            AwsStsBroker::new(
+                ob(),
+                Client::new(),
+                BrokerConfig::new("us-east-1", &aws, CRED_PATH),
+            )
+            .with_grants(GrantPolicy::new().with_grant(
+                "aws-demo",
+                GrantMapping {
+                    tenant_id: TENANT.to_string(),
+                    role_arn: "arn:aws:iam::000000000000:role/wsf-api".to_string(),
+                    actions: vec!["s3:GetObject".to_string()],
+                    resource_prefixes: vec!["arn:aws:s3:::wsf-demo/*".to_string()],
+                    region: None,
+                    max_ttl_secs: 3600,
+                },
+            )),
+        ),
         seal: Arc::new(SealService::new(
             ob(),
             Arc::new(RustCryptoMlDsa87::generate("wsf-api-seal").unwrap()),
@@ -323,7 +336,7 @@ async fn sdk_round_trips_every_endpoint() {
     let creds = sdk
         .exchange(&ExchangeReq {
             token: token.clone(),
-            role_arn: "arn:aws:iam::000000000000:role/wsf-api".to_string(),
+            grant_id: "aws-demo".to_string(),
         })
         .await
         .expect("exchange");
