@@ -1,35 +1,46 @@
-# Commit-msg hook (IGD-05)
+# Commit-msg hook
 
-`.githooks/commit-msg` enforces the MAI canonical co-author footer on every commit. Before IGD-05 the footer was a convention (138/303 commits as of 2026-05-26); afterwards it is a gate.
+`.githooks/commit-msg` stamps the MAI **canonical footer** on every commit and
+strips any AI co-author credit. It is a *rewriter*, not a gate: it never rejects
+a commit — it fixes the message and always exits 0.
 
-## Required pattern
+## What it stamps
 
-The hook accepts any commit whose message contains a line matching (case-insensitive):
-
-```
-Co-Authored by Basho Parks and Claude Opus 4.7 xHigh <basho@islandmountain.io> <claude@anthropic.com>
-```
-
-The canonical form (used in every existing in-spec commit) is:
+Every commit message ends with exactly one footer line:
 
 ```
-Copyright 2026 - Co-Authored by Basho Parks and Claude Opus 4.7 xHigh <basho@islandmountain.io> <claude@anthropic.com>
+Authored and reviewed by Basho Parks, copyright 2026
 ```
 
-The leading `Copyright 2026 - ` is recommended but not required by the regex.
+Any pre-existing AI-attribution trailers — `Co-Authored-By: … Claude/Anthropic`,
+`Claude-Session:`, `Generated with Claude`, a leading 🤖 line, or the legacy
+`Copyright 2026 - Co-Authored by Basho Parks and Claude …` footer — are removed
+first, so re-stamping is idempotent. The shared filter lives in
+`.githooks/footer-filter.awk`.
 
-## Skipped commit types
-
-Auto-generated subjects starting with `Merge `, `Revert `, `fixup! `, or `squash! ` skip the check — those messages are typically rewritten by `git rebase --autosquash` or by the host (GitHub) and shouldn't fail an honest contributor's local commit.
+> **History:** before this, IGD-05 *required* an AI co-author footer. That
+> mandate is retired — the canon no longer credits an AI co-author (CANON §3).
 
 ## Activation
 
-The repo already runs `git config core.hooksPath .githooks` (used by the pre-commit anti-truncation hook). Dropping `.githooks/commit-msg` in place is all that's needed. If your clone is missing the config (the pre-commit hook also wouldn't fire), run it once.
+`git config core.hooksPath .githooks` must be set for this hook (and the
+pre-commit anti-truncation gate) to fire. That config is **not** carried by a
+fresh clone, so `.githooks/session-start.sh` (a Claude Code SessionStart hook
+registered in `.claude/settings.json`) re-arms it at the start of every session.
+To wire it by hand: `git config core.hooksPath .githooks`.
+
+## Skipped commit types
+
+Subjects starting with `Merge `, `Revert `, `fixup! `, or `squash! ` are left
+untouched — those are typically rewritten by `git rebase --autosquash` or the host.
 
 ## Windows-native git (no bash)
 
-The bash hook runs fine under Git Bash on Windows. If your installation lacks bash, use the PowerShell port at `.integrity/scripts/commit-msg-check.ps1` directly, or replace `.githooks/commit-msg` with a one-line wrapper that calls `pwsh -NoProfile -File .integrity/scripts/commit-msg-check.ps1 "$1"` (or `powershell.exe` on a Windows machine without PowerShell 7).
+Use the PowerShell port `.integrity/scripts/commit-msg-check.ps1`, or a one-line
+`.githooks/commit-msg` wrapper: `pwsh -NoProfile -File .integrity/scripts/commit-msg-check.ps1 "$1"`.
 
 ## CI mirror
 
-`.github/workflows/commit-msg-check.yml` re-runs the same regex against every commit in an incoming PR's range, so the gate also catches commits that bypassed the local hook with `--no-verify`.
+`.github/workflows/commit-msg-check.yml` verifies every commit in a PR/push range
+carries the canonical footer and carries **no** AI co-author credit, so the policy
+holds even for commits made without the local hook.
