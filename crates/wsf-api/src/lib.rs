@@ -641,13 +641,44 @@ async fn exchange(
     }))
 }
 
-async fn receipts(State(s): State<AppState>, Query(q): Query<ReceiptsQuery>) -> Json<ReceiptsResp> {
+/// Maximum receipts returned per query (plan L2 — bounded results).
+const RECEIPTS_LIMIT: usize = 500;
+
+async fn receipts(
+    State(s): State<AppState>,
+    Extension(principal): Extension<WsfPrincipal>,
+    Query(q): Query<ReceiptsQuery>,
+) -> Result<Json<ReceiptsResp>, ApiError> {
+    // L1/L2: the query is authenticated (principal established by the A2
+    // middleware) and **mandatorily tenant-scoped** to the caller's tenant. A
+    // receipt is returned only if it carries a `tenant_id` equal to the
+    // principal's. Cross-tenant identifier guessing therefore returns no rows
+    // and no existence oracle (AF-007). Receipts without a tenant binding are
+    // withheld from tenant-scoped reads (fail closed).
+    if !principal.is_for(Audience::Wsf) {
+        return Err(ApiError::new(
+            StatusCode::FORBIDDEN,
+            "principal is not authenticated for the WSF plane",
+        ));
+    }
     let ledger = s.ledger.lock().expect("ledger lock");
-    let entries = match (q.field, q.value) {
-        (Some(field), Some(value)) => ledger.query(&field, &value).into_iter().cloned().collect(),
-        _ => ledger.entries().to_vec(),
+
+    // Optional typed field filter — always intersected with the tenant scope,
+    // so it can never widen beyond the caller's tenant.
+    let base: Vec<&LedgerEntry> = match (q.field.as_deref(), q.value.as_deref()) {
+        (Some(field), Some(value)) => ledger.query(field, value),
+        _ => ledger.entries().iter().collect(),
     };
-    Json(ReceiptsResp { entries })
+    let entries: Vec<LedgerEntry> = base
+        .into_iter()
+        .filter(|e| {
+            e.receipt.get("tenant_id").and_then(|v| v.as_str())
+                == Some(principal.tenant_id.as_str())
+        })
+        .take(RECEIPTS_LIMIT)
+        .cloned()
+        .collect();
+    Ok(Json(ReceiptsResp { entries }))
 }
 
 async fn openapi() -> impl IntoResponse {
