@@ -324,3 +324,23 @@ sufficiently-cleared token could unseal any tenant's envelope).
 
 Remaining in-phase hardening: **E2** per-tenant Transit key namespace, **E5**
 offline v1-envelope migration command, **E6** storage/receipt tenant-key binding.
+
+## Phase B — cloud credential broker confinement (core)
+
+Closes **AF-004** (the broker accepted a caller-selected AWS role ARN).
+
+- **B1** contract: `ExchangeReq` carries a tenant-scoped `grant_id`, not a
+  `role_arn`, with `deny_unknown_fields` — a smuggled `role_arn` is a 422.
+- **B2** server-side grants: `wsf-api/src/grants.rs` (`CloudGrant` + `GrantStore`
+  seam; `StaticGrants` for dev/tests). The exchange handler requires the WSF
+  audience, requires the presented token's tenant to equal the authenticated
+  principal, resolves `(tenant, grant_id)` server-side, and only then brokers
+  with the approved ARN. Missing/cross-tenant grant → 403.
+- **B6** live gate: `wsf-api/tests/broker_grant.rs` against live OpenBao + Moto
+  STS — approved grant brokers scoped creds; raw `role_arn` → 422; unknown grant
+  → 403. Commit `9b66c3a`.
+
+The low-level broker primitive still takes an ARN (W2 `live_localstack` exercises
+it directly and stays green); the AF-004 fix is at the public API. Remaining
+in-phase: **B3** AWS least-privilege scope binding, **B4** GCP/Azure parity,
+**B5** credential-lifecycle hygiene.
