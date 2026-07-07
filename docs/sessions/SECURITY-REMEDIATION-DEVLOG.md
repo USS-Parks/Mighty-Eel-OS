@@ -574,4 +574,39 @@ encryption/init/key proofs — those flip from pass to a real pass only under V9
 
 Evidence: `test-evidence/security-remediation/M1/phase-V/`.
 
+Commit: `a5e0fc5`.
+
+---
+
+## Phase Q (partial) + M1 closure
+
+### Q1/Q3 quality gates
+
+- Q1 (Rust clippy): green from a clean checkout — `cargo clippy --workspace --
+  -D warnings -A clippy::pedantic` exit 0 throughout. AQ-001 was already resolved
+  upstream (the baseline in this container is clean).
+- Q3 (Ruff / deployment mock): fixed the three ruff findings in
+  `deployment/appliance/mock-llm/app.py` — typed `_send`/`log_message`, and the
+  bind policy now defaults to loopback (`MOCK_LLM_BIND`, no hardcoded `0.0.0.0`).
+  `ruff check .` exit 0.
+
+### Deferred in Q (honest)
+
+- Q2/Q4 (Python topology + whole-tree mypy/pytest) — AQ-002 is only partly closed;
+  full package discovery + typing + pytest collection repair is not done.
+- Q5 (dependency policy), Q6 (secret scanning — gitleaks/detect-secrets are not
+  installed in this container), Q7/AS-001 (production compose still carries
+  `:latest` for first-party + minio images; digest pinning + SBOM + signing need
+  the release pipeline's built-image digests), Q8 (full doc reconciliation beyond
+  the per-phase route-inventory + finding updates already made).
+
+### M1 closure
+
+All seven AF findings have FIXED root controls with offline proof, committed and
+pushed. Wrote `docs/scans/SECURITY-REMEDIATION-CLOSURE.md` — the finding-by-finding
+status, the deferred live-gate ledger, and the go/no-go (GO to merge the branch;
+NO-GO to ship until the live gates + external re-scan + owner sign-off complete).
+The P-SPR status header is updated to the M1 milestone. Phase F frontier audits
+(F1–F9) and Phase X ship gates were **not** performed this pass and remain open.
+
 Commit: (this change set).

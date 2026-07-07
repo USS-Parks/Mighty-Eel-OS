@@ -5,7 +5,13 @@
 **Repository:** `im-mighty-eel-mai` at `C:\Users\17076\Documents\Claude\Mighty Eel OS\mai`  
 **Source audit:** 2026-07-05 parent-agent repository audit at commit `6ffaaeeea0a83c7fa071e114183cfa60c5898703`  
 **Author:** Basho Parks + Codex · **Created:** 2026-07-05  
-**Status:** **READY FOR STS APPROVAL — execution has not started**
+**Status:** **M1 ROOT-FIX MILESTONE LANDED (2026-07-07)** — all seven audit
+findings (AF-001…AF-007) have FIXED root controls with offline proof, committed on
+`claude/repository-security-audit-2trwtq`. No finding is CLOSED: the live-service
+gates, Phase F frontier audits, the remainder of Q, and all of Phase X (external
+re-scan, burn-in, owner go/no-go) remain open. See
+[SECURITY-REMEDIATION-CLOSURE.md](SECURITY-REMEDIATION-CLOSURE.md) for the honest
+accounting and go/no-go.
 
 ---
 
