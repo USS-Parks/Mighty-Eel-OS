@@ -1,0 +1,12 @@
+== live service + toolchain versions ==
+2026-07-07T10:39:51Z
+-- OpenBao: OpenBao v2.0.0-HEAD (cgo)
+   source: proxy.golang.org module zip github.com/openbao/openbao @ v0.0.0-20260707075439-c3fd558bbc13 (commit c3fd558bbc13c25eafa72d345a496c72ed0da92a, main, 2026-07-07); built locally with go version go1.24.7 linux/amd64
+   endpoint: http://127.0.0.1:8200 (dev mode, inmem storage, root token 'root')
+-- Moto: Version: 5.2.2
+   source: pypi (moto[server]); endpoint: http://127.0.0.1:5566
+-- rustc: rustc 1.94.1 (e408947bf 2026-03-25); cargo: cargo 1.94.1 (29ea6fb6a 2026-03-24)
+-- repo HEAD: 4af8b8b0daad47968a7f5c3c66e298c6aa53cc8a on claude/live-gates-docker-zfs-qoe2bc
+-- seal-status at run time:
+{"type":"shamir","initialized":true,"sealed":false,"t":1,"n":1,"progress":0,"nonce":"","recovery_seal":false,"version":"2.0.0-HEAD","commit_date":"","migration":false,"cluster_name":"vault-cluster-8f60cab6","cluster_id":"65404c37-2db7-e3cf-4820-2a722c06b448","storage_type":"inmem"}
+

@@ -1,0 +1,22 @@
+== host feasibility probe: ZFS + TPM (V9 live leg) ==
+2026-07-07T10:36:01Z
+-- uname -r:
+6.18.5
+-- /lib/modules:
+ls: cannot access '/lib/modules': No such file or directory
+ENOENT (no kernel modules available in sandbox)
+-- zfs in /proc/filesystems:
+absent
+-- zfs/zpool binaries:
+not installed
+-- apt mirror reachability (deb.debian.org):
+curl: (56) CONNECT tunnel failed, response 403
+000
+-- TPM devices:
+ls: cannot access '/dev/tpm*': No such file or directory
+ls: cannot access '/dev/tpmrm*': No such file or directory
+no /dev/tpm*
+-- tpm in /proc/devices:
+no tpm char major
+-- swtpm binary:
+not installed; apt mirrors policy-blocked
