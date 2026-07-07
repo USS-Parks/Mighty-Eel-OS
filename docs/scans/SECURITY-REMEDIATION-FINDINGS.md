@@ -19,7 +19,7 @@ documentation or mock-only tests where a live boundary exists (plan §0.4).
 | AF-003 | High | Envelope unseal lacks tenant/subject binding | envelope contract, AAD/thread, seal service | PROVEN (E1/E3/E4/E7); E2/E5/E6 hardening open |
 | AF-004 | High | Credential broker accepts caller-selected AWS role | broker policy, role/action/resource binding | PROVEN (B1/B2/B6); B3/B4/B5 hardening open |
 | AF-005 | High | Production readiness certifies uninitialized / plaintext-capable vaults | vault builder, ZFS initialization, readiness | OPEN |
-| AF-006 | Medium | WSF privileged consumers ignore signed revocation snapshots | token verification context, snapshot store | CONTAINED (0.2) |
+| AF-006 | Medium | WSF privileged consumers ignore signed revocation snapshots | token verification context, snapshot store | FIXED (R2 predicate + R3 shared path); seal/broker wiring + R6 live gate open |
 | AF-007 | Medium | Receipt ledger is unauthenticated and not tenant-filtered | ledger query authz, tenant index | CONTAINED (0.2) |
 | AQ-001 | Quality | Clippy gate fails: `clippy::doc_lazy_continuation` at `mai-core/src/cache.rs:109` | Rust CI | OPEN |
 | AQ-002 | Quality | Whole-tree Ruff / mypy / pytest gates fail or do not collect reliably | Python packaging and CI | OPEN |
