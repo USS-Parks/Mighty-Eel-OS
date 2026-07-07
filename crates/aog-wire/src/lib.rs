@@ -5,9 +5,13 @@
 //! Raft handle. This is the wire counterpart of `aog-store`'s in-process
 //! `ClusterNetwork` — the "deployment packaging" the plan exercises in Phase V.
 //!
-//! Transport security (mTLS, sender-constrained per doctrine I-3) layers on at
-//! VH5, where per-node certificates are generated; this crate proves the
-//! consensus carries correctly over a real socket first.
+//! VH5b lands transport security: [`tls::NodeTls`] builds the mutually-authenticated
+//! (sender-constrained, doctrine I-3) rustls configs — a raft server that requires
+//! a CA-signed client certificate, and a client that presents its identity and
+//! pins the estate CA. [`WireNetwork::with_tls`] carries the client leg; the plain
+//! HTTP path still runs where no TLS is configured.
+
+pub mod tls;
 
 use std::io;
 use std::net::SocketAddr;
@@ -43,6 +47,20 @@ impl WireNetwork {
     #[must_use]
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// A wire network whose peer connections use mutually-authenticated TLS
+    /// (VH5b): the reqwest client presents this node's identity and verifies each
+    /// peer's server certificate against the estate CA (`client_config`). Peer
+    /// URLs in cluster membership must then be `https://`.
+    ///
+    /// # Errors
+    /// [`reqwest::Error`] if the TLS-configured client cannot be built.
+    pub fn with_tls(client_config: rustls::ClientConfig) -> Result<Self, reqwest::Error> {
+        let http = reqwest::Client::builder()
+            .use_preconfigured_tls(client_config)
+            .build()?;
+        Ok(Self { http })
     }
 }
 
