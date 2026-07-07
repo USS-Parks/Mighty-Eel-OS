@@ -18,7 +18,7 @@ documentation or mock-only tests where a live boundary exists (plan §0.4).
 | AF-002 | High | Public WSF route issues signed tokens for caller-selected subjects and roles | WSF router, principal derivation, bridge issuance | FIXED (A1–A3; live A5 → PROVEN deferred) |
 | AF-003 | High | Envelope unseal lacks tenant/subject binding | envelope contract, AAD/thread, seal service | FIXED (E1/E3/E4; E2 per-tenant Transit + live E7 → deferred) |
 | AF-004 | High | Credential broker accepts caller-selected AWS role | broker policy, role/action/resource binding | FIXED (B1–B3; B4 GCP/Azure + live B6 → deferred) |
-| AF-005 | High | Production readiness certifies uninitialized / plaintext-capable vaults | vault builder, ZFS initialization, readiness | OPEN |
+| AF-005 | High | Production readiness certifies uninitialized / plaintext-capable vaults | vault builder, ZFS initialization, readiness | FIXED (V1 reject stub/file-dev + V8 measured vault_opened; deep proofs V2–V9 → live gate deferred) |
 | AF-006 | Medium | WSF privileged consumers ignore signed revocation snapshots | token verification context, snapshot store | FIXED (T1 context + R1 store + R3 seal/broker consumers; GCP/Azure + live R6 → deferred) |
 | AF-007 | Medium | Receipt ledger is unauthenticated and not tenant-filtered | ledger query authz, tenant index | FIXED (L1/L2; L3 persistent HA + live L4 → deferred) |
 | AQ-001 | Quality | Clippy gate fails: `clippy::doc_lazy_continuation` at `mai-core/src/cache.rs:109` | Rust CI | RESOLVED (clippy `--workspace -D warnings -A pedantic` green at HEAD) |

@@ -98,6 +98,24 @@ fn production_rejects_stub_backend() {
 }
 
 #[test]
+fn production_rejects_file_dev_backend() {
+    // AF-005: file-dev is a plaintext-capable dev backend; production must refuse
+    // it even when the root exists.
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().join("vault");
+    std::fs::create_dir_all(&root).unwrap();
+    let mut p = baseline(ProfileMode::Production, root);
+    p.vault.backend = VaultBackend::FileDev;
+    let err = build_vault(&p)
+        .map(|_| ())
+        .expect_err("production must refuse the plaintext-capable file-dev backend");
+    assert!(
+        matches!(err, VaultBuildError::FileDevInProduction),
+        "got {err:?}"
+    );
+}
+
+#[test]
 fn production_rejects_allow_stub_true() {
     let temp = tempfile::tempdir().unwrap();
     let mut p = baseline(ProfileMode::Production, temp.path().to_path_buf());

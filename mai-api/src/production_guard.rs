@@ -483,10 +483,13 @@ fn register_vault_checks(ctx: &mut CheckContext) {
     ctx.check(
         "PROD-VAULT-001",
         CheckSeverity::Critical,
-        "set [vault].backend to a real backend (e.g. \"zfs\")",
+        "set [vault].backend to a real encrypted backend (e.g. \"zfs\")",
         |p| {
-            if matches!(p.vault.backend, VaultBackend::Stub) {
-                fail("vault.backend is \"stub\"; StubVault is rejected in production")
+            if matches!(p.vault.backend, VaultBackend::Stub | VaultBackend::FileDev) {
+                fail(&format!(
+                    "vault.backend is {:?}; a plaintext-capable dev backend (stub/file-dev) is rejected in production",
+                    p.vault.backend
+                ))
             } else {
                 pass(&format!("vault.backend = {:?}", p.vault.backend))
             }

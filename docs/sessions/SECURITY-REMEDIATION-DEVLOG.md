@@ -526,4 +526,52 @@ accept a snapshot today).
 
 Evidence: `test-evidence/security-remediation/M1/phase-R/`.
 
+Commit: `7b1fe51`.
+
+---
+
+## Phase V — Production vault truth restoration (AF-005)
+
+### V1 backend policy + V8 measured readiness
+
+Objective: stop production readiness from certifying an uninitialized or
+plaintext-capable vault.
+
+Root cause (confirmed reading `mai-api`): two holes.
+1. `vault_builder::build_vault` **accepted the `FileDev` backend in production** — a
+   plaintext-capable filesystem vault (its own doc matrix said `production |
+   file-dev | FileDevVault`). Only `Stub` was refused.
+2. `server.rs` set the runtime `vault_opened` outcome to an **unconditional
+   `RuntimeOutcome::pass`** — it never opened or verified the vault, so
+   `PROD-VAULT-100` passed regardless of the real backend/root.
+
+Fix:
+- V1: `build_vault` now returns `FileDevInProduction` for a production file-dev
+  profile (and the doc matrix is corrected). The config guard `PROD-VAULT-001` also
+  rejects `stub | file-dev` as "a plaintext-capable dev backend."
+- V8: the runtime `vault_opened` outcome is **measured** — a production stub/file-dev
+  backend, or a missing vault root, flips it to `Fail`, so startup fails closed on
+  the `PROD-VAULT-100` Critical check. (`mai-ship-validate` already measured via
+  `build_vault`; the running server now matches.)
+
+Verify (offline):
+- `cargo fmt --check` PASS; `cargo check --workspace` PASS (exit 0);
+  `cargo clippy -p mai-api -D warnings -A pedantic` PASS.
+- `cargo test -p mai-api --test vault_bootstrap` PASS (10 — incl. new
+  `production_rejects_file_dev_backend`).
+- `cargo test -p mai-api --test ship_convergence --test production_guard` PASS (6 + 4).
+
+Findings: AF-005 OPEN → **FIXED** for the backend-policy + readiness-truth dimensions
+(the two audit holes), with offline proof.
+
+Deferred (honest — these need a live ZFS/TPM environment, the V-phase live gate):
+V2 real construction (PQC/TPM/audit engines) + removing `ZfsVault::new` from the
+production boot; V3 initialization-before-publication (mount/dataset/key/manifest/PCR
+proof); V4 encrypted model storage round-trip; V5 ZFS property proof; V6 snapshot/
+rollback; V7 deletion/cryptographic-erasure semantics; V9 restart/migration gate
+(AF-005 live closure). `vault_opened` now measures backend + root, not the deeper
+encryption/init/key proofs — those flip from pass to a real pass only under V9.
+
+Evidence: `test-evidence/security-remediation/M1/phase-V/`.
+
 Commit: (this change set).
