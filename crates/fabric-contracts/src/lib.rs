@@ -9,6 +9,7 @@
 pub mod common;
 pub mod envelope;
 pub mod identity;
+pub mod principal;
 pub mod receipt;
 pub mod token;
 
@@ -17,5 +18,6 @@ pub use common::{
 };
 pub use envelope::{Envelope, Label, Seal, Thread};
 pub use identity::{Identity, IdentityKind};
+pub use principal::{Audience, AuthStrength, AuthenticatedFacts, WsfPrincipal};
 pub use receipt::{Correlation, PeriodicSignature, Receipt};
 pub use token::{Attenuation, Budget, Caveat, CaveatType, TrustToken};
