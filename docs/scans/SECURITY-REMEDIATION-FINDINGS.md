@@ -18,7 +18,7 @@ documentation or mock-only tests where a live boundary exists (plan §0.4).
 | AF-002 | High | Public WSF route issues signed tokens for caller-selected subjects and roles | WSF router, principal derivation, bridge issuance | PROVEN (A1–A5) |
 | AF-003 | High | Envelope unseal lacks tenant/subject binding | envelope contract, AAD/thread, seal service | PROVEN (E1–E7 complete: per-tenant Transit keys, migration, receipts) |
 | AF-004 | High | Credential broker accepts caller-selected AWS role | broker policy, role/action/resource binding | PROVEN (B1–B6 complete: grant-bound actions/region/external-id/TTL, credential hygiene) |
-| AF-005 | High | Production readiness certifies uninitialized / plaintext-capable vaults | vault builder, ZFS initialization, readiness | OPEN |
+| AF-005 | High | Production readiness certifies uninitialized / plaintext-capable vaults | vault builder, ZFS initialization, readiness | CONTAINED→FIXING (V1 backend policy, V2/V3 initialized construction blocks bind, V5/V6 ZFS ops, V8 measured probe; V4/V7 + V9 live gate open) |
 | AF-006 | Medium | WSF privileged consumers ignore signed revocation snapshots | token verification context, snapshot store | PROVEN (R1 anti-rollback store + seal/broker fail-closed consumers + R6 live gate) |
 | AF-007 | Medium | Receipt ledger is unauthenticated and not tenant-filtered | ledger query authz, tenant index | PROVEN (L1/L2 + E6 binding + auditor-only signed export, L4 live gate; L3 durable backend = ops plumbing) |
 | AQ-001 | Quality | Clippy gate fails: `clippy::doc_lazy_continuation` at `mai-core/src/cache.rs:109` | Rust CI | OPEN |

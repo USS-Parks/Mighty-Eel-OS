@@ -495,3 +495,32 @@ wsf-ledger, aog-gateway, aog-controller, aog-apiserver, aog-node,
 aog-conformance, aogd). `protoc` was also installed in the dev container,
 unblocking `mai-api` builds (pre-existing environment gap, unrelated to the
 remediation).
+
+## Phase V — V1/V2/V3 + V8 core (AF-005)
+
+- **V1 backend policy**: `build_vault` production mode accepts only the
+  reviewed encrypted backend. The plaintext `file-dev` backend — previously
+  accepted in production whenever `vault.root` existed — is refused regardless
+  of `allow_stub` or root state, and the `PROD-VAULT-001` static check fails
+  on it explicitly.
+- **V2 initialized construction**: the ZFS arm no longer hands out a bare
+  `ZfsVault::new` (no PQC, no audit writer, nothing awaited). It constructs
+  and initializes `PqcEngine` and the PQC-signed `AuditWriter`, creates the
+  storage tree, builds `ZfsVault::with_engines`, and — when the new
+  `[vault].dataset` profile field names the backing dataset — wires real
+  `ZfsOps` so initialization **proves the live dataset's properties** (V5)
+  instead of trusting a directory.
+- **V3 initialization blocks binding**: `vault.initialize()` is awaited in
+  the builder and any failure is `VaultBuildError::InitFailed`, which aborts
+  `MaiServer::run` before any socket binds.
+- **V8 core — measured readiness**: the unconditional
+  `vault_opened = Pass("vault opened")` fabrication is gone. `probe_vault`
+  runs a storage round-trip (store → load → byte-compare, unique per-boot id)
+  through the live `VaultInterface` and its outcome feeds `PROD-VAULT-100`;
+  a missing probe fails closed. `mai_ship_validate` runs the same probe.
+  Gate: `vault_bootstrap.rs` proves the probe passes on an initialized vault
+  and FAILS on the stub (which the old code would have certified).
+
+Remaining for AF-005: **V4** encrypted model storage wiring, **V7** deletion
+semantics (cryptographic erasure), full **V8** evidence sweep (restart /
+capacity outcomes), **V9** restart/migration live gate on the ZFS+TPM host.

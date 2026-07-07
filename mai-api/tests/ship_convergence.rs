@@ -60,6 +60,7 @@ fn local_dev_profile(state_dir: PathBuf) -> ShipProfile {
         vault: VaultConfig {
             backend: VaultBackend::Zfs,
             root: vault_root,
+            dataset: None,
             require_sealed_master_key: false,
             require_pqc: false,
             allow_stub: false,
@@ -107,8 +108,8 @@ fn local_dev_profile(state_dir: PathBuf) -> ShipProfile {
     }
 }
 
-#[test]
-fn all_builders_compose_under_local_dev_profile() {
+#[tokio::test]
+async fn all_builders_compose_under_local_dev_profile() {
     // Every SHIP-03..SHIP-06 builder must produce a usable component
     // from the same parse-validated profile. This is the SHIP-07
     // composition contract: one profile in, four real components out,
@@ -116,7 +117,9 @@ fn all_builders_compose_under_local_dev_profile() {
     let temp = tempfile::tempdir().unwrap();
     let profile = local_dev_profile(temp.path().to_path_buf());
 
-    let _vault = build_vault(&profile).expect("vault builder accepts local-dev profile");
+    let _vault = build_vault(&profile)
+        .await
+        .expect("vault builder accepts local-dev profile");
     let _sealer = build_sealer(&profile).expect("sealer builder accepts local-dev profile");
     let trust = build_trust_components(&profile).expect("trust builder accepts local-dev profile");
 

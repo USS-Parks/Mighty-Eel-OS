@@ -12,7 +12,7 @@ use mai_api::ship_profile::{
     NetworkConfig, ObservabilityConfig, PathsConfig, ProfileMeta, ProfileMode, ShipProfile,
     TlsMode, TrustConfig, TrustVerifier, VaultBackend, VaultConfig,
 };
-use mai_api::vault_builder::{VaultBuildError, build_vault};
+use mai_api::vault_builder::{VaultBuildError, build_vault, probe_vault};
 
 /// Baseline profile shared by every test. Production mode tightens
 /// defaults to mirror a real ship profile; local-dev loosens them so
@@ -36,6 +36,7 @@ fn baseline(mode: ProfileMode, root: PathBuf) -> ShipProfile {
         vault: VaultConfig {
             backend: VaultBackend::Zfs,
             root,
+            dataset: None,
             require_sealed_master_key: false,
             require_pqc: false,
             allow_stub: false,
@@ -83,12 +84,13 @@ fn baseline(mode: ProfileMode, root: PathBuf) -> ShipProfile {
     }
 }
 
-#[test]
-fn production_rejects_stub_backend() {
+#[tokio::test]
+async fn production_rejects_stub_backend() {
     let temp = tempfile::tempdir().unwrap();
     let mut p = baseline(ProfileMode::Production, temp.path().to_path_buf());
     p.vault.backend = VaultBackend::Stub;
     let err = build_vault(&p)
+        .await
         .map(|_| ())
         .expect_err("production must refuse stub backend");
     assert!(
@@ -97,12 +99,13 @@ fn production_rejects_stub_backend() {
     );
 }
 
-#[test]
-fn production_rejects_allow_stub_true() {
+#[tokio::test]
+async fn production_rejects_allow_stub_true() {
     let temp = tempfile::tempdir().unwrap();
     let mut p = baseline(ProfileMode::Production, temp.path().to_path_buf());
     p.vault.allow_stub = true;
     let err = build_vault(&p)
+        .await
         .map(|_| ())
         .expect_err("production must refuse allow_stub=true");
     assert!(
@@ -111,21 +114,52 @@ fn production_rejects_allow_stub_true() {
     );
 }
 
-#[test]
-fn production_accepts_zfs_when_root_exists() {
+#[tokio::test]
+async fn production_accepts_zfs_when_root_exists() {
     let temp = tempfile::tempdir().unwrap();
     let p = baseline(ProfileMode::Production, temp.path().to_path_buf());
-    let _vault = build_vault(&p).expect("production zfs build must succeed");
+    let _vault = build_vault(&p)
+        .await
+        .expect("production zfs build must succeed");
 }
 
-#[test]
-fn production_rejects_file_dev_backend() {
+#[tokio::test]
+async fn probe_measures_the_storage_round_trip() {
+    // V8: the readiness outcome is measured, never fabricated. An
+    // initialized vault round-trips the probe payload…
+    let temp = tempfile::tempdir().unwrap();
+    let p = baseline(ProfileMode::LocalDev, temp.path().to_path_buf());
+    let vault = build_vault(&p).await.expect("zfs-backend build");
+    let outcome = probe_vault(vault.as_ref()).await;
+    assert!(
+        outcome.passed,
+        "probe must pass on a live vault: {}",
+        outcome.detail
+    );
+
+    // …while the stub cannot serve the payload back: the probe FAILS
+    // instead of certifying a vault that cannot store anything.
+    let mut p2 = baseline(ProfileMode::LocalDev, temp.path().to_path_buf());
+    p2.vault.backend = VaultBackend::Stub;
+    p2.vault.allow_stub = true;
+    let stub = build_vault(&p2).await.expect("stub build");
+    let outcome = probe_vault(stub.as_ref()).await;
+    assert!(
+        !outcome.passed,
+        "stub must not pass the probe: {}",
+        outcome.detail
+    );
+}
+
+#[tokio::test]
+async fn production_rejects_file_dev_backend() {
     // V1: file-dev stores plaintext — production accepts only the reviewed
     // encrypted backend, no matter what the root looks like.
     let temp = tempfile::tempdir().unwrap();
     let mut p = baseline(ProfileMode::Production, temp.path().to_path_buf());
     p.vault.backend = VaultBackend::FileDev;
     let err = build_vault(&p)
+        .await
         .map(|_| ())
         .expect_err("production must refuse the plaintext file-dev backend");
     assert!(
@@ -139,14 +173,15 @@ fn production_rejects_file_dev_backend() {
     );
 }
 
-#[test]
-fn production_rejects_missing_root() {
+#[tokio::test]
+async fn production_rejects_missing_root() {
     // A path that cannot exist on either Linux or Windows test hosts.
     let p = baseline(
         ProfileMode::Production,
         PathBuf::from("/__ship_03_nonexistent_vault_root__/zzz"),
     );
     let err = build_vault(&p)
+        .await
         .map(|_| ())
         .expect_err("missing root must fail in production");
     assert!(
@@ -155,31 +190,35 @@ fn production_rejects_missing_root() {
     );
 }
 
-#[test]
-fn production_rejects_empty_root() {
+#[tokio::test]
+async fn production_rejects_empty_root() {
     let p = baseline(ProfileMode::Production, PathBuf::new());
     let err = build_vault(&p)
+        .await
         .map(|_| ())
         .expect_err("empty root must fail");
     assert!(matches!(err, VaultBuildError::EmptyRoot), "got {err:?}");
 }
 
-#[test]
-fn local_dev_allows_stub_when_flag_set() {
+#[tokio::test]
+async fn local_dev_allows_stub_when_flag_set() {
     let temp = tempfile::tempdir().unwrap();
     let mut p = baseline(ProfileMode::LocalDev, temp.path().to_path_buf());
     p.vault.backend = VaultBackend::Stub;
     p.vault.allow_stub = true;
-    let _vault = build_vault(&p).expect("local-dev stub vault must build when allow_stub=true");
+    let _vault = build_vault(&p)
+        .await
+        .expect("local-dev stub vault must build when allow_stub=true");
 }
 
-#[test]
-fn local_dev_rejects_stub_when_flag_clear() {
+#[tokio::test]
+async fn local_dev_rejects_stub_when_flag_clear() {
     let temp = tempfile::tempdir().unwrap();
     let mut p = baseline(ProfileMode::LocalDev, temp.path().to_path_buf());
     p.vault.backend = VaultBackend::Stub;
     p.vault.allow_stub = false;
     let err = build_vault(&p)
+        .await
         .map(|_| ())
         .expect_err("stub backend without allow_stub must fail");
     assert!(
@@ -195,7 +234,9 @@ async fn file_dev_backend_is_accepted() {
     std::fs::create_dir_all(&root).unwrap();
     let mut p = baseline(ProfileMode::LocalDev, root);
     p.vault.backend = VaultBackend::FileDev;
-    let vault = build_vault(&p).expect("file-dev must be accepted in local-dev mode");
+    let vault = build_vault(&p)
+        .await
+        .expect("file-dev must be accepted in local-dev mode");
     assert!(
         vault.load_model_weights("any").await.is_err(),
         "stub-like: no models on disk"
@@ -208,7 +249,7 @@ async fn local_dev_stub_responds_as_vault_interface() {
     let mut p = baseline(ProfileMode::LocalDev, temp.path().to_path_buf());
     p.vault.backend = VaultBackend::Stub;
     p.vault.allow_stub = true;
-    let vault = build_vault(&p).expect("build must succeed");
+    let vault = build_vault(&p).await.expect("build must succeed");
     let res = vault.load_model_weights("does-not-exist").await;
     assert!(res.is_err(), "stub must report model-not-found");
 }
