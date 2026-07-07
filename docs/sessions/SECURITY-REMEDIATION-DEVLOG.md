@@ -420,4 +420,52 @@ credential zeroization audit; live B6 Moto/GCP/Azure gate (→ PROVEN). The
 
 Evidence: `test-evidence/security-remediation/M1/phase-B/`.
 
+Commit: `c0c95a4`.
+
+---
+
+## Phase L — Receipt ledger authorization and integrity (AF-007)
+
+### L1/L2 — authenticated, tenant-scoped receipt query
+
+Objective: stop the receipt ledger from serving cross-tenant metadata to any
+caller. Authenticate the query and enforce a mandatory tenant predicate.
+
+Root cause (confirmed reading `wsf-api` + `wsf-ledger`): `/v1/receipts` was
+unauthenticated, accepted an arbitrary `field=/value=` query (an enumeration
+oracle), and returned **all** entries with no tenant filter.
+
+Query model (L1/L2):
+- `wsf-ledger`: `query_tenant(tenant, token_id?, limit)` — only entries whose
+  receipt carries `tenant_id == tenant` (a receipt with no `tenant_id` is never
+  returned to a tenant query; no existence oracle); `query_global(token_id?,
+  limit)` for the audited global-auditor. Both paged.
+- `wsf-seal::SealReceipt` gains `tenant_id` (from the presenting token) so seal
+  receipts are tenant-attributable; the bridge's `AuditCorrelation` already carries
+  it.
+- `wsf-api`: `/v1/receipts` is gated by `require_principal`; `ReceiptsQuery` is
+  typed (`token_id`, `limit` — capped at 1000), the tenant predicate comes from the
+  principal, and the `global-auditor` role is the only cross-tenant path. SDK
+  `receipts(token_id, limit)` attaches the identity header.
+
+Verify (offline):
+- `cargo fmt --check` PASS; `cargo check --workspace` PASS (exit 0);
+  `cargo clippy -p wsf-ledger -p wsf-seal -p wsf-api --all-targets -D warnings -A pedantic` PASS;
+  route gate OK.
+- `cargo test -p wsf-ledger` PASS (5 — incl. `tenant_scoped_query_isolates_tenants`:
+  cross-tenant hidden, untenanted receipt hidden, no oracle, limit caps, global sees all).
+- `cargo test -p wsf-seal` PASS (tenant_binding + inline, with SealReceipt.tenant_id).
+- `cargo test -p wsf-api` PASS: `auth_gate` now 4 — unauthenticated `/v1/receipts`
+  → 401; a tenant-a principal sees only tenant-a's receipts through the HTTP surface.
+
+Regression: REG-AF-007-unfiltered-receipts flips to REPAIRED.
+
+Findings: AF-007 CONTAINED → **FIXED** (root controls + offline proof).
+
+Deferred (honest): L3 persistent HA ledger (production still uses the in-process
+ledger; restart/replica continuity is the persistence prompt); live L4 two-tenant
+ingest/query/export gate (→ PROVEN).
+
+Evidence: `test-evidence/security-remediation/M1/phase-L/`.
+
 Commit: (this change set).

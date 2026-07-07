@@ -146,20 +146,33 @@ impl WsfClient {
         self.post("/v1/credentials/exchange", req).await
     }
 
-    /// Query the receipt ledger by correlation field/value (both or neither).
+    /// Query the receipt ledger, tenant-scoped to the presented identity (AF-007),
+    /// optionally filtered by `token_id` and paged by `limit`.
     ///
     /// # Errors
-    /// [`ClientError`] on transport or a non-2xx response.
+    /// [`ClientError`] on transport or a non-2xx response (401 without identity).
     pub async fn receipts(
         &self,
-        field: Option<&str>,
-        value: Option<&str>,
+        token_id: Option<&str>,
+        limit: Option<usize>,
     ) -> Result<Vec<LedgerEntry>, ClientError> {
         let mut url = format!("{}/v1/receipts", self.base);
-        if let (Some(f), Some(v)) = (field, value) {
-            url.push_str(&format!("?field={f}&value={v}"));
+        let mut params = Vec::new();
+        if let Some(t) = token_id {
+            params.push(format!("token_id={t}"));
         }
-        let resp = self.http.get(url).send().await?;
+        if let Some(l) = limit {
+            params.push(format!("limit={l}"));
+        }
+        if !params.is_empty() {
+            url.push('?');
+            url.push_str(&params.join("&"));
+        }
+        let mut builder = self.http.get(url);
+        if let Some(id) = &self.identity_header {
+            builder = builder.header(crate::auth::IDENTITY_HEADER, id);
+        }
+        let resp = builder.send().await?;
         let status = resp.status();
         if !status.is_success() {
             return Err(ClientError::Api {

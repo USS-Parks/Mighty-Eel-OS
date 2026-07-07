@@ -57,7 +57,7 @@
 /v1/preflight	aog-gateway	bearer-vk	no	-
 /v1/profiles	mai-api	x-im-token	no	-
 /v1/profiles/{profile_id}	mai-api	x-im-token	no	-
-/v1/receipts	wsf-api	none-http	no	AF-007
+/v1/receipts	wsf-api	wsf-principal-tenant-scoped	no	AF-007-fixed
 /v1/registry	mai-api	x-im-token	no	-
 /v1/registry/scan	mai-api	x-im-token	no	-
 /v1/roi	aog-gateway	bearer-vk	no	-

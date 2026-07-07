@@ -342,9 +342,10 @@ async fn sdk_round_trips_every_endpoint() {
         .expect("exchange");
     assert!(!creds.access_key_id.is_empty());
 
-    // Receipt query — issue + seal + unseal all carry the token id.
+    // Receipt query — tenant-scoped to the presented identity; issue + seal +
+    // unseal all carry the token id (and the tenant).
     let entries = sdk
-        .receipts(Some("token_id"), Some(&token.token_id))
+        .receipts(Some(&token.token_id), None)
         .await
         .expect("receipts");
     assert!(

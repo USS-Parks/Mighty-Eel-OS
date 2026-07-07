@@ -56,11 +56,15 @@ pub struct AppState {
     pub authenticator: Arc<dyn WsfAuthenticator>,
 }
 
-/// Mount all routes over `state`. `/v1/tokens/issue` is gated by the issuance
-/// authenticator — the token's tenant/subject/roles come from the verified
-/// principal, never the request body (AF-002).
+/// Mount all routes over `state`. `/v1/tokens/issue` and `/v1/receipts` are gated
+/// by the front-door authenticator: issuance derives tenant/subject/roles from the
+/// verified principal (AF-002), and receipt reads are tenant-scoped to it (AF-007).
 pub fn router(state: AppState) -> Router {
     let issue_route = post(issue).route_layer(middleware::from_fn_with_state(
+        state.clone(),
+        require_principal,
+    ));
+    let receipts_route = get(receipts).route_layer(middleware::from_fn_with_state(
         state.clone(),
         require_principal,
     ));
@@ -71,7 +75,7 @@ pub fn router(state: AppState) -> Router {
         .route("/v1/envelopes/seal", post(seal))
         .route("/v1/envelopes/unseal", post(unseal))
         .route("/v1/credentials/exchange", post(exchange))
-        .route("/v1/receipts", get(receipts))
+        .route("/v1/receipts", receipts_route)
         .route("/openapi.json", get(openapi))
         .route("/healthz", get(|| async { "ok" }))
         .with_state(state)
@@ -212,14 +216,21 @@ pub struct ReceiptsResp {
     pub entries: Vec<LedgerEntry>,
 }
 
-/// Receipt query parameters.
+/// Receipt query parameters. Typed and tenant-scoped (AF-007): there is no
+/// arbitrary field query, and the tenant predicate is applied server-side from
+/// the authenticated principal — never from the request.
 #[derive(Debug, Clone, Deserialize)]
 pub struct ReceiptsQuery {
-    /// Correlation field (e.g. `token_id`).
-    pub field: Option<String>,
-    /// Correlation value.
-    pub value: Option<String>,
+    /// Optional correlation filter by token id (always ANDed with the tenant).
+    pub token_id: Option<String>,
+    /// Page size (capped server-side).
+    pub limit: Option<usize>,
 }
+
+/// The role that permits an audited cross-tenant (global-auditor) receipt read.
+const GLOBAL_AUDITOR_ROLE: &str = "global-auditor";
+/// Server-side cap on a receipt page, regardless of the requested `limit`.
+const RECEIPTS_MAX_LIMIT: usize = 1000;
 
 // ── error mapping ──────────────────────────────────────────────────────
 
@@ -402,12 +413,24 @@ async fn exchange(
     }))
 }
 
-async fn receipts(State(s): State<AppState>, Query(q): Query<ReceiptsQuery>) -> Json<ReceiptsResp> {
+async fn receipts(
+    State(s): State<AppState>,
+    Extension(principal): Extension<WsfPrincipal>,
+    Query(q): Query<ReceiptsQuery>,
+) -> Json<ReceiptsResp> {
     let ledger = s.ledger.lock().expect("ledger lock");
-    let entries = match (q.field, q.value) {
-        (Some(field), Some(value)) => ledger.query(&field, &value).into_iter().cloned().collect(),
-        _ => ledger.entries().to_vec(),
-    };
+    let limit = q.limit.unwrap_or(100).min(RECEIPTS_MAX_LIMIT);
+    // The tenant predicate is mandatory and comes from the authenticated principal
+    // (AF-007) — a caller sees only their tenant's receipts unless they hold the
+    // audited global-auditor role. No arbitrary field query, no existence oracle.
+    let entries = if principal.roles.iter().any(|r| r == GLOBAL_AUDITOR_ROLE) {
+        ledger.query_global(q.token_id.as_deref(), limit)
+    } else {
+        ledger.query_tenant(&principal.tenant_id, q.token_id.as_deref(), limit)
+    }
+    .into_iter()
+    .cloned()
+    .collect();
     Json(ReceiptsResp { entries })
 }
 

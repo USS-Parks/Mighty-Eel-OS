@@ -109,6 +109,10 @@ pub struct SealReceipt {
     pub envelope_id: String,
     /// The presenting token.
     pub token_id: String,
+    /// Owning tenant (from the presenting token) — the ledger's tenant predicate
+    /// for authorized receipt queries (AF-007).
+    #[serde(default)]
+    pub tenant_id: String,
     /// Pseudonymous subject from the token.
     pub subject_hash: String,
     /// `allow` or `deny`.
@@ -239,6 +243,7 @@ impl SealService {
                 op: op.to_string(),
                 envelope_id: envelope_id.to_string(),
                 token_id: token.token_id.clone(),
+                tenant_id: token.tenant_id.clone(),
                 subject_hash: token.subject_hash.clone(),
                 decision: decision.to_string(),
                 at: now.to_rfc3339(),
@@ -393,6 +398,7 @@ mod tests {
                 op: "seal".to_string(),
                 envelope_id: format!("env-{i}"),
                 token_id: "tok".to_string(),
+                tenant_id: "t".to_string(),
                 subject_hash: "h".to_string(),
                 decision: "allow".to_string(),
                 at: "2026-07-03T00:00:00Z".to_string(),
@@ -409,6 +415,7 @@ mod tests {
             op: "seal".to_string(),
             envelope_id: "e".to_string(),
             token_id: "t".to_string(),
+            tenant_id: "t".to_string(),
             subject_hash: "h".to_string(),
             decision: "allow".to_string(),
             at: "2026-07-03T00:00:00Z".to_string(),
@@ -417,6 +424,7 @@ mod tests {
             op: "unseal".to_string(),
             envelope_id: "e".to_string(),
             token_id: "t".to_string(),
+            tenant_id: "t".to_string(),
             subject_hash: "h".to_string(),
             decision: "allow".to_string(),
             at: "2026-07-03T00:01:00Z".to_string(),

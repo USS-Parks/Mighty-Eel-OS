@@ -116,3 +116,61 @@ async fn issue_with_verified_principal_passes_the_gate() {
         "past the gate: the handler reached the (unreachable) bridge"
     );
 }
+
+#[tokio::test]
+async fn receipts_without_identity_is_401() {
+    let base = serve(state(Arc::new(DenyAllAuthenticator))).await;
+    let resp = reqwest::Client::new()
+        .get(format!("{base}/v1/receipts"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(
+        resp.status().as_u16(),
+        401,
+        "unauthenticated receipt read is refused (AF-007)"
+    );
+}
+
+#[tokio::test]
+async fn receipts_are_tenant_scoped_to_the_principal() {
+    // Two tenants' receipts in the ledger; a tenant-a principal sees only its own.
+    let st = state(Arc::new(DevAuthenticator::new("wsf")));
+    {
+        let mut l = st.ledger.lock().unwrap();
+        l.ingest(
+            "wsf-bridge",
+            serde_json::json!({"tenant_id":"tenant-a","token_id":"tok_a"}),
+        )
+        .unwrap();
+        l.ingest(
+            "wsf-bridge",
+            serde_json::json!({"tenant_id":"tenant-b","token_id":"tok_b"}),
+        )
+        .unwrap();
+    }
+    let base = serve(st).await;
+    let principal = WsfPrincipal {
+        tenant_id: "tenant-a".into(),
+        subject_id: "s".into(),
+        service_identity: None,
+        roles: vec![],
+        audience: "wsf".into(),
+        auth_method: "dev".into(),
+        credential_id: String::new(),
+        correlation_id: String::new(),
+    };
+    let hdr =
+        base64::engine::general_purpose::STANDARD.encode(serde_json::to_vec(&principal).unwrap());
+    let resp = reqwest::Client::new()
+        .get(format!("{base}/v1/receipts"))
+        .header(DEV_PRINCIPAL_HEADER, hdr)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status().as_u16(), 200);
+    let body: serde_json::Value = resp.json().await.unwrap();
+    let entries = body["entries"].as_array().unwrap();
+    assert_eq!(entries.len(), 1, "tenant-a sees only its own receipt");
+    assert_eq!(entries[0]["receipt"]["tenant_id"], "tenant-a");
+}
