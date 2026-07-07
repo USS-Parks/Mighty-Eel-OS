@@ -232,3 +232,48 @@ source); role-escalation → 403 + deny receipt; no credential → 401.
 
 Gate: correct identity succeeds; cross-tenant + escalation fail and are
 receipted. PASS against live OpenBao. Commit `c509219`.
+
+## Phase T — token primitive and attenuation repair
+
+Closes **AF-001** (attenuation signed attacker-constructed children without
+authenticating or fully constraining the parent — a signer oracle).
+
+### T1 — VerificationContext
+
+`fabric-token`: `VerificationContext` + `verify_in_context` check revocation,
+signature under the issuer key, expiry, not-before, tenant, and bundle version
+in one required-fields call, so a privileged call site cannot omit a check.
+`Operation` records intent for receipts.
+
+### T2 — TokenRestrictions
+
+Attenuation input is restriction-only (`deny_unknown_fields`): subset/lower/
+earlier axes + a child id. The child's identity/authority is copied server-side
+from the authenticated parent, so no attacker-suppliable child field exists. The
+WSF `/v1/tokens/attenuate` request and Rust SDK now carry `{parent, restrictions}`.
+
+### T3 — Parent authentication (the AF-001 fix)
+
+`attenuate()` runs `verify_in_context(parent)` before constructing any child.
+Unsigned, wrong-key, expired, not-yet-valid, revoked, wrong-tenant, and
+stale-bundle parents fail closed. `attenuate_preverified()` shares the narrowing
+for callers that authenticate the parent at their own boundary (aog-apiserver
+admission), with a doc warning against misuse.
+
+### T4 — Complete monotonicity
+
+Subset/equality on routes, models, roles, compliance scopes, classification,
+budget (fits remaining), expiry; offline can only turn on; child id non-empty
+and ≠ parent (no trivial cycle/dup); per-hop depth budget refuses at zero.
+
+Gates:
+- `fabric-token` unit/property suite — 26 tests: issue/verify, the full
+  `verify_in_context` matrix, a widening per axis, id/depth/offline, and the
+  preverified path. The AF-001/AF-006 regression fixtures flipped from asserting
+  the vulnerable behavior to asserting rejection and moved into the product suite
+  (feature gate retired). Commit `aee70e1`.
+- **T7 live gate** — `wsf-api/tests/attenuate_live.rs` against live OpenBao:
+  issue→attenuate→verify succeeds and the child inherits the parent's tenant;
+  a tampered parent and an attacker-signed parent are refused 403; a widening
+  restriction is refused 422. AF-001 closed black-box, not only in unit tests.
+  Commit `<this change set>`.
