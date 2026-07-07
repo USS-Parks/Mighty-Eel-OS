@@ -29,7 +29,7 @@ jobs:
           fi
           # CANON §3: every commit carries this footer verbatim, and never credits
           # an AI co-author. This replaces the prior AI co-author requirement.
-          required='Authored and reviewed by Basho Parks, Copyright 2026'
+          required='Authored and reviewed by Basho Parks, copyright 2026'
           # Grandfathered commits from before a footer-policy change (the legacy TLM
           # era, plus any in-flight branch's pre-CANON commits). Add SHAs here — or
           # squash before merge. Every new commit is still checked.
@@ -43,10 +43,15 @@ jobs:
             subj=$(git log -1 --format=%s "$sha")
             case "$subj" in "Merge "*|"Revert "*|"fixup! "*|"squash! "*) continue ;; esac
             case " $legacy_skip " in *" $sha "*) continue ;; esac
-            if ! git log -1 --format=%B "$sha" | grep -qiE "$required"; then
-              echo "::error::commit $sha missing canonical co-author footer (subject: $subj)"
+            body=$(git log -1 --format=%B "$sha")
+            if ! printf '%s\n' "$body" | grep -qiE "$required"; then
+              echo "::error::commit $sha missing the canonical footer (subject: $subj)"
+              fail=1
+            fi
+            if printf '%s\n' "$body" | grep -qiE 'co-?authored[ -]?by.*(claude|anthropic)'; then
+              echo "::error::commit $sha carries an AI co-author credit — the canon forbids it (subject: $subj)"
               fail=1
             fi
           done
           [ "$fail" -eq 0 ] || exit 1
-          echo "All commits in range carry the canonical footer."
+          echo "All commits in range carry the canonical footer and credit no AI co-author."
