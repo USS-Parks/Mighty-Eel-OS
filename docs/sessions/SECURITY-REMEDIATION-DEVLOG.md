@@ -344,3 +344,23 @@ The low-level broker primitive still takes an ARN (W2 `live_localstack` exercise
 it directly and stays green); the AF-004 fix is at the public API. Remaining
 in-phase: **B3** AWS least-privilege scope binding, **B4** GCP/Azure parity,
 **B5** credential-lifecycle hygiene.
+
+## Phase L — receipt ledger authorization (core) + E6 receipt binding
+
+Closes **AF-007's core** (the ledger was unauthenticated and not tenant-filtered).
+
+- **L1** authenticated: `/v1/receipts` requires the A2 principal + WSF audience.
+- **L2** tenant-scoped: an entry is returned only if its receipt's `tenant_id`
+  equals the caller's tenant; an optional typed field filter is always
+  intersected with that scope, so cross-tenant identifier guessing returns no
+  rows and no existence oracle. Results bounded by `RECEIPTS_LIMIT`. Untenanted
+  receipts are withheld (fail closed).
+- **E6** receipt binding: `SealReceipt` gains `tenant_id` (stamped from the
+  token), so seal/unseal receipts are tenant-filterable like issuance receipts.
+
+Gate: `wsf-api/tests/ledger_authz.rs` (offline, two tenants) — each principal
+sees only its own tenant's receipts; a cross-tenant token-id query returns
+nothing. W3/W6 live gates green with tenant-stamped receipts. Commit `38b7113`.
+
+Remaining in-phase: **L2** global-auditor role, **L3** persistent HA ledger,
+**L4** end-to-end live gate incl. export.
