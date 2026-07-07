@@ -214,10 +214,50 @@ async fn zfs_property_proof_and_snapshot_lifecycle() {
         "weights sealed before the restart decrypt after it"
     );
 
+    // --- V9 migration: a legacy plaintext model on the dataset is sealed in
+    //     place and still loads back to the original bytes. ------------------
+    const LEGACY_ID: &str = "v9-legacy-model";
+    const LEGACY_BYTES: &[u8] = b"legacy plaintext weights on real ZFS";
+    let legacy_dir = std::path::PathBuf::from(&props.mountpoint).join(LEGACY_ID);
+    if legacy_dir.exists() {
+        std::fs::remove_dir_all(&legacy_dir).expect("clean legacy fixture");
+    }
+    std::fs::create_dir_all(&legacy_dir).expect("legacy dir");
+    std::fs::write(legacy_dir.join("weights.bin"), LEGACY_BYTES).expect("legacy weights");
+    std::fs::write(
+        legacy_dir.join("manifest.json"),
+        serde_json::json!({
+            "model_id": LEGACY_ID, "sha256": "legacy", "size_bytes": LEGACY_BYTES.len(),
+        })
+        .to_string(),
+    )
+    .expect("legacy manifest");
+    reborn
+        .initialize()
+        .await
+        .expect("rescan picks up legacy model");
+    assert!(
+        reborn
+            .migrate_model_to_encrypted(LEGACY_ID)
+            .await
+            .expect("migrate legacy model"),
+        "legacy model migrated"
+    );
+    let sealed_legacy = std::fs::read(legacy_dir.join("weights.bin")).expect("read migrated");
+    assert_ne!(
+        sealed_legacy, LEGACY_BYTES,
+        "migrated weights are sealed at rest"
+    );
+    let migrated = reborn
+        .load_model_weights(LEGACY_ID)
+        .await
+        .expect("migrated model loads");
+    assert_eq!(migrated, LEGACY_BYTES, "migration preserves the payload");
+
     println!(
         "V5/V6/V9 live gate PASSED on dataset {dataset} (encryption={}, compression={}): \
          property proof + create/list/rollback/destroy + signed receipts + \
-         encrypted-weights restart recovery",
+         encrypted-weights restart recovery + legacy-plaintext migration",
         props.encryption, props.compression
     );
 }

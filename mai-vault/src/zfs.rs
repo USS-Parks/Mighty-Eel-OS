@@ -328,6 +328,71 @@ impl ZfsVault {
             .unwrap_or(WEIGHTS_FORMAT_PLAINTEXT_V0)
             .to_string())
     }
+
+    /// Migrate a legacy plaintext (`plaintext-v0`) model to the encrypted
+    /// (`mlkem1024-aesgcm-v1`) format at rest (plan V9). Reads the plaintext
+    /// weights, seals them under the model's per-model KEM key, and rewrites
+    /// the weights file + manifest. Idempotent: an already-encrypted model
+    /// returns `Ok(false)`.
+    ///
+    /// Requires a wired PQC engine. Note (V7/CoW): overwriting the weights file
+    /// seals the *live* copy, but any pre-existing ZFS snapshot from the
+    /// plaintext era still retains the old blocks — take a fresh snapshot after
+    /// migrating and retire the pre-migration ones per your retention policy.
+    ///
+    /// # Errors
+    /// [`VaultError::ModelNotFound`] if the model or its manifest is absent;
+    /// [`VaultError::PqcError`] if no engine is wired or the format is unknown.
+    pub async fn migrate_model_to_encrypted(&self, model_id: &str) -> Result<bool, VaultError> {
+        let model_dir = self.config.storage.mount_point.join(model_id);
+        let weights_path = model_dir.join("weights.bin");
+        let manifest_path = model_dir.join("manifest.json");
+        if !weights_path.exists() || !manifest_path.exists() {
+            return Err(VaultError::ModelNotFound(model_id.to_string()));
+        }
+
+        match Self::read_weights_format(&manifest_path)?.as_str() {
+            WEIGHTS_FORMAT_ENCRYPTED_V1 => return Ok(false), // already sealed
+            WEIGHTS_FORMAT_PLAINTEXT_V0 => {}
+            other => {
+                return Err(VaultError::PqcError(format!(
+                    "model {model_id} has unsupported weights_format {other:?}"
+                )));
+            }
+        }
+
+        let pqc = self.pqc.as_ref().ok_or_else(|| {
+            VaultError::PqcError("cannot migrate to encrypted storage without a PQC engine".into())
+        })?;
+
+        let plaintext = tokio::fs::read(&weights_path)
+            .await
+            .map_err(|e| VaultError::IoError(e.to_string()))?;
+        let sealed = pqc.encrypt_model_weights(model_id, &plaintext).await?;
+        tokio::fs::write(&weights_path, &sealed)
+            .await
+            .map_err(|e| VaultError::IoError(e.to_string()))?;
+
+        let hash = Self::compute_file_hash(&weights_path)?;
+        let manifest = serde_json::json!({
+            "model_id": model_id,
+            "sha256": hash,
+            "size_bytes": sealed.len(),
+            "plaintext_bytes": plaintext.len(),
+            "weights_format": WEIGHTS_FORMAT_ENCRYPTED_V1,
+            "migrated_at": chrono::Utc::now().timestamp(),
+        });
+        tokio::fs::write(&manifest_path, manifest.to_string())
+            .await
+            .map_err(|e| VaultError::IoError(e.to_string()))?;
+
+        if let Some(entry) = self.model_index.write().await.get_mut(model_id) {
+            entry.expected_hash = hash;
+            entry.size_bytes = sealed.len() as u64;
+        }
+        info!(model_id, "Model migrated to encrypted storage (V9)");
+        Ok(true)
+    }
 }
 
 // ============================================================================
@@ -904,6 +969,78 @@ mod tests {
 
         let loaded = vault.load_model_weights("legacy-model").await.unwrap();
         assert_eq!(loaded, b"legacy plain weights".to_vec());
+    }
+
+    #[tokio::test]
+    async fn v9_migrate_legacy_plaintext_to_encrypted() {
+        // Seed a pre-V4 plaintext model by hand (manifest has no
+        // weights_format), then migrate it.
+        let tmp = TempDir::new().unwrap();
+        let vault = engine_vault(&tmp);
+        let dir = tmp.path().join("migrate-me");
+        std::fs::create_dir_all(&dir).unwrap();
+        let plaintext = b"legacy plaintext weights to be sealed";
+        std::fs::write(dir.join("weights.bin"), plaintext).unwrap();
+        let hash = ZfsVault::compute_file_hash(&dir.join("weights.bin")).unwrap();
+        std::fs::write(
+            dir.join("manifest.json"),
+            serde_json::json!({
+                "model_id": "migrate-me", "sha256": hash,
+                "size_bytes": plaintext.len(),
+            })
+            .to_string(),
+        )
+        .unwrap();
+        vault.initialize().await.unwrap();
+
+        // Migrate: returns true, seals the live copy.
+        assert!(
+            vault
+                .migrate_model_to_encrypted("migrate-me")
+                .await
+                .unwrap()
+        );
+        let at_rest = std::fs::read(dir.join("weights.bin")).unwrap();
+        assert_ne!(
+            at_rest,
+            plaintext.to_vec(),
+            "weights sealed after migration"
+        );
+        assert!(
+            std::fs::read_to_string(dir.join("manifest.json"))
+                .unwrap()
+                .contains(WEIGHTS_FORMAT_ENCRYPTED_V1)
+        );
+
+        // Loads back to the original plaintext.
+        let loaded = vault.load_model_weights("migrate-me").await.unwrap();
+        assert_eq!(loaded, plaintext.to_vec());
+
+        // Idempotent: a second migration is a no-op.
+        assert!(
+            !vault
+                .migrate_model_to_encrypted("migrate-me")
+                .await
+                .unwrap()
+        );
+    }
+
+    #[tokio::test]
+    async fn v9_migrate_requires_a_pqc_engine() {
+        // The engine-less dev vault cannot seal, so migration is refused
+        // rather than silently leaving plaintext.
+        let tmp = TempDir::new().unwrap();
+        let bare = ZfsVault::new(test_config(&tmp));
+        let dir = tmp.path().join("m");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("weights.bin"), b"plain").unwrap();
+        std::fs::write(
+            dir.join("manifest.json"),
+            serde_json::json!({"model_id":"m","sha256":"x","size_bytes":5}).to_string(),
+        )
+        .unwrap();
+        let err = bare.migrate_model_to_encrypted("m").await.unwrap_err();
+        assert!(matches!(err, VaultError::PqcError(_)), "got {err:?}");
     }
 
     #[tokio::test]

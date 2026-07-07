@@ -575,11 +575,26 @@ In production the key store sits on the encrypted ZFS dataset (V4/V5) and the
 KEK should additionally be TPM-sealed; the dev/no-TPM path keeps it as a
 plaintext file on that still-encrypted dataset.
 
-Remaining for AF-005: the full **V9** restart/migration **live** gate on a
-real ZFS+TPM host (dataset property proof + TPM-sealed KEK + snapshot/rollback
-against the live pool). The container has neither `zfs` nor `/dev/tpm*`, so
-this leg stays deferred with the code paths in place and crypto-layer restart
-recovery unit-proven.
+**V9 migration** (the last unimplemented V9 code path):
+`ZfsVault::migrate_model_to_encrypted` reads a legacy `plaintext-v0` model,
+seals it under the model's KEM key, and rewrites the weights file + manifest
+as `mlkem1024-aesgcm-v1`. Idempotent on already-encrypted models; refuses
+without a wired engine (never leaves plaintext silently). The doc notes the
+CoW caveat: migration seals the *live* copy, but a pre-existing snapshot from
+the plaintext era still retains the old blocks — snapshot afresh and retire
+the pre-migration ones. Gates: `v9_migrate_legacy_plaintext_to_encrypted`
+(seal-in-place + round-trip + idempotent) and `v9_migrate_requires_a_pqc_engine`.
+
+The **V9 live gate** (`mai-vault/tests/live_zfs.rs`, env-gated on
+`MAI_ZFS_TEST_DATASET`) now also exercises, on a real dataset: (1) restart
+recovery — seal a model, drop the whole vault, bring a fresh one up over the
+same dataset + key store, decrypt; and (2) legacy-plaintext migration in
+place. It skips cleanly where there is no ZFS.
+
+Remaining for AF-005: **running** the V9 live gate on a real ZFS+TPM host
+(this container has neither `zfs` nor `/dev/tpm*`) — every V9 code path is now
+implemented, unit-proven, and wired into the ready-to-run live gate; only the
+host execution + TPM-sealed-KEK hardening are deferred.
 
 ## Phase Q/M3 — quality + supply-chain gates (AQ-001, AQ-002, AS-001)
 
