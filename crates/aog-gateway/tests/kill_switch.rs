@@ -192,6 +192,21 @@ async fn budget_exhaustion_and_revocation_halt_the_next_call() {
     let openbao = OpenBaoAuth::new(OpenBaoConfig::new(&addr, role_id, secret_id)).unwrap();
     let vault_token = openbao.login().await.expect("login");
 
+    // Self-clean: a prior run against this same OpenBao leaves a snapshot at
+    // REVOCATION_PATH signed by that run's throwaway anchor. The gateway fails
+    // closed on the unverifiable signature (correct), which would make every
+    // resolve below Unauthorized. Destroy all versions so the "no snapshot yet"
+    // precondition holds on reruns against a reused dev instance (SKIP_DOCKER=1).
+    bao(
+        &c,
+        &addr,
+        &root_token(),
+        Method::DELETE,
+        &REVOCATION_PATH.replacen("/data/", "/metadata/", 1),
+        None,
+    )
+    .await;
+
     // Seed a small-cap budget token and a separate revocation token.
     openbao
         .put_kv_data(

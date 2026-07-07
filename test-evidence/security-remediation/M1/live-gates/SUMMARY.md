@@ -73,6 +73,21 @@ AOGD_EXIT=0
 | G7 | `aog-gateway::metering` | cost-per-task aggregation across multi-call chain; receipt chain verifies |
 | VH5b-c | `aogd::live_openbao_anchor` | daemon sources trust anchor + field-seal material from live OpenBao; authed CRUD |
 
+## Reproducibility — second full pass on the same live pair (found + fixed one flake)
+
+A verification rerun of `aog-gateway::kill_switch` against the *same* OpenBao instance
+initially failed: the test leaves a revocation snapshot signed by its per-run throwaway
+anchor at the fixed KV path `kv/data/aog/revocation`; on rerun the gateway fails closed on
+the now-unverifiable signature (`Unauthorized("revocation snapshot signature: signature
+failed verification")`) — the *mechanism* behaving correctly, the *test* not idempotent
+against a reused instance. CI never sees this (fresh container per run); the suite's
+documented `SKIP_DOCKER=1` reuse mode does. Fixed in this change: the test now destroys the
+stale snapshot's KV metadata during provision, restoring its "no snapshot yet" precondition
+(`crates/aog-gateway/tests/kill_switch.rs`). After the fix: kill_switch green 3× consecutively,
+offline skip path unchanged, and the **entire 16-test set green a second time end-to-end
+against the reused live pair** (`SUITE_EXIT=0`, `AOGD_EXIT=0`), proving the suite is
+rerun-safe. No product code was changed.
+
 ## PSPR live-gate mapping (docs/scans/SECURITY-REMEDIATION-PSPR.md)
 
 | PSPR gate | Live proof(s) green | Live negative control observed |
