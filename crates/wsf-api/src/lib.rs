@@ -494,7 +494,10 @@ async fn attenuate(
         Utc::now(),
         fabric_token::Operation::Attenuate,
     )
-    .expect_tenant(&principal.tenant_id);
+    .expect_tenant(&principal.tenant_id)
+    // T6: a legacy (v1) parent — one whose bundle is not the bridge's current
+    // version — is refused attenuation (LegacyAttenuationDenied → 422).
+    .require_current_bundle(s.bridge.bundle_version());
 
     let token = fabric_token::attenuate(
         &req.parent,
@@ -520,10 +523,12 @@ fn map_attenuate_error(e: fabric_token::TokenError) -> ApiError {
         | E::NotYetValid
         | E::TenantMismatch
         | E::BundleMismatch
-        | E::RevocationUnknown => StatusCode::FORBIDDEN,
+        | E::RevocationUnknown
+        | E::UnsupportedTokenVersion(_) => StatusCode::FORBIDDEN,
         E::AttenuationWidens { .. }
         | E::InvalidChildId
         | E::DepthExceeded
+        | E::LegacyAttenuationDenied(_)
         | E::BadTimestamp(_)
         | E::BudgetExceeded { .. } => StatusCode::UNPROCESSABLE_ENTITY,
         E::Serialize(_) | E::Sign(_) => StatusCode::INTERNAL_SERVER_ERROR,

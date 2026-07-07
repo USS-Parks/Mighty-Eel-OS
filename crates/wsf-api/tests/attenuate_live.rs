@@ -153,6 +153,8 @@ async fn issue_attenuate_verify_and_adversarial_parents() {
 
     let bridge_signer = Arc::new(RustCryptoMlDsa87::generate("wsf-atten-bridge").unwrap());
     let anchor = bridge_signer.public_key().to_vec();
+    // Keep a handle to mint an anchor-signed *legacy* parent (T6) below.
+    let anchor_signer = bridge_signer.clone();
     let state = AppState {
         bridge: Arc::new(TrustBridge::new(
             ob(),
@@ -283,7 +285,26 @@ async fn issue_attenuate_verify_and_adversarial_parents() {
         "widening is refused"
     );
 
+    // 6. T6: a validly anchor-signed *legacy* parent (bundle != the bridge's
+    //    current) may not be attenuated — no v1 attenuation.
+    let mut legacy: fabric_contracts::TrustToken = serde_json::from_value(parent.clone()).unwrap();
+    legacy.token_id = "legacy-parent".into();
+    legacy.trust_bundle_version = "2020.legacy.v1".into();
+    let legacy = fabric_token::issue(legacy, anchor_signer.as_ref()).unwrap();
+    let l = attenuate(json!({
+        "parent": legacy,
+        "restrictions": { "new_token_id": "child-5" }
+    }))
+    .await;
+    // The handler denies legacy by default (no migration flag): the version
+    // policy in verify_in_context refuses it (403) before the child is built.
+    assert_eq!(
+        l.status(),
+        StatusCode::FORBIDDEN,
+        "legacy (v1) parent is refused (T6 deny-by-default)"
+    );
+
     println!(
-        "T7 live gate PASSED against {addr}: issue→attenuate→verify; forged/tampered parent 403; widening 422"
+        "T7 live gate PASSED against {addr}: issue→attenuate→verify; forged/tampered parent 403; widening 422; legacy parent 403 (T6)"
     );
 }

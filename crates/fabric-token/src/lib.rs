@@ -77,6 +77,14 @@ pub enum TokenError {
     /// The attenuation would exceed the maximum delegation depth.
     #[error("attenuation exceeds maximum delegation depth")]
     DepthExceeded,
+    /// A legacy (v1) token was presented where the current bundle is required
+    /// and legacy migration was not permitted (plan T6 deny-by-default).
+    #[error("unsupported legacy token version (bundle {0})")]
+    UnsupportedTokenVersion(String),
+    /// A legacy (v1) token may be verified under a bounded migration flag but is
+    /// never a valid attenuation parent (plan T6 — no v1 attenuation).
+    #[error("legacy token may not be attenuated (bundle {0})")]
+    LegacyAttenuationDenied(String),
 }
 
 /// BLAKE3-32 over the canonical payload (signature field removed).
@@ -188,6 +196,8 @@ pub struct VerificationContext<'a> {
     expected_tenant: Option<&'a str>,
     expected_bundle_version: Option<&'a str>,
     require_fresh_revocation: bool,
+    current_bundle: Option<&'a str>,
+    permit_legacy_verify: bool,
 }
 
 impl<'a> VerificationContext<'a> {
@@ -209,6 +219,8 @@ impl<'a> VerificationContext<'a> {
             expected_tenant: None,
             expected_bundle_version: None,
             require_fresh_revocation: false,
+            current_bundle: None,
+            permit_legacy_verify: false,
         }
     }
 
@@ -232,6 +244,34 @@ impl<'a> VerificationContext<'a> {
     pub fn require_fresh_revocation(mut self) -> Self {
         self.require_fresh_revocation = true;
         self
+    }
+
+    /// Apply the token-version policy (plan T6): tokens whose bundle equals
+    /// `current` are v2; any other bundle is legacy (v1). Legacy tokens are
+    /// denied by default ([`TokenError::UnsupportedTokenVersion`]) and can never
+    /// be an attenuation parent. Pair with [`permit_legacy_verify`] for a bounded
+    /// verify-only migration window.
+    #[must_use]
+    pub fn require_current_bundle(mut self, current: &'a str) -> Self {
+        self.current_bundle = Some(current);
+        self
+    }
+
+    /// Allow a legacy (v1) token to *verify* (not attenuate) under the version
+    /// policy — the bounded migration path. No effect unless
+    /// [`require_current_bundle`](Self::require_current_bundle) is set.
+    #[must_use]
+    pub fn permit_legacy_verify(mut self) -> Self {
+        self.permit_legacy_verify = true;
+        self
+    }
+
+    /// Whether `token` is a legacy (v1) token under this context's version
+    /// policy. `false` when no policy is set.
+    #[must_use]
+    pub fn is_legacy(&self, token: &TrustToken) -> bool {
+        self.current_bundle
+            .is_some_and(|cur| token.trust_bundle_version != cur)
     }
 
     /// The operation this context guards.
@@ -289,6 +329,13 @@ pub fn verify_in_context(
         && token.trust_bundle_version != b
     {
         return Err(TokenError::BundleMismatch);
+    }
+    // T6 version policy: a legacy (v1) bundle is denied unless a bounded
+    // verify-only migration is explicitly permitted.
+    if ctx.is_legacy(token) && !ctx.permit_legacy_verify {
+        return Err(TokenError::UnsupportedTokenVersion(
+            token.trust_bundle_version.clone(),
+        ));
     }
     Ok(())
 }
@@ -379,6 +426,13 @@ pub fn attenuate(
     // 1. Authenticate the parent — the AF-001 fix. No child is constructed
     //    until the presented parent is proven genuine and current.
     verify_in_context(parent, ctx)?;
+    // T6: a legacy token may (under a migration flag) verify, but is never a
+    // valid attenuation parent — no v1 attenuation, ever.
+    if ctx.is_legacy(parent) {
+        return Err(TokenError::LegacyAttenuationDenied(
+            parent.trust_bundle_version.clone(),
+        ));
+    }
     let child = narrow_child(parent, restrictions, ctx.now, max_child_depth)?;
     issue(child, signer)
 }
