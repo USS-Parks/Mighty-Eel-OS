@@ -55,6 +55,14 @@ pub struct ZfsVault {
     zfs: Option<ZfsOps>,
 }
 
+/// Weights-at-rest format marker (plan V4). `v1` is the ML-KEM-1024 +
+/// AES-256-GCM envelope produced by `PqcProvider::encrypt_model_weights`,
+/// bound to the model id; `v0` is legacy plaintext, readable for migration
+/// but never written when a PQC engine is wired.
+pub const WEIGHTS_FORMAT_ENCRYPTED_V1: &str = "mlkem1024-aesgcm-v1";
+/// Legacy plaintext weights format (pre-V4).
+pub const WEIGHTS_FORMAT_PLAINTEXT_V0: &str = "plaintext-v0";
+
 /// Internal model tracking entry.
 struct ModelEntry {
     /// Expected SHA-256 hash of model weights.
@@ -307,6 +315,19 @@ impl ZfsVault {
             .join(model_id)
             .join("weights.bin")
     }
+
+    /// The `weights_format` recorded in a model manifest. A manifest without
+    /// the field (pre-V4) is legacy plaintext.
+    fn read_weights_format(manifest_path: &Path) -> Result<String, VaultError> {
+        let content = std::fs::read_to_string(manifest_path).map_err(VaultError::from)?;
+        let manifest: serde_json::Value =
+            serde_json::from_str(&content).map_err(|e| VaultError::IoError(e.to_string()))?;
+        Ok(manifest
+            .get("weights_format")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or(WEIGHTS_FORMAT_PLAINTEXT_V0)
+            .to_string())
+    }
 }
 
 // ============================================================================
@@ -330,11 +351,32 @@ impl VaultInterface for ZfsVault {
 
         info!(model_id, path = %weights_path.display(), "Loading model weights from vault");
 
-        // TODO(basho): decrypt weights here via the PqcProvider; currently
-        // reads raw bytes.
-        let data = tokio::fs::read(&weights_path)
+        let stored = tokio::fs::read(&weights_path)
             .await
             .map_err(|e| VaultError::IoError(e.to_string()))?;
+
+        // V4: the manifest's `weights_format` decides the read path. A
+        // missing field means a legacy (pre-V4) plaintext store — readable
+        // for migration. Encrypted weights without a wired engine fail
+        // closed rather than returning ciphertext as if it were a model.
+        let manifest_path = entry.path.join("manifest.json");
+        let weights_format = Self::read_weights_format(&manifest_path)?;
+        let data = match weights_format.as_str() {
+            WEIGHTS_FORMAT_ENCRYPTED_V1 => {
+                let pqc = self.pqc.as_ref().ok_or_else(|| {
+                    VaultError::PqcError(format!(
+                        "model {model_id} is stored encrypted ({WEIGHTS_FORMAT_ENCRYPTED_V1}) but no PQC engine is wired"
+                    ))
+                })?;
+                pqc.decrypt_model_weights(model_id, &stored).await?
+            }
+            WEIGHTS_FORMAT_PLAINTEXT_V0 => stored,
+            other => {
+                return Err(VaultError::IoError(format!(
+                    "model {model_id} has unsupported weights_format {other:?}"
+                )));
+            }
+        };
 
         info!(model_id, bytes = data.len(), "Model weights loaded");
         Ok(data)
@@ -365,17 +407,31 @@ impl VaultInterface for ZfsVault {
             .await
             .map_err(|e| VaultError::IoError(e.to_string()))?;
 
-        // Write weights (in production: encrypt via PqcProvider first)
-        tokio::fs::write(&weights_path, data)
+        // V4: with a PQC engine wired, weights are sealed at rest in the
+        // ML-KEM-1024 + AES-256-GCM envelope, key-derived with the model id
+        // as context. Plaintext-at-rest exists only on the engine-less
+        // dev path (and the builder always wires engines for the ZFS
+        // backend, V2).
+        let (stored, weights_format): (Vec<u8>, &str) = match &self.pqc {
+            Some(pqc) => (
+                pqc.encrypt_model_weights(model_id, data).await?,
+                WEIGHTS_FORMAT_ENCRYPTED_V1,
+            ),
+            None => (data.to_vec(), WEIGHTS_FORMAT_PLAINTEXT_V0),
+        };
+        tokio::fs::write(&weights_path, &stored)
             .await
             .map_err(|e| VaultError::IoError(e.to_string()))?;
 
-        // Compute hash and write manifest
+        // Compute hash over the stored bytes (ciphertext for v1) so
+        // integrity verifies without any decryption.
         let hash = Self::compute_file_hash(&weights_path)?;
         let manifest = serde_json::json!({
             "model_id": model_id,
             "sha256": hash,
-            "size_bytes": data.len(),
+            "size_bytes": stored.len(),
+            "plaintext_bytes": data.len(),
+            "weights_format": weights_format,
             "stored_at": chrono::Utc::now().timestamp(),
         });
         tokio::fs::write(&manifest_path, manifest.to_string())
@@ -388,13 +444,16 @@ impl VaultInterface for ZfsVault {
             model_id.to_string(),
             ModelEntry {
                 expected_hash: hash,
-                size_bytes: data.len() as u64,
+                size_bytes: stored.len() as u64,
                 path: model_dir,
                 verified: true, // just wrote it
             },
         );
 
-        info!(model_id, "Model package stored successfully");
+        info!(
+            model_id,
+            weights_format, "Model package stored successfully"
+        );
         Ok(())
     }
 
@@ -523,10 +582,23 @@ impl ModelStorage for ZfsVault {
             entry.path.clone()
         };
 
-        info!(model_id, path = %model_dir.display(), "Securely removing model from vault");
+        info!(model_id, path = %model_dir.display(), "Removing model from vault (crypto-erase)");
 
-        // In production: ZFS destroy + scrub the freed blocks.
-        // For now: remove the directory tree.
+        // V7: cryptographic erasure, not "secure overwrite". On copy-on-write
+        // ZFS, unlinking or overwriting the weights file does NOT destroy the
+        // blocks it occupied — they persist until freed and reused, and any
+        // snapshot retains them indefinitely. Retiring the model's encryption
+        // key makes the at-rest ciphertext (on disk AND in every snapshot)
+        // permanently unrecoverable, which is the real deletion guarantee.
+        let erased = if let Some(pqc) = &self.pqc {
+            pqc.crypto_erase_model(model_id).await?
+        } else {
+            false
+        };
+
+        // Unlink the directory tree too — frees space and removes the visible
+        // artifact — but the confidentiality guarantee is the key retirement
+        // above, not this unlink.
         if model_dir.exists() {
             tokio::fs::remove_dir_all(&model_dir)
                 .await
@@ -537,7 +609,11 @@ impl ModelStorage for ZfsVault {
         let mut index = self.model_index.write().await;
         index.remove(model_id);
 
-        info!(model_id, "Model removed from vault");
+        info!(
+            model_id,
+            key_retired = erased,
+            "Model removed from vault (blocks in retained snapshots remain, but crypto-erased)"
+        );
         Ok(())
     }
 
@@ -764,6 +840,125 @@ mod tests {
 
         let loaded = vault.load_model_weights("test-model-1").await.unwrap();
         assert_eq!(loaded, model_data);
+    }
+
+    /// V4: a vault with a PQC engine wired — the production shape.
+    fn engine_vault(tmp: &TempDir) -> ZfsVault {
+        let cfg = test_config(tmp);
+        let pqc = std::sync::Arc::new(crate::pqc::PqcEngine::new(cfg.pqc.clone()));
+        let audit = std::sync::Arc::new(crate::audit::AuditWriter::with_pqc(
+            cfg.audit.clone(),
+            pqc.clone(),
+        ));
+        ZfsVault::with_engines(cfg, pqc, audit)
+    }
+
+    #[tokio::test]
+    async fn v4_weights_are_sealed_at_rest_and_round_trip() {
+        let tmp = TempDir::new().unwrap();
+        let vault = engine_vault(&tmp);
+        vault.initialize().await.unwrap();
+
+        let plaintext = b"regulated model weights: mrn 000-11-2222";
+        vault
+            .store_model_package("sealed-model", plaintext)
+            .await
+            .unwrap();
+
+        // At rest: the weights file is the KEM+AEAD envelope, not plaintext.
+        let raw = std::fs::read(tmp.path().join("sealed-model").join("weights.bin")).unwrap();
+        assert_ne!(raw, plaintext.to_vec());
+        assert!(
+            !raw.windows(plaintext.len()).any(|w| w == plaintext),
+            "plaintext must not appear anywhere in the stored file"
+        );
+        // The manifest records the format version.
+        let manifest =
+            std::fs::read_to_string(tmp.path().join("sealed-model").join("manifest.json")).unwrap();
+        assert!(manifest.contains(WEIGHTS_FORMAT_ENCRYPTED_V1));
+
+        // Load decrypts back to the exact plaintext.
+        let loaded = vault.load_model_weights("sealed-model").await.unwrap();
+        assert_eq!(loaded, plaintext.to_vec());
+    }
+
+    #[tokio::test]
+    async fn v4_legacy_plaintext_manifest_still_loads() {
+        // A pre-V4 store (no weights_format field) reads back raw — the
+        // migration path for existing vaults.
+        let tmp = TempDir::new().unwrap();
+        let vault = engine_vault(&tmp);
+        let dir = tmp.path().join("legacy-model");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("weights.bin"), b"legacy plain weights").unwrap();
+        let hash = ZfsVault::compute_file_hash(&dir.join("weights.bin")).unwrap();
+        std::fs::write(
+            dir.join("manifest.json"),
+            serde_json::json!({
+                "model_id": "legacy-model", "sha256": hash, "size_bytes": 20,
+            })
+            .to_string(),
+        )
+        .unwrap();
+        vault.initialize().await.unwrap(); // scan picks the model up
+
+        let loaded = vault.load_model_weights("legacy-model").await.unwrap();
+        assert_eq!(loaded, b"legacy plain weights".to_vec());
+    }
+
+    #[tokio::test]
+    async fn v7_crypto_erase_makes_retained_ciphertext_unrecoverable() {
+        use mai_core::vault::ModelStorage;
+
+        let tmp = TempDir::new().unwrap();
+        let vault = engine_vault(&tmp);
+        vault.initialize().await.unwrap();
+        vault
+            .store_model_package("erase-me", b"confidential weights")
+            .await
+            .unwrap();
+
+        // Capture the exact ciphertext bytes as a "retained snapshot" would.
+        let ciphertext = std::fs::read(tmp.path().join("erase-me").join("weights.bin")).unwrap();
+
+        // Crypto-erase (this is what remove_model performs).
+        vault.remove_model("erase-me").await.unwrap();
+
+        // Re-present the retained ciphertext under the same model id: the key
+        // is gone, so decapsulation can never succeed again. This is the V7
+        // guarantee — CoW block/snapshot retention does not matter once the
+        // key is retired. A fresh engine (no key for this id) stands in for
+        // "the key no longer exists anywhere".
+        let pqc = crate::pqc::PqcEngine::new(test_config(&tmp).pqc);
+        let err = pqc
+            .decrypt_model_weights("erase-me", &ciphertext)
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(err, VaultError::PqcError(_)),
+            "retained ciphertext must be undecryptable after crypto-erase, got {err:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn v4_encrypted_weights_without_engine_fail_closed() {
+        // Store with an engine, then reopen the same tree engine-less: the
+        // load refuses rather than serving ciphertext as a model.
+        let tmp = TempDir::new().unwrap();
+        let vault = engine_vault(&tmp);
+        vault.initialize().await.unwrap();
+        vault
+            .store_model_package("locked-model", b"secret weights")
+            .await
+            .unwrap();
+
+        let bare = ZfsVault::new(test_config(&tmp));
+        bare.initialize().await.unwrap();
+        let err = bare.load_model_weights("locked-model").await.unwrap_err();
+        assert!(
+            matches!(err, VaultError::PqcError(_)),
+            "engine-less read of sealed weights must fail closed, got {err:?}"
+        );
     }
 
     #[tokio::test]

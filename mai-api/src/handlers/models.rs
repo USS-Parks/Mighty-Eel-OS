@@ -447,7 +447,7 @@ pub async fn remove_model_handler(
             Ok(Json(ModelRemoveResponse {
                 model_id: result.model_id,
                 status: "removed".to_string(),
-                secure_wipe: result.secure_wipe,
+                crypto_erased: result.crypto_erased,
                 snapshot_created: result.snapshot_created,
                 message: format!("Model '{model_id}' removed successfully"),
             }))

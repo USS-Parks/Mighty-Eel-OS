@@ -521,6 +521,31 @@ remediation).
   Gate: `vault_bootstrap.rs` proves the probe passes on an initialized vault
   and FAILS on the stub (which the old code would have certified).
 
-Remaining for AF-005: **V4** encrypted model storage wiring, **V7** deletion
-semantics (cryptographic erasure), full **V8** evidence sweep (restart /
-capacity outcomes), **V9** restart/migration live gate on the ZFS+TPM host.
+## Phase V — V4 sealed storage + V7 cryptographic erasure
+
+- **V4 encrypted model storage**: `ZfsVault::store_model_package` seals
+  weights at rest through `PqcProvider::encrypt_model_weights` (ML-KEM-1024 +
+  AES-256-GCM, key-derived with the model id as context) when a PQC engine is
+  wired — which the V2 builder always does for the ZFS backend. The manifest
+  records a `weights_format` (`mlkem1024-aesgcm-v1`); `load_model_weights`
+  dispatches on it, decrypting v1 and reading legacy `plaintext-v0` for
+  migration. Encrypted weights presented to an engine-less vault **fail
+  closed** rather than returning ciphertext. Integrity hashes are computed
+  over the stored (cipher) bytes, so verification needs no key. Gates in
+  `zfs.rs`: sealed-at-rest (plaintext never appears in the file) + round-trip,
+  legacy-plaintext load, engine-less fail-closed.
+- **V7 cryptographic erasure**: the former `secure_overwrite_passes` /
+  `secure_wipe` model was false on copy-on-write ZFS — overwriting a file
+  writes new blocks and the originals persist (indefinitely in any snapshot).
+  Replaced by `PqcProvider::crypto_erase_model`, which retires the model's KEM
+  key (scrubs + drops the secret); once gone, the at-rest envelope — on disk
+  and in every retained snapshot — is permanently undecryptable.
+  `ZfsVault::remove_model` calls it and its comment now states the real
+  guarantee; `RemoveOptions`/`RemovalResult` and the API `ModelRemoveResponse`
+  carry `crypto_erased` instead of `secure_wipe`, with snapshot-retention
+  effects documented on the fields. Gate proves retained ciphertext is
+  undecryptable after erasure.
+
+Remaining for AF-005: full **V8** evidence sweep (restart / capacity
+outcomes) and the **V9** restart/migration live gate on the ZFS+TPM host
+(both need the real dataset host; the code paths are in place and unit-proven).

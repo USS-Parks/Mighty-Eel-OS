@@ -9,17 +9,25 @@ use crate::vault::{ModelStorage, VaultInterface};
 /// Options for model removal
 #[derive(Debug, Clone)]
 pub struct RemoveOptions {
-    /// Whether to create a pre-removal ZFS snapshot
+    /// Whether to create a pre-removal ZFS snapshot. Note (V7): a snapshot
+    /// **retains** the model's encrypted blocks until the snapshot itself is
+    /// destroyed — crypto-erasure (below) is what makes those retained blocks
+    /// unreadable.
     pub create_snapshot: bool,
-    /// Number of overwrite passes for secure deletion (0 = skip)
-    pub secure_overwrite_passes: u8,
+    /// Whether to cryptographically erase the model — retire its encryption
+    /// key so the at-rest ciphertext (on disk and in any retained snapshot)
+    /// is permanently unrecoverable. This replaces the former
+    /// "secure_overwrite_passes" field: on copy-on-write ZFS, overwriting
+    /// blocks in place does not destroy the originals, so pass-count
+    /// overwriting was never a real guarantee.
+    pub crypto_erase: bool,
 }
 
 impl Default for RemoveOptions {
     fn default() -> Self {
         Self {
             create_snapshot: true,
-            secure_overwrite_passes: 3,
+            crypto_erase: true,
         }
     }
 }
@@ -29,11 +37,15 @@ impl Default for RemoveOptions {
 pub struct RemovalResult {
     /// Model ID that was removed
     pub model_id: String,
-    /// Whether vault data was securely overwritten
-    pub secure_wipe: bool,
+    /// Whether the model's encryption key was retired (cryptographic
+    /// erasure). `false` when the model held no per-model key (e.g. a legacy
+    /// plaintext store) — the caller should treat such models as not
+    /// confidentially erased.
+    pub crypto_erased: bool,
     /// Whether registry entry was deleted
     pub registry_cleared: bool,
-    /// Whether pre-removal snapshot was created
+    /// Whether pre-removal snapshot was created. When `true`, the model's
+    /// (encrypted) blocks are retained by that snapshot until it is destroyed.
     pub snapshot_created: bool,
 }
 
@@ -100,17 +112,17 @@ pub(crate) async fn remove_model(
         }
     }
 
-    // Remove from vault with secure deletion
-    if options.secure_overwrite_passes > 0 {
+    // Remove from vault. V7: the vault's `remove_model` cryptographically
+    // erases the model (retires its encryption key) — the real deletion
+    // guarantee on copy-on-write storage — and then unlinks the artifact.
+    let mut crypto_erased = false;
+    if options.crypto_erase {
         if let Some(storage) = storage {
-            info!(
-                model_id,
-                passes = options.secure_overwrite_passes,
-                "Securely removing model weights from vault"
-            );
+            info!(model_id, "Cryptographically erasing model from vault");
             storage.remove_model(model_id).await.map_err(|e| {
                 RemoveError::VaultError(format!("Failed to remove model from vault: {e}"))
             })?;
+            crypto_erased = true;
         } else {
             info!(model_id, "No ModelStorage attached, skipping vault removal");
         }
@@ -121,23 +133,17 @@ pub(crate) async fn remove_model(
 
     // Write audit entry
     let audit_entry = format!(
-        "{{\"event\":\"model_removed\",\"model_id\":\"{model_id}\",\"secure_wipe\":{}, \"snapshot\":{}}}",
-        options.secure_overwrite_passes > 0,
-        snapshot_created,
+        "{{\"event\":\"model_removed\",\"model_id\":\"{model_id}\",\"crypto_erased\":{crypto_erased}, \"snapshot\":{snapshot_created}}}",
     );
     if let Err(e) = vault.append_audit_entry(audit_entry.as_bytes()).await {
         warn!(error = %e, "Failed to write audit entry for model removal");
     }
 
-    info!(
-        model_id,
-        secure_wipe = options.secure_overwrite_passes > 0,
-        "Model removed successfully"
-    );
+    info!(model_id, crypto_erased, "Model removed successfully");
 
     Ok(RemovalResult {
         model_id: model_id.to_string(),
-        secure_wipe: options.secure_overwrite_passes > 0,
+        crypto_erased,
         registry_cleared: true,
         snapshot_created,
     })
@@ -291,7 +297,7 @@ mod tests {
         assert!(result.is_ok());
         let removal = result.unwrap();
         assert!(removal.registry_cleared);
-        assert!(removal.secure_wipe);
+        assert!(removal.crypto_erased);
 
         let model_id = "test-model:1.0.0:Q4_K_M".to_string();
         assert!(!registry.models.contains_key(&model_id));

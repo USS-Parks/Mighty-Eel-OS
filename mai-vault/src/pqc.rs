@@ -510,6 +510,33 @@ impl PqcProvider for PqcEngine {
             .ok_or_else(|| VaultError::PqcError("Signing keypair not initialised".into()))?;
         dsa_backend::verify(package_data, signature, &kp.public_key)
     }
+
+    async fn crypto_erase_model(&self, model_id: &str) -> Result<bool, VaultError> {
+        // V7: retire the model's KEM key. Once the secret is gone, the
+        // ML-KEM-1024 + AES-256-GCM envelope on disk (and in every ZFS
+        // snapshot that retains it) can never be decapsulated again — the
+        // deletion is cryptographic, independent of copy-on-write block
+        // retention.
+        let key_id = {
+            let mut model_keys = self.model_keys.write().await;
+            model_keys.remove(model_id)
+        };
+        let Some(key_id) = key_id else {
+            return Ok(false);
+        };
+        let mut keys = self.keys.write().await;
+        if let Some(mut kp) = keys.remove(&key_id) {
+            // Best-effort scrub of the secret before the buffer is freed.
+            kp.secret_key.iter_mut().for_each(|b| *b = 0);
+            info!(
+                model_id,
+                key_id, "Model encryption key retired (crypto-erase)"
+            );
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
 }
 
 // ===========================================================================
