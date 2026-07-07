@@ -15,6 +15,10 @@ pub enum BrokerError {
     /// Root credentials were missing or malformed in OpenBao.
     #[error("root credential: {0}")]
     RootCredential(String),
+    /// The resolved grant is unusable (e.g. its TTL ceiling is below the STS
+    /// floor) — refuse rather than widen.
+    #[error("grant rejected: {0}")]
+    Grant(String),
     /// STS transport failure.
     #[error("sts transport: {0}")]
     Http(#[from] reqwest::Error),

@@ -58,12 +58,24 @@ impl AzureBrokerConfig {
 }
 
 /// A scoped Azure AD access token minted for a trust token.
-#[derive(Debug, Clone)]
+///
+/// `Debug` redacts the bearer token (plan B5 — parity with the AWS broker):
+/// a stray `{:?}` in a log line must never leak a live credential.
+#[derive(Clone)]
 pub struct AzureCredentials {
     /// The Azure AD access token.
     pub access_token: String,
     /// Effective expiry = `min(Azure token expiry, trust-token TTL)`.
     pub expires_at: DateTime<Utc>,
+}
+
+impl std::fmt::Debug for AzureCredentials {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AzureCredentials")
+            .field("access_token", &"<redacted>")
+            .field("expires_at", &self.expires_at)
+            .finish()
+    }
 }
 
 /// The Azure credential broker.
@@ -190,5 +202,16 @@ mod tests {
         assert!(body.contains("client_id=client-guid"));
         assert!(body.contains("scope=https%3A%2F%2Fstorage.azure.com%2F.default"));
         assert!(body.contains("client_secret=s3cr3t%2F%2B%3D"));
+    }
+
+    #[test]
+    fn debug_output_redacts_the_access_token() {
+        let creds = AzureCredentials {
+            access_token: "eyJ.azure-bearer-material".to_string(),
+            expires_at: Utc::now(),
+        };
+        let d = format!("{creds:?}");
+        assert!(!d.contains("eyJ.azure-bearer-material"));
+        assert!(d.contains("<redacted>"));
     }
 }

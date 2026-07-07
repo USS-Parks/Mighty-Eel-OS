@@ -617,18 +617,22 @@ async fn exchange(
             ApiError::new(StatusCode::FORBIDDEN, "no such cloud grant for this tenant")
         })?;
 
+    // B3: the broker binds the grant's full scope — approved actions (never
+    // `Action:"*"`), region, external id, TTL ceiling — not just the role ARN.
     let creds = s
         .broker
         .broker_credentials(
             &req.token,
             &MlDsa87Verifier,
             &s.token_public_key,
-            &grant.role_arn,
+            &grant.to_scope(),
             Utc::now(),
         )
         .await
         .map_err(|e| match e {
-            wsf_broker::BrokerError::TokenRejected(_) | wsf_broker::BrokerError::TokenExpired => {
+            wsf_broker::BrokerError::TokenRejected(_)
+            | wsf_broker::BrokerError::TokenExpired
+            | wsf_broker::BrokerError::Grant(_) => {
                 ApiError::new(StatusCode::FORBIDDEN, e.to_string())
             }
             _ => ApiError::new(StatusCode::BAD_GATEWAY, e.to_string()),

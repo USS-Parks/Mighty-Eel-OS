@@ -48,12 +48,24 @@ impl GcpBrokerConfig {
 }
 
 /// A short-lived GCP access token minted for a trust token.
-#[derive(Debug, Clone)]
+///
+/// `Debug` redacts the bearer token (plan B5 — parity with the AWS broker):
+/// a stray `{:?}` in a log line must never leak a live credential.
+#[derive(Clone)]
 pub struct GcpCredentials {
     /// The OAuth2 access token.
     pub access_token: String,
     /// Expiry (from GCP).
     pub expire_time: DateTime<Utc>,
+}
+
+impl std::fmt::Debug for GcpCredentials {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("GcpCredentials")
+            .field("access_token", &"<redacted>")
+            .field("expire_time", &self.expire_time)
+            .finish()
+    }
 }
 
 /// The GCP credential broker.
@@ -192,5 +204,16 @@ mod tests {
         let body = access_token_body(&[], 300);
         assert_eq!(body["lifetime"], "300s");
         assert!(body["scope"].as_array().unwrap().is_empty());
+    }
+
+    #[test]
+    fn debug_output_redacts_the_access_token() {
+        let creds = GcpCredentials {
+            access_token: "ya29.gcp-bearer-material".to_string(),
+            expire_time: Utc::now(),
+        };
+        let d = format!("{creds:?}");
+        assert!(!d.contains("ya29.gcp-bearer-material"));
+        assert!(d.contains("<redacted>"));
     }
 }
