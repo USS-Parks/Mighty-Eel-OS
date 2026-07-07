@@ -546,9 +546,40 @@ remediation).
   effects documented on the fields. Gate proves retained ciphertext is
   undecryptable after erasure.
 
-Remaining for AF-005: full **V8** evidence sweep (restart / capacity
-outcomes) and the **V9** restart/migration live gate on the ZFS+TPM host
-(both need the real dataset host; the code paths are in place and unit-proven).
+## Phase V — V9 key persistence + restart recovery
+
+The blocker under V9's "restart, verify/decrypt" leg was that the per-model
+KEM keys `encrypt_model_weights` mints lived only in memory — a process
+restart lost them, so V4-sealed weights became undecryptable across exactly
+the reboot V9 must survive. Fixed in `PqcEngine`:
+
+- **Persisted, wrapped keys**: on first use the engine loads-or-creates a
+  32-byte key-encryption key at `<key_store>/kek.bin`; each per-model KEM
+  secret is AES-256-GCM-wrapped under it and written to
+  `<key_store>/model-keys/<key_id>.json` (public key + metadata clear, secret
+  never plaintext on disk). `ensure_model_keypair` recovers a persisted key
+  before minting a new one, and `decrypt_model_weights` lazily loads it on a
+  cold cache — so re-sealing reuses the key and a fresh process decrypts
+  weights sealed before the restart. Persist failure is an error, not a
+  warning (a key that can't durably store wouldn't survive a reboot).
+- **Erasure survives restart (V7 completion)**: `crypto_erase_model` now
+  deletes the persisted key file as well as the in-memory copy, using the
+  deterministic key id so it works whether or not the key was loaded this
+  boot. A reborn engine over the same store cannot resurrect an erased key.
+- Gates (`pqc.rs`): `v9_model_key_survives_restart` (seal → drop engine →
+  fresh engine decrypts) and `v9_crypto_erase_survives_restart` (erase → drop
+  → fresh engine cannot decrypt retained ciphertext). Test fixtures moved to
+  per-call unique key stores so on-disk state can't leak across tests.
+
+In production the key store sits on the encrypted ZFS dataset (V4/V5) and the
+KEK should additionally be TPM-sealed; the dev/no-TPM path keeps it as a
+plaintext file on that still-encrypted dataset.
+
+Remaining for AF-005: the full **V9** restart/migration **live** gate on a
+real ZFS+TPM host (dataset property proof + TPM-sealed KEK + snapshot/rollback
+against the live pool). The container has neither `zfs` nor `/dev/tpm*`, so
+this leg stays deferred with the code paths in place and crypto-layer restart
+recovery unit-proven.
 
 ## Phase Q/M3 — quality + supply-chain gates (AQ-001, AQ-002, AS-001)
 
