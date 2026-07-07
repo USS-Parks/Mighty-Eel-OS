@@ -34,13 +34,16 @@
 //! The only way to obtain one is [`WsfPrincipal::establish`], which the
 //! authenticator calls after it has verified a credential.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::identity::IdentityKind;
 
 /// How strongly the calling principal was authenticated. Ordered weakest →
 /// strongest; production policy (plan A2/V1) rejects [`AuthStrength::LocalDev`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
+///
+/// This value enum is `Deserialize` (config/credential parsing needs it); the
+/// no-JSON boundary applies to [`WsfPrincipal`] as a whole, not its fields.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AuthStrength {
     /// Explicit local-dev credential. Never valid under the production profile.
@@ -61,7 +64,7 @@ impl AuthStrength {
 
 /// The plane a principal is authenticated *for*. A token minted for one
 /// audience must not verify at another (plan T1/A4 audience binding).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Audience {
     /// The WSF trust-fabric control plane (token issue / attenuate / seal).

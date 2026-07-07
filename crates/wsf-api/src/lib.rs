@@ -12,6 +12,7 @@
 //! folding the SDK into `mai-sdk-rs` and a gRPC/tonic-0.14 surface are follow-ons
 //! (the axum-0.8 half of the 0.2d pin is exercised here and in W3).
 
+pub mod auth;
 pub mod client;
 
 use std::sync::{Arc, Mutex};
@@ -21,6 +22,8 @@ use axum::http::{StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
+
+use auth::{WsfAuthenticator, require_principal};
 use base64::Engine;
 use chrono::Utc;
 use fabric_contracts::{Budget, Envelope, TrustToken};
@@ -47,11 +50,19 @@ pub struct AppState {
     pub ledger: Arc<Mutex<Ledger>>,
     /// Trust-anchor public key for verifying presented tokens.
     pub token_public_key: Arc<Vec<u8>>,
+    /// Transport authenticator (plan A2). Establishes the calling principal for
+    /// every privileged route before its handler runs.
+    pub auth: Arc<dyn WsfAuthenticator>,
 }
 
 /// Mount all routes over `state`.
+///
+/// Privileged `/v1/*` routes are wrapped by the [`require_principal`]
+/// middleware (plan A2): a missing, malformed, expired, wrong-audience, or
+/// wrong-tenant credential is rejected 401/403 before the handler. `/healthz`
+/// and `/openapi.json` are intentionally open.
 pub fn router(state: AppState) -> Router {
-    Router::new()
+    let privileged = Router::new()
         .route("/v1/tokens/issue", post(issue))
         .route("/v1/tokens/verify", post(verify))
         .route("/v1/tokens/attenuate", post(attenuate))
@@ -59,9 +70,16 @@ pub fn router(state: AppState) -> Router {
         .route("/v1/envelopes/unseal", post(unseal))
         .route("/v1/credentials/exchange", post(exchange))
         .route("/v1/receipts", get(receipts))
+        .route_layer(axum::middleware::from_fn_with_state(
+            state.auth.clone(),
+            require_principal,
+        ))
+        .with_state(state);
+
+    Router::new()
         .route("/openapi.json", get(openapi))
         .route("/healthz", get(|| async { "ok" }))
-        .with_state(state)
+        .merge(privileged)
 }
 
 // ── request / response DTOs (shared with the SDK) ──────────────────────

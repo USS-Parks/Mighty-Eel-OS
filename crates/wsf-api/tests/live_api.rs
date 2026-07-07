@@ -224,6 +224,7 @@ async fn sdk_round_trips_every_endpoint() {
             RustCryptoMlDsa87::generate("wsf-api-ledger").unwrap(),
         )))),
         token_public_key: Arc::new(anchor),
+        auth: Arc::new(wsf_api::auth::LocalDevAuthenticator::for_wsf(TENANT)),
     };
 
     let app = wsf_api::router(state);
