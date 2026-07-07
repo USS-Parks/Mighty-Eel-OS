@@ -111,6 +111,38 @@ pub fn unseal(seal: &Seal, data_key: &[u8; 32], aad: &[u8]) -> Result<Vec<u8>, E
         .map_err(|_| EnvelopeError::UnsealFailed)
 }
 
+/// The tenant / owner / audience an envelope is **bound** to (v2). All-empty
+/// means an unbound legacy (v1) envelope; production unseal refuses one.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct EnvelopeBinding {
+    /// Owning tenant.
+    pub tenant_id: String,
+    /// Owner subject hash.
+    pub owner_subject_hash: String,
+    /// Intended audience.
+    pub audience: String,
+}
+
+impl EnvelopeBinding {
+    /// True when no binding field is set (a legacy v1 envelope).
+    #[must_use]
+    pub fn is_unbound(&self) -> bool {
+        self.tenant_id.is_empty() && self.owner_subject_hash.is_empty() && self.audience.is_empty()
+    }
+}
+
+/// The AEAD AAD: the handling label **and** the tenant/owner/audience binding, so
+/// altering either the label or the binding breaks decryption.
+fn envelope_aad(label: &Label, binding: &EnvelopeBinding) -> Result<Vec<u8>, EnvelopeError> {
+    let v = serde_json::json!({
+        "label": label,
+        "tenant_id": binding.tenant_id,
+        "owner_subject_hash": binding.owner_subject_hash,
+        "audience": binding.audience,
+    });
+    fabric_proof::canonical_bytes(&v).map_err(|e| EnvelopeError::Serialize(e.to_string()))
+}
+
 /// The canonical content the thread signs: everything but the signatures.
 fn thread_content(
     envelope_id: &str,
@@ -119,6 +151,7 @@ fn thread_content(
     authorizing_token_id: &str,
     previous_hash: &str,
     created_at: &str,
+    binding: &EnvelopeBinding,
 ) -> serde_json::Value {
     serde_json::json!({
         "envelope_id": envelope_id,
@@ -127,6 +160,9 @@ fn thread_content(
         "authorizing_token_id": authorizing_token_id,
         "previous_hash": previous_hash,
         "created_at": created_at,
+        "tenant_id": binding.tenant_id,
+        "owner_subject_hash": binding.owner_subject_hash,
+        "audience": binding.audience,
     })
 }
 
@@ -138,6 +174,9 @@ pub struct ThreadSpec {
     pub previous_hash: String,
     /// Creation time (RFC3339).
     pub created_at: String,
+    /// The tenant / owner / audience this envelope is bound to (v2). Leave empty
+    /// only for a deliberately unbound envelope.
+    pub binding: EnvelopeBinding,
 }
 
 /// Seal `plaintext` into a full [`Envelope`]: AEAD-seal the payload (label bound
@@ -155,8 +194,9 @@ pub fn seal_envelope(
     signer: &dyn Signer,
 ) -> Result<Envelope, EnvelopeError> {
     let envelope_id = envelope_id.into();
-    let aad = fabric_proof::canonical_bytes(&label)
-        .map_err(|e| EnvelopeError::Serialize(e.to_string()))?;
+    // AAD binds the label AND the tenant/owner/audience: tampering with either
+    // breaks decryption (AF-003).
+    let aad = envelope_aad(&label, &thread.binding)?;
     let seal = seal(plaintext, data_key, data_key_wrapped, &aad)?;
 
     let content = thread_content(
@@ -166,6 +206,7 @@ pub fn seal_envelope(
         &thread.authorizing_token_id,
         &thread.previous_hash,
         &thread.created_at,
+        &thread.binding,
     );
     let hash = fabric_proof::canonical_hash(&content)
         .map_err(|e| EnvelopeError::Serialize(e.to_string()))?;
@@ -186,8 +227,22 @@ pub fn seal_envelope(
                 key_id: signer.key_id().to_string(),
                 value: hex::encode(sig),
             }],
+            tenant_id: thread.binding.tenant_id,
+            owner_subject_hash: thread.binding.owner_subject_hash,
+            audience: thread.binding.audience,
         },
     })
+}
+
+/// The tenant / owner / audience an [`Envelope`] is bound to (read from its
+/// thread), for the unseal-authorization check.
+#[must_use]
+pub fn envelope_binding(envelope: &Envelope) -> EnvelopeBinding {
+    EnvelopeBinding {
+        tenant_id: envelope.thread.tenant_id.clone(),
+        owner_subject_hash: envelope.thread.owner_subject_hash.clone(),
+        audience: envelope.thread.audience.clone(),
+    }
 }
 
 /// Read an envelope's label **without** unsealing the payload. This is the
@@ -215,6 +270,7 @@ pub fn verify_thread(
         &envelope.thread.authorizing_token_id,
         &envelope.thread.previous_hash,
         &envelope.thread.created_at,
+        &envelope_binding(envelope),
     );
     let hash = fabric_proof::canonical_hash(&content)
         .map_err(|e| EnvelopeError::Serialize(e.to_string()))?;
@@ -242,7 +298,6 @@ pub fn open_envelope(
     public_key: &[u8],
 ) -> Result<Vec<u8>, EnvelopeError> {
     verify_thread(envelope, verifier, public_key)?;
-    let aad = fabric_proof::canonical_bytes(&envelope.label)
-        .map_err(|e| EnvelopeError::Serialize(e.to_string()))?;
+    let aad = envelope_aad(&envelope.label, &envelope_binding(envelope))?;
     unseal(&envelope.seal, data_key, &aad)
 }

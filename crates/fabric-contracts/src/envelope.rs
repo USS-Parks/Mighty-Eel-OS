@@ -32,7 +32,10 @@ pub struct Label {
     pub detected_entities: Vec<String>,
 }
 
-/// Wrap 3: the provenance thread. Authorizing token, chain link, signatures.
+/// Wrap 3: the provenance thread. Authorizing token, chain link, signatures, and
+/// the tenant/owner/audience the envelope is **bound** to (v2). The binding is
+/// folded into the AEAD AAD and signed into the thread, so an envelope can only be
+/// unsealed by a token of the same tenant/owner — altering it breaks decryption.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Thread {
     pub created_at: String,
@@ -40,6 +43,16 @@ pub struct Thread {
     pub previous_hash: String,
     #[serde(default)]
     pub signatures: Vec<Signature>,
+    /// Owning tenant the envelope is bound to. Empty on a legacy v1 envelope;
+    /// production unseal refuses an unbound envelope (no silent v1 acceptance).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub tenant_id: String,
+    /// Owner subject hash the envelope is bound to.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub owner_subject_hash: String,
+    /// Intended audience of the envelope.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub audience: String,
 }
 
 /// A sealed, labelled, threaded envelope — the only way regulated data moves.

@@ -313,4 +313,60 @@ schema is reconciled in Q8.
 
 Evidence: `test-evidence/security-remediation/M1/phase-A/`.
 
+Commit: `9c63a9e`.
+
+---
+
+## Phase E — Tenant-bound envelope security (AF-003)
+
+### E1/E3/E4 — envelope binding in AAD + signed thread; unseal authorization
+
+Objective: stop any valid token from unsealing any tenant's envelope. Bind the
+envelope to its owning tenant/subject and enforce that binding on unseal.
+
+Root cause (confirmed reading `wsf-seal` + `fabric-envelope`): the AAD bound only
+the handling `Label` (classification/scopes/ops/destinations); `unseal` checked
+signature + expiry + classification clearance + permitted_ops but **never the
+tenant/owner** — and a single Transit key wrapped every tenant's data keys. Any
+valid, sufficiently-cleared token could open any tenant's envelope.
+
+Binding (E1):
+- `fabric-contracts::Thread` gains `tenant_id` / `owner_subject_hash` / `audience`
+  (`skip_serializing_if` empty ⇒ a v1 envelope's bytes are unchanged).
+- `fabric-envelope`: `EnvelopeBinding`, `ThreadSpec.binding`; the AEAD **AAD now
+  binds the label AND the binding** (`envelope_aad`), and the binding is signed
+  into the provenance thread (`thread_content`). `envelope_binding()` reads it back.
+
+Seal authorization (E3):
+- `wsf-seal::seal` sets the binding from the authorizing token —
+  `tenant_id = token.tenant_id`, `owner_subject_hash = token.subject_hash`.
+
+Unseal authorization (E4):
+- `wsf-seal::unseal` refuses, **before any Transit decrypt** and with a receipt: an
+  unbound (v1) envelope (no silent v1 acceptance, E5), a tenant mismatch, or an
+  owner mismatch. Cross-tenant and cross-owner unseal both fail closed.
+
+Verify (this Linux container; offline — the binding check precedes OpenBao):
+- `cargo fmt --check` PASS; `cargo check --workspace` PASS (exit 0);
+  `cargo clippy -p fabric-contracts -p fabric-envelope -p wsf-seal -p aog-gateway --all-targets -D warnings -A pedantic` PASS.
+- `cargo test -p fabric-envelope` PASS (6 — incl. new
+  `tampering_the_tenant_binding_breaks_the_thread`: rebinding after sealing →
+  InvalidSignature, so the binding is signed).
+- `cargo test -p wsf-seal` PASS (inline 3 + tenant_binding 4): cross-tenant,
+  cross-owner, and unbound-v1 unseal all → `Unauthorized` before Transit; the
+  legitimate owner passes the binding and fails only at the dummy OpenBao.
+
+Regression: REG-AF-003-cross-tenant-unseal flips to REPAIRED (wsf-seal
+`tenant_binding.rs`).
+
+Findings: AF-003 CONTAINED → **FIXED** (root controls + offline proof).
+
+Deferred (honest): E2 per-tenant Transit key namespace (defence-in-depth so
+Transit itself won't unwrap cross-tenant — needs OpenBao policy); E5 offline v1
+migration command (unbound v1 is refused now); E6 tenant-scoped storage/receipt
+keys; E7 live two-tenant OpenBao Transit gate (→ PROVEN). Audience binding field
+is carried but not yet enforced (no token audience field until Phase A/W matures).
+
+Evidence: `test-evidence/security-remediation/M1/phase-E/`.
+
 Commit: (this change set).

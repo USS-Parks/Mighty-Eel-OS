@@ -6,8 +6,8 @@ use fabric_contracts::{Classification, ComplianceScope, Label, Route};
 use fabric_crypto::Signer;
 use fabric_crypto::providers::{MlDsa87Verifier, RustCryptoMlDsa87};
 use fabric_envelope::{
-    EnvelopeError, ThreadSpec, open_envelope, read_label, seal, seal_envelope, unseal,
-    verify_thread,
+    EnvelopeBinding, EnvelopeError, ThreadSpec, open_envelope, read_label, seal, seal_envelope,
+    unseal, verify_thread,
 };
 
 fn label() -> Label {
@@ -26,6 +26,11 @@ fn spec() -> ThreadSpec {
         authorizing_token_id: "tok_1".into(),
         previous_hash: "blake3:0000".into(),
         created_at: "2026-07-03T18:00:00Z".into(),
+        binding: EnvelopeBinding {
+            tenant_id: "baap".into(),
+            owner_subject_hash: "hmac:owner".into(),
+            audience: "wsf".into(),
+        },
     }
 }
 
@@ -93,6 +98,20 @@ fn tampering_the_ciphertext_breaks_the_thread() {
     let key = [7u8; 32];
     let mut env = seal_envelope("env_1", b"data", &key, "x", label(), spec(), &signer).unwrap();
     env.seal.ciphertext = hex::encode([0xAAu8; 40]); // swap the ciphertext
+    assert_eq!(
+        open_envelope(&env, &key, &MlDsa87Verifier, signer.public_key()),
+        Err(EnvelopeError::InvalidSignature)
+    );
+}
+
+#[test]
+fn tampering_the_tenant_binding_breaks_the_thread() {
+    // The tenant/owner/audience binding is signed into the thread (and folded into
+    // the AAD): rebinding an envelope to another tenant after sealing breaks it.
+    let signer = RustCryptoMlDsa87::generate("k").unwrap();
+    let key = [7u8; 32];
+    let mut env = seal_envelope("env_1", b"data", &key, "x", label(), spec(), &signer).unwrap();
+    env.thread.tenant_id = "attacker-tenant".into();
     assert_eq!(
         open_envelope(&env, &key, &MlDsa87Verifier, signer.public_key()),
         Err(EnvelopeError::InvalidSignature)

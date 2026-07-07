@@ -21,7 +21,9 @@ use chrono::{DateTime, Utc};
 use fabric_contracts::{Classification, ComplianceScope, Envelope, Label, Route, TrustToken};
 use fabric_crypto::Signer;
 use fabric_crypto::providers::MlDsa87Verifier;
-use fabric_envelope::{ThreadSpec, open_envelope, seal_envelope};
+use fabric_envelope::{
+    EnvelopeBinding, ThreadSpec, envelope_binding, open_envelope, seal_envelope,
+};
 use fabric_proof::{ChainLink, GENESIS_HASH, canonical_hash, chain_link};
 use serde::{Deserialize, Serialize};
 use wsf_bridge::OpenBaoAuth;
@@ -285,6 +287,13 @@ impl SealService {
                 authorizing_token_id: req.token.token_id.clone(),
                 previous_hash,
                 created_at: now.to_rfc3339(),
+                // Bind the envelope to the sealing token's tenant + owner (AF-003):
+                // only a same-tenant, same-owner token can later unseal it.
+                binding: EnvelopeBinding {
+                    tenant_id: req.token.tenant_id.clone(),
+                    owner_subject_hash: req.token.subject_hash.clone(),
+                    audience: String::new(),
+                },
             },
             self.signer.as_ref(),
         )?;
@@ -326,6 +335,26 @@ impl SealService {
             self.record("unseal", &envelope.envelope_id, &req.token, "deny", now);
             return Err(SealError::Unauthorized(
                 "label does not permit unseal".to_string(),
+            ));
+        }
+
+        // Tenant/owner binding (AF-003): the presenting token must own the
+        // envelope. An unbound (legacy v1) envelope is refused — no silent v1
+        // acceptance (E5). Cross-tenant and cross-owner unseal both fail here,
+        // before any Transit decrypt.
+        let binding = envelope_binding(envelope);
+        if binding.is_unbound() {
+            self.record("unseal", &envelope.envelope_id, &req.token, "deny", now);
+            return Err(SealError::Unauthorized(
+                "envelope is not tenant-bound (legacy v1)".to_string(),
+            ));
+        }
+        if binding.tenant_id != req.token.tenant_id
+            || binding.owner_subject_hash != req.token.subject_hash
+        {
+            self.record("unseal", &envelope.envelope_id, &req.token, "deny", now);
+            return Err(SealError::Unauthorized(
+                "token does not own the envelope (tenant/owner mismatch)".to_string(),
             ));
         }
 
