@@ -254,13 +254,24 @@ async fn sdk_round_trips_every_endpoint() {
         "issued token verifies"
     );
 
-    let mut child = token.clone();
-    child.token_id = format!("{}-child", token.token_id);
-    child.allowed_routes = vec![]; // narrower
-    let attenuated = sdk.attenuate(&token, &child).await.expect("attenuate");
+    // Attenuate with restriction-only intent; the child identity is derived
+    // server-side from the authenticated parent (T2).
+    let restrictions = fabric_token::TokenRestrictions {
+        new_token_id: format!("{}-child", token.token_id),
+        allowed_routes: Some(vec![]), // narrower
+        ..fabric_token::TokenRestrictions::default()
+    };
+    let attenuated = sdk
+        .attenuate(&token, &restrictions)
+        .await
+        .expect("attenuate");
     assert_eq!(
         attenuated.attenuation.parent_id,
         Some(token.token_id.clone())
+    );
+    assert_eq!(
+        attenuated.tenant_id, token.tenant_id,
+        "child inherits the parent's tenant (server-side, not caller-set)"
     );
 
     // Envelope lifecycle.
