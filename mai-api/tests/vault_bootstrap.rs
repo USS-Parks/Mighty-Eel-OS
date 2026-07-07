@@ -119,6 +119,27 @@ fn production_accepts_zfs_when_root_exists() {
 }
 
 #[test]
+fn production_rejects_file_dev_backend() {
+    // V1: file-dev stores plaintext — production accepts only the reviewed
+    // encrypted backend, no matter what the root looks like.
+    let temp = tempfile::tempdir().unwrap();
+    let mut p = baseline(ProfileMode::Production, temp.path().to_path_buf());
+    p.vault.backend = VaultBackend::FileDev;
+    let err = build_vault(&p)
+        .map(|_| ())
+        .expect_err("production must refuse the plaintext file-dev backend");
+    assert!(
+        matches!(
+            err,
+            VaultBuildError::StubInProduction {
+                backend: VaultBackend::FileDev
+            }
+        ),
+        "got {err:?}"
+    );
+}
+
+#[test]
 fn production_rejects_missing_root() {
     // A path that cannot exist on either Linux or Windows test hosts.
     let p = baseline(

@@ -47,14 +47,15 @@ pub enum VaultBuildError {
 
 /// Construct the vault implementation selected by the profile.
 ///
-/// Behavior matrix:
+/// Behavior matrix (V1: production accepts **only** the reviewed encrypted
+/// backend — ZFS; `stub` is not a vault and `file-dev` stores plaintext):
 ///
 /// | Mode        | Backend  | allow_stub | Outcome                       |
 /// |-------------|----------|------------|-------------------------------|
 /// | production  | zfs      | false      | [`ZfsVault`]                  |
 /// | production  | zfs      | true       | [`StubAllowedInProduction`]   |
 /// | production  | stub     | any        | [`StubInProduction`]          |
-/// | production  | file-dev | false      | [`FileDevVault`]               |
+/// | production  | file-dev | any        | [`StubInProduction`]          |
 /// | local-dev   | zfs      | any        | [`ZfsVault`]                  |
 /// | local-dev   | stub     | true       | [`LocalDevStubVault`]         |
 /// | local-dev   | stub     | false      | [`StubNotAllowed`]            |
@@ -89,9 +90,12 @@ pub fn build_vault(profile: &ShipProfile) -> Result<Box<dyn VaultInterface>, Vau
             }
         }
         VaultBackend::FileDev => {
-            if is_production && !root.exists() {
-                return Err(VaultBuildError::RootMissing {
-                    path: root.to_path_buf(),
+            // V1: file-dev stores model material in plaintext — a development
+            // convenience, never a production vault. Reject regardless of
+            // allow_stub or root state.
+            if is_production {
+                return Err(VaultBuildError::StubInProduction {
+                    backend: VaultBackend::FileDev,
                 });
             }
             Ok(Box::new(FileDevVault::new(zfs_config_from_root(root))))
