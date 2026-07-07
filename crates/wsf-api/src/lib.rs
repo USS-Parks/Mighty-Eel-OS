@@ -292,37 +292,89 @@ async fn issue(
     Json(req): Json<IssueReq>,
 ) -> Result<Json<TokenResp>, ApiError> {
     // Authority is derived from the authenticated principal + server-side tenant
-    // policy — never from the request body (plan A3, closes AF-002).
+    // policy — never from the request body (plan A3, closes AF-002). Every
+    // allow and deny is receipted (plan A4).
+    let roles = &req.requested_roles;
     if !principal.is_for(Audience::Wsf) {
-        return Err(ApiError::new(
-            StatusCode::FORBIDDEN,
+        return Err(deny_issuance(
+            &s,
+            &principal,
+            "unknown",
             "principal is not authenticated for the WSF plane",
+            roles,
         ));
     }
-    let policy = s.policy.policy_for(&principal.tenant_id).ok_or_else(|| {
-        ApiError::new(StatusCode::FORBIDDEN, "no issuance policy for this tenant")
-    })?;
+    let Some(policy) = s.policy.policy_for(&principal.tenant_id) else {
+        return Err(deny_issuance(
+            &s,
+            &principal,
+            "unknown",
+            "no issuance policy for this tenant",
+            roles,
+        ));
+    };
+
+    // A4: classify the issuance mode and enforce the permission matrix +
+    // delegation-depth gate before any authority is granted.
+    let mode = policy.classify(principal.kind, roles);
+    if !policy.permits_mode(mode) {
+        return Err(deny_issuance(
+            &s,
+            &principal,
+            mode.label(),
+            "issuance mode is not permitted for this tenant",
+            roles,
+        ));
+    }
+    if mode.is_delegation_capable() && policy.max_delegation_depth == 0 {
+        return Err(deny_issuance(
+            &s,
+            &principal,
+            mode.label(),
+            "tenant forbids delegation for this issuance mode",
+            roles,
+        ));
+    }
 
     // Roles: requested must be a subset of what the tenant may grant.
-    for role in &req.requested_roles {
+    for role in roles {
         if !policy.may_grant_role(role) {
-            return Err(ApiError::new(
-                StatusCode::FORBIDDEN,
+            return Err(deny_issuance(
+                &s,
+                &principal,
+                mode.label(),
                 "requested role is not grantable for this tenant",
+                roles,
             ));
         }
     }
     // Models: requested must lie within the allowlist when the tenant restricts.
     for model in &req.requested_models {
         if !policy.allows_model(model) {
-            return Err(ApiError::new(
-                StatusCode::FORBIDDEN,
+            return Err(deny_issuance(
+                &s,
+                &principal,
+                mode.label(),
                 "requested model is not permitted for this tenant",
+                roles,
             ));
         }
     }
     // Budget: every counter at or below the ceiling; unspecified ⇒ the ceiling.
-    let budget = authorize_budget(req.budget.as_ref(), &policy.max_budget)?;
+    let budget = match authorize_budget(req.budget.as_ref(), &policy.max_budget) {
+        Ok(b) => b,
+        Err(e) => {
+            issuance_receipt(
+                &s,
+                &principal,
+                mode.label(),
+                "deny",
+                "requested budget exceeds tenant ceiling",
+                roles,
+            );
+            return Err(e);
+        }
+    };
 
     // Subject is the authenticated principal, never a caller-supplied id.
     let subject_source = if principal.subject_hash.is_empty() {
@@ -331,13 +383,9 @@ async fn issue(
         principal.subject_hash.clone()
     };
 
-    let ir = IssueTokenRequest::new(
-        principal.tenant_id.clone(),
-        subject_source,
-        req.requested_roles.clone(),
-    )
-    .with_models(req.requested_models.clone())
-    .with_budget(budget);
+    let ir = IssueTokenRequest::new(principal.tenant_id.clone(), subject_source, roles.clone())
+        .with_models(req.requested_models.clone())
+        .with_budget(budget);
 
     let token = s.bridge.issue_token(&ir).await.map_err(|e| match e {
         wsf_bridge::BridgeError::OpenBao(_) => {
@@ -348,6 +396,9 @@ async fn issue(
         }
         _ => ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
     })?;
+
+    // Allow receipt (the authorized decision) + the bridge's token correlation.
+    issuance_receipt(&s, &principal, mode.label(), "allow", "issued", roles);
     let correlation = s.bridge.audit_correlation(&token);
     if let Ok(value) = serde_json::to_value(&correlation) {
         let _ = s
@@ -357,6 +408,49 @@ async fn issue(
             .ingest("wsf-bridge", value);
     }
     Ok(Json(TokenResp { token }))
+}
+
+/// Emit an issuance-decision receipt to the ledger (plan A4). Metadata only —
+/// no cleartext subject, no token payload: the principal carries a `subject_hash`
+/// and correlation id, matching the ledger's receipt contract.
+fn issuance_receipt(
+    s: &AppState,
+    principal: &WsfPrincipal,
+    mode: &str,
+    decision: &str,
+    reason: &str,
+    requested_roles: &[String],
+) {
+    let receipt = serde_json::json!({
+        "kind": "issuance_decision",
+        "decision": decision,
+        "mode": mode,
+        "reason": reason,
+        "tenant_id": principal.tenant_id,
+        "principal_id": principal.principal_id,
+        "subject_hash": principal.subject_hash,
+        "auth_strength": principal.auth_strength,
+        "correlation_id": principal.correlation_id,
+        "requested_roles": requested_roles,
+        "issued_at": Utc::now().to_rfc3339(),
+    });
+    let _ = s
+        .ledger
+        .lock()
+        .expect("ledger lock")
+        .ingest("wsf-issuance", receipt);
+}
+
+/// Emit a deny receipt and build the matching 403 (plan A4).
+fn deny_issuance(
+    s: &AppState,
+    principal: &WsfPrincipal,
+    mode: &str,
+    reason: &'static str,
+    requested_roles: &[String],
+) -> ApiError {
+    issuance_receipt(s, principal, mode, "deny", reason, requested_roles);
+    ApiError::new(StatusCode::FORBIDDEN, reason)
 }
 
 async fn verify(State(s): State<AppState>, Json(req): Json<VerifyReq>) -> Json<VerifyResp> {

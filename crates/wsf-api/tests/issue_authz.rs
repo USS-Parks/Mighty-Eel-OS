@@ -257,7 +257,35 @@ async fn issuance_authority_is_derived_not_caller_supplied() {
     let raw_roles = issue(json!({ "roles": ["admin"] })).await;
     assert_eq!(raw_roles.status(), StatusCode::UNPROCESSABLE_ENTITY);
 
+    // 6. A4 receipts: the successful issue and the two authz refusals above
+    //    (ungranted role, over-ceiling budget) are all on the ledger.
+    let receipts: Value = http
+        .get(format!("{base}/v1/receipts"))
+        .send()
+        .await
+        .expect("receipts req")
+        .json()
+        .await
+        .expect("receipts json");
+    let decisions: Vec<&Value> = receipts["entries"]
+        .as_array()
+        .expect("entries")
+        .iter()
+        .map(|e| &e["receipt"])
+        .filter(|r| r["kind"] == "issuance_decision")
+        .collect();
+    assert!(
+        decisions
+            .iter()
+            .any(|r| r["decision"] == "allow" && r["tenant_id"] == TENANT),
+        "allow receipt for the successful issue"
+    );
+    assert!(
+        decisions.iter().filter(|r| r["decision"] == "deny").count() >= 2,
+        "deny receipts for the refused role + budget"
+    );
+
     println!(
-        "A3 live gate PASSED against {addr}: tenant/subject/role/budget are server-derived; self-assignment refused"
+        "A3/A4 live gate PASSED against {addr}: authority server-derived; self-assignment refused; allow+deny receipted"
     );
 }
