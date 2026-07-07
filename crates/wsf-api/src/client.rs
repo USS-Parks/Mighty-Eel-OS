@@ -85,21 +85,24 @@ impl WsfClient {
         .await
     }
 
-    /// Attenuate a parent into a narrower child.
+    /// Attenuate a parent into a narrower child under `restrictions`. The child
+    /// identity is generated server-side from the authenticated parent — the
+    /// caller supplies narrowing intent only (plan T2).
     ///
     /// # Errors
-    /// [`ClientError`] on transport or a non-2xx response (e.g. widening → 422).
+    /// [`ClientError`] on transport or a non-2xx response (widening → 422,
+    /// unauthenticated/forged parent → 403).
     pub async fn attenuate(
         &self,
         parent: &TrustToken,
-        child: &TrustToken,
+        restrictions: &fabric_token::TokenRestrictions,
     ) -> Result<TrustToken, ClientError> {
         let r: TokenResp = self
             .post(
                 "/v1/tokens/attenuate",
                 &AttenuateReq {
                     parent: parent.clone(),
-                    child: child.clone(),
+                    restrictions: restrictions.clone(),
                 },
             )
             .await?;

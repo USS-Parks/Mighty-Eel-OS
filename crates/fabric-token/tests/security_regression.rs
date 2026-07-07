@@ -1,24 +1,22 @@
-//! Quarantined adversarial regression harness — security remediation.
+//! Adversarial regression suite — security remediation (AF-001 / AF-006).
 //!
-//! Feature-gated (`security-regression`) so it never runs in the default suite:
-//! every test here asserts the CURRENT, VULNERABLE behavior of the trust plane.
-//! When a fix lands, the matching test flips to assert the repaired behavior and
-//! moves into the product suite. Each test name is the deterministic regression
-//! identifier (see docs/scans/SECURITY-REGRESSION-REGISTRY.md).
-//!
-//! Run: `cargo test -p fabric-token --features security-regression`
-#![cfg(feature = "security-regression")]
+//! These began (plan 0.4) as quarantined fixtures asserting the CURRENT,
+//! VULNERABLE behavior. Phase T landed the fix, so each has flipped to assert
+//! the REPAIRED behavior and moved into the product suite (no feature gate).
+//! Each test name is the deterministic regression identifier (see
+//! docs/scans/SECURITY-REGRESSION-REGISTRY.md).
 
+use chrono::{TimeZone, Utc};
 use fabric_contracts::{
     Attenuation, Classification, ComplianceScope, RevocationStatus, Route, Signature, TrustToken,
 };
 use fabric_crypto::Signer;
 use fabric_crypto::providers::{MlDsa87Verifier, RustCryptoMlDsa87};
-use fabric_token::{attenuate, issue, verify};
+use fabric_token::{
+    Operation, TokenError, TokenRestrictions, VerificationContext, attenuate, issue,
+};
 
-/// A maximally-permissive base token; each fixture narrows it as needed. Empty
-/// `allowed_models` and `None` budget make attenuate skip those two subset checks,
-/// isolating the axis each fixture exercises.
+/// A maximally-permissive base token; each fixture narrows it as needed.
 fn base(token_id: &str, expires_at: &str) -> TrustToken {
     TrustToken {
         token_id: token_id.into(),
@@ -50,74 +48,116 @@ fn base(token_id: &str, expires_at: &str) -> TrustToken {
     }
 }
 
-// REG-AF-001-unsigned-parent — attenuate signs a child of a fabricated, never-
-// signed parent. The parent is trusted without verification: a signer oracle.
+fn now() -> chrono::DateTime<Utc> {
+    Utc.with_ymd_and_hms(2026, 7, 4, 0, 0, 0).unwrap()
+}
+
+/// A minimal, valid narrowing (routes ⊆ parent) — isolates the axis each
+/// fixture actually exercises.
+fn narrow(child_id: &str) -> TokenRestrictions {
+    TokenRestrictions {
+        new_token_id: child_id.into(),
+        allowed_routes: Some(vec![Route::LocalOnly]),
+        ..TokenRestrictions::default()
+    }
+}
+
+// REG-AF-001-unsigned-parent — an unsigned, fabricated parent is REJECTED: the
+// signer oracle is closed because the parent is authenticated first.
 #[test]
-fn reg_af_001_unsigned_parent_yields_signed_child() {
+fn reg_af_001_unsigned_parent_is_rejected() {
     let bridge = RustCryptoMlDsa87::generate("bridge").unwrap();
     let parent = base("forged_parent", "2099-01-01T00:00:00Z");
     assert!(parent.signature.value.is_empty(), "parent is unsigned");
-    let mut child = base("child", "2098-01-01T00:00:00Z");
-    child.allowed_routes = vec![Route::CloudAllowed];
-    // VULNERABLE today: succeeds. The fix must verify the parent and reject.
-    let signed = attenuate(&parent, child, &bridge)
-        .expect("VULN(AF-001): unsigned parent accepted, child signed");
-    verify(&signed, &MlDsa87Verifier, bridge.public_key())
-        .expect("VULN(AF-001): forged-lineage child verifies under the bridge key");
+    let ctx = VerificationContext::new(
+        &MlDsa87Verifier,
+        bridge.public_key(),
+        now(),
+        Operation::Attenuate,
+    );
+    assert_eq!(
+        attenuate(&parent, &narrow("child"), &ctx, None, &bridge).unwrap_err(),
+        TokenError::InvalidSignature
+    );
 }
 
 // REG-AF-001-wrong-key-parent — a parent signed by an attacker key (not the
-// bridge anchor) is accepted; attenuate never checks the parent signature.
+// bridge anchor) is REJECTED.
 #[test]
-fn reg_af_001_wrong_key_parent_yields_signed_child() {
+fn reg_af_001_wrong_key_parent_is_rejected() {
     let bridge = RustCryptoMlDsa87::generate("bridge").unwrap();
     let attacker = RustCryptoMlDsa87::generate("attacker").unwrap();
     let parent = issue(base("attacker_parent", "2099-01-01T00:00:00Z"), &attacker).unwrap();
-    let mut child = base("child", "2098-01-01T00:00:00Z");
-    child.allowed_routes = vec![Route::LocalOnly];
-    let signed =
-        attenuate(&parent, child, &bridge).expect("VULN(AF-001): wrong-key parent accepted");
-    verify(&signed, &MlDsa87Verifier, bridge.public_key()).unwrap();
+    let ctx = VerificationContext::new(
+        &MlDsa87Verifier,
+        bridge.public_key(),
+        now(),
+        Operation::Attenuate,
+    );
+    assert_eq!(
+        attenuate(&parent, &narrow("child"), &ctx, None, &bridge).unwrap_err(),
+        TokenError::InvalidSignature
+    );
 }
 
-// REG-AF-001-role-widening — the child gains a role the parent never held;
-// attenuate does not constrain `roles`.
+// REG-AF-001-role-widening — a child cannot gain a role the parent never held.
 #[test]
-fn reg_af_001_role_widening_accepted() {
+fn reg_af_001_role_widening_is_rejected() {
     let bridge = RustCryptoMlDsa87::generate("bridge").unwrap();
     let parent = issue(base("parent", "2099-01-01T00:00:00Z"), &bridge).unwrap();
-    let mut child = base("child", "2098-01-01T00:00:00Z");
-    child.allowed_routes = vec![Route::LocalOnly];
-    child.roles = vec!["clinician".into(), "admin".into()];
-    let signed = attenuate(&parent, child, &bridge).expect("VULN(AF-001): role widening accepted");
-    assert!(signed.roles.iter().any(|r| r == "admin"));
+    let ctx = VerificationContext::new(
+        &MlDsa87Verifier,
+        bridge.public_key(),
+        now(),
+        Operation::Attenuate,
+    );
+    let mut r = narrow("child");
+    r.roles = Some(vec!["clinician".into(), "admin".into()]);
+    assert_eq!(
+        attenuate(&parent, &r, &ctx, None, &bridge).unwrap_err(),
+        TokenError::AttenuationWidens { axis: "roles" }
+    );
 }
 
-// REG-AF-001-tenant-swap — the child claims a different tenant; attenuate does
-// not constrain `tenant_id`.
+// REG-AF-001-tenant-swap — the child's tenant is now STRUCTURALLY inherited from
+// the authenticated parent (the restriction schema has no tenant field), so a
+// cross-tenant child is impossible to express. A valid narrowing keeps the
+// parent's tenant.
 #[test]
-fn reg_af_001_tenant_swap_accepted() {
+fn reg_af_001_tenant_is_inherited_not_settable() {
     let bridge = RustCryptoMlDsa87::generate("bridge").unwrap();
     let parent = issue(base("parent", "2099-01-01T00:00:00Z"), &bridge).unwrap();
-    let mut child = base("child", "2098-01-01T00:00:00Z");
-    child.allowed_routes = vec![Route::LocalOnly];
-    child.tenant_id = "victim-tenant".into();
-    let signed =
-        attenuate(&parent, child, &bridge).expect("VULN(AF-001): cross-tenant child accepted");
-    assert_eq!(signed.tenant_id, "victim-tenant");
+    let ctx = VerificationContext::new(
+        &MlDsa87Verifier,
+        bridge.public_key(),
+        now(),
+        Operation::Attenuate,
+    );
+    let child = attenuate(&parent, &narrow("child"), &ctx, None, &bridge).unwrap();
+    assert_eq!(
+        child.tenant_id, "baap",
+        "child inherits the parent's tenant"
+    );
+    assert_eq!(child.subject_hash, parent.subject_hash);
+    assert_eq!(child.issuer, parent.issuer);
 }
 
-// REG-AF-006-revoked-parent — attenuate never checks the parent's revocation
-// status, so a revoked token still mints fresh, non-revoked children.
+// REG-AF-006-revoked-parent — a revoked parent is REJECTED before any child is
+// constructed.
 #[test]
-fn reg_af_006_revoked_parent_still_attenuates() {
+fn reg_af_006_revoked_parent_is_rejected() {
     let bridge = RustCryptoMlDsa87::generate("bridge").unwrap();
     let mut p = base("parent", "2099-01-01T00:00:00Z");
     p.revocation_status = RevocationStatus::Revoked;
     let parent = issue(p, &bridge).unwrap();
-    let mut child = base("child", "2098-01-01T00:00:00Z");
-    child.allowed_routes = vec![Route::LocalOnly];
-    let signed =
-        attenuate(&parent, child, &bridge).expect("VULN(AF-006): revoked parent still attenuates");
-    assert_eq!(signed.revocation_status, RevocationStatus::Unknown);
+    let ctx = VerificationContext::new(
+        &MlDsa87Verifier,
+        bridge.public_key(),
+        now(),
+        Operation::Attenuate,
+    );
+    assert_eq!(
+        attenuate(&parent, &narrow("child"), &ctx, None, &bridge).unwrap_err(),
+        TokenError::Revoked
+    );
 }

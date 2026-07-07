@@ -136,13 +136,16 @@ pub struct VerifyResp {
     pub reason: String,
 }
 
-/// Attenuate request (mint a narrower child of `parent`).
+/// Attenuate request — the presented parent plus **narrowing restrictions
+/// only** (plan T2). The child's identity/authority fields are generated
+/// server-side from the authenticated parent, so this request exposes no
+/// attacker-suppliable child identity or signature field.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AttenuateReq {
-    /// The parent token.
+    /// The parent token (authenticated server-side before any child is built).
     pub parent: TrustToken,
-    /// The desired child (must narrow the parent on every axis).
-    pub child: TrustToken,
+    /// How the child narrows the parent (subset/lower/earlier only).
+    pub restrictions: fabric_token::TokenRestrictions,
 }
 
 /// Seal request.
@@ -478,11 +481,54 @@ async fn verify(State(s): State<AppState>, Json(req): Json<VerifyReq>) -> Json<V
 
 async fn attenuate(
     State(s): State<AppState>,
+    Extension(principal): Extension<WsfPrincipal>,
     Json(req): Json<AttenuateReq>,
 ) -> Result<Json<TokenResp>, ApiError> {
-    let token = fabric_token::attenuate(&req.parent, req.child, s.bridge.signer())
-        .map_err(|e| ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, e.to_string()))?;
+    // T3: authenticate the presented parent under the trust anchor, bound to the
+    // caller's tenant, before any child is constructed. The child's identity is
+    // copied from the authenticated parent (T2); the request carries narrowing
+    // restrictions only.
+    let ctx = fabric_token::VerificationContext::new(
+        &MlDsa87Verifier,
+        &s.token_public_key,
+        Utc::now(),
+        fabric_token::Operation::Attenuate,
+    )
+    .expect_tenant(&principal.tenant_id);
+
+    let token = fabric_token::attenuate(
+        &req.parent,
+        &req.restrictions,
+        &ctx,
+        None,
+        s.bridge.signer(),
+    )
+    .map_err(map_attenuate_error)?;
     Ok(Json(TokenResp { token }))
+}
+
+/// Map a token-attenuation error to an HTTP status (plan T3): parent-
+/// authentication failures are 403 (the caller presented a parent it may not
+/// use); narrowing / id / depth failures are 422 (a malformed request).
+fn map_attenuate_error(e: fabric_token::TokenError) -> ApiError {
+    use fabric_token::TokenError as E;
+    let status = match e {
+        E::Revoked
+        | E::InvalidSignature
+        | E::MalformedSignature
+        | E::Expired
+        | E::NotYetValid
+        | E::TenantMismatch
+        | E::BundleMismatch
+        | E::RevocationUnknown => StatusCode::FORBIDDEN,
+        E::AttenuationWidens { .. }
+        | E::InvalidChildId
+        | E::DepthExceeded
+        | E::BadTimestamp(_)
+        | E::BudgetExceeded { .. } => StatusCode::UNPROCESSABLE_ENTITY,
+        E::Serialize(_) | E::Sign(_) => StatusCode::INTERNAL_SERVER_ERROR,
+    };
+    ApiError::new(status, e.to_string())
 }
 
 async fn seal(

@@ -20,10 +20,11 @@
 use std::collections::BTreeMap;
 
 use aog_estate::ResourceObject;
-use fabric_contracts::{Attenuation, Budget, Classification, Seal, TrustToken};
+use chrono::Utc;
+use fabric_contracts::{Budget, Classification, Seal, TrustToken};
 use fabric_crypto::Signer;
 use fabric_crypto::providers::RustCryptoMlDsa87;
-use fabric_token::TokenError;
+use fabric_token::{TokenError, TokenRestrictions};
 
 use crate::error::ApiError;
 
@@ -137,21 +138,24 @@ pub fn scoped_child_token(
     child_id: &str,
     signer: &dyn Signer,
 ) -> Result<TrustToken, TokenError> {
-    let mut child = parent.clone();
-    child_id.clone_into(&mut child.token_id);
-    child.attenuation = Attenuation::default();
-    if let Some(c) = ceiling {
-        child.max_data_classification = c.min(parent.max_data_classification);
-    }
-    if let Some(pb) = &parent.budget {
-        child.budget = Some(Budget {
+    // The admission front door has already authenticated `parent` against the
+    // WSF trust anchor (see `auth.rs`), so this uses the pre-verified
+    // attenuation path: server-side identity copy + complete monotonicity, no
+    // re-run of the signature check (whose issuer differs across hops here).
+    let restrictions = TokenRestrictions {
+        new_token_id: child_id.to_string(),
+        max_data_classification: ceiling
+            .map(|c| c.min(parent.max_data_classification))
+            .or(Some(parent.max_data_classification)),
+        budget: parent.budget.as_ref().map(|pb| Budget {
             token_cap: pb.token_cap.saturating_sub(pb.tokens_spent),
             usd_cap_cents: pb.usd_cap_cents.saturating_sub(pb.usd_spent_cents),
             tool_call_cap: pb.tool_call_cap.saturating_sub(pb.tool_calls_spent),
             tokens_spent: 0,
             usd_spent_cents: 0,
             tool_calls_spent: 0,
-        });
-    }
-    fabric_token::attenuate(parent, child, signer)
+        }),
+        ..TokenRestrictions::default()
+    };
+    fabric_token::attenuate_preverified(parent, &restrictions, Utc::now(), None, signer)
 }
