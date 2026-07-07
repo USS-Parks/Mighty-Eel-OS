@@ -12,7 +12,10 @@
 //! endpoint is configurable: the live test points it at a local mock of the
 //! `generateAccessToken` contract; a real-GCP run is owner-gated.
 
+use std::sync::{Arc, RwLock};
+
 use chrono::{DateTime, Utc};
+use fabric_revocation::MonotonicRevocationStore;
 use wsf_bridge::OpenBaoAuth;
 
 use crate::error::BrokerError;
@@ -73,6 +76,7 @@ pub struct GcpBroker {
     openbao: OpenBaoAuth,
     http: reqwest::Client,
     config: GcpBrokerConfig,
+    revocation: Option<Arc<RwLock<MonotonicRevocationStore>>>,
 }
 
 /// Build the `generateAccessToken` request body: the OAuth `scope` list and a
@@ -93,7 +97,16 @@ impl GcpBroker {
             openbao,
             http,
             config,
+            revocation: None,
         }
+    }
+
+    /// Wire a revocation store (plan R consumer wiring) — fail closed, same
+    /// semantics as the AWS broker.
+    #[must_use]
+    pub fn with_revocation_store(mut self, store: Arc<RwLock<MonotonicRevocationStore>>) -> Self {
+        self.revocation = Some(store);
+        self
     }
 
     /// Exchange a verified trust token for a scoped GCP access token on
@@ -114,7 +127,7 @@ impl GcpBroker {
         now: DateTime<Utc>,
     ) -> Result<GcpCredentials, BrokerError> {
         // 1. Fail closed on trust.
-        verify_token(token, verifier, public_key, now)?;
+        verify_token(token, verifier, public_key, self.revocation.as_deref(), now)?;
 
         // 2. Broker's Google bearer from OpenBao (never exposed downstream).
         let vault_token = self.openbao.login().await?;

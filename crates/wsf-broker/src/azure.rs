@@ -11,7 +11,10 @@
 //! test points it at a local mock of the token endpoint; a real-Azure run is
 //! owner-gated.
 
+use std::sync::{Arc, RwLock};
+
 use chrono::{DateTime, Utc};
+use fabric_revocation::MonotonicRevocationStore;
 use percent_encoding::{AsciiSet, NON_ALPHANUMERIC, utf8_percent_encode};
 use wsf_bridge::OpenBaoAuth;
 
@@ -83,6 +86,7 @@ pub struct AzureBroker {
     openbao: OpenBaoAuth,
     http: reqwest::Client,
     config: AzureBrokerConfig,
+    revocation: Option<Arc<RwLock<MonotonicRevocationStore>>>,
 }
 
 /// Build the OAuth2 client-credentials form body. Pure, so it is unit-testable.
@@ -104,7 +108,16 @@ impl AzureBroker {
             openbao,
             http,
             config,
+            revocation: None,
         }
+    }
+
+    /// Wire a revocation store (plan R consumer wiring) — fail closed, same
+    /// semantics as the AWS broker.
+    #[must_use]
+    pub fn with_revocation_store(mut self, store: Arc<RwLock<MonotonicRevocationStore>>) -> Self {
+        self.revocation = Some(store);
+        self
     }
 
     /// Exchange a verified trust token for a scoped Azure AD access token. The
@@ -123,7 +136,7 @@ impl AzureBroker {
         now: DateTime<Utc>,
     ) -> Result<AzureCredentials, BrokerError> {
         // 1. Fail closed on trust.
-        verify_token(token, verifier, public_key, now)?;
+        verify_token(token, verifier, public_key, self.revocation.as_deref(), now)?;
 
         // 2. Broker's app credentials from OpenBao (never exposed downstream).
         let vault_token = self.openbao.login().await?;

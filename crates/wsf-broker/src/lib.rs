@@ -24,9 +24,12 @@ pub use error::BrokerError;
 pub use gcp::{GcpBroker, GcpBrokerConfig, GcpCredentials};
 pub use sts::{RootCredentials, TemporaryCredentials};
 
+use std::sync::{Arc, RwLock};
+
 use chrono::{DateTime, Utc};
 use fabric_contracts::{CaveatType, TrustToken};
 use fabric_crypto::Verifier;
+use fabric_revocation::MonotonicRevocationStore;
 use wsf_bridge::OpenBaoAuth;
 
 /// Static configuration for the AWS STS broker.
@@ -103,6 +106,7 @@ pub struct AwsStsBroker {
     openbao: OpenBaoAuth,
     http: reqwest::Client,
     config: BrokerConfig,
+    revocation: Option<Arc<RwLock<MonotonicRevocationStore>>>,
 }
 
 impl AwsStsBroker {
@@ -114,7 +118,17 @@ impl AwsStsBroker {
             openbao,
             http,
             config,
+            revocation: None,
         }
+    }
+
+    /// Wire a revocation store (plan R consumer wiring). Once configured, the
+    /// broker fails closed: every exchange requires a held, unexpired snapshot
+    /// that does not revoke the presented token on any dimension.
+    #[must_use]
+    pub fn with_revocation_store(mut self, store: Arc<RwLock<MonotonicRevocationStore>>) -> Self {
+        self.revocation = Some(store);
+        self
     }
 
     /// Exchange a verified trust token for scoped temporary AWS credentials.
@@ -133,7 +147,7 @@ impl AwsStsBroker {
         now: DateTime<Utc>,
     ) -> Result<TemporaryCredentials, BrokerError> {
         // 1. Fail closed on trust before touching AWS.
-        verify_token(token, verifier, public_key, now)?;
+        verify_token(token, verifier, public_key, self.revocation.as_deref(), now)?;
 
         // 2. Duration tracks the token TTL, clamped to the STS window; a grant
         //    TTL ceiling tightens the window but can never fall below the STS
@@ -245,11 +259,15 @@ pub fn build_session_policy(token: &TrustToken, allowed_actions: &[String]) -> S
 }
 
 /// Verify a presented trust token — fail closed on a bad signature / revocation
-/// or on expiry, before any cloud call. Shared by the AWS and GCP brokers.
+/// or on expiry, before any cloud call. Shared by the AWS, GCP, and Azure
+/// brokers. When a revocation store is wired (plan R consumer wiring), the
+/// broker fails closed: no held snapshot, an expired snapshot, or a snapshot
+/// revoking the token on any dimension all refuse the exchange.
 pub(crate) fn verify_token(
     token: &TrustToken,
     verifier: &dyn Verifier,
     public_key: &[u8],
+    revocation: Option<&RwLock<MonotonicRevocationStore>>,
     now: DateTime<Utc>,
 ) -> Result<(), BrokerError> {
     fabric_token::verify(token, verifier, public_key)
@@ -258,6 +276,28 @@ pub(crate) fn verify_token(
         .map_err(|e| BrokerError::TokenRejected(e.to_string()))?
     {
         return Err(BrokerError::TokenExpired);
+    }
+    let Some(store) = revocation else {
+        return Ok(());
+    };
+    let store = store.read().expect("revocation store lock");
+    let Some(snapshot) = store.current() else {
+        return Err(BrokerError::TokenRejected(
+            "revocation state unavailable (fail closed)".to_string(),
+        ));
+    };
+    let fresh = DateTime::parse_from_rfc3339(&snapshot.expires_at)
+        .map(|e| e.with_timezone(&Utc) > now)
+        .unwrap_or(false);
+    if !fresh {
+        return Err(BrokerError::TokenRejected(
+            "revocation snapshot expired (fail closed)".to_string(),
+        ));
+    }
+    if let Some(dimension) = snapshot.revokes(token) {
+        return Err(BrokerError::TokenRejected(format!(
+            "token revoked ({dimension})"
+        )));
     }
     Ok(())
 }
@@ -567,6 +607,82 @@ mod tests {
             .await
             .unwrap_err();
         assert!(matches!(err, BrokerError::Grant(_)), "got {err:?}");
+    }
+
+    #[tokio::test]
+    async fn revoked_token_is_refused_before_any_cloud_call() {
+        // R consumer wiring: with a store configured, a revoked tenant is
+        // refused before OpenBao or STS are touched (dummy endpoints, never
+        // reached) — and an empty store fails closed the same way.
+        let signer = RustCryptoMlDsa87::generate("k").unwrap();
+        let rev_anchor = RustCryptoMlDsa87::generate("rev-anchor").unwrap();
+        let tok = fabric_token::issue(
+            token_with(
+                vec![resource_caveat("arn:aws:s3:::b/*")],
+                "2027-01-01T00:00:00Z",
+            ),
+            &signer,
+        )
+        .unwrap();
+
+        let store = Arc::new(RwLock::new(MonotonicRevocationStore::new()));
+        let broker = AwsStsBroker::new(
+            OpenBaoAuth::new(wsf_bridge::OpenBaoConfig::new(
+                "http://127.0.0.1:1",
+                "r",
+                "s",
+            ))
+            .unwrap(),
+            reqwest::Client::new(),
+            BrokerConfig::new("us-east-1", "http://127.0.0.1:1", "kv/data/broker/aws-root"),
+        )
+        .with_revocation_store(store.clone());
+        let grant = GrantScope::new("arn:aws:iam::0:role/x", &["s3:GetObject"]);
+
+        // Empty store → fail closed.
+        let err = broker
+            .broker_credentials(
+                &tok,
+                &MlDsa87Verifier,
+                signer.public_key(),
+                &grant,
+                Utc::now(),
+            )
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(&err, BrokerError::TokenRejected(m) if m.contains("unavailable")),
+            "got {err:?}"
+        );
+
+        // Snapshot revoking the token's tenant → refused with the dimension.
+        let mut snap = fabric_revocation::RevocationSnapshot::new(
+            "rev-1",
+            "2026-07-07T00:00:00Z",
+            "2027-01-01T00:00:00Z",
+        )
+        .with_sequence(1);
+        snap.revoked_tenants.push("tenant-a".to_string());
+        let snap = fabric_revocation::sign(snap, &rev_anchor).unwrap();
+        store
+            .write()
+            .unwrap()
+            .advance(snap, &MlDsa87Verifier, rev_anchor.public_key())
+            .unwrap();
+        let err = broker
+            .broker_credentials(
+                &tok,
+                &MlDsa87Verifier,
+                signer.public_key(),
+                &grant,
+                Utc::now(),
+            )
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(&err, BrokerError::TokenRejected(m) if m.contains("revoked (tenant)")),
+            "got {err:?}"
+        );
     }
 
     #[tokio::test]

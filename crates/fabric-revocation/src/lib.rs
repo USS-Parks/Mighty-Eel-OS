@@ -16,6 +16,13 @@ use serde::{Deserialize, Serialize};
 pub struct RevocationSnapshot {
     /// Stable snapshot id.
     pub snapshot_id: String,
+    /// Monotonic publication counter (plan R1). Consumers accept a snapshot
+    /// only if its sequence is strictly higher than the one they hold, so a
+    /// replayed older snapshot — a stale "nothing revoked" view — is rejected.
+    /// Emergency snapshots share the same counter (the publisher bumps it).
+    /// Serialized only when non-zero so pre-R1 signatures keep verifying.
+    #[serde(default, skip_serializing_if = "sequence_is_zero")]
+    pub sequence: u64,
     /// Issue time (RFC3339).
     pub issued_at: String,
     /// Expiry (RFC3339).
@@ -58,6 +65,7 @@ impl RevocationSnapshot {
     ) -> Self {
         Self {
             snapshot_id: snapshot_id.into(),
+            sequence: 0,
             issued_at: issued_at.into(),
             expires_at: expires_at.into(),
             revoked_tokens: Vec::new(),
@@ -80,6 +88,13 @@ impl RevocationSnapshot {
     #[must_use]
     pub fn emergency(mut self) -> Self {
         self.emergency = true;
+        self
+    }
+
+    /// Set the monotonic publication sequence (plan R1).
+    #[must_use]
+    pub fn with_sequence(mut self, sequence: u64) -> Self {
+        self.sequence = sequence;
         self
     }
 
@@ -160,6 +175,10 @@ impl RevocationSnapshot {
     }
 }
 
+fn sequence_is_zero(sequence: &u64) -> bool {
+    *sequence == 0
+}
+
 /// Failures from revocation operations.
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum RevocationError {
@@ -175,6 +194,84 @@ pub enum RevocationError {
     /// The signature did not verify.
     #[error("signature failed verification")]
     InvalidSignature,
+    /// The candidate snapshot does not advance the held sequence (plan R1) —
+    /// a rollback / replay of older revocation state was refused.
+    #[error("snapshot rollback rejected: candidate sequence {candidate} <= held {current}")]
+    Rollback {
+        /// Sequence of the snapshot the store holds.
+        current: u64,
+        /// Sequence of the rejected candidate.
+        candidate: u64,
+    },
+}
+
+/// R1: monotonic, anti-rollback revocation state for a service consumer.
+///
+/// [`advance`](Self::advance) accepts a candidate snapshot only if it
+/// (a) verifies against the trust anchor and (b) carries a strictly higher
+/// [`sequence`](RevocationSnapshot::sequence) than the held snapshot. A
+/// replayed older snapshot — a stale "nothing revoked" view served by a
+/// compromised or lagging distribution channel — is rejected and the held
+/// state stands. Emergency snapshots participate in the same sequence space,
+/// so an out-of-band revocation can never be rolled back by a slower regular
+/// publication either.
+///
+/// The store holds only anchor-verified snapshots; consumers that are
+/// configured with a store must fail closed when it is empty or its snapshot
+/// has expired (freshness is the consumer's clock-aware check).
+#[derive(Debug, Default)]
+pub struct MonotonicRevocationStore {
+    current: Option<RevocationSnapshot>,
+}
+
+impl MonotonicRevocationStore {
+    /// An empty store — consumers fail closed until the first `advance`.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Verify `candidate` against the trust anchor and adopt it if it strictly
+    /// advances the held sequence. Returns the adopted sequence.
+    ///
+    /// # Errors
+    /// [`RevocationError::InvalidSignature`] / [`RevocationError::MalformedSignature`]
+    /// if the candidate does not verify; [`RevocationError::Rollback`] if it
+    /// does not advance the held sequence (the held snapshot is kept).
+    pub fn advance(
+        &mut self,
+        candidate: RevocationSnapshot,
+        verifier: &dyn Verifier,
+        public_key: &[u8],
+    ) -> Result<u64, RevocationError> {
+        verify(&candidate, verifier, public_key)?;
+        if let Some(held) = &self.current
+            && candidate.sequence <= held.sequence
+        {
+            return Err(RevocationError::Rollback {
+                current: held.sequence,
+                candidate: candidate.sequence,
+            });
+        }
+        let sequence = candidate.sequence;
+        self.current = Some(candidate);
+        Ok(sequence)
+    }
+
+    /// The held snapshot, if any.
+    #[must_use]
+    pub fn current(&self) -> Option<&RevocationSnapshot> {
+        self.current.as_ref()
+    }
+
+    /// Does the held snapshot revoke `token`? Returns the matched dimension.
+    /// `None` also when the store is empty — a consumer configured with a
+    /// store must treat "no snapshot" as deny via [`current`](Self::current),
+    /// not via this predicate.
+    #[must_use]
+    pub fn revokes(&self, token: &TrustToken) -> Option<&'static str> {
+        self.current.as_ref().and_then(|s| s.revokes(token))
+    }
 }
 
 /// BLAKE3-32 over the canonical payload (signature field removed).

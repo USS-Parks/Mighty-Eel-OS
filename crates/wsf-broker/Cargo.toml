@@ -11,6 +11,7 @@ description = "WSF sovereign STS broker: exchange a verified trust token for eph
 fabric-contracts = { path = "../fabric-contracts" }
 fabric-crypto = { path = "../fabric-crypto" }
 fabric-token = { path = "../fabric-token" }
+fabric-revocation = { path = "../fabric-revocation" }
 wsf-bridge = { path = "../wsf-bridge" }
 tokio = { workspace = true }
 serde_json = { workspace = true }

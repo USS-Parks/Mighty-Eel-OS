@@ -364,3 +364,82 @@ nothing. W3/W6 live gates green with tenant-stamped receipts. Commit `38b7113`.
 
 Remaining in-phase: **L2** global-auditor role, **L3** persistent HA ledger,
 **L4** end-to-end live gate incl. export.
+
+## Phase R — revocation and trust freshness (complete; AF-006 → PROVEN)
+
+Core (earlier commits `76f1ca5`, `116b0f1`): **R2** the complete revocation
+predicate — `RevocationSnapshot` gained `revoked_tenants` / `revoked_issuers` /
+`revoked_service_identities` and a single `revokes(&token)` covering every
+dimension (token id, subject, signing key, issuer, bundle, tenant, service
+identity); **R3** the shared verify path (`fabric-token::verify_in_context`
+with `with_revocation`).
+
+Hardening (this session):
+
+- **R1** anti-rollback: `MonotonicRevocationStore` (`fabric-revocation`) —
+  `advance` adopts a candidate snapshot only if it verifies against the trust
+  anchor **and** strictly advances the new `sequence` counter (serialized only
+  when non-zero, so pre-R1 signatures keep verifying). A replayed older
+  "nothing revoked" view is refused (`RevocationError::Rollback`) and the held
+  state stands. Emergency snapshots share the counter, so an out-of-band
+  revocation cannot be rolled back by a lagging regular publication.
+- **Consumer wiring**: `SealService` and all three brokers (AWS/GCP/Azure) take
+  `with_revocation_store(...)`. Once wired they fail closed **before any
+  custody or cloud call**: no held snapshot, an expired snapshot, or a snapshot
+  revoking the token on any dimension all deny (receipted on the seal side,
+  `TokenRejected` on the broker side). Unit gates prove the denial fires with
+  unreachable OpenBao/STS endpoints.
+- **R6 live gate**: `wsf-api/tests/live_revocation.rs` against live OpenBao +
+  Moto — a signed snapshot travels the real KV distribution channel; with a
+  clean sequence-1 snapshot engaged, issue/seal/unseal/exchange all succeed;
+  after publishing sequence-2 revoking the tenant, **unseal and credential
+  exchange both deny (403)** for the still-signature-valid token with no
+  restart; replaying the stale clean snapshot is refused (R1) and the denials
+  stand. PASS.
+
+**R4/R5 posture** (ops-plane): propagation is poll-driven; the fail-closed
+freshness check bounds exposure at snapshot TTL — an appliance that cannot
+fetch a fresh snapshot stops honoring privileged ops rather than serving from
+a stale view. Signed snapshots verify offline (`fabric-revocation` docs), which
+is the air-gap leg; HA distribution (multi-channel publication) is deployment
+plumbing tracked for the ops runbook, not a code gap.
+
+## Phase E — hardening complete (E2/E5)
+
+- **E2** per-tenant Transit keys (commit `0a7f383`): the seal service wraps
+  each tenant's data keys under `<base>-<tenant>`; unseal unwraps under the
+  **binding's** tenant key. Live gate `wsf-seal/tests/live_tenant_keys.rs`
+  proves OpenBao itself refuses a cross-tenant unwrap (400) independent of the
+  app-layer E4 check.
+- **E5** authenticated v1→v2 migration (commit `a22cf63`):
+  `fabric-envelope::migrate_legacy` verifies the legacy thread against the
+  original sealer key, opens the label-only AAD, and re-seals with the tenant
+  binding; idempotent on v2; tampered v1 refused. Offline gates in
+  `fabric-envelope/tests/envelope.rs`.
+
+With E6 (receipt binding, logged with Phase L) this completes Phase E:
+**AF-003 fully PROVEN**.
+
+## Phase B — hardening complete (B3/B4/B5)
+
+- **B3** least privilege: `build_session_policy(token, allowed_actions)` emits
+  the **grant's** approved IAM actions on the token's `ResourcePrefix` caveats
+  — never `Action:"*"`. A wildcard action in a misconfigured grant is dropped
+  (alone → deny-all); token `ToolAllowlist` caveats intersect (narrow) the
+  action set. `GrantScope` binds role ARN + actions + signing-region override +
+  `ExternalId` (confused-deputy defense, appended to the AssumeRole form) + a
+  TTL ceiling that tightens the STS window and refuses grants below the 900s
+  floor before any custody call. `CloudGrant::to_scope()` carries all of it
+  from the API's grant store into the broker.
+- **B5** credential hygiene: `RootCredentials` zeroize on drop
+  (`zeroize::ZeroizeOnDrop`) with fully-redacted `Debug`;
+  `TemporaryCredentials` redacts secret access key + session token in `Debug`
+  (access key id stays visible — CloudTrail correlation data). Regression
+  tests prove `{:?}` output carries no secret material.
+- **B4** parity: `GcpCredentials` / `AzureCredentials` redact their bearer
+  tokens in `Debug`; GCP/Azure brokers share the same fail-closed
+  `verify_token` (including the revocation consult) and TTL clamps.
+
+Gates: 26 wsf-broker unit tests + W2 (`live_localstack` via `GrantScope`) +
+B6 (`broker_grant`) + W6 (`live_api`) all green against live OpenBao + Moto.
+With B1/B2/B6 this completes Phase B: **AF-004 fully PROVEN**.

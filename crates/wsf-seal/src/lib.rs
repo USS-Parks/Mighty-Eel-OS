@@ -15,7 +15,7 @@
 
 pub mod http;
 
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 
 use chrono::{DateTime, Utc};
 use fabric_contracts::{Classification, ComplianceScope, Envelope, Label, Route, TrustToken};
@@ -23,6 +23,7 @@ use fabric_crypto::Signer;
 use fabric_crypto::providers::MlDsa87Verifier;
 use fabric_envelope::{ThreadSpec, open_envelope, seal_envelope};
 use fabric_proof::{ChainLink, GENESIS_HASH, canonical_hash, chain_link};
+use fabric_revocation::MonotonicRevocationStore;
 use serde::{Deserialize, Serialize};
 use wsf_bridge::OpenBaoAuth;
 
@@ -184,6 +185,7 @@ pub struct SealService {
     signer: Arc<dyn Signer>,
     config: SealServiceConfig,
     receipts: Arc<Mutex<ReceiptChain>>,
+    revocation: Option<Arc<RwLock<MonotonicRevocationStore>>>,
 }
 
 impl SealService {
@@ -196,7 +198,17 @@ impl SealService {
             signer,
             config,
             receipts: Arc::new(Mutex::new(ReceiptChain::new())),
+            revocation: None,
         }
+    }
+
+    /// Wire a revocation store (plan R consumer wiring). Once configured, the
+    /// service fails closed: every seal/unseal requires a held, unexpired
+    /// snapshot that does not revoke the presented token on any dimension.
+    #[must_use]
+    pub fn with_revocation_store(mut self, store: Arc<RwLock<MonotonicRevocationStore>>) -> Self {
+        self.revocation = Some(store);
+        self
     }
 
     /// The service's provenance-signing public key (verifies envelope threads).
@@ -268,6 +280,35 @@ impl SealService {
             .map_err(|e| SealError::Unauthorized(e.to_string()))?
         {
             return Err(SealError::Unauthorized("token expired".to_string()));
+        }
+        self.check_revocation(token, now)
+    }
+
+    /// Revocation consult (plan R consumer wiring): when a store is wired, the
+    /// service fails closed — no snapshot, an expired snapshot, or a snapshot
+    /// that revokes the token on any dimension all deny before any Transit op.
+    fn check_revocation(&self, token: &TrustToken, now: DateTime<Utc>) -> Result<(), SealError> {
+        let Some(store) = &self.revocation else {
+            return Ok(());
+        };
+        let store = store.read().expect("revocation store lock");
+        let Some(snapshot) = store.current() else {
+            return Err(SealError::Unauthorized(
+                "revocation state unavailable (fail closed)".to_string(),
+            ));
+        };
+        let fresh = DateTime::parse_from_rfc3339(&snapshot.expires_at)
+            .map(|e| e.with_timezone(&Utc) > now)
+            .unwrap_or(false);
+        if !fresh {
+            return Err(SealError::Unauthorized(
+                "revocation snapshot expired (fail closed)".to_string(),
+            ));
+        }
+        if let Some(dimension) = snapshot.revokes(token) {
+            return Err(SealError::Unauthorized(format!(
+                "token revoked ({dimension})"
+            )));
         }
         Ok(())
     }
@@ -464,5 +505,178 @@ mod tests {
         let label: Label = spec.into();
         assert_eq!(label.classification, Classification::Restricted);
         assert_eq!(label.permitted_ops, vec!["unseal".to_string()]);
+    }
+
+    // ---- Revocation consumer wiring (plan R): fail-closed seal service ----
+
+    use fabric_crypto::providers::RustCryptoMlDsa87;
+
+    /// Service against an unreachable OpenBao — revocation denials must fire
+    /// BEFORE any custody call, so these tests never touch the network.
+    fn service_with_store(
+        anchor: &RustCryptoMlDsa87,
+        store: Arc<RwLock<MonotonicRevocationStore>>,
+    ) -> SealService {
+        SealService::new(
+            OpenBaoAuth::new(wsf_bridge::OpenBaoConfig::new(
+                "http://127.0.0.1:1",
+                "r",
+                "s",
+            ))
+            .unwrap(),
+            Arc::new(RustCryptoMlDsa87::generate("seal-svc").unwrap()),
+            SealServiceConfig {
+                transit_key: "k".to_string(),
+                token_public_key: anchor.public_key().to_vec(),
+            },
+        )
+        .with_revocation_store(store)
+    }
+
+    fn valid_token(anchor: &RustCryptoMlDsa87, tenant: &str) -> TrustToken {
+        let now = Utc::now();
+        let t = TrustToken {
+            token_id: format!("tok-{tenant}"),
+            issued_at: now.to_rfc3339(),
+            expires_at: (now + chrono::Duration::minutes(15)).to_rfc3339(),
+            issuer: "wsf-trust-bridge".to_string(),
+            trust_bundle_version: "2026.07.07".to_string(),
+            tenant_id: tenant.to_string(),
+            subject_id: None,
+            subject_hash: "hmac-sha256:demo".to_string(),
+            service_identity: None,
+            identity_id: None,
+            roles: vec![],
+            compliance_scopes: vec![],
+            allowed_routes: vec![],
+            allowed_models: vec![],
+            max_data_classification: Classification::Secret,
+            country: None,
+            person_type: None,
+            offline_mode: false,
+            revocation_status: fabric_contracts::RevocationStatus::Valid,
+            budget: None,
+            attenuation: fabric_contracts::Attenuation::default(),
+            signature: fabric_contracts::Signature {
+                alg: String::new(),
+                key_id: String::new(),
+                value: String::new(),
+            },
+        };
+        fabric_token::issue(t, anchor).unwrap()
+    }
+
+    fn seal_req(token: TrustToken) -> SealRequest {
+        SealRequest {
+            token,
+            plaintext: b"phi".to_vec(),
+            label: LabelSpec {
+                classification: Classification::Restricted,
+                compliance_scopes: vec![],
+                origin: "test".to_string(),
+                permitted_ops: vec!["unseal".to_string()],
+                permitted_destinations: vec![],
+                detected_entities: vec![],
+            },
+            envelope_id: "env-r".to_string(),
+        }
+    }
+
+    fn snapshot(
+        rev_anchor: &RustCryptoMlDsa87,
+        sequence: u64,
+        expires_at: &str,
+        revoked_tenant: Option<&str>,
+    ) -> fabric_revocation::RevocationSnapshot {
+        let mut s = fabric_revocation::RevocationSnapshot::new(
+            format!("rev-{sequence}"),
+            "2026-07-07T00:00:00Z",
+            expires_at,
+        )
+        .with_sequence(sequence);
+        if let Some(t) = revoked_tenant {
+            s.revoked_tenants.push(t.to_string());
+        }
+        fabric_revocation::sign(s, rev_anchor).unwrap()
+    }
+
+    #[tokio::test]
+    async fn configured_store_with_no_snapshot_fails_closed() {
+        let anchor = RustCryptoMlDsa87::generate("token-anchor").unwrap();
+        let store = Arc::new(RwLock::new(MonotonicRevocationStore::new()));
+        let svc = service_with_store(&anchor, store);
+        let err = svc
+            .seal(seal_req(valid_token(&anchor, "tenant-a")), Utc::now())
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(&err, SealError::Unauthorized(m) if m.contains("unavailable")),
+            "got {err:?}"
+        );
+        // The denial is receipted.
+        assert!(
+            svc.receipts_snapshot()
+                .iter()
+                .any(|r| r.op == "seal" && r.decision == "deny")
+        );
+    }
+
+    #[tokio::test]
+    async fn revoked_tenant_is_denied_before_any_custody_call() {
+        let anchor = RustCryptoMlDsa87::generate("token-anchor").unwrap();
+        let rev_anchor = RustCryptoMlDsa87::generate("rev-anchor").unwrap();
+        let store = Arc::new(RwLock::new(MonotonicRevocationStore::new()));
+        store
+            .write()
+            .unwrap()
+            .advance(
+                snapshot(&rev_anchor, 1, "2027-01-01T00:00:00Z", Some("tenant-a")),
+                &MlDsa87Verifier,
+                rev_anchor.public_key(),
+            )
+            .unwrap();
+        let svc = service_with_store(&anchor, store);
+
+        let err = svc
+            .seal(seal_req(valid_token(&anchor, "tenant-a")), Utc::now())
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(&err, SealError::Unauthorized(m) if m.contains("revoked (tenant)")),
+            "got {err:?}"
+        );
+
+        // An unrevoked tenant still fails — but only later, at the (dead)
+        // OpenBao endpoint — proving the revocation gate itself passed.
+        let err = svc
+            .seal(seal_req(valid_token(&anchor, "tenant-b")), Utc::now())
+            .await
+            .unwrap_err();
+        assert!(matches!(err, SealError::OpenBao(_)), "got {err:?}");
+    }
+
+    #[tokio::test]
+    async fn expired_snapshot_fails_closed() {
+        let anchor = RustCryptoMlDsa87::generate("token-anchor").unwrap();
+        let rev_anchor = RustCryptoMlDsa87::generate("rev-anchor").unwrap();
+        let store = Arc::new(RwLock::new(MonotonicRevocationStore::new()));
+        store
+            .write()
+            .unwrap()
+            .advance(
+                snapshot(&rev_anchor, 1, "2020-01-01T00:00:00Z", None), // stale
+                &MlDsa87Verifier,
+                rev_anchor.public_key(),
+            )
+            .unwrap();
+        let svc = service_with_store(&anchor, store);
+        let err = svc
+            .seal(seal_req(valid_token(&anchor, "tenant-a")), Utc::now())
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(&err, SealError::Unauthorized(m) if m.contains("expired (fail closed)")),
+            "got {err:?}"
+        );
     }
 }
