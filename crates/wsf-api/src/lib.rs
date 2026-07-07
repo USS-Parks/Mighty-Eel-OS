@@ -14,20 +14,22 @@
 
 pub mod auth;
 pub mod client;
+pub mod policy;
 
 use std::sync::{Arc, Mutex};
 
-use axum::extract::{Query, State};
+use axum::extract::{Extension, Query, State};
 use axum::http::{StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
+use fabric_contracts::{Audience, Budget, Envelope, TrustToken, WsfPrincipal};
 
 use auth::{WsfAuthenticator, require_principal};
 use base64::Engine;
 use chrono::Utc;
-use fabric_contracts::{Budget, Envelope, TrustToken};
 use fabric_crypto::providers::MlDsa87Verifier;
+use policy::TenantPolicyStore;
 use serde::{Deserialize, Serialize};
 use wsf_bridge::{IssueTokenRequest, TrustBridge};
 use wsf_broker::AwsStsBroker;
@@ -53,6 +55,9 @@ pub struct AppState {
     /// Transport authenticator (plan A2). Establishes the calling principal for
     /// every privileged route before its handler runs.
     pub auth: Arc<dyn WsfAuthenticator>,
+    /// Server-side tenant issuance policy (plan A3). Bounds what any principal
+    /// may be granted; the caller supplies intent, never authority.
+    pub policy: Arc<dyn TenantPolicyStore>,
 }
 
 /// Mount all routes over `state`.
@@ -84,22 +89,28 @@ pub fn router(state: AppState) -> Router {
 
 // ── request / response DTOs (shared with the SDK) ──────────────────────
 
-/// Issue-token request.
+/// Issue-token request — **bounded intent only** (plan A3).
+///
+/// The tenant, subject, and effective authority are derived server-side from
+/// the authenticated [`WsfPrincipal`] and the tenant's issuance policy. This
+/// type carries *requests*, not authority: `deny_unknown_fields` means an
+/// attempt to smuggle a `tenant_id` / `subject_id` / `roles` authority field is
+/// a 422, not a silent override (closes AF-002).
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct IssueReq {
-    /// Tenant.
-    pub tenant_id: String,
-    /// Cleartext subject (pseudonymized by the bridge).
-    pub subject_id: String,
-    /// Roles.
+    /// Roles the caller requests. Each must be grantable by the tenant policy;
+    /// a role outside the policy is refused.
     #[serde(default)]
-    pub roles: Vec<String>,
-    /// Optional budget strand.
+    pub requested_roles: Vec<String>,
+    /// Models the caller requests. Must lie within the policy allowlist when the
+    /// tenant restricts models.
+    #[serde(default)]
+    pub requested_models: Vec<String>,
+    /// Requested budget. Every counter must be at or below the policy ceiling;
+    /// omitted ⇒ the ceiling is granted (never unlimited).
     #[serde(default)]
     pub budget: Option<Budget>,
-    /// Optional model allowlist.
-    #[serde(default)]
-    pub allowed_models: Vec<String>,
 }
 
 /// Issue-token response.
@@ -238,19 +249,96 @@ fn b64_decode(s: &str) -> Result<Vec<u8>, ApiError> {
         .map_err(|e| ApiError::new(StatusCode::BAD_REQUEST, format!("bad base64: {e}")))
 }
 
+/// Authorize a requested budget against the tenant ceiling (plan A3): every
+/// counter must be at or below the ceiling; an omitted request is granted the
+/// ceiling exactly (never unlimited). Spent counters are always reset to zero.
+fn authorize_budget(requested: Option<&Budget>, ceiling: &Budget) -> Result<Budget, ApiError> {
+    let deny = |counter: &str| {
+        Err(ApiError::new(
+            StatusCode::FORBIDDEN,
+            format!("requested budget exceeds tenant ceiling: {counter}"),
+        ))
+    };
+    let effective = match requested {
+        None => ceiling.clone(),
+        Some(r) => {
+            if r.token_cap > ceiling.token_cap {
+                return deny("token_cap");
+            }
+            if r.usd_cap_cents > ceiling.usd_cap_cents {
+                return deny("usd_cap_cents");
+            }
+            if r.tool_call_cap > ceiling.tool_call_cap {
+                return deny("tool_call_cap");
+            }
+            r.clone()
+        }
+    };
+    Ok(Budget {
+        token_cap: effective.token_cap,
+        tokens_spent: 0,
+        usd_cap_cents: effective.usd_cap_cents,
+        usd_spent_cents: 0,
+        tool_call_cap: effective.tool_call_cap,
+        tool_calls_spent: 0,
+    })
+}
+
 // ── handlers ───────────────────────────────────────────────────────────
 
 async fn issue(
     State(s): State<AppState>,
+    Extension(principal): Extension<WsfPrincipal>,
     Json(req): Json<IssueReq>,
 ) -> Result<Json<TokenResp>, ApiError> {
-    let ir = IssueTokenRequest::new(req.tenant_id, req.subject_id, req.roles)
-        .with_models(req.allowed_models);
-    let ir = if let Some(b) = req.budget {
-        ir.with_budget(b)
+    // Authority is derived from the authenticated principal + server-side tenant
+    // policy — never from the request body (plan A3, closes AF-002).
+    if !principal.is_for(Audience::Wsf) {
+        return Err(ApiError::new(
+            StatusCode::FORBIDDEN,
+            "principal is not authenticated for the WSF plane",
+        ));
+    }
+    let policy = s.policy.policy_for(&principal.tenant_id).ok_or_else(|| {
+        ApiError::new(StatusCode::FORBIDDEN, "no issuance policy for this tenant")
+    })?;
+
+    // Roles: requested must be a subset of what the tenant may grant.
+    for role in &req.requested_roles {
+        if !policy.may_grant_role(role) {
+            return Err(ApiError::new(
+                StatusCode::FORBIDDEN,
+                "requested role is not grantable for this tenant",
+            ));
+        }
+    }
+    // Models: requested must lie within the allowlist when the tenant restricts.
+    for model in &req.requested_models {
+        if !policy.allows_model(model) {
+            return Err(ApiError::new(
+                StatusCode::FORBIDDEN,
+                "requested model is not permitted for this tenant",
+            ));
+        }
+    }
+    // Budget: every counter at or below the ceiling; unspecified ⇒ the ceiling.
+    let budget = authorize_budget(req.budget.as_ref(), &policy.max_budget)?;
+
+    // Subject is the authenticated principal, never a caller-supplied id.
+    let subject_source = if principal.subject_hash.is_empty() {
+        principal.principal_id.clone()
     } else {
-        ir
+        principal.subject_hash.clone()
     };
+
+    let ir = IssueTokenRequest::new(
+        principal.tenant_id.clone(),
+        subject_source,
+        req.requested_roles.clone(),
+    )
+    .with_models(req.requested_models.clone())
+    .with_budget(budget);
+
     let token = s.bridge.issue_token(&ir).await.map_err(|e| match e {
         wsf_bridge::BridgeError::OpenBao(_) => {
             ApiError::new(StatusCode::BAD_GATEWAY, e.to_string())
@@ -404,6 +492,85 @@ fn ingest_new_seal_receipts(s: &AppState, before: usize) {
     for r in receipts.iter().skip(before) {
         if let Ok(value) = serde_json::to_value(r) {
             let _ = ledger.ingest("wsf-seal", value);
+        }
+    }
+}
+
+#[cfg(test)]
+mod issue_authz_tests {
+    use super::*;
+
+    fn ceiling() -> Budget {
+        Budget {
+            token_cap: 1000,
+            usd_cap_cents: 500,
+            tool_call_cap: 10,
+            ..Budget::default()
+        }
+    }
+
+    #[test]
+    fn omitted_budget_is_granted_the_ceiling_not_unlimited() {
+        let b = authorize_budget(None, &ceiling()).unwrap();
+        assert_eq!(b.token_cap, 1000);
+        assert_eq!(b.usd_cap_cents, 500);
+        assert_eq!(b.tool_call_cap, 10);
+        assert_eq!(b.tokens_spent, 0);
+    }
+
+    #[test]
+    fn within_ceiling_is_granted_with_spent_reset() {
+        let req = Budget {
+            token_cap: 400,
+            tokens_spent: 999, // caller-supplied spent is ignored
+            usd_cap_cents: 100,
+            tool_call_cap: 3,
+            ..Budget::default()
+        };
+        let b = authorize_budget(Some(&req), &ceiling()).unwrap();
+        assert_eq!(b.token_cap, 400);
+        assert_eq!(b.tokens_spent, 0, "spent counters always reset");
+        assert_eq!(b.tool_call_cap, 3);
+    }
+
+    #[test]
+    fn each_over_ceiling_counter_is_denied() {
+        for over in [
+            Budget {
+                token_cap: 1001,
+                ..ceiling()
+            },
+            Budget {
+                usd_cap_cents: 501,
+                ..ceiling()
+            },
+            Budget {
+                tool_call_cap: 11,
+                ..ceiling()
+            },
+        ] {
+            let err = authorize_budget(Some(&over), &ceiling()).unwrap_err();
+            assert_eq!(err.status, StatusCode::FORBIDDEN);
+        }
+    }
+
+    #[test]
+    fn issue_req_rejects_smuggled_authority_fields() {
+        // Bounded intent parses.
+        let ok: Result<IssueReq, _> = serde_json::from_str(r#"{"requested_roles":["user"]}"#);
+        assert!(ok.is_ok());
+        // Any attempt to smuggle authority is a hard parse error (deny_unknown_fields),
+        // not a silently-ignored field — the structural half of the AF-002 fix.
+        for smuggle in [
+            r#"{"tenant_id":"victim","requested_roles":["user"]}"#,
+            r#"{"subject_id":"someone-else"}"#,
+            r#"{"roles":["admin"]}"#,
+            r#"{"allowed_models":["*"]}"#,
+        ] {
+            assert!(
+                serde_json::from_str::<IssueReq>(smuggle).is_err(),
+                "must reject smuggled authority: {smuggle}"
+            );
         }
     }
 }

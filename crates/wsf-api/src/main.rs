@@ -125,6 +125,17 @@ async fn run() -> Result<(), String> {
         }
     };
 
+    // A3 issuance policy. Production loads signed / OpenBao-held tenant mappings
+    // (extended in B2); the dev fallback grants a small role set to the dev
+    // tenant so the loopback surface is usable without inventing authority.
+    let issuance_policy: Arc<dyn wsf_api::policy::TenantPolicyStore> = {
+        let tenant = env_or("WSF_DEV_TENANT", "local-dev-tenant");
+        Arc::new(wsf_api::policy::StaticTenantPolicies::single_dev(
+            tenant,
+            &["user", "clinician"],
+        ))
+    };
+
     let state = AppState {
         bridge: Arc::new(TrustBridge::new(
             new_openbao()?,
@@ -147,6 +158,7 @@ async fn run() -> Result<(), String> {
         ledger: Arc::new(Mutex::new(Ledger::new(ledger_signer))),
         token_public_key: Arc::new(anchor),
         auth: authenticator,
+        policy: issuance_policy,
     };
 
     let app = wsf_api::router(state);

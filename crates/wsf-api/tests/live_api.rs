@@ -225,6 +225,10 @@ async fn sdk_round_trips_every_endpoint() {
         )))),
         token_public_key: Arc::new(anchor),
         auth: Arc::new(wsf_api::auth::LocalDevAuthenticator::for_wsf(TENANT)),
+        policy: Arc::new(wsf_api::policy::StaticTenantPolicies::single_dev(
+            TENANT,
+            &["clinician"],
+        )),
     };
 
     let app = wsf_api::router(state);
@@ -239,11 +243,9 @@ async fn sdk_round_trips_every_endpoint() {
     // Token lifecycle.
     let token = sdk
         .issue(&IssueReq {
-            tenant_id: TENANT.to_string(),
-            subject_id: "clinician-1".to_string(),
-            roles: vec!["clinician".to_string()],
+            requested_roles: vec!["clinician".to_string()],
+            requested_models: vec![],
             budget: None,
-            allowed_models: vec![],
         })
         .await
         .expect("issue");
