@@ -881,6 +881,10 @@ mod tests {
         let mut config = VaultConfig::default();
         config.storage.mount_point = tmp.path().to_path_buf();
         config.storage.staging_dir = tmp.path().join("staging");
+        // V9: the PQC engine persists model keys under key_store_path. Point it
+        // inside the tempdir — the default `/vault/keys` is unwritable to a
+        // non-root CI runner, which panicked the encryption tests.
+        config.pqc.key_store_path = tmp.path().join("keys");
         config
     }
 
