@@ -81,6 +81,7 @@ async fn bootstrap(c: &Client, addr: &str, tok: &str) -> (String, String) {
     .await;
 
     let policy = r#"
+path "transit/keys"      { capabilities = ["list"] }
 path "transit/keys/*"    { capabilities = ["create", "read", "update", "delete"] }
 path "transit/encrypt/*" { capabilities = ["create", "update"] }
 path "transit/decrypt/*" { capabilities = ["create", "update"] }
@@ -351,6 +352,13 @@ async fn darkening_a_ring_kills_its_envelopes_and_halts_its_workloads() {
         transit.key_version(&key).await.unwrap(),
         None,
         "ring key disabled"
+    );
+    // …including the per-tenant derivative the seal actually wrapped under
+    // (E2 namespacing): the dark switch covers the whole key family.
+    assert_eq!(
+        transit.key_version(&format!("{key}-acme")).await.unwrap(),
+        None,
+        "per-tenant ring key disabled with the family"
     );
     // …so the envelope is unreadable: its wrapped data key cannot decrypt.
     assert!(

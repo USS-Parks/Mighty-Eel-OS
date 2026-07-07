@@ -469,3 +469,29 @@ With B1/B2/B6 this completes Phase B: **AF-004 fully PROVEN**.
 
 With L1/L2 core + E6 receipt binding this completes Phase L: **AF-007 fully
 PROVEN**.
+
+## Live re-verification sweep — E2 interaction fixes
+
+Full re-run of every live suite in the changed-code dependency set surfaced
+two E2 (per-tenant Transit keys) interactions the per-crate gates had missed:
+
+- **W4 (`wsf-ledger/tests/live_ledger.rs`)**: the test provisioned the bare
+  base key and an exact-path Transit policy, so the E2 seal path
+  (`<base>-<tenant>`) had no key/permission. Test provisioning updated to the
+  per-tenant key + wildcard policy (same shape as the other live suites).
+- **R4 ring darkening (real regression, `aog-controller`)**: darkening a
+  trust ring disabled only the base ring key, but the seal service now wraps
+  under per-tenant derivatives — so a darkened ring's tenant-namespaced
+  envelopes **still unsealed**. `TransitAdmin` gains `list_keys` +
+  `disable_key_family`, and the ring reconciler darkens the whole key family
+  (`<base>` and every `<base>-*`). The R4 live gate now also asserts the
+  per-tenant derivative is dead after darkening, and the behavioral proof
+  (unseal fails on a dark ring) is green again.
+
+Post-fix state: every crate depending on the phase-B/R/L-changed code passes
+its full suite against live OpenBao + Moto (fabric-token, fabric-revocation,
+wsf-bridge, wsf-broker, wsf-seal, wsf-api, wsf-cache, wsf-tenants,
+wsf-ledger, aog-gateway, aog-controller, aog-apiserver, aog-node,
+aog-conformance, aogd). `protoc` was also installed in the dev container,
+unblocking `mai-api` builds (pre-existing environment gap, unrelated to the
+remediation).
