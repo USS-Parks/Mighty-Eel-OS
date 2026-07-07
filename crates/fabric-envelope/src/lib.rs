@@ -118,6 +118,102 @@ fn aad_bytes(label: &Label, binding: &EnvelopeBinding) -> Result<Vec<u8>, Envelo
         .map_err(|e| EnvelopeError::Serialize(e.to_string()))
 }
 
+/// The pre-E1 (v1) AAD: the label alone, no binding. Used only by the offline
+/// migration command to open a legacy envelope.
+fn legacy_aad(label: &Label) -> Result<Vec<u8>, EnvelopeError> {
+    fabric_proof::canonical_bytes(label).map_err(|e| EnvelopeError::Serialize(e.to_string()))
+}
+
+/// The pre-E1 (v1) thread content: no `binding` key.
+fn legacy_thread_content(
+    envelope_id: &str,
+    seal: &Seal,
+    label: &Label,
+    authorizing_token_id: &str,
+    previous_hash: &str,
+    created_at: &str,
+) -> serde_json::Value {
+    serde_json::json!({
+        "envelope_id": envelope_id,
+        "seal": seal,
+        "label": label,
+        "authorizing_token_id": authorizing_token_id,
+        "previous_hash": previous_hash,
+        "created_at": created_at,
+    })
+}
+
+/// Offline authenticated migration of a legacy (v1, unbound) envelope to v2
+/// (plan E5). Online unseal of v1 envelopes is disabled (the seal service denies
+/// them, E4); this is the only path. The operator supplies the v1 data key
+/// (recovered offline) and the tenant/owner `binding` the payload belongs to.
+///
+/// The v1 provenance thread is verified against `signer`'s key before anything
+/// is re-sealed, the payload is opened under the legacy AAD, and a fresh v2
+/// envelope is minted (new AAD + thread over the binding). **Idempotent**: an
+/// already-v2 envelope is returned unchanged.
+///
+/// # Errors
+/// [`EnvelopeError`] if the v1 thread does not verify, the legacy AAD does not
+/// match, decryption fails, or re-sealing fails.
+pub fn migrate_legacy(
+    v1: &Envelope,
+    data_key: &[u8; 32],
+    binding: EnvelopeBinding,
+    verifier: &dyn Verifier,
+    original_public_key: &[u8],
+    signer: &dyn Signer,
+) -> Result<Envelope, EnvelopeError> {
+    // Idempotent: already migrated.
+    if v1.binding.envelope_version >= 2 {
+        return Ok(v1.clone());
+    }
+    // 1. Authenticate the v1 provenance thread against the original sealer's key
+    //    (legacy content, no binding).
+    let content = legacy_thread_content(
+        &v1.envelope_id,
+        &v1.seal,
+        &v1.label,
+        &v1.thread.authorizing_token_id,
+        &v1.thread.previous_hash,
+        &v1.thread.created_at,
+    );
+    let hash = fabric_proof::canonical_hash(&content)
+        .map_err(|e| EnvelopeError::Serialize(e.to_string()))?;
+    let sig = v1
+        .thread
+        .signatures
+        .first()
+        .ok_or(EnvelopeError::NoSignature)?;
+    let sig_bytes = hex::decode(&sig.value).map_err(|_| EnvelopeError::Malformed)?;
+    match verifier.verify(&hash, &sig_bytes, original_public_key) {
+        Ok(true) => {}
+        _ => return Err(EnvelopeError::InvalidSignature),
+    }
+
+    // 2. Open under the legacy AAD (label only) — an authenticated AEAD decrypt.
+    let aad = legacy_aad(&v1.label)?;
+    let plaintext = unseal(&v1.seal, data_key, &aad)?;
+
+    // 3. Re-seal as v2 with the tenant/owner binding (the same wrapped-key
+    //    reference is retained; a re-wrap under a per-tenant key is the caller's
+    //    concern at the service layer).
+    seal_envelope(
+        v1.envelope_id.clone(),
+        &plaintext,
+        data_key,
+        v1.seal.data_key_wrapped.clone(),
+        v1.label.clone(),
+        binding,
+        ThreadSpec {
+            authorizing_token_id: v1.thread.authorizing_token_id.clone(),
+            previous_hash: v1.thread.previous_hash.clone(),
+            created_at: v1.thread.created_at.clone(),
+        },
+        signer,
+    )
+}
+
 /// The canonical content the thread signs: everything but the signatures. The
 /// binding is included so provenance covers the tenant/owner binding too.
 fn thread_content(
