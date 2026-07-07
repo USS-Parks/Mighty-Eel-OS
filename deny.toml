@@ -6,7 +6,7 @@
 # a real medium-severity timing side-channel in `ml-dsa`. None has a
 # semver-compatible upgrade path from where this RC1 freeze sits. Each
 # is allow-listed here with a written reason that mirrors the
-# corresponding row in `docs/INDEPENDENT-EVIDENCE-DEFERRALS.md`.
+# corresponding row in `docs/compliance/INDEPENDENT-EVIDENCE-DEFERRALS.md`.
 #
 # This is NOT a blanket suppression. Every entry below cites a
 # specific RustSec advisory ID, names the post-RC lane that will

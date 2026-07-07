@@ -444,6 +444,24 @@ Gates: 26 wsf-broker unit tests + W2 (`live_localstack` via `GrantScope`) +
 B6 (`broker_grant`) + W6 (`live_api`) all green against live OpenBao + Moto.
 With B1/B2/B6 this completes Phase B: **AF-004 fully PROVEN**.
 
+## Phase Q — Q5 dependency-policy config drift fixed
+
+`cargo audit` and `cargo deny` read the same RustSec DB but had drifted:
+`.cargo/audit.toml` ignored 4 advisories (0144, 0384, 0176, 0177) while
+`deny.toml` ignored 5 — the extra being **RUSTSEC-2026-0173**
+(`proc-macro-error2` unmaintained, compile-time-only via `validator_derive`).
+So `cargo audit` would have **failed** on 0173 while `cargo deny` passed —
+exactly the "documented command doesn't match CI" gate inconsistency Q1/Q5
+target. Synced the two: `.cargo/audit.toml` now ignores the same 5 advisories
+(verified equal by parsing both), added the missing §1.5 to
+`docs/compliance/INDEPENDENT-EVIDENCE-DEFERRALS.md` (the audit config's own
+rule is "no ignore without a doc entry"), and fixed the stale doc path both
+configs cited (`docs/…` → `docs/compliance/…`). Every ignore remains a
+specific advisory id with a written rationale and a named revisit lane — no
+blanket suppression. Running the tools to confirm no *new* advisory falls
+through is the remaining step (the binaries aren't installed here and
+compiling them from source risks the tight disk).
+
 ## Phase L — hardening complete (L2 auditor / L4 export; AF-007 → PROVEN)
 
 - **L2 remainder — global auditor**: `wsf-api/src/audit.rs` (`AuditorStore` +
