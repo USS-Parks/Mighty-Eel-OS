@@ -34,6 +34,8 @@ async fn edge_daemons_register_and_heartbeat_into_the_control_plane() {
         data_dir: base.join("cp"),
         listen: cp_addr,
         advertise: cp_url.clone(),
+        anchor_pubkey: None,
+        openbao: None,
     })
     .await
     .unwrap();
