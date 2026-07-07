@@ -12,6 +12,7 @@
 //! folding the SDK into `mai-sdk-rs` and a gRPC/tonic-0.14 surface are follow-ons
 //! (the axum-0.8 half of the 0.2d pin is exercised here and in W3).
 
+pub mod audit;
 pub mod auth;
 pub mod client;
 pub mod grants;
@@ -26,6 +27,7 @@ use axum::routing::{get, post};
 use axum::{Json, Router};
 use fabric_contracts::{Audience, Budget, Envelope, TrustToken, WsfPrincipal};
 
+use audit::AuditorStore;
 use auth::{WsfAuthenticator, require_principal};
 use base64::Engine;
 use chrono::Utc;
@@ -63,6 +65,9 @@ pub struct AppState {
     /// Server-side cloud-credential grants (plan B1/B2). Resolves a tenant-scoped
     /// grant_id to an approved cloud identity; the caller never submits a raw ARN.
     pub grants: Arc<dyn GrantStore>,
+    /// Server-side global-auditor enrollment (plan L2). The only path past
+    /// receipt tenant scoping; `StaticAuditors::none()` for non-audit planes.
+    pub auditors: Arc<dyn AuditorStore>,
 }
 
 /// Mount all routes over `state`.
@@ -80,6 +85,7 @@ pub fn router(state: AppState) -> Router {
         .route("/v1/envelopes/unseal", post(unseal))
         .route("/v1/credentials/exchange", post(exchange))
         .route("/v1/receipts", get(receipts))
+        .route("/v1/receipts/export", get(export_receipts))
         .route_layer(axum::middleware::from_fn_with_state(
             state.auth.clone(),
             require_principal,
@@ -665,6 +671,10 @@ async fn receipts(
             "principal is not authenticated for the WSF plane",
         ));
     }
+    // L2: a server-enrolled global auditor is the one exception to tenant
+    // scoping — enrollment is by authenticated principal_id, never by anything
+    // in the request.
+    let auditor = s.auditors.is_global_auditor(&principal);
     let ledger = s.ledger.lock().expect("ledger lock");
 
     // Optional typed field filter — always intersected with the tenant scope,
@@ -676,13 +686,42 @@ async fn receipts(
     let entries: Vec<LedgerEntry> = base
         .into_iter()
         .filter(|e| {
-            e.receipt.get("tenant_id").and_then(|v| v.as_str())
-                == Some(principal.tenant_id.as_str())
+            auditor
+                || e.receipt.get("tenant_id").and_then(|v| v.as_str())
+                    == Some(principal.tenant_id.as_str())
         })
         .take(RECEIPTS_LIMIT)
         .cloned()
         .collect();
     Ok(Json(ReceiptsResp { entries }))
+}
+
+/// L4: export the signed evidence pack over the full ledger. Global auditors
+/// only — the pack is cross-tenant by nature (the whole chain), and its ML-DSA
+/// signature verifies offline via `wsf_ledger::verify_pack`.
+async fn export_receipts(
+    State(s): State<AppState>,
+    Extension(principal): Extension<WsfPrincipal>,
+) -> Result<Json<wsf_ledger::EvidencePack>, ApiError> {
+    if !principal.is_for(Audience::Wsf) {
+        return Err(ApiError::new(
+            StatusCode::FORBIDDEN,
+            "principal is not authenticated for the WSF plane",
+        ));
+    }
+    if !s.auditors.is_global_auditor(&principal) {
+        return Err(ApiError::new(
+            StatusCode::FORBIDDEN,
+            "receipt export requires global-auditor enrollment",
+        ));
+    }
+    let pack = s
+        .ledger
+        .lock()
+        .expect("ledger lock")
+        .export_pack(Utc::now().to_rfc3339())
+        .map_err(|e| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok(Json(pack))
 }
 
 async fn openapi() -> impl IntoResponse {

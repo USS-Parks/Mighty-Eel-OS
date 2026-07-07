@@ -200,6 +200,7 @@ async fn exchange_is_grant_scoped_not_raw_arn() {
             "aws-approved",
             APPROVED_ARN,
         )),
+        auditors: Arc::new(wsf_api::audit::StaticAuditors::none()),
     };
     let app = wsf_api::router(state);
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();

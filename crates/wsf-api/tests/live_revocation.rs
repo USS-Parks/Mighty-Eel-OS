@@ -331,6 +331,7 @@ async fn revocation_propagates_to_seal_and_broker_end_to_end() {
             "aws-readonly",
             "arn:aws:iam::000000000000:role/wsf-r6",
         )),
+        auditors: Arc::new(wsf_api::audit::StaticAuditors::none()),
     };
 
     let app = wsf_api::router(state);

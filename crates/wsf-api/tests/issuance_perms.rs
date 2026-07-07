@@ -65,6 +65,7 @@ async fn spawn(policy: TenantIssuancePolicy) -> String {
         auth: Arc::new(LocalDevAuthenticator::for_wsf(TENANT)),
         policy: Arc::new(StaticTenantPolicies::new().with(policy)),
         grants: Arc::new(wsf_api::grants::StaticGrants::new()),
+        auditors: Arc::new(wsf_api::audit::StaticAuditors::none()),
     };
     let app = wsf_api::router(state);
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();

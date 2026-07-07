@@ -175,6 +175,8 @@ async fn run() -> Result<(), String> {
         auth: authenticator,
         policy: issuance_policy,
         grants: cloud_grants,
+        // L2: no global auditors unless explicitly enrolled (safe default).
+        auditors: Arc::new(wsf_api::audit::StaticAuditors::none()),
     };
 
     let app = wsf_api::router(state);

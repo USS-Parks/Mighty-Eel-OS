@@ -443,3 +443,29 @@ With E6 (receipt binding, logged with Phase L) this completes Phase E:
 Gates: 26 wsf-broker unit tests + W2 (`live_localstack` via `GrantScope`) +
 B6 (`broker_grant`) + W6 (`live_api`) all green against live OpenBao + Moto.
 With B1/B2/B6 this completes Phase B: **AF-004 fully PROVEN**.
+
+## Phase L — hardening complete (L2 auditor / L4 export; AF-007 → PROVEN)
+
+- **L2 remainder — global auditor**: `wsf-api/src/audit.rs` (`AuditorStore` +
+  `StaticAuditors`). Enrollment is by authenticated `principal_id`, server-side
+  only — nothing in the request can confer it, and the default everywhere is
+  `StaticAuditors::none()`. An enrolled auditor is the single exception to
+  receipt tenant scoping (still bounded by `RECEIPTS_LIMIT`); everyone else's
+  queries stay mandatorily tenant-scoped exactly as before.
+- **L4 — signed evidence export**: `GET /v1/receipts/export` (A2-gated +
+  auditor-only) returns the ledger's ML-DSA-signed `EvidencePack`, which
+  verifies **offline** via `wsf_ledger::verify_pack` with the ledger public key
+  alone. Non-auditors get 403. SDK: `WsfClient::export_receipts`. OpenAPI
+  updated.
+- Gates: offline `ledger_authz.rs` — auditor sees both tenants, plain principal
+  stays scoped, exported pack verifies offline, a tampered entry breaks the
+  signature, non-auditor export 403. Live `live_api.rs` (W6/L4) — the SDK's
+  unenrolled principal is refused 403; the enrolled auditor principal exports
+  over live HTTP and the pack verifies offline against the ledger key. PASS.
+- **L3 posture** (ops-plane): the in-memory chain + signed offline-verifiable
+  export is the evidence path; a durable HA backend is deployment plumbing for
+  the ops runbook — the authorization and integrity controls above are
+  backend-independent.
+
+With L1/L2 core + E6 receipt binding this completes Phase L: **AF-007 fully
+PROVEN**.

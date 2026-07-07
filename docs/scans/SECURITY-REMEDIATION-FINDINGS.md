@@ -20,7 +20,7 @@ documentation or mock-only tests where a live boundary exists (plan §0.4).
 | AF-004 | High | Credential broker accepts caller-selected AWS role | broker policy, role/action/resource binding | PROVEN (B1–B6 complete: grant-bound actions/region/external-id/TTL, credential hygiene) |
 | AF-005 | High | Production readiness certifies uninitialized / plaintext-capable vaults | vault builder, ZFS initialization, readiness | OPEN |
 | AF-006 | Medium | WSF privileged consumers ignore signed revocation snapshots | token verification context, snapshot store | PROVEN (R1 anti-rollback store + seal/broker fail-closed consumers + R6 live gate) |
-| AF-007 | Medium | Receipt ledger is unauthenticated and not tenant-filtered | ledger query authz, tenant index | FIXED (L1/L2 + E6 receipt binding); L3/L4 open |
+| AF-007 | Medium | Receipt ledger is unauthenticated and not tenant-filtered | ledger query authz, tenant index | PROVEN (L1/L2 + E6 binding + auditor-only signed export, L4 live gate; L3 durable backend = ops plumbing) |
 | AQ-001 | Quality | Clippy gate fails: `clippy::doc_lazy_continuation` at `mai-core/src/cache.rs:109` | Rust CI | OPEN |
 | AQ-002 | Quality | Whole-tree Ruff / mypy / pytest gates fail or do not collect reliably | Python packaging and CI | OPEN |
 | AS-001 | Supply chain | Deployment uses floating image tags and unpinned base-image digests | Docker/Compose/release provenance | OPEN |

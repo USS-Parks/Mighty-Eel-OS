@@ -44,12 +44,18 @@
     },
     "/v1/receipts": {
       "get": {
-        "summary": "Query the receipt ledger by correlation field/value.",
+        "summary": "Query the receipt ledger by correlation field/value (tenant-scoped; global auditors read across tenants).",
         "parameters": [
           { "name": "field", "in": "query", "required": false, "schema": { "type": "string" } },
           { "name": "value", "in": "query", "required": false, "schema": { "type": "string" } }
         ],
         "responses": { "200": { "description": "Matching ledger entries." } }
+      }
+    },
+    "/v1/receipts/export": {
+      "get": {
+        "summary": "Export the ML-DSA-signed evidence pack over the full ledger (global auditors only; verifies offline).",
+        "responses": { "200": { "description": "The signed evidence pack." }, "403": { "description": "Principal is not an enrolled global auditor." } }
       }
     },
     "/healthz": {

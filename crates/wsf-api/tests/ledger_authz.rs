@@ -1,6 +1,9 @@
 //! L1/L2 gate (offline) — receipt queries are authenticated and mandatorily
 //! tenant-scoped (AF-007). A principal sees only its own tenant's receipts; a
-//! cross-tenant identifier query returns no rows and no existence oracle.
+//! cross-tenant identifier query returns no rows and no existence oracle. The
+//! one exception is a server-enrolled **global auditor** (L2), who may read
+//! across tenants and export the signed evidence pack (L4) — everyone else
+//! gets 403 on export.
 //!
 //! Runs with no OpenBao: the ledger is seeded directly with receipts for two
 //! tenants, and the router is driven over HTTP with a dev principal per tenant.
@@ -9,16 +12,17 @@
 use std::sync::{Arc, Mutex};
 
 use fabric_crypto::Signer;
-use fabric_crypto::providers::RustCryptoMlDsa87;
+use fabric_crypto::providers::{MlDsa87Verifier, RustCryptoMlDsa87};
 use reqwest::Client;
 use serde_json::{Value, json};
 use wsf_api::AppState;
+use wsf_api::audit::StaticAuditors;
 use wsf_api::auth::LocalDevAuthenticator;
 use wsf_api::grants::StaticGrants;
 use wsf_api::policy::StaticTenantPolicies;
 use wsf_bridge::{BridgeConfig, OpenBaoAuth, OpenBaoConfig, TrustBridge};
 use wsf_broker::{AwsStsBroker, BrokerConfig};
-use wsf_ledger::Ledger;
+use wsf_ledger::{EvidencePack, Ledger};
 use wsf_seal::{SealService, SealServiceConfig};
 
 fn unused() -> OpenBaoAuth {
@@ -48,6 +52,10 @@ fn seeded_ledger() -> Arc<Mutex<Ledger>> {
 }
 
 async fn spawn_as(tenant: &str, ledger: Arc<Mutex<Ledger>>) -> String {
+    spawn_with(tenant, ledger, StaticAuditors::none()).await
+}
+
+async fn spawn_with(tenant: &str, ledger: Arc<Mutex<Ledger>>, auditors: StaticAuditors) -> String {
     let anchor = RustCryptoMlDsa87::generate("l-anchor")
         .unwrap()
         .public_key()
@@ -76,6 +84,7 @@ async fn spawn_as(tenant: &str, ledger: Arc<Mutex<Ledger>>) -> String {
         auth: Arc::new(LocalDevAuthenticator::for_wsf(tenant)),
         policy: Arc::new(StaticTenantPolicies::single_dev(tenant, &["user"])),
         grants: Arc::new(StaticGrants::new()),
+        auditors: Arc::new(auditors),
     };
     let app = wsf_api::router(state);
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -125,4 +134,64 @@ async fn receipts_are_tenant_scoped_with_no_cross_tenant_oracle() {
     assert_eq!(all_b[0]["receipt"]["tenant_id"], "tenant-b");
 
     println!("L1/L2 gate PASSED: receipts authenticated + tenant-scoped; no cross-tenant oracle");
+}
+
+#[tokio::test]
+async fn global_auditor_reads_across_tenants_and_exports_a_verifiable_pack() {
+    let ledger = seeded_ledger();
+    let ledger_public_key = ledger.lock().unwrap().public_key().to_vec();
+
+    // The dev principal_id is "local-dev"; enroll it as a global auditor on
+    // one plane only. Enrollment is server-side — nothing in the request.
+    let auditor_base = spawn_with(
+        "tenant-a",
+        ledger.clone(),
+        StaticAuditors::none().with("local-dev"),
+    )
+    .await;
+    let plain_base = spawn_as("tenant-a", ledger.clone()).await;
+
+    // L2: the auditor sees BOTH tenants' receipts; the plain principal one.
+    let audited = receipts(&auditor_base, "").await;
+    assert_eq!(audited.len(), 2, "auditor sees both tenants");
+    let plain = receipts(&plain_base, "").await;
+    assert_eq!(plain.len(), 1, "non-auditor stays tenant-scoped");
+
+    // L4: the auditor exports a signed evidence pack that verifies OFFLINE
+    // with the ledger's public key alone.
+    let pack: EvidencePack = Client::new()
+        .get(format!("{auditor_base}/v1/receipts/export"))
+        .send()
+        .await
+        .expect("export req")
+        .error_for_status()
+        .expect("export 200")
+        .json()
+        .await
+        .expect("pack json");
+    assert_eq!(pack.count, 2);
+    assert!(
+        wsf_ledger::verify_pack(&pack, &MlDsa87Verifier, &ledger_public_key),
+        "exported pack verifies offline"
+    );
+
+    // Tampering any entry breaks the pack signature.
+    let mut tampered = pack.clone();
+    tampered.entries[0].receipt["decision"] = json!("deny");
+    assert!(
+        !wsf_ledger::verify_pack(&tampered, &MlDsa87Verifier, &ledger_public_key),
+        "tampered pack must not verify"
+    );
+
+    // The non-auditor is refused the export outright.
+    let denied = Client::new()
+        .get(format!("{plain_base}/v1/receipts/export"))
+        .send()
+        .await
+        .expect("export req");
+    assert_eq!(denied.status().as_u16(), 403, "non-auditor export is 403");
+
+    println!(
+        "L2/L4 gate PASSED: auditor-only cross-tenant reads + signed export verifies offline; tamper + non-auditor refused"
+    );
 }

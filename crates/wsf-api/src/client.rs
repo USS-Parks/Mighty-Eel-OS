@@ -2,7 +2,7 @@
 
 use base64::Engine;
 use fabric_contracts::{Envelope, TrustToken};
-use wsf_ledger::LedgerEntry;
+use wsf_ledger::{EvidencePack, LedgerEntry};
 
 use crate::{
     AttenuateReq, ExchangeReq, ExchangeResp, IssueReq, ReceiptsResp, SealReq, TokenResp, UnsealReq,
@@ -163,6 +163,27 @@ impl WsfClient {
         }
         let r: ReceiptsResp = resp.json().await?;
         Ok(r.entries)
+    }
+
+    /// Export the signed evidence pack over the full ledger (plan L4).
+    /// Requires global-auditor enrollment — everyone else gets 403.
+    ///
+    /// # Errors
+    /// [`ClientError`] on transport or a non-2xx response.
+    pub async fn export_receipts(&self) -> Result<EvidencePack, ClientError> {
+        let resp = self
+            .http
+            .get(format!("{}/v1/receipts/export", self.base))
+            .send()
+            .await?;
+        let status = resp.status();
+        if !status.is_success() {
+            return Err(ClientError::Api {
+                status: status.as_u16(),
+                body: resp.text().await.unwrap_or_default(),
+            });
+        }
+        Ok(resp.json().await?)
     }
 
     /// Fetch the raw OpenAPI document.
