@@ -14,7 +14,7 @@
 
 use aes_gcm::aead::{Aead, KeyInit, Payload};
 use aes_gcm::{Aes256Gcm, Nonce};
-use fabric_contracts::{Envelope, Label, Seal, Signature, Thread};
+use fabric_contracts::{Envelope, EnvelopeBinding, Label, Seal, Signature, Thread};
 use fabric_crypto::{Signer, Verifier};
 
 /// Failures from envelope operations.
@@ -111,11 +111,20 @@ pub fn unseal(seal: &Seal, data_key: &[u8; 32], aad: &[u8]) -> Result<Vec<u8>, E
         .map_err(|_| EnvelopeError::UnsealFailed)
 }
 
-/// The canonical content the thread signs: everything but the signatures.
+/// The AAD binding the ciphertext to its label **and** its tenant/owner binding
+/// (plan E1): any change to either breaks decryption.
+fn aad_bytes(label: &Label, binding: &EnvelopeBinding) -> Result<Vec<u8>, EnvelopeError> {
+    fabric_proof::canonical_bytes(&serde_json::json!({ "label": label, "binding": binding }))
+        .map_err(|e| EnvelopeError::Serialize(e.to_string()))
+}
+
+/// The canonical content the thread signs: everything but the signatures. The
+/// binding is included so provenance covers the tenant/owner binding too.
 fn thread_content(
     envelope_id: &str,
     seal: &Seal,
     label: &Label,
+    binding: &EnvelopeBinding,
     authorizing_token_id: &str,
     previous_hash: &str,
     created_at: &str,
@@ -124,6 +133,7 @@ fn thread_content(
         "envelope_id": envelope_id,
         "seal": seal,
         "label": label,
+        "binding": binding,
         "authorizing_token_id": authorizing_token_id,
         "previous_hash": previous_hash,
         "created_at": created_at,
@@ -145,24 +155,27 @@ pub struct ThreadSpec {
 ///
 /// # Errors
 /// Returns [`EnvelopeError`] on serialization, encryption, or signing failure.
+#[allow(clippy::too_many_arguments)] // a low-level seal constructor: id, payload,
+// key, wrapped-key, label, binding, thread, signer are all irreducible inputs.
 pub fn seal_envelope(
     envelope_id: impl Into<String>,
     plaintext: &[u8],
     data_key: &[u8; 32],
     data_key_wrapped: impl Into<String>,
     label: Label,
+    binding: EnvelopeBinding,
     thread: ThreadSpec,
     signer: &dyn Signer,
 ) -> Result<Envelope, EnvelopeError> {
     let envelope_id = envelope_id.into();
-    let aad = fabric_proof::canonical_bytes(&label)
-        .map_err(|e| EnvelopeError::Serialize(e.to_string()))?;
+    let aad = aad_bytes(&label, &binding)?;
     let seal = seal(plaintext, data_key, data_key_wrapped, &aad)?;
 
     let content = thread_content(
         &envelope_id,
         &seal,
         &label,
+        &binding,
         &thread.authorizing_token_id,
         &thread.previous_hash,
         &thread.created_at,
@@ -177,6 +190,7 @@ pub fn seal_envelope(
         envelope_id,
         seal,
         label,
+        binding,
         thread: Thread {
             created_at: thread.created_at,
             authorizing_token_id: thread.authorizing_token_id,
@@ -212,6 +226,7 @@ pub fn verify_thread(
         &envelope.envelope_id,
         &envelope.seal,
         &envelope.label,
+        &envelope.binding,
         &envelope.thread.authorizing_token_id,
         &envelope.thread.previous_hash,
         &envelope.thread.created_at,
@@ -242,7 +257,6 @@ pub fn open_envelope(
     public_key: &[u8],
 ) -> Result<Vec<u8>, EnvelopeError> {
     verify_thread(envelope, verifier, public_key)?;
-    let aad = fabric_proof::canonical_bytes(&envelope.label)
-        .map_err(|e| EnvelopeError::Serialize(e.to_string()))?;
+    let aad = aad_bytes(&envelope.label, &envelope.binding)?;
     unseal(&envelope.seal, data_key, &aad)
 }

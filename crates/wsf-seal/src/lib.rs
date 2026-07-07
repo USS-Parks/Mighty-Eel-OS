@@ -275,12 +275,21 @@ impl SealService {
             .await?;
 
         let previous_hash = self.receipts.lock().expect("receipts lock").head_hex();
+        // E3: the envelope's tenant/owner binding is derived from the verified
+        // token — never caller-chosen — so a payload is bound to its tenant.
+        let binding = fabric_contracts::EnvelopeBinding {
+            tenant_id: req.token.tenant_id.clone(),
+            owner_subject_hash: req.token.subject_hash.clone(),
+            audience: "wsf".to_string(),
+            envelope_version: 2,
+        };
         let envelope = seal_envelope(
             req.envelope_id.clone(),
             &req.plaintext,
             &data_key,
             data_key_wrapped,
             req.label.into(),
+            binding,
             ThreadSpec {
                 authorizing_token_id: req.token.token_id.clone(),
                 previous_hash,
@@ -311,6 +320,28 @@ impl SealService {
         if let Err(e) = self.verify_token(&req.token, now) {
             self.record("unseal", &envelope.envelope_id, &req.token, "deny", now);
             return Err(e);
+        }
+        // E4: envelope-binding authorization, BEFORE any Transit decrypt. Closes
+        // AF-003 — a token may only unseal its own tenant's envelope, on the
+        // right plane. Legacy (v1) unbound envelopes are denied online.
+        let binding = &envelope.binding;
+        if binding.envelope_version < 2 || binding.tenant_id.is_empty() {
+            self.record("unseal", &envelope.envelope_id, &req.token, "deny", now);
+            return Err(SealError::Unauthorized(
+                "legacy unbound envelope: online unseal denied (migration required)".to_string(),
+            ));
+        }
+        if binding.tenant_id != req.token.tenant_id {
+            self.record("unseal", &envelope.envelope_id, &req.token, "deny", now);
+            return Err(SealError::Unauthorized(
+                "cross-tenant unseal denied".to_string(),
+            ));
+        }
+        if binding.audience != "wsf" {
+            self.record("unseal", &envelope.envelope_id, &req.token, "deny", now);
+            return Err(SealError::Unauthorized(
+                "envelope audience does not permit this plane".to_string(),
+            ));
         }
         // Clearance: the token must be cleared to at least the payload's classification.
         if req.token.max_data_classification < envelope.label.classification {

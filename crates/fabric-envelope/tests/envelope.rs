@@ -2,7 +2,7 @@
 //! label-AAD binding, full envelope seal/open, label-readable-without-unseal,
 //! and thread tamper-evidence (label, ciphertext, wrong key all break it).
 
-use fabric_contracts::{Classification, ComplianceScope, Label, Route};
+use fabric_contracts::{Classification, ComplianceScope, EnvelopeBinding, Label, Route};
 use fabric_crypto::Signer;
 use fabric_crypto::providers::{MlDsa87Verifier, RustCryptoMlDsa87};
 use fabric_envelope::{
@@ -18,6 +18,15 @@ fn label() -> Label {
         permitted_ops: vec!["unseal_local".into()],
         permitted_destinations: vec![Route::LocalOnly],
         detected_entities: vec!["phi.mrn".into()],
+    }
+}
+
+fn binding() -> EnvelopeBinding {
+    EnvelopeBinding {
+        tenant_id: "baap".into(),
+        owner_subject_hash: "hmac:abc".into(),
+        audience: "wsf".into(),
+        envelope_version: 2,
     }
 }
 
@@ -58,6 +67,7 @@ fn envelope_seals_opens_and_label_is_readable_without_the_key() {
         &key,
         "openbao:transit:keys/tenant-baap:v3",
         label(),
+        binding(),
         spec(),
         &signer,
     )
@@ -76,10 +86,44 @@ fn envelope_seals_opens_and_label_is_readable_without_the_key() {
 }
 
 #[test]
+fn tampering_the_binding_breaks_the_envelope() {
+    // E1: the tenant/owner binding is authenticated. Swapping the tenant after
+    // sealing breaks both the provenance thread and the AEAD AAD.
+    let signer = RustCryptoMlDsa87::generate("k").unwrap();
+    let key = [7u8; 32];
+    let mut env = seal_envelope(
+        "env_1",
+        b"data",
+        &key,
+        "x",
+        label(),
+        binding(),
+        spec(),
+        &signer,
+    )
+    .unwrap();
+    env.binding.tenant_id = "attacker-tenant".into(); // cross-tenant swap
+    assert_eq!(
+        open_envelope(&env, &key, &MlDsa87Verifier, signer.public_key()),
+        Err(EnvelopeError::InvalidSignature)
+    );
+}
+
+#[test]
 fn tampering_the_label_breaks_the_thread() {
     let signer = RustCryptoMlDsa87::generate("k").unwrap();
     let key = [7u8; 32];
-    let mut env = seal_envelope("env_1", b"data", &key, "x", label(), spec(), &signer).unwrap();
+    let mut env = seal_envelope(
+        "env_1",
+        b"data",
+        &key,
+        "x",
+        label(),
+        binding(),
+        spec(),
+        &signer,
+    )
+    .unwrap();
     env.label.classification = Classification::Public; // downgrade after signing
     assert_eq!(
         open_envelope(&env, &key, &MlDsa87Verifier, signer.public_key()),
@@ -91,7 +135,17 @@ fn tampering_the_label_breaks_the_thread() {
 fn tampering_the_ciphertext_breaks_the_thread() {
     let signer = RustCryptoMlDsa87::generate("k").unwrap();
     let key = [7u8; 32];
-    let mut env = seal_envelope("env_1", b"data", &key, "x", label(), spec(), &signer).unwrap();
+    let mut env = seal_envelope(
+        "env_1",
+        b"data",
+        &key,
+        "x",
+        label(),
+        binding(),
+        spec(),
+        &signer,
+    )
+    .unwrap();
     env.seal.ciphertext = hex::encode([0xAAu8; 40]); // swap the ciphertext
     assert_eq!(
         open_envelope(&env, &key, &MlDsa87Verifier, signer.public_key()),
@@ -104,7 +158,17 @@ fn opening_with_the_wrong_public_key_fails() {
     let signer = RustCryptoMlDsa87::generate("k").unwrap();
     let impostor = RustCryptoMlDsa87::generate("other").unwrap();
     let key = [7u8; 32];
-    let env = seal_envelope("env_1", b"data", &key, "x", label(), spec(), &signer).unwrap();
+    let env = seal_envelope(
+        "env_1",
+        b"data",
+        &key,
+        "x",
+        label(),
+        binding(),
+        spec(),
+        &signer,
+    )
+    .unwrap();
     assert_eq!(
         open_envelope(&env, &key, &MlDsa87Verifier, impostor.public_key()),
         Err(EnvelopeError::InvalidSignature)

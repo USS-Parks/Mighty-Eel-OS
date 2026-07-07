@@ -221,6 +221,7 @@ mod tests {
                 previous_hash: String::new(),
                 signatures: vec![],
             },
+            binding: fabric_contracts::EnvelopeBinding::default(),
         }
     }
 
