@@ -27,6 +27,7 @@ pub use sts::{RootCredentials, TemporaryCredentials};
 use chrono::{DateTime, Utc};
 use fabric_contracts::{CaveatType, TrustToken};
 use fabric_crypto::Verifier;
+use fabric_revocation::RevocationSnapshot;
 use wsf_bridge::OpenBaoAuth;
 
 /// Static configuration for the AWS STS broker.
@@ -129,6 +130,7 @@ pub struct AwsStsBroker {
     http: reqwest::Client,
     config: BrokerConfig,
     grant_policy: GrantPolicy,
+    revocation: Option<RevocationSnapshot>,
 }
 
 impl AwsStsBroker {
@@ -142,6 +144,7 @@ impl AwsStsBroker {
             http,
             config,
             grant_policy: GrantPolicy::new(),
+            revocation: None,
         }
     }
 
@@ -149,6 +152,14 @@ impl AwsStsBroker {
     #[must_use]
     pub fn with_grants(mut self, grant_policy: GrantPolicy) -> Self {
         self.grant_policy = grant_policy;
+        self
+    }
+
+    /// Builder: consult `snapshot` so a revoked token is refused before any AWS
+    /// call (AF-006).
+    #[must_use]
+    pub fn with_revocation(mut self, snapshot: RevocationSnapshot) -> Self {
+        self.revocation = Some(snapshot);
         self
     }
 
@@ -167,8 +178,8 @@ impl AwsStsBroker {
         grant_id: &str,
         now: DateTime<Utc>,
     ) -> Result<TemporaryCredentials, BrokerError> {
-        // 1. Fail closed on trust before touching AWS.
-        verify_token(token, verifier, public_key, now)?;
+        // 1. Fail closed on trust (signature, expiry, revocation) before AWS.
+        verify_token(token, verifier, public_key, self.revocation.as_ref(), now)?;
 
         // 2. Resolve the named grant server-side (AF-004): the caller never names a
         //    raw role ARN; the grant maps its tenant + scope to an approved role.
@@ -277,22 +288,26 @@ pub fn build_session_policy(mapping: &GrantMapping, token: &TrustToken) -> Strin
     )
 }
 
-/// Verify a presented trust token — fail closed on a bad signature / revocation
-/// or on expiry, before any cloud call. Shared by the AWS and GCP brokers.
+/// Verify a presented trust token — fail closed on a bad signature, expiry, or
+/// (when a snapshot is supplied) revocation by token/subject/key/bundle, before
+/// any cloud call. Shared by the AWS, GCP, and Azure brokers.
 pub(crate) fn verify_token(
     token: &TrustToken,
     verifier: &dyn Verifier,
     public_key: &[u8],
+    revocation: Option<&RevocationSnapshot>,
     now: DateTime<Utc>,
 ) -> Result<(), BrokerError> {
-    fabric_token::verify(token, verifier, public_key)
-        .map_err(|e| BrokerError::TokenRejected(e.to_string()))?;
-    if fabric_token::is_expired(token, now)
-        .map_err(|e| BrokerError::TokenRejected(e.to_string()))?
-    {
-        return Err(BrokerError::TokenExpired);
-    }
-    Ok(())
+    let ctx = fabric_token::VerificationContext {
+        verifier,
+        public_key,
+        now,
+        revocation,
+    };
+    fabric_token::verify_in_context(token, &ctx).map_err(|e| match e {
+        fabric_token::TokenError::Expired => BrokerError::TokenExpired,
+        other => BrokerError::TokenRejected(other.to_string()),
+    })
 }
 
 /// Compute a cloud-cred duration: the token's remaining lifetime, clamped to
@@ -494,6 +509,39 @@ mod tests {
         assert!(
             matches!(err, BrokerError::GrantDenied(_)),
             "cross-tenant grant must be denied, got {err:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn snapshot_revoked_token_is_refused() {
+        // A signed snapshot revoking the token id → refused before AWS (AF-006).
+        let signer = RustCryptoMlDsa87::generate("k").unwrap();
+        let tok = fabric_token::issue(token_with(vec![], "2099-01-01T00:00:00Z"), &signer).unwrap();
+        let mut snap = fabric_revocation::RevocationSnapshot::new(
+            "s",
+            "2026-07-03T00:00:00Z",
+            "2099-01-01T00:00:00Z",
+        );
+        snap.revoked_tokens = vec![tok.token_id.clone()];
+        let snap = fabric_revocation::sign(snap, &signer).unwrap();
+        let broker = AwsStsBroker::new(
+            OpenBaoAuth::new(wsf_bridge::OpenBaoConfig::new(
+                "http://127.0.0.1:1",
+                "r",
+                "s",
+            ))
+            .unwrap(),
+            reqwest::Client::new(),
+            BrokerConfig::new("us-east-1", "http://127.0.0.1:1", "kv/data/broker/aws-root"),
+        )
+        .with_revocation(snap);
+        let err = broker
+            .broker_credentials(&tok, &MlDsa87Verifier, signer.public_key(), "g", Utc::now())
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(err, BrokerError::TokenRejected(_)),
+            "snapshot-revoked token must be refused, got {err:?}"
         );
     }
 

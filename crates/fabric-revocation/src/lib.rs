@@ -6,6 +6,7 @@
 //! [`emergency`] snapshots are short-TTL, out-of-band revocations applied on the
 //! next poll regardless of the normal cadence.
 
+use chrono::{DateTime, Utc};
 use fabric_contracts::Signature;
 use fabric_crypto::{Signer, Verifier};
 use fabric_proof::canonical_hash;
@@ -111,6 +112,16 @@ pub enum RevocationError {
     /// The signature did not verify.
     #[error("signature failed verification")]
     InvalidSignature,
+    /// A snapshot timestamp was not valid RFC3339.
+    #[error("timestamp is not valid RFC3339: {0}")]
+    BadTimestamp(String),
+    /// The snapshot is expired at the checked time.
+    #[error("revocation snapshot is expired")]
+    Expired,
+    /// The snapshot would roll the store back to an older (or equal, non-emergency)
+    /// snapshot — refused; the last-known-good snapshot is retained.
+    #[error("revocation snapshot rollback refused")]
+    Rollback,
 }
 
 /// BLAKE3-32 over the canonical payload (signature field removed).
@@ -159,5 +170,149 @@ pub fn verify(
     match verifier.verify(&hash, &sig, public_key) {
         Ok(true) => Ok(()),
         _ => Err(RevocationError::InvalidSignature),
+    }
+}
+
+fn parse_ts(s: &str) -> Result<DateTime<Utc>, RevocationError> {
+    Ok(DateTime::parse_from_rfc3339(s)
+        .map_err(|_| RevocationError::BadTimestamp(s.to_string()))?
+        .with_timezone(&Utc))
+}
+
+/// A verified, monotonic revocation snapshot store (R1). Replacement is
+/// **anti-rollback**: a new snapshot must verify under the trust anchor, be
+/// unexpired, and be strictly newer than the current one (by `issued_at`) — an
+/// emergency snapshot may replace at an equal timestamp. On any failure the
+/// current snapshot is retained (last-known-good), so a stale, expired, or forged
+/// update can never blind the store.
+#[derive(Debug, Default)]
+pub struct RevocationStore {
+    current: Option<RevocationSnapshot>,
+}
+
+impl RevocationStore {
+    /// An empty store (no revocations in force yet).
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// The current in-force snapshot, if one is installed.
+    #[must_use]
+    pub fn current(&self) -> Option<&RevocationSnapshot> {
+        self.current.as_ref()
+    }
+
+    /// Install `snapshot` if it verifies under `public_key`, is unexpired at `now`,
+    /// and is newer than the current one. Refuses a rollback and keeps the
+    /// last-known-good snapshot on any failure.
+    ///
+    /// # Errors
+    /// [`RevocationError::InvalidSignature`], [`Expired`](RevocationError::Expired),
+    /// [`Rollback`](RevocationError::Rollback), or
+    /// [`BadTimestamp`](RevocationError::BadTimestamp).
+    pub fn update(
+        &mut self,
+        snapshot: RevocationSnapshot,
+        verifier: &dyn Verifier,
+        public_key: &[u8],
+        now: DateTime<Utc>,
+    ) -> Result<(), RevocationError> {
+        verify(&snapshot, verifier, public_key)?;
+        if parse_ts(&snapshot.expires_at)? <= now {
+            return Err(RevocationError::Expired);
+        }
+        if let Some(cur) = &self.current {
+            let cur_issued = parse_ts(&cur.issued_at)?;
+            let new_issued = parse_ts(&snapshot.issued_at)?;
+            let newer = new_issued > cur_issued || (new_issued == cur_issued && snapshot.emergency);
+            if !newer {
+                return Err(RevocationError::Rollback);
+            }
+        }
+        self.current = Some(snapshot);
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod store_tests {
+    use super::*;
+    use fabric_crypto::providers::{MlDsa87Verifier, RustCryptoMlDsa87};
+
+    fn now() -> DateTime<Utc> {
+        parse_ts("2026-07-03T12:00:00Z").unwrap()
+    }
+
+    fn snap(
+        id: &str,
+        issued: &str,
+        expires: &str,
+        signer: &RustCryptoMlDsa87,
+    ) -> RevocationSnapshot {
+        sign(RevocationSnapshot::new(id, issued, expires), signer).unwrap()
+    }
+
+    #[test]
+    fn install_verifies_and_rejects_rollback_expiry_and_forgery() {
+        let anchor = RustCryptoMlDsa87::generate("anchor").unwrap();
+        let pk = anchor.public_key().to_vec();
+        let mut store = RevocationStore::new();
+
+        // A valid snapshot installs, and a newer one replaces it.
+        let s1 = snap(
+            "s1",
+            "2026-07-03T10:00:00Z",
+            "2026-07-04T00:00:00Z",
+            &anchor,
+        );
+        store.update(s1, &MlDsa87Verifier, &pk, now()).unwrap();
+        let s2 = snap(
+            "s2",
+            "2026-07-03T11:00:00Z",
+            "2026-07-04T00:00:00Z",
+            &anchor,
+        );
+        store.update(s2, &MlDsa87Verifier, &pk, now()).unwrap();
+        assert_eq!(store.current().unwrap().snapshot_id, "s2");
+
+        // An older snapshot is a rollback → refused; s2 retained.
+        let old = snap(
+            "old",
+            "2026-07-03T09:00:00Z",
+            "2026-07-04T00:00:00Z",
+            &anchor,
+        );
+        assert_eq!(
+            store.update(old, &MlDsa87Verifier, &pk, now()),
+            Err(RevocationError::Rollback)
+        );
+        assert_eq!(store.current().unwrap().snapshot_id, "s2");
+
+        // A newer-but-expired snapshot is refused.
+        let expired = snap(
+            "exp",
+            "2026-07-03T11:30:00Z",
+            "2026-07-03T11:45:00Z",
+            &anchor,
+        );
+        assert_eq!(
+            store.update(expired, &MlDsa87Verifier, &pk, now()),
+            Err(RevocationError::Expired)
+        );
+
+        // A forged (attacker-key) snapshot is refused; last-known-good retained.
+        let attacker = RustCryptoMlDsa87::generate("evil").unwrap();
+        let forged = snap(
+            "forged",
+            "2026-07-03T13:00:00Z",
+            "2026-07-04T00:00:00Z",
+            &attacker,
+        );
+        assert_eq!(
+            store.update(forged, &MlDsa87Verifier, &pk, now()),
+            Err(RevocationError::InvalidSignature)
+        );
+        assert_eq!(store.current().unwrap().snapshot_id, "s2");
     }
 }

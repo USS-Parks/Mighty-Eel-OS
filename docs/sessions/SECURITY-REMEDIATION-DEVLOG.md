@@ -468,4 +468,62 @@ ingest/query/export gate (→ PROVEN).
 
 Evidence: `test-evidence/security-remediation/M1/phase-L/`.
 
+Commit: `5987c53`.
+
+---
+
+## Phase R — Revocation and trust freshness (AF-006)
+
+### R1 store + R3 consumer integration (seal, broker)
+
+Objective: make the WSF privileged consumers actually consult signed revocation.
+Phase T added the `VerificationContext` + `verify_in_context` mechanism (which
+checks a snapshot by token/subject/signing-key/bundle); R adds the store and wires
+the consumers.
+
+Root cause (confirmed): `wsf-seal` and `wsf-broker` verified only the signature +
+on-token `revocation_status`, never a signed snapshot — a revoked-by-snapshot
+token still sealed data and brokered credentials. (The AOG kernel `auth.rs` already
+consumed revocation; the gap was the WSF trust-plane services.)
+
+Store (R1) — `fabric-revocation::RevocationStore`:
+- Anti-rollback, monotonic install: a new snapshot must verify under the anchor,
+  be unexpired, and be strictly newer by `issued_at` (an emergency snapshot may
+  replace at an equal timestamp). Any failure keeps the last-known-good snapshot —
+  a stale, expired, or forged update cannot blind the store. New errors
+  `BadTimestamp` / `Expired` / `Rollback`.
+
+Consumer integration (R3):
+- `wsf-seal::SealService.with_revocation(snapshot)`; `verify_token` now uses
+  `verify_in_context` — a snapshot-revoked token is refused (and receipted) on both
+  seal and unseal, before any Transit call.
+- `wsf-broker`: the shared `verify_token` takes the snapshot and uses
+  `verify_in_context`; `AwsStsBroker.with_revocation(snapshot)` supplies it — a
+  revoked token is refused before any AWS call. GCP/Azure pass `None` for now (their
+  wiring lands with the B4 parity prompt; on-token revocation + expiry apply).
+
+Verify (offline):
+- `cargo fmt --check` PASS; `cargo check --workspace` PASS (exit 0);
+  `cargo clippy -p fabric-revocation -p wsf-seal -p wsf-broker --all-targets -D warnings -A pedantic` PASS.
+- `cargo test -p fabric-revocation` PASS (store: install → newer replaces → older is
+  Rollback → newer-but-expired is Expired → forged is InvalidSignature, last-known-good kept).
+- `cargo test -p wsf-seal` PASS (snapshot_revoked_token_is_refused_at_seal).
+- `cargo test -p wsf-broker` PASS (19 — incl. snapshot_revoked_token_is_refused).
+
+Regression: REG-AF-006-revoked-parent stays REPAIRED (Phase T); the seal/broker
+snapshot-consumption tests extend the coverage to the consumer paths.
+
+Findings: AF-006 CONTAINED → **FIXED** (context + store + seal/broker consumers,
+with offline proof).
+
+Deferred (honest): R2 broaden the snapshot predicate (issuer/tenant/lineage
+dimensions) beyond token/subject/key/bundle; R3 continued — gateway, tool-proxy,
+approval, and GCP/Azure broker consumption via the same `VerificationContext` seam;
+R4 emergency network/removable-media propagation + SLO; R5 HA/partition/air-gap
+behavior; live R6 revoke-by-every-dimension gate (→ PROVEN). The appliance snapshot
+poll into `wsf-api` main is R4 (the mechanism is in place; the store + consumers
+accept a snapshot today).
+
+Evidence: `test-evidence/security-remediation/M1/phase-R/`.
+
 Commit: (this change set).

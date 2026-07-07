@@ -101,8 +101,9 @@ impl GcpBroker {
         scopes: &[String],
         now: DateTime<Utc>,
     ) -> Result<GcpCredentials, BrokerError> {
-        // 1. Fail closed on trust.
-        verify_token(token, verifier, public_key, now)?;
+        // 1. Fail closed on trust. GCP snapshot-revocation wiring lands with the
+        //    B4 GCP/Azure parity prompt; on-token revocation + expiry apply now.
+        verify_token(token, verifier, public_key, None, now)?;
 
         // 2. Broker's Google bearer from OpenBao (never exposed downstream).
         let vault_token = self.openbao.login().await?;

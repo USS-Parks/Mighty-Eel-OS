@@ -1231,6 +1231,7 @@ dependencies = [
 name = "fabric-revocation"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "fabric-contracts",
  "fabric-crypto",
  "fabric-proof",
@@ -5337,6 +5338,7 @@ dependencies = [
  "chrono",
  "fabric-contracts",
  "fabric-crypto",
+ "fabric-revocation",
  "fabric-token",
  "hex",
  "hmac",
@@ -5407,6 +5409,7 @@ dependencies = [
  "fabric-crypto",
  "fabric-envelope",
  "fabric-proof",
+ "fabric-revocation",
  "fabric-token",
  "hex",
  "rand 0.8.6",
