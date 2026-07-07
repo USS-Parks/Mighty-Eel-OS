@@ -9,11 +9,11 @@ END {
     if (l ~ /^Claude-Session:/) continue
     if (l ~ /Generated with (\[)?Claude/) continue
     if (l ~ /^🤖/) continue
-    if (l ~ /^Authored and reviewed by Basho Parks/) continue
+    if (l ~ /^Authored and reviewed by/) continue
     out[++n] = l
   }
   while (n > 0 && out[n] ~ /^[ \t\r]*$/) n--
   for (i = 1; i <= n; i++) print out[i]
   if (n > 0) print ""
-  print "Authored and reviewed by Basho Parks, Copyright 2026"
+  print "Authored and reviewed by Basho Parks, copyright 2026"
 }

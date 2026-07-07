@@ -639,3 +639,24 @@ host execution + TPM-sealed-KEK hardening are deferred.
   release `Dockerfile` was already digest-pinned. First-party
   `islandmountain/*` / `wsf-api` references stay tagged — they are local
   `build:` outputs, not registry pulls, so a digest can't precede the build.
+
+## Session close (2026-07-07 — paused for owner audit)
+
+State at pause: every finding is FIXED or PROVEN; none OPEN, none yet CLOSED
+(CLOSED requires the Phase X independent re-scan). AF-001/002/003/004/006/007
+PROVEN with live gates; AF-005 FIXED (V1–V8 + V9 persistence/restart/migration,
+all unit-proven and wired into the env-gated ZFS live gate); AQ-001/AQ-002/
+AS-001 FIXED. See the register's "Session status" block for the deferral list
+(V9 live-host run, `cargo audit`/`gitleaks`/`detect-secrets` executions, Phase
+F/X audits) — each blocked on hardware or on independent-review scope, not on
+further implementation.
+
+Governance/commit convention reaffirmed at close: the canonical commit footer
+is `Authored and reviewed by Basho Parks, copyright 2026` with **no** AI
+co-author credit — enforced by `.githooks/commit-msg` (+ `footer-filter.awk`),
+mirrored in `.integrity/hooks/`, the PowerShell port, and the
+`.github/workflows/commit-msg-check.yml` CI gate. This pass unified the two
+stray `Copyright` (capital-C) variants in the `.integrity/` mirror and
+`HANDOFF.md` to the lowercase `copyright` canon and loosened the mirror's strip
+regex to the `^Authored and reviewed by` prefix so re-stamping stays idempotent.
+Branch `claude/live-gates-docker-zfs-qoe2bc`; all work pushed to origin.

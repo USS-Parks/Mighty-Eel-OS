@@ -47,3 +47,29 @@ data; a token selects an unapproved cloud identity; a revoked token stays usable
 propagation bound; production validation passes an uninitialized / plaintext / dev vault;
 required live gates are skipped; the final scan lacks high-impact coverage without an
 owner-signed deferral.
+
+## Session status (2026-07-07 — paused for owner audit)
+
+Every finding is at **FIXED or PROVEN**:
+
+- **PROVEN** (root controls + live gate green): AF-001, AF-002, AF-003, AF-004,
+  AF-006, AF-007.
+- **FIXED** (root controls + focused/unit tests green; live/re-scan closure
+  pending): AF-005 (V1–V8 + V9 key-persistence/restart/migration; only the V9
+  restart/migration **live** gate on a real ZFS+TPM host remains — the code
+  paths are implemented, unit-proven, and wired into the ready-to-run
+  env-gated gate), AQ-001, AQ-002, AS-001.
+
+No finding is OPEN. No finding has reached **CLOSED** — that state requires the
+independent re-scan (plan Phase X). Deferred to the owner's audit lane:
+
+- Running the AF-005 V9 live gate on real ZFS+TPM hardware (absent in the build
+  container: no `zfs`, no `/dev/tpm*`).
+- Executing the `cargo audit` / `gitleaks` / `detect-secrets` tool runs (Q5/Q6
+  configs are correct and doc-backed; binaries not installed here).
+- Phase F frontier audits (F1–F9) and the Phase X independent re-scan, which
+  move PROVEN → CLOSED by fresh-eyes review rather than further implementation.
+
+This register and [the DEVLOG](../sessions/SECURITY-REMEDIATION-DEVLOG.md) are
+the source of truth for status; each entry links to the commit and gate that
+established it.
