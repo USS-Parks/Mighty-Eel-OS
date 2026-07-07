@@ -167,3 +167,68 @@ Evidence: `test-evidence/security-remediation/M0/adversarial-fixtures/`.
 Gate: every AF finding has a deterministic regression identifier (registry).
 
 Commit: (pending — this change set).
+
+## Phase A — WSF authentication and issuance authorization
+
+Closes M1's Phase A (A1–A5) and the structural half of **AF-002** (public WSF
+route issued signed tokens for caller-selected subjects/roles). Live gates run
+against a source-built OpenBao dev server (registry blobs are egress-blocked in
+this environment; see `test-evidence/security-remediation/M1/live-gates/`).
+
+### A1 — Principal contract
+
+`crates/fabric-contracts/src/principal.rs`: `WsfPrincipal`, `AuthStrength`,
+`Audience`, `AuthenticatedFacts`. The principal derives `Serialize` (receipts
+need it) but **not** `Deserialize`, and a private zero-size witness blocks
+external struct literals — the wire layer cannot manufacture a principal.
+`establish()` is the sole constructor (called by the A2 authenticator).
+
+Gate: serde tests + two `compile_fail` doctests proving `serde_json::from_str::
+<WsfPrincipal>` and a `DeserializeOwned` bound both fail to compile. Commit `97ad579`.
+
+### A2 — Authenticator seam
+
+`crates/wsf-api/src/auth.rs`: `WsfAuthenticator` trait; `WorkloadAuthenticator`
+verifies a signed `WorkloadCredential` (`Authorization: Workload <b64-json>`) —
+ML-DSA signature over a length-prefixed domain-separated preimage FIRST, then
+expiry, audience, optional bound-tenant; `LocalDevAuthenticator` is the explicit
+dev principal. `require_principal` middleware (route_layer over `/v1/*`) returns
+401/403 before the handler; `/healthz` + `/openapi.json` stay open.
+
+Gate: `tests/auth_gate.rs` (8) — missing→401, malformed→401, forged-sig→401,
+tampered-after-signing→401, expired→401, wrong-audience→403, wrong-tenant→403,
+valid→principal. Commit `a71bf03`.
+
+### A3 — Derived issuance request
+
+`crates/wsf-api/src/policy.rs` + `issue()` rewrite: `IssueReq` is bounded intent
+only (`deny_unknown_fields` — smuggling tenant_id/subject_id/roles → 422).
+Tenant + subject come from the principal; roles ⊆ tenant-grantable; models ⊆
+allowlist; `authorize_budget` refuses any over-ceiling counter (omitted ⇒
+ceiling, never unlimited).
+
+Gate: `tests/issue_authz.rs` (live) — issued token bound to the principal's
+tenant; smuggled tenant/roles → 422; ungranted role / over-ceiling budget → 403.
+Plus lib + policy unit tests. Commit `1a87685`.
+
+### A4 — Issuance permission model
+
+`IssuanceMode {SelfService, ServiceToService, Administrative}` classified from
+principal kind + requested roles; `permitted_modes` + `max_delegation_depth`
+gate the request; **every allow and deny** is receipted to the ledger (source
+`wsf-issuance`, metadata only).
+
+Gate: `tests/issuance_perms.rs` (5, offline — denials never dial the bridge):
+each refusal returns 403 AND lands a mode-labeled deny receipt; live test
+asserts the allow receipt + ≥2 deny receipts. Commit `4dd56d1`.
+
+### A5 — Live issuance gate
+
+`tests/issue_authz.rs::two_tenants_two_workloads_against_live_openbao`:
+authenticated issuance via the real `WorkloadAuthenticator` with **two workload
+identities in two tenants**. Each token binds to its own tenant; cross-tenant is
+structurally impossible (the authority-signed credential is the only tenant
+source); role-escalation → 403 + deny receipt; no credential → 401.
+
+Gate: correct identity succeeds; cross-tenant + escalation fail and are
+receipted. PASS against live OpenBao. Commit `c509219`.
