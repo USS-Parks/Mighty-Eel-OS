@@ -11,6 +11,7 @@ description = "The WSF trust-token primitive: issue, verify, attenuate, and mete
 fabric-contracts = { path = "../fabric-contracts" }
 fabric-crypto = { path = "../fabric-crypto" }
 fabric-proof = { path = "../fabric-proof" }
+fabric-revocation = { path = "../fabric-revocation" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }

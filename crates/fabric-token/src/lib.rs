@@ -198,6 +198,7 @@ pub struct VerificationContext<'a> {
     require_fresh_revocation: bool,
     current_bundle: Option<&'a str>,
     permit_legacy_verify: bool,
+    revocation: Option<&'a fabric_revocation::RevocationSnapshot>,
 }
 
 impl<'a> VerificationContext<'a> {
@@ -221,6 +222,7 @@ impl<'a> VerificationContext<'a> {
             require_fresh_revocation: false,
             current_bundle: None,
             permit_legacy_verify: false,
+            revocation: None,
         }
     }
 
@@ -274,6 +276,18 @@ impl<'a> VerificationContext<'a> {
             .is_some_and(|cur| token.trust_bundle_version != cur)
     }
 
+    /// Require the token to pass a **verified, current** signed revocation
+    /// snapshot (plan R3): every consumer that authenticates a token also honors
+    /// revocation on every dimension. The caller verifies the snapshot signature
+    /// and hands it in; `verify_in_context` then fails closed if the snapshot is
+    /// expired or revokes the token. Implies [`require_fresh_revocation`].
+    #[must_use]
+    pub fn with_revocation(mut self, snapshot: &'a fabric_revocation::RevocationSnapshot) -> Self {
+        self.revocation = Some(snapshot);
+        self.require_fresh_revocation = true;
+        self
+    }
+
     /// The operation this context guards.
     #[must_use]
     pub fn operation(&self) -> Operation {
@@ -294,10 +308,23 @@ pub fn verify_in_context(
     // Revocation first — a revoked token is never worth verifying further.
     match token.revocation_status {
         RevocationStatus::Revoked => return Err(TokenError::Revoked),
-        RevocationStatus::Unknown if ctx.require_fresh_revocation => {
+        RevocationStatus::Unknown if ctx.require_fresh_revocation && ctx.revocation.is_none() => {
             return Err(TokenError::RevocationUnknown);
         }
         _ => {}
+    }
+    // R3: a verified signed snapshot is the fresh revocation state. Fail closed
+    // if it is expired, and deny on any revoked dimension (R2 predicate).
+    if let Some(snapshot) = ctx.revocation {
+        let snap_exp = DateTime::parse_from_rfc3339(&snapshot.expires_at)
+            .map_err(|_| TokenError::BadTimestamp(snapshot.expires_at.clone()))?
+            .with_timezone(&Utc);
+        if ctx.now >= snap_exp {
+            return Err(TokenError::RevocationUnknown);
+        }
+        if snapshot.revokes(token).is_some() {
+            return Err(TokenError::Revoked);
+        }
     }
     // Signature under the trusted issuer key.
     let hash = signing_hash(token)?;

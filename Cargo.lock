@@ -1248,6 +1248,7 @@ dependencies = [
  "fabric-contracts",
  "fabric-crypto",
  "fabric-proof",
+ "fabric-revocation",
  "hex",
  "serde",
  "serde_json",

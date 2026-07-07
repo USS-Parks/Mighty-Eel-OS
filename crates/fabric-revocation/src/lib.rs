@@ -6,7 +6,7 @@
 //! [`emergency`] snapshots are short-TTL, out-of-band revocations applied on the
 //! next poll regardless of the normal cadence.
 
-use fabric_contracts::Signature;
+use fabric_contracts::{Signature, TrustToken};
 use fabric_crypto::{Signer, Verifier};
 use fabric_proof::canonical_hash;
 use serde::{Deserialize, Serialize};
@@ -32,6 +32,15 @@ pub struct RevocationSnapshot {
     /// Revoked bundle versions.
     #[serde(default)]
     pub revoked_bundle_versions: Vec<String>,
+    /// Revoked tenants — every token bound to one is revoked (plan R2).
+    #[serde(default)]
+    pub revoked_tenants: Vec<String>,
+    /// Revoked issuers (plan R2).
+    #[serde(default)]
+    pub revoked_issuers: Vec<String>,
+    /// Revoked service identities (plan R2).
+    #[serde(default)]
+    pub revoked_service_identities: Vec<String>,
     /// Whether this is an out-of-band emergency snapshot.
     #[serde(default)]
     pub emergency: bool,
@@ -55,6 +64,9 @@ impl RevocationSnapshot {
             revoked_subjects: Vec::new(),
             revoked_signing_keys: Vec::new(),
             revoked_bundle_versions: Vec::new(),
+            revoked_tenants: Vec::new(),
+            revoked_issuers: Vec::new(),
+            revoked_service_identities: Vec::new(),
             emergency: false,
             signature: Signature {
                 alg: String::new(),
@@ -93,6 +105,58 @@ impl RevocationSnapshot {
     #[must_use]
     pub fn is_bundle_revoked(&self, version: &str) -> bool {
         self.revoked_bundle_versions.iter().any(|v| v == version)
+    }
+
+    /// Is `tenant_id` revoked by this snapshot?
+    #[must_use]
+    pub fn is_tenant_revoked(&self, tenant_id: &str) -> bool {
+        self.revoked_tenants.iter().any(|t| t == tenant_id)
+    }
+
+    /// Is `issuer` revoked by this snapshot?
+    #[must_use]
+    pub fn is_issuer_revoked(&self, issuer: &str) -> bool {
+        self.revoked_issuers.iter().any(|i| i == issuer)
+    }
+
+    /// Is `service_identity` revoked by this snapshot?
+    #[must_use]
+    pub fn is_service_identity_revoked(&self, service_identity: &str) -> bool {
+        self.revoked_service_identities
+            .iter()
+            .any(|s| s == service_identity)
+    }
+
+    /// The complete revocation predicate (plan R2): does this snapshot revoke
+    /// `token` on **any** dimension — token id, subject hash, signing key,
+    /// issuer, bundle version, tenant, or service identity? Returns the dimension
+    /// that matched (for receipts), or `None`.
+    #[must_use]
+    pub fn revokes(&self, token: &TrustToken) -> Option<&'static str> {
+        if self.is_token_revoked(&token.token_id) {
+            return Some("token_id");
+        }
+        if self.is_subject_revoked(&token.subject_hash) {
+            return Some("subject_hash");
+        }
+        if self.is_key_revoked(&token.signature.key_id) {
+            return Some("signing_key");
+        }
+        if self.is_issuer_revoked(&token.issuer) {
+            return Some("issuer");
+        }
+        if self.is_bundle_revoked(&token.trust_bundle_version) {
+            return Some("bundle_version");
+        }
+        if self.is_tenant_revoked(&token.tenant_id) {
+            return Some("tenant");
+        }
+        if let Some(svc) = &token.service_identity
+            && self.is_service_identity_revoked(svc)
+        {
+            return Some("service_identity");
+        }
+        None
     }
 }
 
