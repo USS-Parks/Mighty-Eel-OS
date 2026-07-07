@@ -50,4 +50,4 @@ After any second-pass tester feedback is received and processed, RC2 (Hardened R
 
 ---
 
-*Copyright 2026 — Co-Authored by Basho Parks and Claude (DeepSeek v4 Pro)*
+*Authored and reviewed by Basho Parks, copyright 2026*

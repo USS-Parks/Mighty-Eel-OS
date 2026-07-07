@@ -2,7 +2,7 @@
 
 **Lane:** DOUGHERTY (J-01..J-26)
 **Date:** 2026-05-25 (Memorial Day)
-**Author:** Basho Parks + Claude (co-author)
+**Author:** Basho Parks
 **Status:** LANE CLOSED
 
 ---
@@ -121,4 +121,4 @@ The DOUGHERTY remediation lane is closed as of 2026-05-25. RC-10 re-bundle and R
 
 ---
 
-*Copyright 2026 — Co-Authored by Basho Parks and Claude (DeepSeek v4 Pro)*
+*Authored and reviewed by Basho Parks, copyright 2026*

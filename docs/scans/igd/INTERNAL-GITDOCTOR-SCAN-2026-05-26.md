@@ -192,4 +192,4 @@ The Memorial Day scanner's "HIGH" findings (SEC-003 SQL injection, SEC-004 hardc
 
 ---
 
-*Internal GitDoctor Scan — 2026-05-26 — Co-Authored by Basho Parks and Claude Opus 4.7 xHigh \<basho@islandmountain.io\> \<claude@anthropic.com\>*
+*Internal GitDoctor Scan — 2026-05-26 — Authored and reviewed by Basho Parks, copyright 2026*

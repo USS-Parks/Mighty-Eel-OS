@@ -476,4 +476,4 @@ Copyright 2026 - Co-Authored by Basho Parks and Claude Opus 4.7 xHigh <basho@isl
 
 ---
 
-*IGD Remediation Roster — 2026-05-26 — Co-Authored by Basho Parks and Claude Opus 4.7 xHigh \<basho@islandmountain.io\> \<claude@anthropic.com\>*
+*IGD Remediation Roster — 2026-05-26 — Authored and reviewed by Basho Parks, copyright 2026*

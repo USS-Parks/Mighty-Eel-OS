@@ -71,4 +71,4 @@ The DOUGHERTY remediation lane (J-01..J-26) is **closed** as of 2026-05-25. All 
 
 ---
 
-*Copyright 2026 — Co-Authored by Basho Parks and Claude (DeepSeek v4 Pro)*
+*Authored and reviewed by Basho Parks, copyright 2026*
