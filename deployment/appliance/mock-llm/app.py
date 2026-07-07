@@ -16,7 +16,7 @@ CANNED = (
 
 
 class Handler(BaseHTTPRequestHandler):
-    def _send(self, code, obj):
+    def _send(self, code: int, obj: object) -> None:
         body = json.dumps(obj).encode()
         self.send_response(code)
         self.send_header("Content-Type", "application/json")
@@ -62,9 +62,12 @@ class Handler(BaseHTTPRequestHandler):
         else:
             self._send(404, {"error": "not found"})
 
-    def log_message(self, *_args):
+    def log_message(self, *_args: object) -> None:
         pass
 
 
 if __name__ == "__main__":
-    HTTPServer(("0.0.0.0", 8000), Handler).serve_forever()
+    # Binds to all interfaces by design: this mock runs inside the appliance
+    # demo container and must be reachable from the gateway container. Not for
+    # production (the module docstring says as much).
+    HTTPServer(("0.0.0.0", 8000), Handler).serve_forever()  # noqa: S104

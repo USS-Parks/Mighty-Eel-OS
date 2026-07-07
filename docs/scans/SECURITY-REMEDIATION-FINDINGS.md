@@ -21,8 +21,8 @@ documentation or mock-only tests where a live boundary exists (plan §0.4).
 | AF-005 | High | Production readiness certifies uninitialized / plaintext-capable vaults | vault builder, ZFS initialization, readiness | FIXED (V1 backend policy, V2/V3 initialized construction blocks bind, V4 sealed-at-rest storage, V5/V6 ZFS ops, V7 cryptographic erasure, V8 measured probe; V9 restart/migration live gate open) |
 | AF-006 | Medium | WSF privileged consumers ignore signed revocation snapshots | token verification context, snapshot store | PROVEN (R1 anti-rollback store + seal/broker fail-closed consumers + R6 live gate) |
 | AF-007 | Medium | Receipt ledger is unauthenticated and not tenant-filtered | ledger query authz, tenant index | PROVEN (L1/L2 + E6 binding + auditor-only signed export, L4 live gate; L3 durable backend = ops plumbing) |
-| AQ-001 | Quality | Clippy gate fails: `clippy::doc_lazy_continuation` at `mai-core/src/cache.rs:109` | Rust CI | OPEN |
-| AQ-002 | Quality | Whole-tree Ruff / mypy / pytest gates fail or do not collect reliably | Python packaging and CI | OPEN |
+| AQ-001 | Quality | Clippy gate fails: `clippy::doc_lazy_continuation` at `mai-core/src/cache.rs:109` | Rust CI | FIXED (workspace clippy clean under CI flags `-D warnings -A clippy::pedantic`; the cache.rs doc list is properly continued) |
+| AQ-002 | Quality | Whole-tree Ruff / mypy / pytest gates fail or do not collect reliably | Python packaging and CI | FIXED (SDK pytest self-contained via `pythonpath=["src"]`; whole-tree ruff clean; 1310 tests collect with 0 errors; SDK 179 pass + mypy clean) |
 | AS-001 | Supply chain | Deployment uses floating image tags and unpinned base-image digests | Docker/Compose/release provenance | OPEN |
 
 ## Closure matrix (plan Appendix A)
