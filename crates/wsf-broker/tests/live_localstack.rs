@@ -170,6 +170,7 @@ fn signed_token(signer: &RustCryptoMlDsa87) -> TrustToken {
                 caveat_type: CaveatType::ResourcePrefix,
                 value: "arn:aws:s3:::wsf-demo/*".to_string(),
             }],
+            depth: 0,
         },
         signature: Signature {
             alg: String::new(),

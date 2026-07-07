@@ -194,6 +194,7 @@ mod tests {
             attenuation: Attenuation {
                 parent_id: None,
                 caveats: vec![],
+                depth: 0,
             },
             signature: Signature {
                 alg: String::new(),

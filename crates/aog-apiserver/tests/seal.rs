@@ -89,6 +89,7 @@ async fn scoped_child_is_a_subset_of_the_parent() {
         &parent,
         Some(Classification::Internal),
         "child:Tenant/acme",
+        signer.public_key(),
         &signer,
     )
     .unwrap();

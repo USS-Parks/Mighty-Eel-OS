@@ -166,4 +166,84 @@ Evidence: `test-evidence/security-remediation/M0/adversarial-fixtures/`.
 
 Gate: every AF finding has a deterministic regression identifier (registry).
 
-Commit: (pending — this change set).
+Commit: `f678e11`.
+
+---
+
+## Phase T — Token primitive and attenuation repair (AF-001 Critical)
+
+### T1–T4 — VerificationContext + parent-authenticated, fully-monotonic attenuation
+
+Objective: close the attenuation signer-oracle and identity-widening (AF-001) at
+the `fabric-token` primitive, and introduce the `VerificationContext` (T1) that
+Phase R will consume across every privileged path.
+
+Root cause (confirmed reading `fabric-token/src/lib.rs`): `attenuate(parent,
+child, signer)` trusted the caller's `parent` without verifying its signature — a
+signer oracle: a fabricated or attacker-key parent minted a valid child — and
+constrained only routes/models/classification/budget/expiry, leaving tenant,
+subject, roles, service identity, scopes, locale, offline_mode, and revocation
+unchecked (a child could swap tenant, add roles, or descend from a revoked parent).
+
+Contract (T1/T2):
+- `fabric-contracts`: `Attenuation` gains a bounded lineage `depth`
+  (`skip_serializing_if` when 0, so every pre-existing root-token signature is
+  byte-identical and still verifies — proven by the unchanged issue/verify tests).
+- `fabric-token`: new `VerificationContext { verifier, public_key, now,
+  revocation }` + `verify_in_context` (signature + expiry + signed-snapshot
+  revocation by token/subject/signing-key/bundle; the snapshot is itself verified
+  under the anchor so a substituted/forged snapshot fails closed). Signature-only
+  `verify` stays as the low-level primitive.
+
+Attenuation (T3/T4) — `attenuate(parent, child, ctx, signer)` now:
+1. authenticates the parent — reject on-token/snapshot revocation, verify the
+   anchor signature (`ctx.public_key` may differ from the child `signer`: a kernel
+   re-anchors a WSF-issued parent), reject if expired;
+2. enforces monotonicity on EVERY axis — identity (tenant/issuer/bundle/subject/
+   service/identity_id/country/person) equal, sets (roles/scopes/routes/models)
+   subset, scalars (classification/budget/expiry) narrowing, `offline_mode` a
+   one-way restriction;
+3. bounds the lineage — parent_id bound, `depth+1 ≤ MAX_ATTENUATION_DEPTH` (16),
+   no self-cycle.
+
+Consumers migrated (one commit, tree always green — §0.3 contract-then-consumers):
+- `wsf-api` `/v1/tokens/attenuate`: builds the ctx from the bridge anchor pubkey.
+- `aog-apiserver` mutate stage (K8): `Sealer` gains the WSF anchor pubkey, wired in
+  `AppState::from_raft` from the front-door authenticator (the ~20 `Sealer::generate`
+  call sites are unchanged); `mint_child`/`scoped_child_token` authenticate the
+  parent under it before minting. Added `Authenticator::token_public_key()`.
+- Five `Attenuation { .. }` root-token literals (wsf-broker, aog-controller vkeys +
+  scheduler, aog-node edge, a broker live test) gained `depth: 0`.
+
+Regression (0.4 → repaired): the 5 fixtures flipped from asserting the vuln to
+asserting rejection and left quarantine — they run in the default product suite
+(the `security-regression` feature is removed). REG-AF-001-{unsigned,wrong-key} →
+`ParentUnverified`; -role-widening → `AttenuationWidens{roles}`; -tenant-swap →
+`AttenuationWidens{tenant_id}`; REG-AF-006-revoked-parent → `ParentRevoked`.
+
+Verify (this Linux CI container; protoc installed):
+- `cargo fmt --check` .................................. PASS
+- `cargo check --workspace --all-targets` ............. PASS (exit 0 — all targets)
+- `cargo clippy --workspace -- -D warnings -A pedantic`  PASS (exit 0)
+- `cargo test -p fabric-token` ........................ PASS (5 regression + 8 unit
+  + 4 spend)
+- `cargo test -p aog-apiserver --lib`/`--test seal` ... PASS (3 + 2; the seal test
+  drives mint_child end-to-end through admission)
+- `cargo test -p {fabric-contracts,wsf-broker(16),aog-node(32),wsf-api,
+  aog-controller --lib(50)}` .......................... PASS
+- Note: `cargo test --workspace` exhausts this container's disk while compiling all
+  ~40 crates' test binaries (rustc-LLVM ENOSPC, not a test failure); the tests that
+  ran before it filled had zero failures. The full suite is CI-gated (more disk).
+
+Findings: AF-001 CONTAINED → **FIXED** (root controls + focused/property proof; the
+live T7 OpenBao black-box gate is deferred → PROVEN, needs the live lane). AF-006:
+its attenuate-path leg is FIXED here; full consumer integration (snapshot consumed
+on issue/verify/seal/unseal/broker/ledger paths) is Phase R.
+
+Deferred (honest): T5 atomic budget lineage (sibling double-spend) is owned with
+`fabric-token::spend`; T6 v1-token migration semantics and T7 live attenuation gate
+ride the OpenBao lane. `VerificationContext` is in place for R to consume.
+
+Evidence: `test-evidence/security-remediation/M1/phase-T/`.
+
+Commit: (this change set).

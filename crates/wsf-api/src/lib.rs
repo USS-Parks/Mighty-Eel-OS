@@ -280,7 +280,15 @@ async fn attenuate(
     State(s): State<AppState>,
     Json(req): Json<AttenuateReq>,
 ) -> Result<Json<TokenResp>, ApiError> {
-    let token = fabric_token::attenuate(&req.parent, req.child, s.bridge.signer())
+    // The parent must authenticate under the trust anchor before it can mint a
+    // child (AF-001): a fabricated / wrong-key / expired / revoked parent, or a
+    // child that widens any authority axis, is refused here — never signed.
+    let ctx = fabric_token::VerificationContext::new(
+        &MlDsa87Verifier,
+        s.token_public_key.as_slice(),
+        Utc::now(),
+    );
+    let token = fabric_token::attenuate(&req.parent, req.child, &ctx, s.bridge.signer())
         .map_err(|e| ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, e.to_string()))?;
     Ok(Json(TokenResp { token }))
 }
