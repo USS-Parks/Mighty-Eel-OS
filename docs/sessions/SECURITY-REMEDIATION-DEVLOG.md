@@ -549,3 +549,29 @@ remediation).
 Remaining for AF-005: full **V8** evidence sweep (restart / capacity
 outcomes) and the **V9** restart/migration live gate on the ZFS+TPM host
 (both need the real dataset host; the code paths are in place and unit-proven).
+
+## Phase Q/M3 — quality + supply-chain gates (AQ-001, AQ-002, AS-001)
+
+- **AQ-001** (clippy): the workspace is clean under the CI flags
+  (`-D warnings -A clippy::pedantic`, 0 errors); the `doc_lazy_continuation`
+  the finding cited at `mai-core/src/cache.rs:109` no longer exists (the
+  cacheability doc list is properly continued). No code change needed.
+- **AQ-002** (Python gates collect reliably): the SDK uses a `src/` layout,
+  so tests importing `mai` only resolved with an editable install — the
+  "does not collect" root cause. Added a local `[tool.pytest.ini_options]`
+  to `mai-sdk-python` (`pythonpath = ["src"]`, `testpaths`, `asyncio_mode`)
+  so the gate is self-contained and rootdir is the SDK dir. Whole-tree ruff
+  had 3 findings, all in the appliance mock-llm demo server (two missing
+  annotations + an intentional bind-all-interfaces now `# noqa`'d with
+  rationale) — fixed. Verified: SDK 179 pytest pass + mypy clean; whole-tree
+  ruff clean; whole tree collects 1310 tests with 0 errors once requirements
+  are installed.
+- **AS-001** (image pinning): every **third-party** base/service image is now
+  digest-pinned across the three deployment Dockerfiles
+  (`rust`, `debian`, `node`, `nginx`) and the four compose stacks
+  (`openbao`, `postgres`, `minio`, `python`); digests resolved 2026-07-07 via
+  `docker buildx imagetools inspect` (registry manifest reachable through the
+  agent proxy; layer pulls are not, so `RepoDigests` was unavailable). The
+  release `Dockerfile` was already digest-pinned. First-party
+  `islandmountain/*` / `wsf-api` references stay tagged — they are local
+  `build:` outputs, not registry pulls, so a digest can't precede the build.
