@@ -1,4 +1,5 @@
-//! V5/V6 live gate — real ZFS dataset property proof + snapshot lifecycle.
+//! V5/V6/V9 live gate — real ZFS dataset property proof + snapshot lifecycle +
+//! encrypted-weights restart recovery.
 //!
 //! Env-gated (no `#[ignore]`, repo live-test pattern): runs only when
 //! `MAI_ZFS_TEST_DATASET` names a **disposable** ZFS dataset this test may
@@ -90,6 +91,8 @@ async fn zfs_property_proof_and_snapshot_lifecycle() {
     let audit = Arc::new(AuditWriter::with_pqc(cfg.audit.clone(), pqc.clone()));
     audit.initialize().await.expect("audit init");
 
+    // Keep a config clone for the V9 restart leg (the vault takes `cfg` by value).
+    let cfg_reborn = cfg.clone();
     let vault = ZfsVault::with_engines(cfg, pqc, audit.clone()).with_zfs(ZfsOps::system());
 
     // --- V5: initialize() runs the live dataset property proof. ------------
@@ -165,9 +168,56 @@ async fn zfs_property_proof_and_snapshot_lifecycle() {
     }
     audit.verify_chain().await.expect("audit chain verifies");
 
+    // --- V9: encrypted weights survive a process restart on real ZFS. Store a
+    //     fresh model, drop the whole vault (in-memory KEM keys gone), then
+    //     bring up a NEW vault over the SAME dataset mount + key store: it must
+    //     recover the persisted, KEK-wrapped model key and decrypt. -----------
+    const RESTART_ID: &str = "v9-restart-model";
+    const RESTART_BYTES: &[u8] = b"weights that must survive a real-ZFS restart";
+    let restart_dir = std::path::PathBuf::from(&props.mountpoint).join(RESTART_ID);
+    if restart_dir.exists() {
+        std::fs::remove_dir_all(&restart_dir).expect("clean restart fixture");
+    }
+    vault
+        .store_model_package(RESTART_ID, RESTART_BYTES)
+        .await
+        .expect("store restart fixture (sealed at rest)");
+    // At rest the weights are the KEM+AEAD envelope, not plaintext.
+    let sealed = std::fs::read(restart_dir.join("weights.bin")).expect("read sealed weights");
+    assert_ne!(
+        sealed, RESTART_BYTES,
+        "weights must be encrypted on the dataset"
+    );
+
+    drop(vault); // simulate process exit: memory cleared; dataset + key store persist.
+
+    let reborn_pqc = Arc::new(PqcEngine::new(cfg_reborn.pqc.clone()));
+    reborn_pqc.initialize().await.expect("reborn pqc init");
+    // Fresh audit log for the reborn process (a separate file avoids contending
+    // with the first writer); the key store is deliberately the SAME.
+    let mut cfg_reborn = cfg_reborn;
+    cfg_reborn.audit.db_path = side.path().join("audit-reborn.db");
+    let reborn_audit = Arc::new(AuditWriter::with_pqc(
+        cfg_reborn.audit.clone(),
+        reborn_pqc.clone(),
+    ));
+    reborn_audit.initialize().await.expect("reborn audit init");
+    let reborn =
+        ZfsVault::with_engines(cfg_reborn, reborn_pqc, reborn_audit).with_zfs(ZfsOps::system());
+    reborn.initialize().await.expect("reborn property proof");
+    let recovered = reborn
+        .load_model_weights(RESTART_ID)
+        .await
+        .expect("reborn vault recovers the persisted model key and decrypts");
+    assert_eq!(
+        recovered, RESTART_BYTES,
+        "weights sealed before the restart decrypt after it"
+    );
+
     println!(
-        "V5/V6 live gate PASSED on dataset {dataset} (encryption={}, compression={}): \
-         property proof + create/list/rollback/destroy + signed receipts",
+        "V5/V6/V9 live gate PASSED on dataset {dataset} (encryption={}, compression={}): \
+         property proof + create/list/rollback/destroy + signed receipts + \
+         encrypted-weights restart recovery",
         props.encryption, props.compression
     );
 }
