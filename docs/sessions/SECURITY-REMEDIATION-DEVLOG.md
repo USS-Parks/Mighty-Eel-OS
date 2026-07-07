@@ -303,3 +303,24 @@ into `/v1/tokens/attenuate` via the bridge's `bundle_version()`. Gates:
 `attenuate_live.rs`. Commit `1543b93`.
 
 **Phase T complete (T1–T7).** AF-001 PROVEN.
+
+## Phase E — tenant-bound envelope security (core)
+
+Closes **AF-003** (envelope unseal lacked tenant/subject binding — any
+sufficiently-cleared token could unseal any tenant's envelope).
+
+- **E1** contract: `EnvelopeBinding {tenant_id, owner_subject_hash, audience,
+  envelope_version}` on the `Envelope`, readable pre-decrypt and folded into
+  both the AEAD AAD and the provenance thread — swapping any binding field
+  breaks decryption and the signature (tested).
+- **E3** seal authorization: `wsf-seal` derives the binding from the verified
+  token (tenant + subject), never caller-chosen; envelopes are stamped v2.
+- **E4** unseal authorization: before any Transit decrypt, unseal denies a
+  legacy unbound envelope, a cross-tenant token, or a wrong-audience envelope —
+  each receipted.
+- **E7** live gate: `wsf-seal/tests/live_seal.rs` adds a cross-tenant case — a
+  fully-cleared token from another tenant is refused 403 before unwrap. PASS
+  against live OpenBao Transit. Commit `8fcb6ae`.
+
+Remaining in-phase hardening: **E2** per-tenant Transit key namespace, **E5**
+offline v1-envelope migration command, **E6** storage/receipt tenant-key binding.

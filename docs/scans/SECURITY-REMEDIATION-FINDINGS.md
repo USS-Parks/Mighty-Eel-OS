@@ -16,7 +16,7 @@ documentation or mock-only tests where a live boundary exists (plan §0.4).
 |----|-----|---------|------------------|--------|
 | AF-001 | Critical | Attenuation signs attacker-constructed children without authenticating or fully constraining the parent | `fabric-token::attenuate`, WSF attenuation route | PROVEN (T1–T4, T7) |
 | AF-002 | High | Public WSF route issues signed tokens for caller-selected subjects and roles | WSF router, principal derivation, bridge issuance | PROVEN (A1–A5) |
-| AF-003 | High | Envelope unseal lacks tenant/subject binding | envelope contract, AAD/thread, seal service | CONTAINED (0.2) |
+| AF-003 | High | Envelope unseal lacks tenant/subject binding | envelope contract, AAD/thread, seal service | PROVEN (E1/E3/E4/E7); E2/E5/E6 hardening open |
 | AF-004 | High | Credential broker accepts caller-selected AWS role | broker policy, role/action/resource binding | CONTAINED (0.2) |
 | AF-005 | High | Production readiness certifies uninitialized / plaintext-capable vaults | vault builder, ZFS initialization, readiness | OPEN |
 | AF-006 | Medium | WSF privileged consumers ignore signed revocation snapshots | token verification context, snapshot store | CONTAINED (0.2) |
