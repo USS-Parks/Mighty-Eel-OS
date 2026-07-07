@@ -276,4 +276,30 @@ Gates:
   issue→attenuate→verify succeeds and the child inherits the parent's tenant;
   a tampered parent and an attacker-signed parent are refused 403; a widening
   restriction is refused 422. AF-001 closed black-box, not only in unit tests.
-  Commit `<this change set>`.
+  Commit `bfdfa6a`.
+
+### T5 — Atomic budget lineage
+
+`fabric_token::lineage_key(token)` — the immediate parent for an attenuated
+token, its own id for a root — keys the gateway's budget fold + `record_spend`,
+so all siblings of a parent draw from one shared atomic counter (the
+`LocalSpendLedger`/`LeasedSpendLedger` from X1). Sibling children can no longer
+each spend the parent's full remaining. Root tokens are unchanged, so the live
+`kill_switch` gate stays green. Gate: `tests/budget_lineage.rs` — two siblings
+share one counter; 8 concurrent siblings land every unit on one counter with the
+ceiling holding. Honest bound: one level of siblings shares with their parent;
+full deep-subtree accounting against the lineage root needs the Phase-L chain.
+Commit `f68f95b`.
+
+### T6 — Compatibility and migration
+
+`VerificationContext::require_current_bundle(current)` classifies any other
+bundle as legacy (v1); `permit_legacy_verify()` opens a bounded verify-only
+window. Production denies legacy by default (`UnsupportedTokenVersion`); a legacy
+token is never an attenuation parent (`LegacyAttenuationDenied`), even under the
+migration flag; with no policy set, behavior is unchanged (back-compat). Wired
+into `/v1/tokens/attenuate` via the bridge's `bundle_version()`. Gates:
+`tests/token_versioning.rs` (4) + a live legacy-parent-refused case in
+`attenuate_live.rs`. Commit `1543b93`.
+
+**Phase T complete (T1–T7).** AF-001 PROVEN.
