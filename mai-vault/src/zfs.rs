@@ -26,13 +26,14 @@ use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
 
 use mai_core::vault::{
-    AuditStore, IntegrityResult, ModelStorage, PqcProvider, SnapshotInfo, StorageInfo, VaultError,
-    VaultInterface,
+    AuditStore, IntegrityResult, ModelStorage, PqcProvider, SnapshotInfo, StorageInfo,
+    VaultAuditAction, VaultAuditStatus, VaultError, VaultInterface,
 };
 
-use crate::audit::AuditWriter;
+use crate::audit::{AuditWriter, build_audit_entry};
 use crate::config::VaultConfig;
 use crate::pqc::PqcEngine;
+use crate::zfs_ops::{DatasetExpectations, ZfsOps};
 
 /// ZFS-backed vault providing encrypted model storage.
 ///
@@ -49,6 +50,9 @@ pub struct ZfsVault {
     pqc: Option<Arc<PqcEngine>>,
     /// Audit writer for `append_audit_entry` delegation (optional).
     audit: Option<Arc<AuditWriter>>,
+    /// Real bounded ZFS operations (V5/V6). `None` = dev/test mode: snapshot
+    /// calls track metadata only and no dataset property proof runs.
+    zfs: Option<ZfsOps>,
 }
 
 /// Internal model tracking entry.
@@ -75,7 +79,17 @@ impl ZfsVault {
             snapshots: RwLock::new(Vec::new()),
             pqc: None,
             audit: None,
+            zfs: None,
         }
+    }
+
+    /// Enable real bounded ZFS operations (V5/V6): `initialize()` then runs
+    /// the dataset property proof and snapshot calls execute actual `zfs`
+    /// commands with receipts. Without this the vault stays in dev/test mode.
+    #[must_use]
+    pub fn with_zfs(mut self, ops: ZfsOps) -> Self {
+        self.zfs = Some(ops);
+        self
     }
 
     /// Create a vault wired to a PQC engine and audit writer.
@@ -90,6 +104,7 @@ impl ZfsVault {
             snapshots: RwLock::new(Vec::new()),
             pqc: Some(pqc),
             audit: Some(audit),
+            zfs: None,
         }
     }
 
@@ -104,6 +119,26 @@ impl ZfsVault {
             mount = %self.config.storage.mount_point.display(),
             "Initializing ZFS vault"
         );
+
+        // V5: with real ZFS wired, prove the dataset before touching anything.
+        // An ordinary directory masquerading as ZFS fails here, hard.
+        if let Some(ops) = &self.zfs {
+            let expect = DatasetExpectations {
+                mountpoint: Some(self.config.storage.mount_point.display().to_string()),
+                require_compression: self.config.storage.compression_enabled,
+                ..DatasetExpectations::default()
+            };
+            let props = ops
+                .verify_dataset(&self.config.storage.dataset, &expect)
+                .await?;
+            info!(
+                encryption = %props.encryption,
+                compression = %props.compression,
+                used = props.used,
+                available = props.available,
+                "ZFS dataset property proof passed"
+            );
+        }
 
         // Verify mount point exists
         let mount = &self.config.storage.mount_point;
@@ -200,10 +235,52 @@ impl ZfsVault {
     async fn scan_snapshots(&self) -> Result<(), VaultError> {
         let mut snaps = self.snapshots.write().await;
         snaps.clear();
-        // TODO(basho): run `zfs list -t snapshot -o name,creation,referenced`
-        // and parse the output; currently returns an empty list.
-        debug!("Snapshot scan complete (no ZFS access in stub mode)");
+        if let Some(ops) = &self.zfs {
+            *snaps = ops.list_snapshots(&self.config.storage.dataset).await?;
+            debug!(count = snaps.len(), "Snapshot scan complete (live ZFS)");
+        } else {
+            debug!("Snapshot scan complete (dev mode, no ZFS)");
+        }
         Ok(())
+    }
+
+    /// Write a snapshot-operation receipt to the audit chain. With an audit
+    /// writer wired the receipt is part of the operation — a failed append
+    /// fails the operation (fail-closed). In dev mode it is a debug log.
+    async fn snapshot_receipt(
+        &self,
+        action: VaultAuditAction,
+        status: VaultAuditStatus,
+        target: &str,
+        detail: Option<String>,
+    ) -> Result<(), VaultError> {
+        let Some(audit) = &self.audit else {
+            debug!(
+                ?action,
+                ?status,
+                target,
+                "snapshot receipt (dev mode, unaudited)"
+            );
+            return Ok(());
+        };
+        #[allow(clippy::cast_sign_loss)] // post-epoch timestamps only
+        let now = chrono::Utc::now().timestamp() as u64;
+        let entry = build_audit_entry(
+            uuid::Uuid::new_v4().to_string(),
+            now,
+            "vault-system".to_string(),
+            action,
+            // The acted-on object: `<dataset>@<snapshot>`.
+            Some(target.to_string()),
+            None,
+            None,
+            0,
+            None,
+            status,
+            detail,
+            audit.last_hash().await?,
+        );
+        audit.append(&entry).await
     }
 
     /// Compute SHA-256 hash of a file.
@@ -398,8 +475,22 @@ impl ModelStorage for ZfsVault {
     }
 
     async fn storage_info(&self) -> Result<StorageInfo, VaultError> {
-        // TODO(basho): query ZFS dataset properties; currently stats the
-        // mount point filesystem.
+        if let Some(ops) = &self.zfs {
+            // Real dataset numbers (V5): used/available/compressratio come
+            // from the dataset itself, not an estimate.
+            let props = ops.dataset_properties(&self.config.storage.dataset).await?;
+            let index = self.model_index.read().await;
+            #[allow(clippy::cast_possible_truncation)]
+            let model_count = index.len() as u32;
+            return Ok(StorageInfo {
+                total_bytes: props.used.saturating_add(props.available),
+                used_bytes: props.used,
+                available_bytes: props.available,
+                model_count,
+                compression_ratio: props.compressratio,
+            });
+        }
+
         let index = self.model_index.read().await;
         let total_model_bytes: u64 = index.values().map(|e| e.size_bytes).sum();
 
@@ -457,11 +548,40 @@ impl ModelStorage for ZfsVault {
 
         info!(snapshot = %name, reason, "Creating vault snapshot");
 
-        // In production: run `zfs snapshot im-vault/models@{name}`
+        let mut referenced_bytes = 0;
+        if let Some(ops) = &self.zfs {
+            let dataset = &self.config.storage.dataset;
+            let target = format!("{dataset}@{name}");
+            if let Err(e) = ops.snapshot(dataset, &name).await {
+                let _ = self
+                    .snapshot_receipt(
+                        VaultAuditAction::SnapshotCreate,
+                        VaultAuditStatus::Error,
+                        &target,
+                        Some(e.to_string()),
+                    )
+                    .await;
+                return Err(e);
+            }
+            referenced_bytes = ops
+                .list_snapshots(dataset)
+                .await?
+                .into_iter()
+                .find(|s| s.name == name)
+                .map_or(0, |s| s.referenced_bytes);
+            self.snapshot_receipt(
+                VaultAuditAction::SnapshotCreate,
+                VaultAuditStatus::Success,
+                &target,
+                None,
+            )
+            .await?;
+        }
+
         let snap = SnapshotInfo {
             name: name.clone(),
             created_at: now,
-            referenced_bytes: 0, // populated by ZFS
+            referenced_bytes,
             reason: reason.to_string(),
         };
 
@@ -473,15 +593,49 @@ impl ModelStorage for ZfsVault {
     }
 
     async fn rollback_snapshot(&self, snapshot_name: &str) -> Result<(), VaultError> {
+        if let Some(ops) = &self.zfs {
+            // Existence check against the live dataset, not the cache.
+            let dataset = &self.config.storage.dataset;
+            if !ops
+                .list_snapshots(dataset)
+                .await?
+                .iter()
+                .any(|s| s.name == snapshot_name)
+            {
+                return Err(VaultError::SnapshotNotFound(snapshot_name.to_string()));
+            }
+            info!(snapshot = %snapshot_name, "Rolling back to snapshot (live ZFS)");
+            let target = format!("{dataset}@{snapshot_name}");
+            if let Err(e) = ops.rollback(dataset, snapshot_name).await {
+                let _ = self
+                    .snapshot_receipt(
+                        VaultAuditAction::SnapshotRollback,
+                        VaultAuditStatus::Error,
+                        &target,
+                        Some(e.to_string()),
+                    )
+                    .await;
+                return Err(e);
+            }
+            self.snapshot_receipt(
+                VaultAuditAction::SnapshotRollback,
+                VaultAuditStatus::Success,
+                &target,
+                None,
+            )
+            .await?;
+            self.scan_models().await?;
+            self.scan_snapshots().await?;
+            info!(snapshot = %snapshot_name, "Rollback complete");
+            return Ok(());
+        }
+
         let snaps = self.snapshots.read().await;
         if !snaps.iter().any(|s| s.name == snapshot_name) {
             return Err(VaultError::SnapshotNotFound(snapshot_name.to_string()));
         }
 
         info!(snapshot = %snapshot_name, "Rolling back to snapshot");
-        // In production: run `zfs rollback im-vault/models@{snapshot_name}`
-        // Then re-scan models.
-
         drop(snaps);
         self.scan_models().await?;
 
@@ -490,6 +644,41 @@ impl ModelStorage for ZfsVault {
     }
 
     async fn delete_snapshot(&self, snapshot_name: &str) -> Result<(), VaultError> {
+        if let Some(ops) = &self.zfs {
+            let dataset = &self.config.storage.dataset;
+            if !ops
+                .list_snapshots(dataset)
+                .await?
+                .iter()
+                .any(|s| s.name == snapshot_name)
+            {
+                return Err(VaultError::SnapshotNotFound(snapshot_name.to_string()));
+            }
+            info!(snapshot = %snapshot_name, "Deleting snapshot (live ZFS)");
+            let target = format!("{dataset}@{snapshot_name}");
+            if let Err(e) = ops.destroy_snapshot(dataset, snapshot_name).await {
+                let _ = self
+                    .snapshot_receipt(
+                        VaultAuditAction::SnapshotDelete,
+                        VaultAuditStatus::Error,
+                        &target,
+                        Some(e.to_string()),
+                    )
+                    .await;
+                return Err(e);
+            }
+            self.snapshot_receipt(
+                VaultAuditAction::SnapshotDelete,
+                VaultAuditStatus::Success,
+                &target,
+                None,
+            )
+            .await?;
+            let mut snaps = self.snapshots.write().await;
+            snaps.retain(|s| s.name != snapshot_name);
+            return Ok(());
+        }
+
         let mut snaps = self.snapshots.write().await;
         let pos = snaps
             .iter()
@@ -497,13 +686,29 @@ impl ModelStorage for ZfsVault {
             .ok_or_else(|| VaultError::SnapshotNotFound(snapshot_name.to_string()))?;
 
         info!(snapshot = %snapshot_name, "Deleting snapshot");
-        // In production: run `zfs destroy im-vault/models@{snapshot_name}`
         snaps.remove(pos);
 
         Ok(())
     }
 
     async fn list_snapshots(&self) -> Result<Vec<SnapshotInfo>, VaultError> {
+        if let Some(ops) = &self.zfs {
+            // Live listing is the truth; keep the reason strings the cache
+            // carries for snapshots this process created.
+            let live = ops.list_snapshots(&self.config.storage.dataset).await?;
+            let mut snaps = self.snapshots.write().await;
+            let merged: Vec<SnapshotInfo> = live
+                .into_iter()
+                .map(|mut s| {
+                    if let Some(cached) = snaps.iter().find(|c| c.name == s.name) {
+                        s.reason = cached.reason.clone();
+                    }
+                    s
+                })
+                .collect();
+            *snaps = merged.clone();
+            return Ok(merged);
+        }
         let snaps = self.snapshots.read().await;
         Ok(snaps.clone())
     }

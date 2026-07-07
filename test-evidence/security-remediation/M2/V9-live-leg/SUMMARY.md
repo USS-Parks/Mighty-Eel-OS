@@ -25,30 +25,53 @@ no kernel module tree (`/lib/modules` absent → no `zfs.ko` can ever load), `zf
 `/proc/devices`, and the egress policy blocks apt mirrors (deb.debian.org → 403), so neither
 `zfsutils-linux` nor `swtpm` can even be installed. This sandbox cannot be the ZFS+TPM host.
 
-**2. Mechanism prerequisites (V5/V6) not yet wired.** V9 presupposes the V5 dataset property
-proof and the V6 real snapshot/rollback operations. In `mai-vault/src/zfs.rs` the snapshot
-ops are still metadata-only placeholders — `create_snapshot` / `rollback_snapshot` /
-`delete_snapshot` update in-memory metadata with comments *"In production: run `zfs snapshot
-im-vault/models@{name}`"* (zfs.rs ~460, ~483, ~503) and never execute bounded `zfs` argv.
-Even on a real ZFS+TPM host, V9 cannot go green until V5/V6 land.
+**2. Mechanism prerequisites (V5/V6) — CLOSED in this change (2026-07-07).** V9 presupposes
+the V5 dataset property proof and the V6 real snapshot/rollback operations; both are now
+wired, replacing the metadata-only placeholders that were at zfs.rs ~460/483/503:
 
-## Exact prerequisites for the V9 live run
+- `mai-vault/src/zfs_ops.rs` — bounded ZFS execution: direct argv (never a shell), strict
+  dataset/snapshot identifier validation (charset, no leading `-`, no `..`, length caps),
+  hard timeout, typed parsing. V5: `dataset_properties`/`verify_dataset` require actual
+  encryption, keystatus=available, type=filesystem, mounted, pinned mountpoint, readonly=off,
+  compression — a missing dataset or missing `zfs` binary is a hard error. V6: `snapshot`/
+  `rollback` (un-forced — no `-r`, nothing deleted implicitly)/`destroy_snapshot`
+  (snapshot-only by construction: the argv target always carries `@`)/`list_snapshots`
+  (real creation times + referenced bytes).
+- `mai-vault/src/zfs.rs` — `ZfsVault::with_zfs(ops)` enables the real path: `initialize()`
+  runs the live property proof (V5) before touching anything; create/rollback/delete/list
+  execute real `zfs` and land `SnapshotCreate`/`SnapshotRollback`/`SnapshotDelete` receipts
+  on the hash-chained audit log, fail-closed (a failed receipt fails the operation);
+  `storage_info` reports actual used/available/compressratio. Without `with_zfs` the vault
+  keeps its previous dev/test behavior — no observable change for existing consumers.
+- Offline proof: `cargo test -p mai-vault` → **74/74** (up from 63), including argv-exactness,
+  injection-shape rejection, every V5 negative control (encryption off, key unavailable,
+  unmounted, wrong mountpoint, readonly, compression off, non-filesystem), and the
+  fail-closed-without-a-real-dataset control. `cargo clippy` with CI flags: clean;
+  `cargo check --workspace`: 0 errors.
+- Live leg on a ZFS host: `MAI_ZFS_TEST_DATASET=<disposable-dataset> cargo test -p mai-vault
+  --test live_zfs` (`mai-vault/tests/live_zfs.rs`, env-gated, self-cleaning; provisioning
+  recipe in its header) — property proof, masquerade negative control, store→snapshot→
+  damage→rollback→destroy with bytes verified, signed receipts + chain verification.
+
+## Exact prerequisites for the V9 live run (remaining)
 
 1. Host with the OpenZFS kernel module + `zfsutils`, a disposable pool/dataset for the
    fixture, and TPM 2.0 (`/dev/tpmrm0`, or `swtpm` for a software rig).
-2. V5 implemented: readiness queries the actual dataset (encryption, keystatus, mountpoint,
-   readonly, quota) and fails against a plain directory masquerading as ZFS.
-3. V6 implemented: bounded-argv `zfs snapshot/rollback/destroy` with validated identifiers
-   and audit receipts, integration-tested on a disposable dataset.
-4. Then the V9 sequence itself, each step with a failing negative control (V8 rule).
+2. ~~V5 implemented~~ / ~~V6 implemented~~ — **done** (this change); run their live leg on
+   the host via `live_zfs` above.
+3. V4 (encrypted model storage wiring) for the encrypted-fixture install/decrypt legs of the
+   V9 sequence, then the V9 sequence itself — install encrypted fixture → restart →
+   verify/decrypt → snapshot → migrate legacy plaintext fixture → failure recovery — each
+   step with a failing negative control (V8 rule).
 
 ## Verdict
 
-**V9 stays open — correctly.** The plan's own rules forbid a pass here: V8 requires every
-reported pass to have a failing negative control on the real backend, and M2's outcome is
-*"honestly gated"*. The offline leg is green and recorded; the live leg awaits the designated
-ZFS+TPM host **and** completion of the V5/V6 mechanisms. Marking V9 green from this
-environment would recreate the exact false-readiness finding (AF-005) the gate exists to
+**V9 stays open — correctly — but its mechanism gap is now closed.** The plan's own rules
+forbid a pass here: V8 requires every reported pass to have a failing negative control on the
+real backend, and M2's outcome is *"honestly gated"*. The offline leg is green and recorded
+(74/74 after V5/V6 landed); the live leg awaits the designated ZFS+TPM host, where `live_zfs`
+closes V5/V6 live and the remaining V9 sequence (with V4) closes AF-005. Marking V9 green
+from this environment would recreate the exact false-readiness finding the gate exists to
 close.
 
 ## Files

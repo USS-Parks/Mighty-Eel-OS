@@ -27,7 +27,9 @@ pub mod profiles;
 pub mod tpm;
 pub mod vectors;
 pub mod zfs;
+pub mod zfs_ops;
 
 pub use config::VaultConfig;
 pub use file_dev::FileDevVault;
 pub use zfs::ZfsVault;
+pub use zfs_ops::{DatasetExpectations, ZfsOps};
