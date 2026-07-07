@@ -89,6 +89,10 @@ impl AppState {
     /// rather than a separately bootstrapped one.
     #[must_use]
     pub fn from_raft(raft: Arc<RaftNode>, authenticator: Authenticator, sealer: Sealer) -> Self {
+        // Anchor the mutate stage's child-token attenuation (K8) on the same WSF
+        // trust key the front door (K6) authenticates requests under, so a child is
+        // only ever minted from a verified parent (AF-001).
+        let sealer = sealer.with_anchor(authenticator.token_public_key().to_vec());
         Self {
             admission: Arc::new(Admission::new(Arc::clone(&raft), sealer)),
             reader: StoreReader::new(raft),

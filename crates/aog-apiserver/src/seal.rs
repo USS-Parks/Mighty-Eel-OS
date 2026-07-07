@@ -22,7 +22,7 @@ use std::collections::BTreeMap;
 use aog_estate::ResourceObject;
 use fabric_contracts::{Attenuation, Budget, Classification, Seal, TrustToken};
 use fabric_crypto::Signer;
-use fabric_crypto::providers::RustCryptoMlDsa87;
+use fabric_crypto::providers::{MlDsa87Verifier, RustCryptoMlDsa87};
 use fabric_token::TokenError;
 
 use crate::error::ApiError;
@@ -43,13 +43,22 @@ const KERNEL_DATA_KEY: [u8; 32] = [0x5a; 32];
 pub struct Sealer {
     data_key: [u8; 32],
     signer: RustCryptoMlDsa87,
+    /// The WSF trust anchor a parent token must verify under before a child is
+    /// minted from it (K8 attenuation). Injected by `AppState::from_raft` from the
+    /// front-door authenticator; empty until then, and an empty anchor fails
+    /// closed in `mint_child` (doctrine I-4).
+    parent_anchor: Vec<u8>,
 }
 
 impl Sealer {
     /// Build a sealer from an explicit data key + signer.
     #[must_use]
     pub fn new(data_key: [u8; 32], signer: RustCryptoMlDsa87) -> Self {
-        Self { data_key, signer }
+        Self {
+            data_key,
+            signer,
+            parent_anchor: Vec::new(),
+        }
     }
 
     /// The kernel default: the fixed placeholder data key + a fresh signer.
@@ -62,7 +71,18 @@ impl Sealer {
         Ok(Self {
             data_key: KERNEL_DATA_KEY,
             signer,
+            parent_anchor: Vec::new(),
         })
+    }
+
+    /// Anchor parent-token verification on `parent_anchor` — the WSF trust key the
+    /// front door (K6) authenticated the request under. The mutate stage mints a
+    /// child ONLY from a parent that verifies here; `AppState::from_raft` injects
+    /// it so every server-wired sealer is anchored.
+    #[must_use]
+    pub fn with_anchor(mut self, parent_anchor: Vec<u8>) -> Self {
+        self.parent_anchor = parent_anchor;
+        self
     }
 
     /// The public key that verifies the child tokens this sealer mints.
@@ -115,8 +135,14 @@ impl Sealer {
         ceiling: Option<Classification>,
         action: &str,
     ) -> Result<TrustToken, ApiError> {
-        scoped_child_token(parent, ceiling, &format!("child:{action}"), &self.signer)
-            .map_err(|e| ApiError::Store(e.to_string()))
+        scoped_child_token(
+            parent,
+            ceiling,
+            &format!("child:{action}"),
+            &self.signer,
+            &self.parent_anchor,
+        )
+        .map_err(|e| ApiError::Store(e.to_string()))
     }
 }
 
@@ -126,16 +152,19 @@ fn stash(annotations: &mut BTreeMap<String, String>, field: &str, seal: &Seal) {
     }
 }
 
-/// Build a child token narrowing `parent` to `ceiling` (and no more), then
-/// attenuate + sign it under `signer`. Pure; the seam the K8 tests inspect.
+/// Build a child token narrowing `parent` to `ceiling` (and no more), then verify
+/// the parent under `parent_anchor` and attenuate + sign the child under `signer`.
+/// Pure; the seam the K8 tests inspect.
 ///
 /// # Errors
-/// [`TokenError`] if the (built-to-be-subset) child fails attenuation.
+/// [`TokenError`] if the parent does not verify under `parent_anchor`, or if the
+/// (built-to-be-subset) child fails attenuation.
 pub fn scoped_child_token(
     parent: &TrustToken,
     ceiling: Option<Classification>,
     child_id: &str,
     signer: &dyn Signer,
+    parent_anchor: &[u8],
 ) -> Result<TrustToken, TokenError> {
     let mut child = parent.clone();
     child_id.clone_into(&mut child.token_id);
@@ -153,5 +182,5 @@ pub fn scoped_child_token(
             tool_calls_spent: 0,
         });
     }
-    fabric_token::attenuate(parent, child, signer)
+    fabric_token::attenuate(parent, child, signer, &MlDsa87Verifier, parent_anchor)
 }

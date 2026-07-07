@@ -166,4 +166,45 @@ Evidence: `test-evidence/security-remediation/M0/adversarial-fixtures/`.
 
 Gate: every AF finding has a deterministic regression identifier (registry).
 
+Commit: `f678e11`.
+
+### AF-001 / AF-006 root fix — attenuate authenticates the parent + full monotonicity
+
+Objective: close the AF-001 signer oracle and the AF-006 revoked-parent lineage
+leg at the trust-token primitive, and flip the quarantined regression fixtures to
+assert the repaired behavior (plan T3/T4).
+
+Root cause (0.4 reading, confirmed): `fabric_token::attenuate` signed a
+caller-supplied child from an *unverified* parent and checked monotonicity on only
+routes/models/classification/budget/expiry — so a fabricated / unsigned / wrong-key
+parent yielded a signed child, a valid parent could be widened on tenant / roles,
+and a revoked parent still attenuated.
+
+Change:
+- `fabric-token::attenuate` now takes `verifier` + `parent_public_key` and
+  authenticates the parent first (`verify` → signature + on-token revocation),
+  then enforces monotonicity on every axis: tenant_id / subject_hash /
+  service_identity (equality), roles + compliance_scopes (subset), plus the
+  existing routes / models / classification / budget / expiry.
+- wsf-api `POST /v1/tokens/attenuate` (the public oracle) now verifies the parent
+  under the trust anchor (`token_public_key`) before minting.
+- aog-apiserver mutate stage (K8): the `Sealer` carries the WSF anchor, injected
+  by `AppState::from_raft` from the front-door authenticator, so a child is only
+  ever minted from a verified parent. `Authenticator::token_public_key()` exposes
+  the anchor; the ~20 controller test constructors are unchanged (they funnel
+  through `from_raft`).
+- `security_regression.rs`: the 5 AF-001/AF-006 fixtures flipped to assert
+  rejection and were de-quarantined (the `security-regression` feature is retired);
+  3 new fixtures added (service-identity swap, scope widening, subject swap).
+
+Verify: `cargo fmt --check` PASS; `cargo check --workspace --tests` PASS; `cargo
+clippy --workspace -- -D warnings -A clippy::pedantic` PASS; `cargo test -p
+fabric-token` = 20 passed (8 adversarial + 8 product + 4 spend); `cargo test -p
+aog-apiserver` green (seal/admission incl. `scoped_child_token` + full mutate path).
+
+Gate: a fabricated / unsigned / wrong-key / revoked parent can no longer produce a
+signed child, and no axis widens. AF-001 root controls landed (finding register:
+FIXED); the live black-box gate against OpenBao + the real WSF API (T7) is still
+pending, so AF-001 is not yet PROVEN/CLOSED.
+
 Commit: (pending — this change set).

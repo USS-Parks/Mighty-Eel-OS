@@ -45,7 +45,8 @@ pub enum TokenError {
     /// A child attenuation widened the parent on `axis`.
     #[error("attenuation widens the parent on {axis}")]
     AttenuationWidens {
-        /// The axis (routes / models / classification / budget / expiry) widened.
+        /// The axis widened (tenant / subject / service identity / roles /
+        /// compliance scopes / routes / models / classification / budget / expiry).
         axis: &'static str,
     },
     /// A spend would exceed the budget `counter`.
@@ -116,19 +117,63 @@ pub fn is_expired(token: &TrustToken, now: DateTime<Utc>) -> Result<bool, TokenE
     Ok(exp <= now)
 }
 
-/// Validate that `child` narrows `parent` on every axis, bind it to the parent
-/// (`attenuation.parent_id`), and sign it. Fails closed if the child widens any
-/// axis: routes/models must be subsets, classification must not exceed the
-/// parent ceiling, each budget cap must fit the parent's remaining, and the
-/// child must not outlive the parent.
+/// Authenticate `parent` under the trust anchor, then validate that `child`
+/// narrows it on every axis, bind it to the parent (`attenuation.parent_id`), and
+/// sign it.
+///
+/// The parent is verified first (`verify`): a child is never minted from an
+/// unsigned, wrong-key, or revoked parent — closing the AF-001 signer-oracle and
+/// the AF-006 revoked-lineage hole. Attenuation then fails closed if the child
+/// widens ANY axis: tenant, subject, and service identity must match the parent;
+/// roles and compliance scopes must be subsets; routes and models must be
+/// subsets; classification must not exceed the parent ceiling; each budget cap
+/// must fit the parent's remaining; and the child must not outlive the parent.
 ///
 /// # Errors
-/// Returns [`TokenError::AttenuationWidens`] on any widening, or a signing error.
+/// Returns [`TokenError::Revoked`], [`TokenError::InvalidSignature`], or
+/// [`TokenError::MalformedSignature`] if the parent does not authenticate;
+/// [`TokenError::AttenuationWidens`] on any widening; or a signing error.
 pub fn attenuate(
     parent: &TrustToken,
     mut child: TrustToken,
     signer: &dyn Signer,
+    verifier: &dyn Verifier,
+    parent_public_key: &[u8],
 ) -> Result<TrustToken, TokenError> {
+    // Authenticate the parent before minting anything from it. An unsigned,
+    // wrong-key, or revoked parent can never be a signer oracle (AF-001/AF-006):
+    // `verify` fails closed on a bad signature or a revoked status.
+    verify(parent, verifier, parent_public_key)?;
+
+    // Identity is immutable under attenuation — a child speaks for the same
+    // tenant, subject, and service identity as its parent, never a different one.
+    if child.tenant_id != parent.tenant_id {
+        return Err(TokenError::AttenuationWidens { axis: "tenant_id" });
+    }
+    if child.subject_hash != parent.subject_hash {
+        return Err(TokenError::AttenuationWidens {
+            axis: "subject_hash",
+        });
+    }
+    if child.service_identity != parent.service_identity {
+        return Err(TokenError::AttenuationWidens {
+            axis: "service_identity",
+        });
+    }
+    // Authority sets may only shrink: each child role / compliance scope must
+    // already be held by the parent.
+    if !child.roles.iter().all(|r| parent.roles.contains(r)) {
+        return Err(TokenError::AttenuationWidens { axis: "roles" });
+    }
+    if !child
+        .compliance_scopes
+        .iter()
+        .all(|s| parent.compliance_scopes.contains(s))
+    {
+        return Err(TokenError::AttenuationWidens {
+            axis: "compliance_scopes",
+        });
+    }
     if !child
         .allowed_routes
         .iter()

@@ -78,6 +78,14 @@ impl Authenticator {
         }
     }
 
+    /// The WSF trust-anchor public key this authenticator verifies presented
+    /// tokens under. The mutate stage (K8) re-verifies a parent under the same
+    /// anchor before minting a child from it (`AppState::from_raft`).
+    #[must_use]
+    pub fn token_public_key(&self) -> &[u8] {
+        &self.token_public_key
+    }
+
     /// The shared live-revocation handle. The revocation-indexing controller
     /// writes it; [`authenticate`](Authenticator::authenticate) reads it on
     /// every request.

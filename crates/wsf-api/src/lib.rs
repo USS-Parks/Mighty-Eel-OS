@@ -280,8 +280,16 @@ async fn attenuate(
     State(s): State<AppState>,
     Json(req): Json<AttenuateReq>,
 ) -> Result<Json<TokenResp>, ApiError> {
-    let token = fabric_token::attenuate(&req.parent, req.child, s.bridge.signer())
-        .map_err(|e| ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, e.to_string()))?;
+    // Verify the parent under the trust anchor before minting a child from it —
+    // this public route must never be a signer oracle (AF-001).
+    let token = fabric_token::attenuate(
+        &req.parent,
+        req.child,
+        s.bridge.signer(),
+        &MlDsa87Verifier,
+        &s.token_public_key,
+    )
+    .map_err(|e| ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, e.to_string()))?;
     Ok(Json(TokenResp { token }))
 }
 

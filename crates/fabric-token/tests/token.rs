@@ -100,7 +100,14 @@ fn attenuate_narrows_and_binds_parent() {
         tool_calls_spent: 0,
     });
 
-    let minted_child = attenuate(&parent, child, &signer).unwrap();
+    let minted_child = attenuate(
+        &parent,
+        child,
+        &signer,
+        &MlDsa87Verifier,
+        signer.public_key(),
+    )
+    .unwrap();
     assert_eq!(minted_child.attenuation.parent_id.as_deref(), Some("tok_1"));
     verify(&minted_child, &MlDsa87Verifier, signer.public_key()).unwrap();
 }
@@ -114,7 +121,14 @@ fn attenuate_rejects_widening() {
     let mut widen_route = base_token("2098-01-01T00:00:00Z");
     widen_route.allowed_routes = vec![Route::CloudAllowed];
     assert_eq!(
-        attenuate(&parent, widen_route, &signer).unwrap_err(),
+        attenuate(
+            &parent,
+            widen_route,
+            &signer,
+            &MlDsa87Verifier,
+            signer.public_key()
+        )
+        .unwrap_err(),
         TokenError::AttenuationWidens {
             axis: "allowed_routes"
         }
@@ -125,7 +139,14 @@ fn attenuate_rejects_widening() {
     widen_class.allowed_routes = vec![Route::LocalOnly];
     widen_class.max_data_classification = Classification::Secret;
     assert_eq!(
-        attenuate(&parent, widen_class, &signer).unwrap_err(),
+        attenuate(
+            &parent,
+            widen_class,
+            &signer,
+            &MlDsa87Verifier,
+            signer.public_key()
+        )
+        .unwrap_err(),
         TokenError::AttenuationWidens {
             axis: "max_data_classification"
         }
@@ -143,7 +164,14 @@ fn attenuate_rejects_widening() {
         tool_calls_spent: 0,
     });
     assert_eq!(
-        attenuate(&parent, widen_budget, &signer).unwrap_err(),
+        attenuate(
+            &parent,
+            widen_budget,
+            &signer,
+            &MlDsa87Verifier,
+            signer.public_key()
+        )
+        .unwrap_err(),
         TokenError::AttenuationWidens { axis: "budget" }
     );
 }

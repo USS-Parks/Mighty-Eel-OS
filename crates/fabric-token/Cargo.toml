@@ -19,11 +19,5 @@ hex = "0.4"
 [dev-dependencies]
 tokio = { workspace = true }
 
-[features]
-# Quarantined adversarial regression harness (tests/security_regression.rs).
-# Off by default so those tests — which assert current vulnerable behavior — do
-# not run in the product suite; enable with --features security-regression.
-security-regression = []
-
 [lints]
 workspace = true
