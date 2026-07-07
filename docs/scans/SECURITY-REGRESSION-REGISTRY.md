@@ -19,7 +19,7 @@ fix, in the product suite) → PROVEN (a live-service gate confirms end-to-end).
 | REG-AF-001-role-widening | AF-001 | a child role the parent never held is refused (`AttenuationWidens{roles}`) | REPAIRED (Phase T) | fabric-token suite |
 | REG-AF-001-tenant-swap | AF-001 | a cross-tenant child is refused (`AttenuationWidens{tenant_id}`) | REPAIRED (Phase T) | fabric-token suite |
 | REG-AF-006-revoked-parent | AF-006 | a revoked parent mints no child (`ParentRevoked`) | REPAIRED (Phase T) | fabric-token suite |
-| REG-AF-002-caller-subject | AF-002 | `/v1/tokens/issue` mints from caller-supplied tenant/subject/roles | PHASE A | wsf-bridge / wsf-api |
+| REG-AF-002-caller-subject | AF-002 | issuance refuses an unauthenticated caller (401) and copies tenant/subject/roles from the verified principal, not the body | REPAIRED (Phase A) | wsf-api auth_gate |
 | REG-AF-003-cross-tenant-unseal | AF-003 | unseal opens another tenant's envelope | PHASE E | wsf-seal |
 | REG-AF-004-arbitrary-role | AF-004 | exchange assumes a caller-chosen `role_arn` | PHASE B | wsf-broker |
 | REG-AF-007-unfiltered-receipts | AF-007 | receipt query returns cross-tenant entries | PHASE L | wsf-ledger / wsf-api |

@@ -10,11 +10,12 @@
 use std::sync::{Arc, Mutex};
 
 use base64::Engine;
-use fabric_contracts::Classification;
+use fabric_contracts::{Classification, Identity, IdentityKind, Signature};
 use fabric_crypto::Signer;
 use fabric_crypto::providers::RustCryptoMlDsa87;
 use reqwest::{Client, Method};
 use serde_json::{Value, json};
+use wsf_api::auth::SignedIdentityAuthenticator;
 use wsf_api::client::WsfClient;
 use wsf_api::{AppState, ExchangeReq, IssueReq, SealReq, UnsealReq};
 use wsf_bridge::{BridgeConfig, OpenBaoAuth, OpenBaoConfig, TrustBridge};
@@ -201,6 +202,7 @@ async fn sdk_round_trips_every_endpoint() {
 
     let bridge_signer = Arc::new(RustCryptoMlDsa87::generate("wsf-api-bridge").unwrap());
     let anchor = bridge_signer.public_key().to_vec();
+    let identity_signer = Arc::new(RustCryptoMlDsa87::generate("wsf-api-identity").unwrap());
     let state = AppState {
         bridge: Arc::new(TrustBridge::new(
             ob(),
@@ -224,13 +226,44 @@ async fn sdk_round_trips_every_endpoint() {
             RustCryptoMlDsa87::generate("wsf-api-ledger").unwrap(),
         )))),
         token_public_key: Arc::new(anchor),
+        authenticator: Arc::new(
+            SignedIdentityAuthenticator::new(identity_signer.public_key().to_vec(), "wsf")
+                .with_role_grant("clinician-1", vec!["clinician".to_string()]),
+        ),
     };
 
     let app = wsf_api::router(state);
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let base = format!("http://{}", listener.local_addr().unwrap());
     let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
-    let sdk = WsfClient::new(base);
+
+    // Present a signed workload-identity assertion so issuance can authenticate
+    // the caller (AF-002); tenant/subject/roles are derived from it server-side.
+    let identity = fabric_identity::mint(
+        Identity {
+            identity_id: "id_clinician_1".to_string(),
+            kind: IdentityKind::Workload,
+            tenant_id: TENANT.to_string(),
+            subject_id: "clinician-1".to_string(),
+            subject_hash: String::new(),
+            service_identity: None,
+            spiffe_id: String::new(),
+            pki_cert_fingerprint: String::new(),
+            parent_id: None,
+            issued_at: "2026-07-03T00:00:00Z".to_string(),
+            expires_at: "2099-01-01T00:00:00Z".to_string(),
+            signature: Signature {
+                alg: String::new(),
+                key_id: String::new(),
+                value: String::new(),
+            },
+        },
+        identity_signer.as_ref(),
+    )
+    .unwrap();
+    let identity_b64 =
+        base64::engine::general_purpose::STANDARD.encode(serde_json::to_vec(&identity).unwrap());
+    let sdk = WsfClient::new(base).with_identity(identity_b64);
 
     // OpenAPI published.
     assert!(sdk.openapi().await.unwrap().contains("WSF API"));
@@ -238,14 +271,14 @@ async fn sdk_round_trips_every_endpoint() {
     // Token lifecycle.
     let token = sdk
         .issue(&IssueReq {
-            tenant_id: TENANT.to_string(),
-            subject_id: "clinician-1".to_string(),
-            roles: vec!["clinician".to_string()],
             budget: None,
             allowed_models: vec![],
         })
         .await
         .expect("issue");
+    // Identity came from the verified principal, not the request body.
+    assert_eq!(token.tenant_id, TENANT);
+    assert_eq!(token.roles, vec!["clinician".to_string()]);
     assert!(
         sdk.verify(&token).await.unwrap().valid,
         "issued token verifies"

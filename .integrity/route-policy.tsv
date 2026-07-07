@@ -69,7 +69,7 @@
 /v1/system/airgap	mai-api	x-im-token	no	-
 /v1/system/production-readiness	mai-api	x-im-token	no	-
 /v1/tokens/attenuate	wsf-api	none-http	no	AF-001
-/v1/tokens/issue	wsf-api	none-http	no	AF-002
+/v1/tokens/issue	wsf-api	wsf-principal	no	AF-002-fixed
 /v1/tokens/verify	wsf-api	none-http	no	-
 /v1/trust/bundle_status	mai-api	x-im-token	no	-
 /v1/trust/claims	mai-api	x-im-token	no	-

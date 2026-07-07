@@ -99,6 +99,26 @@ async fn run() -> Result<(), String> {
     // authenticated ingress. The demo/appliance composes set WSF_LISTEN themselves.
     let listen = env_or("WSF_LISTEN", "127.0.0.1:8300");
 
+    // Issuance authenticator (AF-002): the token's tenant/subject/roles come from
+    // a verified principal, never the request body. Production requires a signed
+    // workload-identity anchor (`WSF_IDENTITY_ANCHOR_PK`); `WSF_DEV_AUTH` is an
+    // explicit dev opt-in. With neither, startup fails closed.
+    let audience = env_or("WSF_AUDIENCE", "wsf");
+    let authenticator: Arc<dyn wsf_api::auth::WsfAuthenticator> = if std::env::var("WSF_DEV_AUTH")
+        .is_ok()
+    {
+        eprintln!(
+            "wsf-api: WSF_DEV_AUTH set — DEV issuance authenticator in use (never in production)"
+        );
+        Arc::new(wsf_api::auth::DevAuthenticator::new(audience))
+    } else {
+        let identity_pk = b64("WSF_IDENTITY_ANCHOR_PK")?;
+        Arc::new(wsf_api::auth::SignedIdentityAuthenticator::new(
+            identity_pk,
+            audience,
+        ))
+    };
+
     let state = AppState {
         bridge: Arc::new(TrustBridge::new(
             new_openbao()?,
@@ -120,6 +140,7 @@ async fn run() -> Result<(), String> {
         )),
         ledger: Arc::new(Mutex::new(Ledger::new(ledger_signer))),
         token_public_key: Arc::new(anchor),
+        authenticator,
     };
 
     let app = wsf_api::router(state);

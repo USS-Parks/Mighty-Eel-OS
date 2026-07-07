@@ -246,4 +246,71 @@ ride the OpenBao lane. `VerificationContext` is in place for R to consume.
 
 Evidence: `test-evidence/security-remediation/M1/phase-T/`.
 
+Commit: `fb92641`.
+
+---
+
+## Phase A — WSF authentication and issuance authorization (AF-002)
+
+### A1–A3 — WsfPrincipal + authenticator seam + principal-derived issuance
+
+Objective: stop `/v1/tokens/issue` from minting signed tokens for caller-selected
+tenant / subject / roles. Identity must come from a verified principal, never the
+request body.
+
+Root cause (confirmed reading `wsf-api/src/lib.rs`): the `issue` handler took
+`IssueReq { tenant_id, subject_id, roles, .. }` straight from request JSON and
+passed it to `bridge.issue_token()` with no caller authentication — any reachable
+client minted a token for any tenant/subject with any roles.
+
+Contract (A1):
+- `fabric-contracts`: new `WsfPrincipal` (tenant, subject, service identity, roles,
+  audience, auth method, credential id, correlation id) — the server-created
+  authenticated principal. It is the sole issuance identity authority.
+
+Authenticator seam (A2) — new `wsf-api::auth`:
+- `WsfAuthenticator` trait → `Result<WsfPrincipal, AuthError>`.
+- `SignedIdentityAuthenticator` (production): verifies a presented signed
+  `fabric_contracts::Identity` assertion (ML-DSA, via `fabric-identity`) under the
+  identity anchor, checks expiry, and maps it to a principal — **roles come from
+  server-side policy (`with_role_grant`), never the caller**. Reuses the existing
+  signed-identity contract rather than inventing a new assertion.
+- `DevAuthenticator` (explicit local-dev opt-in) and `DenyAllAuthenticator` (the
+  fail-closed default). Production `main.rs` requires `WSF_IDENTITY_ANCHOR_PK`
+  unless `WSF_DEV_AUTH` is explicitly set — no authenticator ⇒ startup fails.
+- `require_principal` axum middleware wraps `/v1/tokens/issue`: missing / malformed
+  / unverifiable / expired identity ⇒ 401; verified-but-not-permitted ⇒ 403,
+  before the handler runs.
+
+Issuance (A3):
+- `IssueReq` loses `tenant_id` / `subject_id` / `roles`; it now carries only
+  narrowing intent (`allowed_models`, `budget`). The handler builds the
+  `IssueTokenRequest` from `principal.{tenant_id, subject_id, roles}`.
+- SDK `WsfClient::with_identity(..)` attaches the `x-wsf-identity` header.
+
+Verify (this Linux container; offline — no live OpenBao needed for the gate):
+- `cargo fmt --check` PASS; `cargo check --workspace` PASS (exit 0);
+  `cargo clippy -p wsf-api -p fabric-contracts --all-targets -D warnings -A pedantic` PASS.
+- `cargo test -p fabric-contracts` PASS (5).
+- `cargo test -p wsf-api` PASS: auth unit tests (6 — signed-identity → principal
+  with policy roles, missing/wrong-key/expired identity rejected, unknown identity
+  → no roles, deny-all); `auth_gate` integration (2 — unauthenticated issue → 401
+  before the bridge; a verified principal passes the gate → 502 at the dummy
+  bridge, i.e. past the boundary); live_api compiles + skips without OpenBao.
+
+Regression: REG-AF-002-caller-subject flips to REPAIRED — proven by
+`wsf-api/tests/auth_gate.rs` (401 for the unauthenticated caller; principal-derived
+identity).
+
+Findings: AF-002 CONTAINED → **FIXED** (root controls + offline gate proof; the
+live A5 two-tenant OpenBao gate is deferred → PROVEN).
+
+Deferred (honest): A4 fine-grained issuance-permission matrix (self/service/admin,
+delegation depth) beyond role-grant policy; A5 live two-tenant OpenBao issuance
+gate; production mTLS peer-identity binding (the signed-assertion seam is the
+equally-strong pluggable authenticator §2.1 allows). The `openapi.json` issue
+schema is reconciled in Q8.
+
+Evidence: `test-evidence/security-remediation/M1/phase-A/`.
+
 Commit: (this change set).

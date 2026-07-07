@@ -5292,6 +5292,7 @@ dependencies = [
  "chrono",
  "fabric-contracts",
  "fabric-crypto",
+ "fabric-identity",
  "fabric-token",
  "hex",
  "reqwest",

@@ -29,6 +29,7 @@ pub enum ClientError {
 pub struct WsfClient {
     base: String,
     http: reqwest::Client,
+    identity_header: Option<String>,
 }
 
 impl WsfClient {
@@ -38,7 +39,16 @@ impl WsfClient {
         Self {
             base: base.into(),
             http: reqwest::Client::new(),
+            identity_header: None,
         }
+    }
+
+    /// Attach a base64 signed-identity assertion (`x-wsf-identity`) so privileged
+    /// issuance can authenticate the caller (AF-002).
+    #[must_use]
+    pub fn with_identity(mut self, identity_b64: impl Into<String>) -> Self {
+        self.identity_header = Some(identity_b64.into());
+        self
     }
 
     async fn post<Req: serde::Serialize, Resp: serde::de::DeserializeOwned>(
@@ -46,12 +56,11 @@ impl WsfClient {
         path: &str,
         body: &Req,
     ) -> Result<Resp, ClientError> {
-        let resp = self
-            .http
-            .post(format!("{}{path}", self.base))
-            .json(body)
-            .send()
-            .await?;
+        let mut builder = self.http.post(format!("{}{path}", self.base)).json(body);
+        if let Some(id) = &self.identity_header {
+            builder = builder.header(crate::auth::IDENTITY_HEADER, id);
+        }
+        let resp = builder.send().await?;
         let status = resp.status();
         if !status.is_success() {
             return Err(ClientError::Api {

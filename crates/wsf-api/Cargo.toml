@@ -10,6 +10,7 @@ description = "WSF unified REST API + Rust SDK over the trust-plane services (to
 [dependencies]
 fabric-contracts = { path = "../fabric-contracts" }
 fabric-crypto = { path = "../fabric-crypto" }
+fabric-identity = { path = "../fabric-identity" }
 fabric-token = { path = "../fabric-token" }
 wsf-bridge = { path = "../wsf-bridge" }
 wsf-broker = { path = "../wsf-broker" }
