@@ -7,6 +7,7 @@ real model server. Not for production — it echoes a fixed message.
 """
 
 import json
+import os
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 CANNED = (
@@ -16,7 +17,7 @@ CANNED = (
 
 
 class Handler(BaseHTTPRequestHandler):
-    def _send(self, code, obj):
+    def _send(self, code: int, obj: object) -> None:
         body = json.dumps(obj).encode()
         self.send_response(code)
         self.send_header("Content-Type", "application/json")
@@ -62,9 +63,12 @@ class Handler(BaseHTTPRequestHandler):
         else:
             self._send(404, {"error": "not found"})
 
-    def log_message(self, *_args):
+    def log_message(self, *_args: object) -> None:
         pass
 
 
 if __name__ == "__main__":
-    HTTPServer(("0.0.0.0", 8000), Handler).serve_forever()
+    # Loopback by default; a container that needs cross-container reachability sets
+    # MOCK_LLM_BIND explicitly (bind policy — no hardcoded 0.0.0.0).
+    host = os.environ.get("MOCK_LLM_BIND", "127.0.0.1")
+    HTTPServer((host, 8000), Handler).serve_forever()

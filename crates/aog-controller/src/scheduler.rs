@@ -177,6 +177,7 @@ impl SchedulerController {
             attenuation: Attenuation {
                 parent_id: None,
                 caveats,
+                depth: 0,
             },
             signature: Signature {
                 alg: String::new(),

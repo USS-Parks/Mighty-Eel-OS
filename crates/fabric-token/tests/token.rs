@@ -9,7 +9,9 @@ use fabric_contracts::{
 };
 use fabric_crypto::Signer;
 use fabric_crypto::providers::{MlDsa87Verifier, RustCryptoMlDsa87};
-use fabric_token::{TokenError, attenuate, is_expired, issue, try_spend, verify};
+use fabric_token::{
+    TokenError, VerificationContext, attenuate, is_expired, issue, try_spend, verify,
+};
 
 fn base_token(expires_at: &str) -> TrustToken {
     TrustToken {
@@ -100,8 +102,10 @@ fn attenuate_narrows_and_binds_parent() {
         tool_calls_spent: 0,
     });
 
-    let minted_child = attenuate(&parent, child, &signer).unwrap();
+    let ctx = VerificationContext::new(&MlDsa87Verifier, signer.public_key(), Utc::now());
+    let minted_child = attenuate(&parent, child, &ctx, &signer).unwrap();
     assert_eq!(minted_child.attenuation.parent_id.as_deref(), Some("tok_1"));
+    assert_eq!(minted_child.attenuation.depth, 1);
     verify(&minted_child, &MlDsa87Verifier, signer.public_key()).unwrap();
 }
 
@@ -109,12 +113,14 @@ fn attenuate_narrows_and_binds_parent() {
 fn attenuate_rejects_widening() {
     let signer = RustCryptoMlDsa87::generate("k").unwrap();
     let parent = issue(base_token("2099-01-01T00:00:00Z"), &signer).unwrap();
+    let ctx = VerificationContext::new(&MlDsa87Verifier, signer.public_key(), Utc::now());
 
     // Widen routes: CloudAllowed is not in the parent.
     let mut widen_route = base_token("2098-01-01T00:00:00Z");
+    widen_route.token_id = "tok_child".into();
     widen_route.allowed_routes = vec![Route::CloudAllowed];
     assert_eq!(
-        attenuate(&parent, widen_route, &signer).unwrap_err(),
+        attenuate(&parent, widen_route, &ctx, &signer).unwrap_err(),
         TokenError::AttenuationWidens {
             axis: "allowed_routes"
         }
@@ -122,10 +128,11 @@ fn attenuate_rejects_widening() {
 
     // Widen classification: Secret > Restricted.
     let mut widen_class = base_token("2098-01-01T00:00:00Z");
+    widen_class.token_id = "tok_child".into();
     widen_class.allowed_routes = vec![Route::LocalOnly];
     widen_class.max_data_classification = Classification::Secret;
     assert_eq!(
-        attenuate(&parent, widen_class, &signer).unwrap_err(),
+        attenuate(&parent, widen_class, &ctx, &signer).unwrap_err(),
         TokenError::AttenuationWidens {
             axis: "max_data_classification"
         }
@@ -133,6 +140,7 @@ fn attenuate_rejects_widening() {
 
     // Widen budget: child cap exceeds parent remaining.
     let mut widen_budget = base_token("2098-01-01T00:00:00Z");
+    widen_budget.token_id = "tok_child".into();
     widen_budget.allowed_routes = vec![Route::LocalOnly];
     widen_budget.budget = Some(Budget {
         token_cap: 5000, // > parent's 1000 remaining
@@ -143,7 +151,7 @@ fn attenuate_rejects_widening() {
         tool_calls_spent: 0,
     });
     assert_eq!(
-        attenuate(&parent, widen_budget, &signer).unwrap_err(),
+        attenuate(&parent, widen_budget, &ctx, &signer).unwrap_err(),
         TokenError::AttenuationWidens { axis: "budget" }
     );
 }

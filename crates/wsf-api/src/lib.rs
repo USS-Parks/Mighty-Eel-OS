@@ -12,21 +12,25 @@
 //! folding the SDK into `mai-sdk-rs` and a gRPC/tonic-0.14 surface are follow-ons
 //! (the axum-0.8 half of the 0.2d pin is exercised here and in W3).
 
+pub mod auth;
 pub mod client;
 
 use std::sync::{Arc, Mutex};
 
-use axum::extract::{Query, State};
+use axum::extract::{Query, Request, State};
 use axum::http::{StatusCode, header};
+use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
-use axum::{Json, Router};
+use axum::{Extension, Json, Router, middleware};
 use base64::Engine;
 use chrono::Utc;
-use fabric_contracts::{Budget, Envelope, TrustToken};
+use fabric_contracts::{Budget, Envelope, TrustToken, WsfPrincipal};
 use fabric_crypto::providers::MlDsa87Verifier;
 use serde::{Deserialize, Serialize};
 use wsf_bridge::{IssueTokenRequest, TrustBridge};
+
+use crate::auth::{AuthError, WsfAuthenticator};
 use wsf_broker::AwsStsBroker;
 use wsf_ledger::{Ledger, LedgerEntry};
 use wsf_seal::{LabelSpec, SealRequest, SealService, UnsealRequest};
@@ -47,39 +51,69 @@ pub struct AppState {
     pub ledger: Arc<Mutex<Ledger>>,
     /// Trust-anchor public key for verifying presented tokens.
     pub token_public_key: Arc<Vec<u8>>,
+    /// Front-door authenticator for privileged issuance (AF-002). Fail-closed:
+    /// a request without a verified `WsfPrincipal` cannot mint a token.
+    pub authenticator: Arc<dyn WsfAuthenticator>,
 }
 
-/// Mount all routes over `state`.
+/// Mount all routes over `state`. `/v1/tokens/issue` and `/v1/receipts` are gated
+/// by the front-door authenticator: issuance derives tenant/subject/roles from the
+/// verified principal (AF-002), and receipt reads are tenant-scoped to it (AF-007).
 pub fn router(state: AppState) -> Router {
+    let issue_route = post(issue).route_layer(middleware::from_fn_with_state(
+        state.clone(),
+        require_principal,
+    ));
+    let receipts_route = get(receipts).route_layer(middleware::from_fn_with_state(
+        state.clone(),
+        require_principal,
+    ));
     Router::new()
-        .route("/v1/tokens/issue", post(issue))
+        .route("/v1/tokens/issue", issue_route)
         .route("/v1/tokens/verify", post(verify))
         .route("/v1/tokens/attenuate", post(attenuate))
         .route("/v1/envelopes/seal", post(seal))
         .route("/v1/envelopes/unseal", post(unseal))
         .route("/v1/credentials/exchange", post(exchange))
-        .route("/v1/receipts", get(receipts))
+        .route("/v1/receipts", receipts_route)
         .route("/openapi.json", get(openapi))
         .route("/healthz", get(|| async { "ok" }))
         .with_state(state)
 }
 
+/// Authenticate a privileged issuance request into a `WsfPrincipal` before its
+/// handler runs, stashing it in request extensions. Refuses (401/403) when
+/// identity is missing, unverifiable, expired, or not permitted.
+async fn require_principal(
+    State(s): State<AppState>,
+    mut req: Request,
+    next: Next,
+) -> Result<Response, ApiError> {
+    let principal = s
+        .authenticator
+        .authenticate(req.headers(), Utc::now())
+        .map_err(|e| match e {
+            AuthError::Unauthenticated => {
+                ApiError::new(StatusCode::UNAUTHORIZED, "unauthenticated")
+            }
+            AuthError::Forbidden => ApiError::new(StatusCode::FORBIDDEN, "forbidden"),
+        })?;
+    req.extensions_mut().insert(principal);
+    Ok(next.run(req).await)
+}
+
 // ── request / response DTOs (shared with the SDK) ──────────────────────
 
-/// Issue-token request.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// Issue-token request. Identity (tenant / subject / roles) is **not** accepted
+/// here — it is copied from the authenticated `WsfPrincipal` (AF-002). The body
+/// may only *narrow*: an optional model allowlist and a budget below the tenant
+/// ceiling.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct IssueReq {
-    /// Tenant.
-    pub tenant_id: String,
-    /// Cleartext subject (pseudonymized by the bridge).
-    pub subject_id: String,
-    /// Roles.
-    #[serde(default)]
-    pub roles: Vec<String>,
-    /// Optional budget strand.
+    /// Optional budget strand (narrowing intent; capped by tenant policy).
     #[serde(default)]
     pub budget: Option<Budget>,
-    /// Optional model allowlist.
+    /// Optional model allowlist (narrowing intent).
     #[serde(default)]
     pub allowed_models: Vec<String>,
 }
@@ -152,13 +186,14 @@ pub struct UnsealResp {
     pub plaintext_b64: String,
 }
 
-/// Credential-exchange request.
+/// Credential-exchange request. The caller names a tenant-scoped grant, never a
+/// raw cloud role ARN (AF-004); the broker resolves it to an approved identity.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExchangeReq {
     /// The verified trust token.
     pub token: TrustToken,
-    /// The cloud role ARN to assume.
-    pub role_arn: String,
+    /// The tenant-scoped named grant to exercise.
+    pub grant_id: String,
 }
 
 /// Credential-exchange response (ephemeral scoped creds).
@@ -181,14 +216,21 @@ pub struct ReceiptsResp {
     pub entries: Vec<LedgerEntry>,
 }
 
-/// Receipt query parameters.
+/// Receipt query parameters. Typed and tenant-scoped (AF-007): there is no
+/// arbitrary field query, and the tenant predicate is applied server-side from
+/// the authenticated principal — never from the request.
 #[derive(Debug, Clone, Deserialize)]
 pub struct ReceiptsQuery {
-    /// Correlation field (e.g. `token_id`).
-    pub field: Option<String>,
-    /// Correlation value.
-    pub value: Option<String>,
+    /// Optional correlation filter by token id (always ANDed with the tenant).
+    pub token_id: Option<String>,
+    /// Page size (capped server-side).
+    pub limit: Option<usize>,
 }
+
+/// The role that permits an audited cross-tenant (global-auditor) receipt read.
+const GLOBAL_AUDITOR_ROLE: &str = "global-auditor";
+/// Server-side cap on a receipt page, regardless of the requested `limit`.
+const RECEIPTS_MAX_LIMIT: usize = 1000;
 
 // ── error mapping ──────────────────────────────────────────────────────
 
@@ -224,9 +266,12 @@ fn b64_decode(s: &str) -> Result<Vec<u8>, ApiError> {
 
 async fn issue(
     State(s): State<AppState>,
+    Extension(principal): Extension<WsfPrincipal>,
     Json(req): Json<IssueReq>,
 ) -> Result<Json<TokenResp>, ApiError> {
-    let ir = IssueTokenRequest::new(req.tenant_id, req.subject_id, req.roles)
+    // Identity (tenant / subject / roles) comes from the authenticated principal,
+    // never the request body (AF-002). The body may only narrow (models, budget).
+    let ir = IssueTokenRequest::new(principal.tenant_id, principal.subject_id, principal.roles)
         .with_models(req.allowed_models);
     let ir = if let Some(b) = req.budget {
         ir.with_budget(b)
@@ -280,7 +325,15 @@ async fn attenuate(
     State(s): State<AppState>,
     Json(req): Json<AttenuateReq>,
 ) -> Result<Json<TokenResp>, ApiError> {
-    let token = fabric_token::attenuate(&req.parent, req.child, s.bridge.signer())
+    // The parent must authenticate under the trust anchor before it can mint a
+    // child (AF-001): a fabricated / wrong-key / expired / revoked parent, or a
+    // child that widens any authority axis, is refused here — never signed.
+    let ctx = fabric_token::VerificationContext::new(
+        &MlDsa87Verifier,
+        s.token_public_key.as_slice(),
+        Utc::now(),
+    );
+    let token = fabric_token::attenuate(&req.parent, req.child, &ctx, s.bridge.signer())
         .map_err(|e| ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, e.to_string()))?;
     Ok(Json(TokenResp { token }))
 }
@@ -340,12 +393,14 @@ async fn exchange(
             &req.token,
             &MlDsa87Verifier,
             &s.token_public_key,
-            &req.role_arn,
+            &req.grant_id,
             Utc::now(),
         )
         .await
         .map_err(|e| match e {
-            wsf_broker::BrokerError::TokenRejected(_) | wsf_broker::BrokerError::TokenExpired => {
+            wsf_broker::BrokerError::TokenRejected(_)
+            | wsf_broker::BrokerError::TokenExpired
+            | wsf_broker::BrokerError::GrantDenied(_) => {
                 ApiError::new(StatusCode::FORBIDDEN, e.to_string())
             }
             _ => ApiError::new(StatusCode::BAD_GATEWAY, e.to_string()),
@@ -358,12 +413,24 @@ async fn exchange(
     }))
 }
 
-async fn receipts(State(s): State<AppState>, Query(q): Query<ReceiptsQuery>) -> Json<ReceiptsResp> {
+async fn receipts(
+    State(s): State<AppState>,
+    Extension(principal): Extension<WsfPrincipal>,
+    Query(q): Query<ReceiptsQuery>,
+) -> Json<ReceiptsResp> {
     let ledger = s.ledger.lock().expect("ledger lock");
-    let entries = match (q.field, q.value) {
-        (Some(field), Some(value)) => ledger.query(&field, &value).into_iter().cloned().collect(),
-        _ => ledger.entries().to_vec(),
-    };
+    let limit = q.limit.unwrap_or(100).min(RECEIPTS_MAX_LIMIT);
+    // The tenant predicate is mandatory and comes from the authenticated principal
+    // (AF-007) — a caller sees only their tenant's receipts unless they hold the
+    // audited global-auditor role. No arbitrary field query, no existence oracle.
+    let entries = if principal.roles.iter().any(|r| r == GLOBAL_AUDITOR_ROLE) {
+        ledger.query_global(q.token_id.as_deref(), limit)
+    } else {
+        ledger.query_tenant(&principal.tenant_id, q.token_id.as_deref(), limit)
+    }
+    .into_iter()
+    .cloned()
+    .collect();
     Json(ReceiptsResp { entries })
 }
 

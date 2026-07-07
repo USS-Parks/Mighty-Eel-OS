@@ -21,8 +21,11 @@ use chrono::{DateTime, Utc};
 use fabric_contracts::{Classification, ComplianceScope, Envelope, Label, Route, TrustToken};
 use fabric_crypto::Signer;
 use fabric_crypto::providers::MlDsa87Verifier;
-use fabric_envelope::{ThreadSpec, open_envelope, seal_envelope};
+use fabric_envelope::{
+    EnvelopeBinding, ThreadSpec, envelope_binding, open_envelope, seal_envelope,
+};
 use fabric_proof::{ChainLink, GENESIS_HASH, canonical_hash, chain_link};
+use fabric_revocation::RevocationSnapshot;
 use serde::{Deserialize, Serialize};
 use wsf_bridge::OpenBaoAuth;
 
@@ -107,6 +110,10 @@ pub struct SealReceipt {
     pub envelope_id: String,
     /// The presenting token.
     pub token_id: String,
+    /// Owning tenant (from the presenting token) — the ledger's tenant predicate
+    /// for authorized receipt queries (AF-007).
+    #[serde(default)]
+    pub tenant_id: String,
     /// Pseudonymous subject from the token.
     pub subject_hash: String,
     /// `allow` or `deny`.
@@ -181,6 +188,7 @@ pub struct SealService {
     signer: Arc<dyn Signer>,
     config: SealServiceConfig,
     receipts: Arc<Mutex<ReceiptChain>>,
+    revocation: Option<RevocationSnapshot>,
 }
 
 impl SealService {
@@ -193,7 +201,17 @@ impl SealService {
             signer,
             config,
             receipts: Arc::new(Mutex::new(ReceiptChain::new())),
+            revocation: None,
         }
+    }
+
+    /// Builder: consult `snapshot` on every seal/unseal so a revoked token (by id,
+    /// subject, signing key, or bundle) is refused (AF-006). The snapshot's own
+    /// signature is verified against the trust anchor at token-check time.
+    #[must_use]
+    pub fn with_revocation(mut self, snapshot: RevocationSnapshot) -> Self {
+        self.revocation = Some(snapshot);
+        self
     }
 
     /// The service's provenance-signing public key (verifies envelope threads).
@@ -237,6 +255,7 @@ impl SealService {
                 op: op.to_string(),
                 envelope_id: envelope_id.to_string(),
                 token_id: token.token_id.clone(),
+                tenant_id: token.tenant_id.clone(),
                 subject_hash: token.subject_hash.clone(),
                 decision: decision.to_string(),
                 at: now.to_rfc3339(),
@@ -244,14 +263,16 @@ impl SealService {
     }
 
     fn verify_token(&self, token: &TrustToken, now: DateTime<Utc>) -> Result<(), SealError> {
-        fabric_token::verify(token, &MlDsa87Verifier, &self.config.token_public_key)
-            .map_err(|e| SealError::Unauthorized(e.to_string()))?;
-        if fabric_token::is_expired(token, now)
-            .map_err(|e| SealError::Unauthorized(e.to_string()))?
-        {
-            return Err(SealError::Unauthorized("token expired".to_string()));
-        }
-        Ok(())
+        // Context-aware verification (AF-006): signature + expiry + the current
+        // signed revocation snapshot (token / subject / signing key / bundle).
+        let ctx = fabric_token::VerificationContext {
+            verifier: &MlDsa87Verifier,
+            public_key: &self.config.token_public_key,
+            now,
+            revocation: self.revocation.as_ref(),
+        };
+        fabric_token::verify_in_context(token, &ctx)
+            .map_err(|e| SealError::Unauthorized(e.to_string()))
     }
 
     /// Seal a payload into an envelope (Transit-wrapped data key + provenance
@@ -285,6 +306,13 @@ impl SealService {
                 authorizing_token_id: req.token.token_id.clone(),
                 previous_hash,
                 created_at: now.to_rfc3339(),
+                // Bind the envelope to the sealing token's tenant + owner (AF-003):
+                // only a same-tenant, same-owner token can later unseal it.
+                binding: EnvelopeBinding {
+                    tenant_id: req.token.tenant_id.clone(),
+                    owner_subject_hash: req.token.subject_hash.clone(),
+                    audience: String::new(),
+                },
             },
             self.signer.as_ref(),
         )?;
@@ -329,6 +357,26 @@ impl SealService {
             ));
         }
 
+        // Tenant/owner binding (AF-003): the presenting token must own the
+        // envelope. An unbound (legacy v1) envelope is refused — no silent v1
+        // acceptance (E5). Cross-tenant and cross-owner unseal both fail here,
+        // before any Transit decrypt.
+        let binding = envelope_binding(envelope);
+        if binding.is_unbound() {
+            self.record("unseal", &envelope.envelope_id, &req.token, "deny", now);
+            return Err(SealError::Unauthorized(
+                "envelope is not tenant-bound (legacy v1)".to_string(),
+            ));
+        }
+        if binding.tenant_id != req.token.tenant_id
+            || binding.owner_subject_hash != req.token.subject_hash
+        {
+            self.record("unseal", &envelope.envelope_id, &req.token, "deny", now);
+            return Err(SealError::Unauthorized(
+                "token does not own the envelope (tenant/owner mismatch)".to_string(),
+            ));
+        }
+
         let vault_token = self.openbao.login().await?;
         let key_bytes = self
             .openbao
@@ -364,6 +412,7 @@ mod tests {
                 op: "seal".to_string(),
                 envelope_id: format!("env-{i}"),
                 token_id: "tok".to_string(),
+                tenant_id: "t".to_string(),
                 subject_hash: "h".to_string(),
                 decision: "allow".to_string(),
                 at: "2026-07-03T00:00:00Z".to_string(),
@@ -380,6 +429,7 @@ mod tests {
             op: "seal".to_string(),
             envelope_id: "e".to_string(),
             token_id: "t".to_string(),
+            tenant_id: "t".to_string(),
             subject_hash: "h".to_string(),
             decision: "allow".to_string(),
             at: "2026-07-03T00:00:00Z".to_string(),
@@ -388,6 +438,7 @@ mod tests {
             op: "unseal".to_string(),
             envelope_id: "e".to_string(),
             token_id: "t".to_string(),
+            tenant_id: "t".to_string(),
             subject_hash: "h".to_string(),
             decision: "allow".to_string(),
             at: "2026-07-03T00:01:00Z".to_string(),

@@ -29,6 +29,7 @@ pub enum ClientError {
 pub struct WsfClient {
     base: String,
     http: reqwest::Client,
+    identity_header: Option<String>,
 }
 
 impl WsfClient {
@@ -38,7 +39,16 @@ impl WsfClient {
         Self {
             base: base.into(),
             http: reqwest::Client::new(),
+            identity_header: None,
         }
+    }
+
+    /// Attach a base64 signed-identity assertion (`x-wsf-identity`) so privileged
+    /// issuance can authenticate the caller (AF-002).
+    #[must_use]
+    pub fn with_identity(mut self, identity_b64: impl Into<String>) -> Self {
+        self.identity_header = Some(identity_b64.into());
+        self
     }
 
     async fn post<Req: serde::Serialize, Resp: serde::de::DeserializeOwned>(
@@ -46,12 +56,11 @@ impl WsfClient {
         path: &str,
         body: &Req,
     ) -> Result<Resp, ClientError> {
-        let resp = self
-            .http
-            .post(format!("{}{path}", self.base))
-            .json(body)
-            .send()
-            .await?;
+        let mut builder = self.http.post(format!("{}{path}", self.base)).json(body);
+        if let Some(id) = &self.identity_header {
+            builder = builder.header(crate::auth::IDENTITY_HEADER, id);
+        }
+        let resp = builder.send().await?;
         let status = resp.status();
         if !status.is_success() {
             return Err(ClientError::Api {
@@ -137,20 +146,33 @@ impl WsfClient {
         self.post("/v1/credentials/exchange", req).await
     }
 
-    /// Query the receipt ledger by correlation field/value (both or neither).
+    /// Query the receipt ledger, tenant-scoped to the presented identity (AF-007),
+    /// optionally filtered by `token_id` and paged by `limit`.
     ///
     /// # Errors
-    /// [`ClientError`] on transport or a non-2xx response.
+    /// [`ClientError`] on transport or a non-2xx response (401 without identity).
     pub async fn receipts(
         &self,
-        field: Option<&str>,
-        value: Option<&str>,
+        token_id: Option<&str>,
+        limit: Option<usize>,
     ) -> Result<Vec<LedgerEntry>, ClientError> {
         let mut url = format!("{}/v1/receipts", self.base);
-        if let (Some(f), Some(v)) = (field, value) {
-            url.push_str(&format!("?field={f}&value={v}"));
+        let mut params = Vec::new();
+        if let Some(t) = token_id {
+            params.push(format!("token_id={t}"));
         }
-        let resp = self.http.get(url).send().await?;
+        if let Some(l) = limit {
+            params.push(format!("limit={l}"));
+        }
+        if !params.is_empty() {
+            url.push('?');
+            url.push_str(&params.join("&"));
+        }
+        let mut builder = self.http.get(url);
+        if let Some(id) = &self.identity_header {
+            builder = builder.header(crate::auth::IDENTITY_HEADER, id);
+        }
+        let resp = builder.send().await?;
         let status = resp.status();
         if !status.is_success() {
             return Err(ClientError::Api {

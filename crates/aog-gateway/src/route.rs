@@ -220,6 +220,9 @@ mod tests {
                 authorizing_token_id: String::new(),
                 previous_hash: String::new(),
                 signatures: vec![],
+                tenant_id: String::new(),
+                owner_subject_hash: String::new(),
+                audience: String::new(),
             },
         }
     }

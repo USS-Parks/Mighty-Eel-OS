@@ -8,8 +8,8 @@
   "paths": {
     "/v1/tokens/issue": {
       "post": {
-        "summary": "Issue a signed trust token for a subject within a tenant.",
-        "responses": { "200": { "description": "The signed token." }, "502": { "description": "OpenBao unavailable." } }
+        "summary": "Issue a signed trust token. Tenant/subject/roles come from the authenticated principal (x-wsf-identity required); the body may only narrow (models, budget).",
+        "responses": { "200": { "description": "The signed token." }, "401": { "description": "Missing or invalid identity." }, "502": { "description": "OpenBao unavailable." } }
       }
     },
     "/v1/tokens/verify": {
@@ -20,7 +20,7 @@
     },
     "/v1/tokens/attenuate": {
       "post": {
-        "summary": "Mint a narrower child token from a parent (fails closed on any widening).",
+        "summary": "Mint a narrower child from a parent. The parent is authenticated (signature/expiry/revocation) and every authority axis must narrow; fails closed on a forged parent or any widening.",
         "responses": { "200": { "description": "The signed child token." }, "422": { "description": "Attenuation widens the parent." } }
       }
     },
@@ -38,18 +38,18 @@
     },
     "/v1/credentials/exchange": {
       "post": {
-        "summary": "Exchange a verified token for ephemeral, scoped cloud credentials.",
-        "responses": { "200": { "description": "Temporary credentials." }, "403": { "description": "Token rejected or expired." } }
+        "summary": "Exchange a verified token for ephemeral cloud credentials via a tenant-scoped named grant (grant_id, never a raw role ARN).",
+        "responses": { "200": { "description": "Temporary credentials." }, "403": { "description": "Token rejected/expired or grant denied (unknown or cross-tenant)." } }
       }
     },
     "/v1/receipts": {
       "get": {
-        "summary": "Query the receipt ledger by correlation field/value.",
+        "summary": "Query the receipt ledger, tenant-scoped to the authenticated principal (x-wsf-identity required).",
         "parameters": [
-          { "name": "field", "in": "query", "required": false, "schema": { "type": "string" } },
-          { "name": "value", "in": "query", "required": false, "schema": { "type": "string" } }
+          { "name": "token_id", "in": "query", "required": false, "schema": { "type": "string" } },
+          { "name": "limit", "in": "query", "required": false, "schema": { "type": "integer" } }
         ],
-        "responses": { "200": { "description": "Matching ledger entries." } }
+        "responses": { "200": { "description": "The principal's tenant receipts (or all, for a global-auditor)." }, "401": { "description": "Missing or invalid identity." } }
       }
     },
     "/healthz": {

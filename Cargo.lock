@@ -1231,6 +1231,7 @@ dependencies = [
 name = "fabric-revocation"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "fabric-contracts",
  "fabric-crypto",
  "fabric-proof",
@@ -1248,6 +1249,7 @@ dependencies = [
  "fabric-contracts",
  "fabric-crypto",
  "fabric-proof",
+ "fabric-revocation",
  "hex",
  "serde_json",
  "thiserror 2.0.18",
@@ -5291,6 +5293,7 @@ dependencies = [
  "chrono",
  "fabric-contracts",
  "fabric-crypto",
+ "fabric-identity",
  "fabric-token",
  "hex",
  "reqwest",
@@ -5335,6 +5338,7 @@ dependencies = [
  "chrono",
  "fabric-contracts",
  "fabric-crypto",
+ "fabric-revocation",
  "fabric-token",
  "hex",
  "hmac",
@@ -5405,6 +5409,7 @@ dependencies = [
  "fabric-crypto",
  "fabric-envelope",
  "fabric-proof",
+ "fabric-revocation",
  "fabric-token",
  "hex",
  "rand 0.8.6",

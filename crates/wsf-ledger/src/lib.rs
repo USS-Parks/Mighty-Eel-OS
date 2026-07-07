@@ -124,11 +124,67 @@ impl Ledger {
 
     /// Entries whose receipt has a top-level string `field == value` — the
     /// correlation query (by `token_id`, `envelope_id`, `tenant_id`, …).
+    ///
+    /// This is an unfiltered library primitive; the authenticated API surface must
+    /// use [`query_tenant`](Ledger::query_tenant) / [`query_global`](Ledger::query_global)
+    /// so a caller can never read another tenant's receipts (AF-007).
     #[must_use]
     pub fn query(&self, field: &str, value: &str) -> Vec<&LedgerEntry> {
         self.entries
             .iter()
             .filter(|e| e.receipt.get(field).and_then(serde_json::Value::as_str) == Some(value))
+            .collect()
+    }
+
+    /// Tenant-scoped receipt query (AF-007): entries whose receipt carries a
+    /// top-level `tenant_id == tenant`, optionally further filtered by `token_id`,
+    /// capped at `limit`. A receipt without a `tenant_id` is **never** returned to
+    /// a tenant query — unattributable metadata is not disclosed cross-tenant, and
+    /// there is no existence oracle (a non-matching id yields no rows, not an
+    /// error).
+    #[must_use]
+    pub fn query_tenant(
+        &self,
+        tenant: &str,
+        token_id: Option<&str>,
+        limit: usize,
+    ) -> Vec<&LedgerEntry> {
+        self.entries
+            .iter()
+            .filter(|e| {
+                e.receipt
+                    .get("tenant_id")
+                    .and_then(serde_json::Value::as_str)
+                    == Some(tenant)
+            })
+            .filter(|e| {
+                token_id.is_none_or(|t| {
+                    e.receipt
+                        .get("token_id")
+                        .and_then(serde_json::Value::as_str)
+                        == Some(t)
+                })
+            })
+            .take(limit)
+            .collect()
+    }
+
+    /// Global-auditor query: every tenant's entries, optionally filtered by
+    /// `token_id`, capped at `limit`. Only a separately-audited global-auditor
+    /// principal may reach this (enforced at the API layer).
+    #[must_use]
+    pub fn query_global(&self, token_id: Option<&str>, limit: usize) -> Vec<&LedgerEntry> {
+        self.entries
+            .iter()
+            .filter(|e| {
+                token_id.is_none_or(|t| {
+                    e.receipt
+                        .get("token_id")
+                        .and_then(serde_json::Value::as_str)
+                        == Some(t)
+                })
+            })
+            .take(limit)
             .collect()
     }
 
@@ -292,5 +348,28 @@ mod tests {
         // Break the second link's back-pointer.
         l.entries[1].previous_hash = hex::encode([9u8; 32]);
         assert!(l.verify().is_err());
+    }
+
+    #[test]
+    fn tenant_scoped_query_isolates_tenants() {
+        let mut l = ledger();
+        l.ingest("wsf-bridge", json!({"tenant_id":"a","token_id":"tok_a"}))
+            .unwrap();
+        l.ingest("wsf-bridge", json!({"tenant_id":"b","token_id":"tok_b"}))
+            .unwrap();
+        l.ingest("wsf-seal", json!({"token_id":"tok_x"})).unwrap(); // no tenant_id
+
+        // Tenant a sees only its own row.
+        let a = l.query_tenant("a", None, 100);
+        assert_eq!(a.len(), 1);
+        assert_eq!(a[0].receipt["token_id"], "tok_a");
+        // No cross-tenant leak and no existence oracle: querying tenant b's token
+        // as tenant a returns nothing (not an error, not a "hidden" hint).
+        assert_eq!(l.query_tenant("a", Some("tok_b"), 100).len(), 0);
+        // A receipt with no tenant_id is never returned to a tenant query.
+        assert_eq!(l.query_tenant("a", Some("tok_x"), 100).len(), 0);
+        // The global auditor sees everything; the limit caps results.
+        assert_eq!(l.query_global(None, 100).len(), 3);
+        assert_eq!(l.query_global(None, 2).len(), 2);
     }
 }

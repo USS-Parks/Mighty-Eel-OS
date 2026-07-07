@@ -86,6 +86,14 @@ impl Authenticator {
         Arc::clone(&self.live)
     }
 
+    /// The trust-anchor public key presented tokens verify under. The API server
+    /// wires this into the mutate-stage sealer (`AppState::from_raft`) so it can
+    /// authenticate a parent token before attenuating a child from it (AF-001).
+    #[must_use]
+    pub fn token_public_key(&self) -> &[u8] {
+        &self.token_public_key
+    }
+
     /// Attach a revocation snapshot (the kill switch). The snapshot's own
     /// signature is verified against the trust anchor here — a snapshot that does
     /// not verify is refused, never silently ignored (fail-closed, doctrine I-4).

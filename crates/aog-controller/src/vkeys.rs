@@ -137,6 +137,7 @@ impl VirtualKeyController {
             attenuation: Attenuation {
                 parent_id: None,
                 caveats: cap.caveats.clone(),
+                depth: 0,
             },
             signature: Signature {
                 alg: String::new(),

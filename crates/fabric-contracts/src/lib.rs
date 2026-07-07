@@ -16,6 +16,6 @@ pub use common::{
     Classification, ComplianceScope, RevocationStatus, Route, RoutingDecision, Signature,
 };
 pub use envelope::{Envelope, Label, Seal, Thread};
-pub use identity::{Identity, IdentityKind};
+pub use identity::{Identity, IdentityKind, WsfPrincipal};
 pub use receipt::{Correlation, PeriodicSignature, Receipt};
 pub use token::{Attenuation, Budget, Caveat, CaveatType, TrustToken};

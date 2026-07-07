@@ -45,14 +45,28 @@ pub struct Caveat {
     pub value: String,
 }
 
-/// Attenuation lineage: the parent this token was minted from and the caveats
-/// that narrowed it. A root token has `parent_id: None` and no caveats.
+/// Attenuation lineage: the parent this token was minted from, the caveats that
+/// narrowed it, and the lineage depth. A root token has `parent_id: None`, no
+/// caveats, and `depth: 0`.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Attenuation {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub parent_id: Option<String>,
     #[serde(default)]
     pub caveats: Vec<Caveat>,
+    /// Lineage depth: 0 for a root token, `parent.depth + 1` for each attenuated
+    /// child. `fabric-token` bounds it (see `MAX_ATTENUATION_DEPTH`) so a chain
+    /// cannot grow without limit. Omitted from the canonical payload when 0, so a
+    /// root token's signed bytes — and every pre-existing signature — are
+    /// unchanged.
+    #[serde(default, skip_serializing_if = "is_zero_u32")]
+    pub depth: u32,
+}
+
+/// serde `skip_serializing_if` predicate: omit a `u32` field when it is 0.
+#[allow(clippy::trivially_copy_pass_by_ref)]
+fn is_zero_u32(n: &u32) -> bool {
+    *n == 0
 }
 
 /// The trust token. Field order and names mirror the MAI claim so existing

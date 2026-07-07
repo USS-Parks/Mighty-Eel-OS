@@ -57,7 +57,7 @@
 /v1/preflight	aog-gateway	bearer-vk	no	-
 /v1/profiles	mai-api	x-im-token	no	-
 /v1/profiles/{profile_id}	mai-api	x-im-token	no	-
-/v1/receipts	wsf-api	none-http	no	AF-007
+/v1/receipts	wsf-api	wsf-principal-tenant-scoped	no	AF-007-fixed
 /v1/registry	mai-api	x-im-token	no	-
 /v1/registry/scan	mai-api	x-im-token	no	-
 /v1/roi	aog-gateway	bearer-vk	no	-
@@ -69,7 +69,7 @@
 /v1/system/airgap	mai-api	x-im-token	no	-
 /v1/system/production-readiness	mai-api	x-im-token	no	-
 /v1/tokens/attenuate	wsf-api	none-http	no	AF-001
-/v1/tokens/issue	wsf-api	none-http	no	AF-002
+/v1/tokens/issue	wsf-api	wsf-principal	no	AF-002-fixed
 /v1/tokens/verify	wsf-api	none-http	no	-
 /v1/trust/bundle_status	mai-api	x-im-token	no	-
 /v1/trust/claims	mai-api	x-im-token	no	-

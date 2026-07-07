@@ -686,11 +686,33 @@ fn apply_ship_profile(
         "ephemeral AEAD sealer (local-dev)".to_string()
     });
 
-    let vault_outcome = RuntimeOutcome::pass(format!(
-        "{:?} vault opened at {}",
-        profile.vault.backend,
-        profile.vault.root.display()
-    ));
+    // PROD-VAULT-100: a *measured* vault outcome (AF-005). Previously this was an
+    // unconditional pass; it now reflects the vault backend policy and root, so a
+    // plaintext-capable dev backend (stub / file-dev) or a missing root in
+    // production flips it to Fail and startup fails closed. Deeper proofs —
+    // encryption round-trip, ZFS properties, sealed master key — are the V-phase
+    // live gate and are tracked as deferred.
+    let vault_outcome = if is_production
+        && matches!(
+            profile.vault.backend,
+            crate::ship_profile::VaultBackend::Stub | crate::ship_profile::VaultBackend::FileDev
+        ) {
+        RuntimeOutcome::fail(format!(
+            "{:?} is a plaintext-capable dev backend; production requires a real encrypted vault",
+            profile.vault.backend
+        ))
+    } else if is_production && !profile.vault.root.exists() {
+        RuntimeOutcome::fail(format!(
+            "vault root {} does not exist",
+            profile.vault.root.display()
+        ))
+    } else {
+        RuntimeOutcome::pass(format!(
+            "{:?} vault backend accepted; root {} present",
+            profile.vault.backend,
+            profile.vault.root.display()
+        ))
+    };
 
     let wal_outcome =
         RuntimeOutcome::pass(format!("WAL opened at {}", profile.audit.wal_dir.display()));

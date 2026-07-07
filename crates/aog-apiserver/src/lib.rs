@@ -88,7 +88,14 @@ impl AppState {
     /// authenticated CRUD surface over the very node it drives consensus on,
     /// rather than a separately bootstrapped one.
     #[must_use]
-    pub fn from_raft(raft: Arc<RaftNode>, authenticator: Authenticator, sealer: Sealer) -> Self {
+    pub fn from_raft(
+        raft: Arc<RaftNode>,
+        authenticator: Authenticator,
+        mut sealer: Sealer,
+    ) -> Self {
+        // Wire the trust anchor into the mutate-stage sealer so it authenticates a
+        // parent token before minting an attenuated child from it (AF-001).
+        sealer.set_anchor_public_key(authenticator.token_public_key().to_vec());
         Self {
             admission: Arc::new(Admission::new(Arc::clone(&raft), sealer)),
             reader: StoreReader::new(raft),

@@ -35,6 +35,10 @@ use crate::ship_profile::{ProfileMode, ShipProfile, VaultBackend};
 pub enum VaultBuildError {
     #[error("ship profile selects backend {backend:?} but production mode forbids non-real vaults")]
     StubInProduction { backend: VaultBackend },
+    #[error(
+        "ship profile selects the file-dev vault but production mode forbids a plaintext-capable dev backend"
+    )]
+    FileDevInProduction,
     #[error("production profile sets vault.allow_stub=true; refused by the vault builder")]
     StubAllowedInProduction,
     #[error("local-dev profile selects stub vault but vault.allow_stub=false")]
@@ -54,7 +58,7 @@ pub enum VaultBuildError {
 /// | production  | zfs      | false      | [`ZfsVault`]                  |
 /// | production  | zfs      | true       | [`StubAllowedInProduction`]   |
 /// | production  | stub     | any        | [`StubInProduction`]          |
-/// | production  | file-dev | false      | [`FileDevVault`]               |
+/// | production  | file-dev | any        | [`FileDevInProduction`]        |
 /// | local-dev   | zfs      | any        | [`ZfsVault`]                  |
 /// | local-dev   | stub     | true       | [`LocalDevStubVault`]         |
 /// | local-dev   | stub     | false      | [`StubNotAllowed`]            |
@@ -62,6 +66,7 @@ pub enum VaultBuildError {
 ///
 /// [`StubAllowedInProduction`]: VaultBuildError::StubAllowedInProduction
 /// [`StubInProduction`]: VaultBuildError::StubInProduction
+/// [`FileDevInProduction`]: VaultBuildError::FileDevInProduction
 /// [`FileDevVault`]: mai_vault::file_dev::FileDevVault
 /// [`StubNotAllowed`]: VaultBuildError::StubNotAllowed
 pub fn build_vault(profile: &ShipProfile) -> Result<Box<dyn VaultInterface>, VaultBuildError> {
@@ -89,10 +94,10 @@ pub fn build_vault(profile: &ShipProfile) -> Result<Box<dyn VaultInterface>, Vau
             }
         }
         VaultBackend::FileDev => {
-            if is_production && !root.exists() {
-                return Err(VaultBuildError::RootMissing {
-                    path: root.to_path_buf(),
-                });
+            if is_production {
+                // FileDev is a plaintext-capable dev/staging backend; production
+                // must use a real encrypted backend (AF-005 / V1).
+                return Err(VaultBuildError::FileDevInProduction);
             }
             Ok(Box::new(FileDevVault::new(zfs_config_from_root(root))))
         }
