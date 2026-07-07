@@ -252,11 +252,18 @@ impl MaiServer {
         let scheduler: Arc<dyn mai_scheduler::Scheduler> = Arc::new(build_configured_scheduler());
 
         // Vault: builder-driven when a ship profile is loaded, StubVault
-        // otherwise so the no-profile bring-up path is unchanged.
+        // otherwise so the no-profile bring-up path is unchanged. V2/V3: the
+        // builder returns an *initialized* vault or an error — a failed
+        // initialization aborts run() here, before any socket binds.
+        let mut vault_probe: Option<RuntimeOutcome> = None;
         let vault_box: Box<dyn VaultInterface> = if let Some(profile) = ship_profile.as_ref() {
-            build_vault(profile).map_err(|e| {
+            let vault = build_vault(profile).await.map_err(|e| {
                 ServerError::Init(format!("vault builder rejected ship profile: {e}"))
-            })?
+            })?;
+            // V8: measure the vault before certifying it — a storage
+            // round-trip, never an unconditional pass.
+            vault_probe = Some(crate::vault_builder::probe_vault(vault.as_ref()).await);
+            vault
         } else {
             Box::new(StubVault)
         };
@@ -413,9 +420,13 @@ impl MaiServer {
         // sealer-backed compliance audit log and the real trust
         // verifier so the demo defaults never reach handlers.
         let (state, runtime_checks) = match ship_profile.as_ref() {
-            Some(profile) => {
-                apply_ship_profile(state, profile, auth_key_count, auth_bypass_runtime)?
-            }
+            Some(profile) => apply_ship_profile(
+                state,
+                profile,
+                auth_key_count,
+                auth_bypass_runtime,
+                vault_probe,
+            )?,
             None => (state, RuntimeChecks::default()),
         };
 
@@ -554,6 +565,7 @@ fn apply_ship_profile(
     profile: &ShipProfile,
     auth_key_count: usize,
     auth_bypass_runtime: bool,
+    vault_probe: Option<RuntimeOutcome>,
 ) -> Result<(AppState, RuntimeChecks), ServerError> {
     let is_production = matches!(profile.profile.mode, ProfileMode::Production);
 
@@ -686,11 +698,12 @@ fn apply_ship_profile(
         "ephemeral AEAD sealer (local-dev)".to_string()
     });
 
-    let vault_outcome = RuntimeOutcome::pass(format!(
-        "{:?} vault opened at {}",
-        profile.vault.backend,
-        profile.vault.root.display()
-    ));
+    // V8: the vault outcome is MEASURED (storage round-trip + audit append,
+    // run in `MaiServer::run` right after initialized construction) — never
+    // fabricated. A missing probe fails closed.
+    let vault_outcome = vault_probe.unwrap_or_else(|| {
+        RuntimeOutcome::fail("vault readiness probe did not run (fail closed)".to_string())
+    });
 
     let wal_outcome =
         RuntimeOutcome::pass(format!("WAL opened at {}", profile.audit.wal_dir.display()));

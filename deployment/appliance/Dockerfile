@@ -4,12 +4,14 @@
 # binaries and ships them on a slim runtime. Build context = the mai workspace
 # root (so the Cargo workspace + Cargo.lock resolve). target/ is .dockerignore'd.
 
-FROM rust:1-bookworm AS builder
+# AS-001: base images digest-pinned (tag kept for readability; the digest is
+# authoritative). Digests resolved 2026-07-07.
+FROM rust:1-bookworm@sha256:a339861ae23e9abb272cea45dfafde21760d2ce6577a70f8a926153677902663 AS builder
 WORKDIR /build
 COPY . .
 RUN cargo build --release -p wsf-api -p aog-gateway --bins
 
-FROM debian:bookworm-slim AS runtime
+FROM debian:bookworm-slim@sha256:60eac759739651111db372c07be67863818726f754804b8707c90979bda511df AS runtime
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates \
     && rm -rf /var/lib/apt/lists/*

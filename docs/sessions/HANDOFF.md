@@ -79,7 +79,7 @@ WSF_OPENBAO_ADDR=http://127.0.0.1:8250 WSF_OPENBAO_TOKEN=root WSF_AWS_ENDPOINT=h
   Markdown/toml commits pass clean. Run `cargo fmt` before committing Rust.
 - **Commit footer (Basho's convention — use verbatim; NEVER credit an AI co-author):**
   ```
-  Authored and reviewed by Basho Parks, Copyright 2026
+  Authored and reviewed by Basho Parks, copyright 2026
   ```
   (A prior handoff wrongly instructed a "Co-Authored by … Claude Fable 5" footer; Basho corrected this
   on 2026-07-03 and the W1–W5 commit footers were rewritten. Do not reintroduce any AI-co-author line.)

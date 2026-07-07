@@ -28,5 +28,15 @@ dev = [
 [tool.hatch.build.targets.wheel]
 packages = ["src/mai"]
 
-# Ruff, mypy, pytest config lives in root pyproject.toml.
-# No [tool.ruff] section here so ruff inherits from root.
+# Ruff and mypy config live in the root pyproject.toml; no [tool.ruff]
+# section here so ruff inherits from root.
+#
+# Pytest config is local (AQ-002): the SDK uses a src/ layout, so tests
+# `import mai` only resolve when `src` is on the path. Declaring the
+# section here also makes pytest treat this dir as the rootdir when run
+# from the SDK, so collection is reliable whether invoked here or from the
+# repo root — no editable install required.
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+pythonpath = ["src"]
+testpaths = ["tests"]

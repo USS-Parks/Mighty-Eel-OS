@@ -12,7 +12,10 @@
 //! endpoint is configurable: the live test points it at a local mock of the
 //! `generateAccessToken` contract; a real-GCP run is owner-gated.
 
+use std::sync::{Arc, RwLock};
+
 use chrono::{DateTime, Utc};
+use fabric_revocation::MonotonicRevocationStore;
 use wsf_bridge::OpenBaoAuth;
 
 use crate::error::BrokerError;
@@ -48,7 +51,10 @@ impl GcpBrokerConfig {
 }
 
 /// A short-lived GCP access token minted for a trust token.
-#[derive(Debug, Clone)]
+///
+/// `Debug` redacts the bearer token (plan B5 — parity with the AWS broker):
+/// a stray `{:?}` in a log line must never leak a live credential.
+#[derive(Clone)]
 pub struct GcpCredentials {
     /// The OAuth2 access token.
     pub access_token: String,
@@ -56,11 +62,21 @@ pub struct GcpCredentials {
     pub expire_time: DateTime<Utc>,
 }
 
+impl std::fmt::Debug for GcpCredentials {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("GcpCredentials")
+            .field("access_token", &"<redacted>")
+            .field("expire_time", &self.expire_time)
+            .finish()
+    }
+}
+
 /// The GCP credential broker.
 pub struct GcpBroker {
     openbao: OpenBaoAuth,
     http: reqwest::Client,
     config: GcpBrokerConfig,
+    revocation: Option<Arc<RwLock<MonotonicRevocationStore>>>,
 }
 
 /// Build the `generateAccessToken` request body: the OAuth `scope` list and a
@@ -81,7 +97,16 @@ impl GcpBroker {
             openbao,
             http,
             config,
+            revocation: None,
         }
+    }
+
+    /// Wire a revocation store (plan R consumer wiring) — fail closed, same
+    /// semantics as the AWS broker.
+    #[must_use]
+    pub fn with_revocation_store(mut self, store: Arc<RwLock<MonotonicRevocationStore>>) -> Self {
+        self.revocation = Some(store);
+        self
     }
 
     /// Exchange a verified trust token for a scoped GCP access token on
@@ -102,7 +127,7 @@ impl GcpBroker {
         now: DateTime<Utc>,
     ) -> Result<GcpCredentials, BrokerError> {
         // 1. Fail closed on trust.
-        verify_token(token, verifier, public_key, now)?;
+        verify_token(token, verifier, public_key, self.revocation.as_deref(), now)?;
 
         // 2. Broker's Google bearer from OpenBao (never exposed downstream).
         let vault_token = self.openbao.login().await?;
@@ -192,5 +217,16 @@ mod tests {
         let body = access_token_body(&[], 300);
         assert_eq!(body["lifetime"], "300s");
         assert!(body["scope"].as_array().unwrap().is_empty());
+    }
+
+    #[test]
+    fn debug_output_redacts_the_access_token() {
+        let creds = GcpCredentials {
+            access_token: "ya29.gcp-bearer-material".to_string(),
+            expire_time: Utc::now(),
+        };
+        let d = format!("{creds:?}");
+        assert!(!d.contains("ya29.gcp-bearer-material"));
+        assert!(d.contains("<redacted>"));
     }
 }

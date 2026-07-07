@@ -148,4 +148,51 @@ impl TransitAdmin {
             )))
         }
     }
+
+    /// List all Transit key names; empty when the engine holds none.
+    ///
+    /// # Errors
+    /// [`ReconcileError`] on transport failure or an unexpected status.
+    pub async fn list_keys(&self) -> Result<Vec<String>, ReconcileError> {
+        let resp = self
+            .call(reqwest::Method::GET, "transit/keys?list=true", None)
+            .await?;
+        match resp.status() {
+            StatusCode::NOT_FOUND => Ok(Vec::new()),
+            s if s.is_success() => {
+                let v: serde_json::Value = resp
+                    .json()
+                    .await
+                    .map_err(|e| ReconcileError(e.to_string()))?;
+                Ok(v["data"]["keys"]
+                    .as_array()
+                    .map(|keys| {
+                        keys.iter()
+                            .filter_map(|k| k.as_str().map(String::from))
+                            .collect()
+                    })
+                    .unwrap_or_default())
+            }
+            s => Err(ReconcileError(format!("transit key list: {s}"))),
+        }
+    }
+
+    /// Disable a ring key **and every per-tenant derivative** (`<base>-<tenant>`,
+    /// plan E2). The seal service namespaces its wraps per tenant, so the
+    /// ring-dark switch must cover the whole key family — otherwise a
+    /// tenant-namespaced wrap would survive the kill and the ring's envelopes
+    /// would still unseal.
+    ///
+    /// # Errors
+    /// [`ReconcileError`] on transport failure or a refusal other than 404.
+    pub async fn disable_key_family(&self, base: &str) -> Result<(), ReconcileError> {
+        self.disable_key(base).await?;
+        let prefix = format!("{base}-");
+        for key in self.list_keys().await? {
+            if key.starts_with(&prefix) {
+                self.disable_key(&key).await?;
+            }
+        }
+        Ok(())
+    }
 }

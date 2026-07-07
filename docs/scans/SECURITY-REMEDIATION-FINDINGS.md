@@ -14,16 +14,16 @@ documentation or mock-only tests where a live boundary exists (plan §0.4).
 
 | ID | Sev | Finding | Primary controls | Status |
 |----|-----|---------|------------------|--------|
-| AF-001 | Critical | Attenuation signs attacker-constructed children without authenticating or fully constraining the parent | `fabric-token::attenuate`, WSF attenuation route | CONTAINED (0.2) |
-| AF-002 | High | Public WSF route issues signed tokens for caller-selected subjects and roles | WSF router, principal derivation, bridge issuance | CONTAINED (0.2) |
-| AF-003 | High | Envelope unseal lacks tenant/subject binding | envelope contract, AAD/thread, seal service | CONTAINED (0.2) |
-| AF-004 | High | Credential broker accepts caller-selected AWS role | broker policy, role/action/resource binding | CONTAINED (0.2) |
-| AF-005 | High | Production readiness certifies uninitialized / plaintext-capable vaults | vault builder, ZFS initialization, readiness | OPEN |
-| AF-006 | Medium | WSF privileged consumers ignore signed revocation snapshots | token verification context, snapshot store | CONTAINED (0.2) |
-| AF-007 | Medium | Receipt ledger is unauthenticated and not tenant-filtered | ledger query authz, tenant index | CONTAINED (0.2) |
-| AQ-001 | Quality | Clippy gate fails: `clippy::doc_lazy_continuation` at `mai-core/src/cache.rs:109` | Rust CI | OPEN |
-| AQ-002 | Quality | Whole-tree Ruff / mypy / pytest gates fail or do not collect reliably | Python packaging and CI | OPEN |
-| AS-001 | Supply chain | Deployment uses floating image tags and unpinned base-image digests | Docker/Compose/release provenance | OPEN |
+| AF-001 | Critical | Attenuation signs attacker-constructed children without authenticating or fully constraining the parent | `fabric-token::attenuate`, WSF attenuation route | PROVEN (T1–T4, T7) |
+| AF-002 | High | Public WSF route issues signed tokens for caller-selected subjects and roles | WSF router, principal derivation, bridge issuance | PROVEN (A1–A5) |
+| AF-003 | High | Envelope unseal lacks tenant/subject binding | envelope contract, AAD/thread, seal service | PROVEN (E1–E7 complete: per-tenant Transit keys, migration, receipts) |
+| AF-004 | High | Credential broker accepts caller-selected AWS role | broker policy, role/action/resource binding | PROVEN (B1–B6 complete: grant-bound actions/region/external-id/TTL, credential hygiene) |
+| AF-005 | High | Production readiness certifies uninitialized / plaintext-capable vaults | vault builder, ZFS initialization, readiness | FIXED (V1 backend policy, V2/V3 initialized construction blocks bind, V4 sealed-at-rest storage, V5/V6 ZFS ops, V7 cryptographic erasure, V8 measured probe, V9 key persistence + restart-recovery proven at the crypto layer; V9 full restart/migration gate on a real ZFS+TPM host still open) |
+| AF-006 | Medium | WSF privileged consumers ignore signed revocation snapshots | token verification context, snapshot store | PROVEN (R1 anti-rollback store + seal/broker fail-closed consumers + R6 live gate) |
+| AF-007 | Medium | Receipt ledger is unauthenticated and not tenant-filtered | ledger query authz, tenant index | PROVEN (L1/L2 + E6 binding + auditor-only signed export, L4 live gate; L3 durable backend = ops plumbing) |
+| AQ-001 | Quality | Clippy gate fails: `clippy::doc_lazy_continuation` at `mai-core/src/cache.rs:109` | Rust CI | FIXED (workspace clippy clean under CI flags `-D warnings -A clippy::pedantic`; the cache.rs doc list is properly continued) |
+| AQ-002 | Quality | Whole-tree Ruff / mypy / pytest gates fail or do not collect reliably | Python packaging and CI | FIXED (SDK pytest self-contained via `pythonpath=["src"]`; whole-tree ruff clean; 1310 tests collect with 0 errors; SDK 179 pass + mypy clean) |
+| AS-001 | Supply chain | Deployment uses floating image tags and unpinned base-image digests | Docker/Compose/release provenance | FIXED (every third-party base/service image digest-pinned across the 3 deployment Dockerfiles + 4 compose stacks; release Dockerfile already pinned; first-party `islandmountain/*` tags are local `build:` outputs, not registry pulls) |
 
 ## Closure matrix (plan Appendix A)
 
@@ -47,3 +47,29 @@ data; a token selects an unapproved cloud identity; a revoked token stays usable
 propagation bound; production validation passes an uninitialized / plaintext / dev vault;
 required live gates are skipped; the final scan lacks high-impact coverage without an
 owner-signed deferral.
+
+## Session status (2026-07-07 — paused for owner audit)
+
+Every finding is at **FIXED or PROVEN**:
+
+- **PROVEN** (root controls + live gate green): AF-001, AF-002, AF-003, AF-004,
+  AF-006, AF-007.
+- **FIXED** (root controls + focused/unit tests green; live/re-scan closure
+  pending): AF-005 (V1–V8 + V9 key-persistence/restart/migration; only the V9
+  restart/migration **live** gate on a real ZFS+TPM host remains — the code
+  paths are implemented, unit-proven, and wired into the ready-to-run
+  env-gated gate), AQ-001, AQ-002, AS-001.
+
+No finding is OPEN. No finding has reached **CLOSED** — that state requires the
+independent re-scan (plan Phase X). Deferred to the owner's audit lane:
+
+- Running the AF-005 V9 live gate on real ZFS+TPM hardware (absent in the build
+  container: no `zfs`, no `/dev/tpm*`).
+- Executing the `cargo audit` / `gitleaks` / `detect-secrets` tool runs (Q5/Q6
+  configs are correct and doc-backed; binaries not installed here).
+- Phase F frontier audits (F1–F9) and the Phase X independent re-scan, which
+  move PROVEN → CLOSED by fresh-eyes review rather than further implementation.
+
+This register and [the DEVLOG](../sessions/SECURITY-REMEDIATION-DEVLOG.md) are
+the source of truth for status; each entry links to the commit and gate that
+established it.

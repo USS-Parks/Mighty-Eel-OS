@@ -591,6 +591,17 @@ pub trait PqcProvider: Send + Sync {
         package_data: &[u8],
         signature: &[u8],
     ) -> Result<bool, VaultError>;
+
+    /// Cryptographically erase a model (plan V7): retire the model's
+    /// encryption key so its at-rest ciphertext becomes permanently
+    /// unrecoverable — the honest deletion primitive on copy-on-write storage,
+    /// where overwriting blocks in place does not destroy the originals.
+    /// Returns `true` if a key was retired, `false` if none was held (already
+    /// erased / never encrypted). The default is a no-op for providers that
+    /// hold no per-model key material.
+    async fn crypto_erase_model(&self, _model_id: &str) -> Result<bool, VaultError> {
+        Ok(false)
+    }
 }
 
 // ============================================================================

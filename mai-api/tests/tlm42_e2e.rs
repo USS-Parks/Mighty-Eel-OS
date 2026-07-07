@@ -4,9 +4,9 @@
 //! Run manually:
 //!   $env:MAI_OPENBAO_SECRET_ID = '<live secret>'
 //!   cargo test -p mai-api --test tlm42_e2e -- --nocapture
+#![allow(clippy::print_stderr)]
 
-use mai_api::openbao_client::{OpenBaoBridgeClient, OpenBaoBridgeConfig, OpenbaoHealth};
-use mai_compliance::trust_cache::{LocalTrustCache, SnapshotStatus};
+use mai_api::openbao_client::{OpenBaoBridgeClient, OpenBaoBridgeConfig};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 

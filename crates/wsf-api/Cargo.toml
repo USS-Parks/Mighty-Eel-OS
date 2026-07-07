@@ -24,7 +24,11 @@ thiserror = { workspace = true }
 hex = "0.4"
 base64 = "0.22"
 sha2 = "0.10"
+uuid = { workspace = true }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+
+[dev-dependencies]
+fabric-revocation = { path = "../fabric-revocation" }
 
 [lints]
 workspace = true

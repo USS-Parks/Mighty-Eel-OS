@@ -28,7 +28,8 @@ x-edge: &edge
 
 services:
   openbao:
-    image: openbao/openbao:latest
+    # AS-001: third-party image digest-pinned (resolved 2026-07-07).
+    image: openbao/openbao@sha256:6150c4a6b62067db6141c8da7a6a6b5763f4f47c315343d0c848b40fecdfd452
     cap_add: [IPC_LOCK]
     command: server -dev -dev-root-token-id=root -dev-listen-address=0.0.0.0:8200
     healthcheck:

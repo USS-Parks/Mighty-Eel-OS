@@ -115,8 +115,10 @@ impl TrustRingController {
 
         let key = ring_key_name(ring.spec.ring);
         let desired = if self.ring_darkened(ring.spec.ring).await? {
-            // Dark: disable the key, halt the ring's workloads, ack the kill.
-            self.transit.disable_key(&key).await?;
+            // Dark: disable the key family — the base ring key AND every
+            // per-tenant derivative (E2 namespacing) — halt the ring's
+            // workloads, ack the kill. A tenant-scoped wrap must not survive.
+            self.transit.disable_key_family(&key).await?;
             self.halt_ring_workloads(ring.spec.ring).await?;
             self.ack_ring_intents(ring.spec.ring).await?;
             TrustRingStatus {

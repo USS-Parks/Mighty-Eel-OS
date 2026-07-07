@@ -197,12 +197,10 @@ fn print_help() {
 /// `MaiServer::apply_ship_profile` collects at boot, but without
 /// mutating any AppState or starting sockets.
 async fn evaluate_runtime(profile: &ShipProfile) -> RuntimeChecks {
-    let vault_opened = match build_vault(profile) {
-        Ok(_) => RuntimeOutcome::pass(format!(
-            "{:?} vault built for {}",
-            profile.vault.backend,
-            profile.vault.root.display()
-        )),
+    // V2/V8: initialized construction + a measured storage round-trip —
+    // the same probe the server runs at boot, never a fabricated pass.
+    let vault_opened = match build_vault(profile).await {
+        Ok(vault) => mai_api::vault_builder::probe_vault(vault.as_ref()).await,
         Err(e) => RuntimeOutcome::fail(format!("vault builder rejected profile: {e}")),
     };
 

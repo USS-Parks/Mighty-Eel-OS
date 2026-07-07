@@ -8,8 +8,10 @@
 use std::sync::{Arc, Mutex};
 
 use base64::Engine;
-use fabric_crypto::providers::RustCryptoMlDsa87;
+use fabric_contracts::Audience;
+use fabric_crypto::providers::{MlDsa87Verifier, RustCryptoMlDsa87};
 use wsf_api::AppState;
+use wsf_api::auth::{LocalDevAuthenticator, WorkloadAuthenticator, WsfAuthenticator};
 use wsf_bridge::{BridgeConfig, OpenBaoAuth, OpenBaoConfig, TrustBridge};
 use wsf_broker::{AwsStsBroker, BrokerConfig};
 use wsf_ledger::Ledger;
@@ -99,6 +101,56 @@ async fn run() -> Result<(), String> {
     // authenticated ingress. The demo/appliance composes set WSF_LISTEN themselves.
     let listen = env_or("WSF_LISTEN", "127.0.0.1:8300");
 
+    // A2 authenticator: production requires a trusted workload-credential
+    // authority key; without it we fall back to the explicit local-dev
+    // principal (never production-grade). The default loopback bind keeps the
+    // dev fallback off any public interface.
+    let authenticator: Arc<dyn WsfAuthenticator> = match std::env::var("WSF_WORKLOAD_AUTHORITY_KEY")
+    {
+        Ok(k) => {
+            let key = base64::engine::general_purpose::STANDARD
+                .decode(k.trim())
+                .map_err(|e| format!("WSF_WORKLOAD_AUTHORITY_KEY not base64: {e}"))?;
+            let mut a = WorkloadAuthenticator::new(Box::new(MlDsa87Verifier), key, Audience::Wsf);
+            if let Ok(t) = std::env::var("WSF_INGRESS_TENANT") {
+                a = a.bound_to_tenant(t);
+            }
+            println!("wsf-api: workload-credential authenticator (audience=wsf)");
+            Arc::new(a)
+        }
+        Err(_) => {
+            let tenant = env_or("WSF_DEV_TENANT", "local-dev-tenant");
+            println!("wsf-api: LOCAL-DEV authenticator (tenant={tenant}) — not for production");
+            Arc::new(LocalDevAuthenticator::for_wsf(tenant))
+        }
+    };
+
+    // A3 issuance policy. Production loads signed / OpenBao-held tenant mappings
+    // (extended in B2); the dev fallback grants a small role set to the dev
+    // tenant so the loopback surface is usable without inventing authority.
+    let issuance_policy: Arc<dyn wsf_api::policy::TenantPolicyStore> = {
+        let tenant = env_or("WSF_DEV_TENANT", "local-dev-tenant");
+        Arc::new(wsf_api::policy::StaticTenantPolicies::single_dev(
+            tenant,
+            &["user", "clinician"],
+        ))
+    };
+
+    // B1/B2 cloud grants. Production loads signed / OpenBao-custodied mappings;
+    // the dev fallback maps a single grant id to a role ARN if configured.
+    let cloud_grants: Arc<dyn wsf_api::grants::GrantStore> = {
+        let tenant = env_or("WSF_DEV_TENANT", "local-dev-tenant");
+        match (
+            std::env::var("WSF_DEV_GRANT_ID"),
+            std::env::var("WSF_DEV_GRANT_ROLE_ARN"),
+        ) {
+            (Ok(gid), Ok(arn)) => {
+                Arc::new(wsf_api::grants::StaticGrants::single_dev(tenant, gid, arn))
+            }
+            _ => Arc::new(wsf_api::grants::StaticGrants::new()),
+        }
+    };
+
     let state = AppState {
         bridge: Arc::new(TrustBridge::new(
             new_openbao()?,
@@ -120,6 +172,11 @@ async fn run() -> Result<(), String> {
         )),
         ledger: Arc::new(Mutex::new(Ledger::new(ledger_signer))),
         token_public_key: Arc::new(anchor),
+        auth: authenticator,
+        policy: issuance_policy,
+        grants: cloud_grants,
+        // L2: no global auditors unless explicitly enrolled (safe default).
+        auditors: Arc::new(wsf_api::audit::StaticAuditors::none()),
     };
 
     let app = wsf_api::router(state);

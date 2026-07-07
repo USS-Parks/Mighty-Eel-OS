@@ -5,7 +5,8 @@
 # a slim runtime. Build context = the mai workspace root (so Cargo.lock resolves);
 # target/ is .dockerignore'd. One image, one binary per compose service (VH5).
 
-FROM rust:1-bookworm AS builder
+# AS-001: base images digest-pinned (digests resolved 2026-07-07).
+FROM rust:1-bookworm@sha256:a339861ae23e9abb272cea45dfafde21760d2ce6577a70f8a926153677902663 AS builder
 WORKDIR /build
 COPY . .
 # Cache the crate registry + target dir across builds, then copy the two binaries
@@ -18,7 +19,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     && cp target/release/aogd      /out/aogd \
     && cp target/release/aog-noded /out/aog-noded
 
-FROM debian:bookworm-slim AS runtime
+FROM debian:bookworm-slim@sha256:60eac759739651111db372c07be67863818726f754804b8707c90979bda511df AS runtime
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl \
     && rm -rf /var/lib/apt/lists/*

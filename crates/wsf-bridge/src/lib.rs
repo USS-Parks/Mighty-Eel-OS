@@ -206,6 +206,14 @@ impl TrustBridge {
         self.signer.as_ref()
     }
 
+    /// The current trust-bundle version this bridge stamps on issued tokens.
+    /// Used as the T6 "current" bundle so legacy (v1) tokens are refused
+    /// attenuation.
+    #[must_use]
+    pub fn bundle_version(&self) -> &str {
+        &self.config.trust_bundle_version
+    }
+
     /// Issue a signed trust token: OpenBao auth event → tenant lookup → compose
     /// → ML-DSA sign. Stateless (its own login each call).
     ///

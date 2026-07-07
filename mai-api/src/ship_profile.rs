@@ -83,6 +83,12 @@ pub struct PathsConfig {
 pub struct VaultConfig {
     pub backend: VaultBackend,
     pub root: PathBuf,
+    /// ZFS dataset backing `root` (V2/V5). When set, vault initialization
+    /// proves the live dataset's properties (encryption on, keys available,
+    /// expected mountpoint) and refuses to boot on a plain directory
+    /// masquerading as ZFS.
+    #[serde(default)]
+    pub dataset: Option<String>,
     #[serde(default)]
     pub require_sealed_master_key: bool,
     #[serde(default)]

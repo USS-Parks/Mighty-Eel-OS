@@ -118,6 +118,35 @@ which point the pyo3 bump is done as part of that layer's work.
 
 ---
 
+### 1.5 RUSTSEC-2026-0173 — `proc-macro-error2` is unmaintained
+
+| Field | Value |
+|:--|:--|
+| Crate | `proc-macro-error2 2.0.1` (proc-macro, compile-time only) |
+| Severity | Unmaintained-crate advisory (informational, not a vulnerability) |
+| Path | `mai-api` → `validator 0.20` → `validator_derive 0.20` (proc-macro) → `proc-macro-error2` |
+| Vulnerable range | all versions (unmaintained) |
+| Suggested fix | a future `validator` release that migrates off `proc-macro-error2` |
+| Suppression | [.cargo/audit.toml](../../.cargo/audit.toml), [deny.toml](../../deny.toml) |
+| Owner | Basho Parks |
+| Revisit lane | post-RC1 dependency-refresh lane |
+
+**Why deferred.** `proc-macro-error2` runs only during
+`validator_derive`'s macro expansion at build time; it is not linked
+into any shipped runtime binary and sits on no trust path. `validator`
+0.20.0 is the latest published release (verified), so no upgrade drops
+the dependency yet, and the advisory itself states no safe upgrade is
+available. The real fix is a future `validator` release (or replacement)
+that migrates off `proc-macro-error2` — a semver bump into the legacy
+`mai-api` crate — which rides the post-RC1 dependency-refresh lane rather
+than being churned across the RC1 freeze for an informational advisory.
+
+**Revisit trigger.** The post-RC1 dependency-refresh lane re-evaluates
+`validator`; if a release has dropped `proc-macro-error2` the ignore is
+removed, otherwise the deferral is re-confirmed.
+
+---
+
 ## 2. pip-audit (host-pip CVEs)
 
 Layer 2 probe: `IND-PY-004` (`python -m pip_audit`).

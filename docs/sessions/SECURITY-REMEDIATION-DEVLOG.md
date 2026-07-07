@@ -167,3 +167,496 @@ Evidence: `test-evidence/security-remediation/M0/adversarial-fixtures/`.
 Gate: every AF finding has a deterministic regression identifier (registry).
 
 Commit: (pending — this change set).
+
+## Phase A — WSF authentication and issuance authorization
+
+Closes M1's Phase A (A1–A5) and the structural half of **AF-002** (public WSF
+route issued signed tokens for caller-selected subjects/roles). Live gates run
+against a source-built OpenBao dev server (registry blobs are egress-blocked in
+this environment; see `test-evidence/security-remediation/M1/live-gates/`).
+
+### A1 — Principal contract
+
+`crates/fabric-contracts/src/principal.rs`: `WsfPrincipal`, `AuthStrength`,
+`Audience`, `AuthenticatedFacts`. The principal derives `Serialize` (receipts
+need it) but **not** `Deserialize`, and a private zero-size witness blocks
+external struct literals — the wire layer cannot manufacture a principal.
+`establish()` is the sole constructor (called by the A2 authenticator).
+
+Gate: serde tests + two `compile_fail` doctests proving `serde_json::from_str::
+<WsfPrincipal>` and a `DeserializeOwned` bound both fail to compile. Commit `97ad579`.
+
+### A2 — Authenticator seam
+
+`crates/wsf-api/src/auth.rs`: `WsfAuthenticator` trait; `WorkloadAuthenticator`
+verifies a signed `WorkloadCredential` (`Authorization: Workload <b64-json>`) —
+ML-DSA signature over a length-prefixed domain-separated preimage FIRST, then
+expiry, audience, optional bound-tenant; `LocalDevAuthenticator` is the explicit
+dev principal. `require_principal` middleware (route_layer over `/v1/*`) returns
+401/403 before the handler; `/healthz` + `/openapi.json` stay open.
+
+Gate: `tests/auth_gate.rs` (8) — missing→401, malformed→401, forged-sig→401,
+tampered-after-signing→401, expired→401, wrong-audience→403, wrong-tenant→403,
+valid→principal. Commit `a71bf03`.
+
+### A3 — Derived issuance request
+
+`crates/wsf-api/src/policy.rs` + `issue()` rewrite: `IssueReq` is bounded intent
+only (`deny_unknown_fields` — smuggling tenant_id/subject_id/roles → 422).
+Tenant + subject come from the principal; roles ⊆ tenant-grantable; models ⊆
+allowlist; `authorize_budget` refuses any over-ceiling counter (omitted ⇒
+ceiling, never unlimited).
+
+Gate: `tests/issue_authz.rs` (live) — issued token bound to the principal's
+tenant; smuggled tenant/roles → 422; ungranted role / over-ceiling budget → 403.
+Plus lib + policy unit tests. Commit `1a87685`.
+
+### A4 — Issuance permission model
+
+`IssuanceMode {SelfService, ServiceToService, Administrative}` classified from
+principal kind + requested roles; `permitted_modes` + `max_delegation_depth`
+gate the request; **every allow and deny** is receipted to the ledger (source
+`wsf-issuance`, metadata only).
+
+Gate: `tests/issuance_perms.rs` (5, offline — denials never dial the bridge):
+each refusal returns 403 AND lands a mode-labeled deny receipt; live test
+asserts the allow receipt + ≥2 deny receipts. Commit `4dd56d1`.
+
+### A5 — Live issuance gate
+
+`tests/issue_authz.rs::two_tenants_two_workloads_against_live_openbao`:
+authenticated issuance via the real `WorkloadAuthenticator` with **two workload
+identities in two tenants**. Each token binds to its own tenant; cross-tenant is
+structurally impossible (the authority-signed credential is the only tenant
+source); role-escalation → 403 + deny receipt; no credential → 401.
+
+Gate: correct identity succeeds; cross-tenant + escalation fail and are
+receipted. PASS against live OpenBao. Commit `c509219`.
+
+## Phase T — token primitive and attenuation repair
+
+Closes **AF-001** (attenuation signed attacker-constructed children without
+authenticating or fully constraining the parent — a signer oracle).
+
+### T1 — VerificationContext
+
+`fabric-token`: `VerificationContext` + `verify_in_context` check revocation,
+signature under the issuer key, expiry, not-before, tenant, and bundle version
+in one required-fields call, so a privileged call site cannot omit a check.
+`Operation` records intent for receipts.
+
+### T2 — TokenRestrictions
+
+Attenuation input is restriction-only (`deny_unknown_fields`): subset/lower/
+earlier axes + a child id. The child's identity/authority is copied server-side
+from the authenticated parent, so no attacker-suppliable child field exists. The
+WSF `/v1/tokens/attenuate` request and Rust SDK now carry `{parent, restrictions}`.
+
+### T3 — Parent authentication (the AF-001 fix)
+
+`attenuate()` runs `verify_in_context(parent)` before constructing any child.
+Unsigned, wrong-key, expired, not-yet-valid, revoked, wrong-tenant, and
+stale-bundle parents fail closed. `attenuate_preverified()` shares the narrowing
+for callers that authenticate the parent at their own boundary (aog-apiserver
+admission), with a doc warning against misuse.
+
+### T4 — Complete monotonicity
+
+Subset/equality on routes, models, roles, compliance scopes, classification,
+budget (fits remaining), expiry; offline can only turn on; child id non-empty
+and ≠ parent (no trivial cycle/dup); per-hop depth budget refuses at zero.
+
+Gates:
+- `fabric-token` unit/property suite — 26 tests: issue/verify, the full
+  `verify_in_context` matrix, a widening per axis, id/depth/offline, and the
+  preverified path. The AF-001/AF-006 regression fixtures flipped from asserting
+  the vulnerable behavior to asserting rejection and moved into the product suite
+  (feature gate retired). Commit `aee70e1`.
+- **T7 live gate** — `wsf-api/tests/attenuate_live.rs` against live OpenBao:
+  issue→attenuate→verify succeeds and the child inherits the parent's tenant;
+  a tampered parent and an attacker-signed parent are refused 403; a widening
+  restriction is refused 422. AF-001 closed black-box, not only in unit tests.
+  Commit `bfdfa6a`.
+
+### T5 — Atomic budget lineage
+
+`fabric_token::lineage_key(token)` — the immediate parent for an attenuated
+token, its own id for a root — keys the gateway's budget fold + `record_spend`,
+so all siblings of a parent draw from one shared atomic counter (the
+`LocalSpendLedger`/`LeasedSpendLedger` from X1). Sibling children can no longer
+each spend the parent's full remaining. Root tokens are unchanged, so the live
+`kill_switch` gate stays green. Gate: `tests/budget_lineage.rs` — two siblings
+share one counter; 8 concurrent siblings land every unit on one counter with the
+ceiling holding. Honest bound: one level of siblings shares with their parent;
+full deep-subtree accounting against the lineage root needs the Phase-L chain.
+Commit `f68f95b`.
+
+### T6 — Compatibility and migration
+
+`VerificationContext::require_current_bundle(current)` classifies any other
+bundle as legacy (v1); `permit_legacy_verify()` opens a bounded verify-only
+window. Production denies legacy by default (`UnsupportedTokenVersion`); a legacy
+token is never an attenuation parent (`LegacyAttenuationDenied`), even under the
+migration flag; with no policy set, behavior is unchanged (back-compat). Wired
+into `/v1/tokens/attenuate` via the bridge's `bundle_version()`. Gates:
+`tests/token_versioning.rs` (4) + a live legacy-parent-refused case in
+`attenuate_live.rs`. Commit `1543b93`.
+
+**Phase T complete (T1–T7).** AF-001 PROVEN.
+
+## Phase E — tenant-bound envelope security (core)
+
+Closes **AF-003** (envelope unseal lacked tenant/subject binding — any
+sufficiently-cleared token could unseal any tenant's envelope).
+
+- **E1** contract: `EnvelopeBinding {tenant_id, owner_subject_hash, audience,
+  envelope_version}` on the `Envelope`, readable pre-decrypt and folded into
+  both the AEAD AAD and the provenance thread — swapping any binding field
+  breaks decryption and the signature (tested).
+- **E3** seal authorization: `wsf-seal` derives the binding from the verified
+  token (tenant + subject), never caller-chosen; envelopes are stamped v2.
+- **E4** unseal authorization: before any Transit decrypt, unseal denies a
+  legacy unbound envelope, a cross-tenant token, or a wrong-audience envelope —
+  each receipted.
+- **E7** live gate: `wsf-seal/tests/live_seal.rs` adds a cross-tenant case — a
+  fully-cleared token from another tenant is refused 403 before unwrap. PASS
+  against live OpenBao Transit. Commit `8fcb6ae`.
+
+Remaining in-phase hardening: **E2** per-tenant Transit key namespace, **E5**
+offline v1-envelope migration command, **E6** storage/receipt tenant-key binding.
+
+## Phase B — cloud credential broker confinement (core)
+
+Closes **AF-004** (the broker accepted a caller-selected AWS role ARN).
+
+- **B1** contract: `ExchangeReq` carries a tenant-scoped `grant_id`, not a
+  `role_arn`, with `deny_unknown_fields` — a smuggled `role_arn` is a 422.
+- **B2** server-side grants: `wsf-api/src/grants.rs` (`CloudGrant` + `GrantStore`
+  seam; `StaticGrants` for dev/tests). The exchange handler requires the WSF
+  audience, requires the presented token's tenant to equal the authenticated
+  principal, resolves `(tenant, grant_id)` server-side, and only then brokers
+  with the approved ARN. Missing/cross-tenant grant → 403.
+- **B6** live gate: `wsf-api/tests/broker_grant.rs` against live OpenBao + Moto
+  STS — approved grant brokers scoped creds; raw `role_arn` → 422; unknown grant
+  → 403. Commit `9b66c3a`.
+
+The low-level broker primitive still takes an ARN (W2 `live_localstack` exercises
+it directly and stays green); the AF-004 fix is at the public API. Remaining
+in-phase: **B3** AWS least-privilege scope binding, **B4** GCP/Azure parity,
+**B5** credential-lifecycle hygiene.
+
+## Phase L — receipt ledger authorization (core) + E6 receipt binding
+
+Closes **AF-007's core** (the ledger was unauthenticated and not tenant-filtered).
+
+- **L1** authenticated: `/v1/receipts` requires the A2 principal + WSF audience.
+- **L2** tenant-scoped: an entry is returned only if its receipt's `tenant_id`
+  equals the caller's tenant; an optional typed field filter is always
+  intersected with that scope, so cross-tenant identifier guessing returns no
+  rows and no existence oracle. Results bounded by `RECEIPTS_LIMIT`. Untenanted
+  receipts are withheld (fail closed).
+- **E6** receipt binding: `SealReceipt` gains `tenant_id` (stamped from the
+  token), so seal/unseal receipts are tenant-filterable like issuance receipts.
+
+Gate: `wsf-api/tests/ledger_authz.rs` (offline, two tenants) — each principal
+sees only its own tenant's receipts; a cross-tenant token-id query returns
+nothing. W3/W6 live gates green with tenant-stamped receipts. Commit `38b7113`.
+
+Remaining in-phase: **L2** global-auditor role, **L3** persistent HA ledger,
+**L4** end-to-end live gate incl. export.
+
+## Phase R — revocation and trust freshness (complete; AF-006 → PROVEN)
+
+Core (earlier commits `76f1ca5`, `116b0f1`): **R2** the complete revocation
+predicate — `RevocationSnapshot` gained `revoked_tenants` / `revoked_issuers` /
+`revoked_service_identities` and a single `revokes(&token)` covering every
+dimension (token id, subject, signing key, issuer, bundle, tenant, service
+identity); **R3** the shared verify path (`fabric-token::verify_in_context`
+with `with_revocation`).
+
+Hardening (this session):
+
+- **R1** anti-rollback: `MonotonicRevocationStore` (`fabric-revocation`) —
+  `advance` adopts a candidate snapshot only if it verifies against the trust
+  anchor **and** strictly advances the new `sequence` counter (serialized only
+  when non-zero, so pre-R1 signatures keep verifying). A replayed older
+  "nothing revoked" view is refused (`RevocationError::Rollback`) and the held
+  state stands. Emergency snapshots share the counter, so an out-of-band
+  revocation cannot be rolled back by a lagging regular publication.
+- **Consumer wiring**: `SealService` and all three brokers (AWS/GCP/Azure) take
+  `with_revocation_store(...)`. Once wired they fail closed **before any
+  custody or cloud call**: no held snapshot, an expired snapshot, or a snapshot
+  revoking the token on any dimension all deny (receipted on the seal side,
+  `TokenRejected` on the broker side). Unit gates prove the denial fires with
+  unreachable OpenBao/STS endpoints.
+- **R6 live gate**: `wsf-api/tests/live_revocation.rs` against live OpenBao +
+  Moto — a signed snapshot travels the real KV distribution channel; with a
+  clean sequence-1 snapshot engaged, issue/seal/unseal/exchange all succeed;
+  after publishing sequence-2 revoking the tenant, **unseal and credential
+  exchange both deny (403)** for the still-signature-valid token with no
+  restart; replaying the stale clean snapshot is refused (R1) and the denials
+  stand. PASS.
+
+**R4/R5 posture** (ops-plane): propagation is poll-driven; the fail-closed
+freshness check bounds exposure at snapshot TTL — an appliance that cannot
+fetch a fresh snapshot stops honoring privileged ops rather than serving from
+a stale view. Signed snapshots verify offline (`fabric-revocation` docs), which
+is the air-gap leg; HA distribution (multi-channel publication) is deployment
+plumbing tracked for the ops runbook, not a code gap.
+
+## Phase E — hardening complete (E2/E5)
+
+- **E2** per-tenant Transit keys (commit `0a7f383`): the seal service wraps
+  each tenant's data keys under `<base>-<tenant>`; unseal unwraps under the
+  **binding's** tenant key. Live gate `wsf-seal/tests/live_tenant_keys.rs`
+  proves OpenBao itself refuses a cross-tenant unwrap (400) independent of the
+  app-layer E4 check.
+- **E5** authenticated v1→v2 migration (commit `a22cf63`):
+  `fabric-envelope::migrate_legacy` verifies the legacy thread against the
+  original sealer key, opens the label-only AAD, and re-seals with the tenant
+  binding; idempotent on v2; tampered v1 refused. Offline gates in
+  `fabric-envelope/tests/envelope.rs`.
+
+With E6 (receipt binding, logged with Phase L) this completes Phase E:
+**AF-003 fully PROVEN**.
+
+## Phase B — hardening complete (B3/B4/B5)
+
+- **B3** least privilege: `build_session_policy(token, allowed_actions)` emits
+  the **grant's** approved IAM actions on the token's `ResourcePrefix` caveats
+  — never `Action:"*"`. A wildcard action in a misconfigured grant is dropped
+  (alone → deny-all); token `ToolAllowlist` caveats intersect (narrow) the
+  action set. `GrantScope` binds role ARN + actions + signing-region override +
+  `ExternalId` (confused-deputy defense, appended to the AssumeRole form) + a
+  TTL ceiling that tightens the STS window and refuses grants below the 900s
+  floor before any custody call. `CloudGrant::to_scope()` carries all of it
+  from the API's grant store into the broker.
+- **B5** credential hygiene: `RootCredentials` zeroize on drop
+  (`zeroize::ZeroizeOnDrop`) with fully-redacted `Debug`;
+  `TemporaryCredentials` redacts secret access key + session token in `Debug`
+  (access key id stays visible — CloudTrail correlation data). Regression
+  tests prove `{:?}` output carries no secret material.
+- **B4** parity: `GcpCredentials` / `AzureCredentials` redact their bearer
+  tokens in `Debug`; GCP/Azure brokers share the same fail-closed
+  `verify_token` (including the revocation consult) and TTL clamps.
+
+Gates: 26 wsf-broker unit tests + W2 (`live_localstack` via `GrantScope`) +
+B6 (`broker_grant`) + W6 (`live_api`) all green against live OpenBao + Moto.
+With B1/B2/B6 this completes Phase B: **AF-004 fully PROVEN**.
+
+## Phase Q — Q5 dependency-policy config drift fixed
+
+`cargo audit` and `cargo deny` read the same RustSec DB but had drifted:
+`.cargo/audit.toml` ignored 4 advisories (0144, 0384, 0176, 0177) while
+`deny.toml` ignored 5 — the extra being **RUSTSEC-2026-0173**
+(`proc-macro-error2` unmaintained, compile-time-only via `validator_derive`).
+So `cargo audit` would have **failed** on 0173 while `cargo deny` passed —
+exactly the "documented command doesn't match CI" gate inconsistency Q1/Q5
+target. Synced the two: `.cargo/audit.toml` now ignores the same 5 advisories
+(verified equal by parsing both), added the missing §1.5 to
+`docs/compliance/INDEPENDENT-EVIDENCE-DEFERRALS.md` (the audit config's own
+rule is "no ignore without a doc entry"), and fixed the stale doc path both
+configs cited (`docs/…` → `docs/compliance/…`). Every ignore remains a
+specific advisory id with a written rationale and a named revisit lane — no
+blanket suppression. Running the tools to confirm no *new* advisory falls
+through is the remaining step (the binaries aren't installed here and
+compiling them from source risks the tight disk).
+
+## Phase L — hardening complete (L2 auditor / L4 export; AF-007 → PROVEN)
+
+- **L2 remainder — global auditor**: `wsf-api/src/audit.rs` (`AuditorStore` +
+  `StaticAuditors`). Enrollment is by authenticated `principal_id`, server-side
+  only — nothing in the request can confer it, and the default everywhere is
+  `StaticAuditors::none()`. An enrolled auditor is the single exception to
+  receipt tenant scoping (still bounded by `RECEIPTS_LIMIT`); everyone else's
+  queries stay mandatorily tenant-scoped exactly as before.
+- **L4 — signed evidence export**: `GET /v1/receipts/export` (A2-gated +
+  auditor-only) returns the ledger's ML-DSA-signed `EvidencePack`, which
+  verifies **offline** via `wsf_ledger::verify_pack` with the ledger public key
+  alone. Non-auditors get 403. SDK: `WsfClient::export_receipts`. OpenAPI
+  updated.
+- Gates: offline `ledger_authz.rs` — auditor sees both tenants, plain principal
+  stays scoped, exported pack verifies offline, a tampered entry breaks the
+  signature, non-auditor export 403. Live `live_api.rs` (W6/L4) — the SDK's
+  unenrolled principal is refused 403; the enrolled auditor principal exports
+  over live HTTP and the pack verifies offline against the ledger key. PASS.
+- **L3 posture** (ops-plane): the in-memory chain + signed offline-verifiable
+  export is the evidence path; a durable HA backend is deployment plumbing for
+  the ops runbook — the authorization and integrity controls above are
+  backend-independent.
+
+With L1/L2 core + E6 receipt binding this completes Phase L: **AF-007 fully
+PROVEN**.
+
+## Live re-verification sweep — E2 interaction fixes
+
+Full re-run of every live suite in the changed-code dependency set surfaced
+two E2 (per-tenant Transit keys) interactions the per-crate gates had missed:
+
+- **W4 (`wsf-ledger/tests/live_ledger.rs`)**: the test provisioned the bare
+  base key and an exact-path Transit policy, so the E2 seal path
+  (`<base>-<tenant>`) had no key/permission. Test provisioning updated to the
+  per-tenant key + wildcard policy (same shape as the other live suites).
+- **R4 ring darkening (real regression, `aog-controller`)**: darkening a
+  trust ring disabled only the base ring key, but the seal service now wraps
+  under per-tenant derivatives — so a darkened ring's tenant-namespaced
+  envelopes **still unsealed**. `TransitAdmin` gains `list_keys` +
+  `disable_key_family`, and the ring reconciler darkens the whole key family
+  (`<base>` and every `<base>-*`). The R4 live gate now also asserts the
+  per-tenant derivative is dead after darkening, and the behavioral proof
+  (unseal fails on a dark ring) is green again.
+
+Post-fix state: every crate depending on the phase-B/R/L-changed code passes
+its full suite against live OpenBao + Moto (fabric-token, fabric-revocation,
+wsf-bridge, wsf-broker, wsf-seal, wsf-api, wsf-cache, wsf-tenants,
+wsf-ledger, aog-gateway, aog-controller, aog-apiserver, aog-node,
+aog-conformance, aogd). `protoc` was also installed in the dev container,
+unblocking `mai-api` builds (pre-existing environment gap, unrelated to the
+remediation).
+
+## Phase V — V1/V2/V3 + V8 core (AF-005)
+
+- **V1 backend policy**: `build_vault` production mode accepts only the
+  reviewed encrypted backend. The plaintext `file-dev` backend — previously
+  accepted in production whenever `vault.root` existed — is refused regardless
+  of `allow_stub` or root state, and the `PROD-VAULT-001` static check fails
+  on it explicitly.
+- **V2 initialized construction**: the ZFS arm no longer hands out a bare
+  `ZfsVault::new` (no PQC, no audit writer, nothing awaited). It constructs
+  and initializes `PqcEngine` and the PQC-signed `AuditWriter`, creates the
+  storage tree, builds `ZfsVault::with_engines`, and — when the new
+  `[vault].dataset` profile field names the backing dataset — wires real
+  `ZfsOps` so initialization **proves the live dataset's properties** (V5)
+  instead of trusting a directory.
+- **V3 initialization blocks binding**: `vault.initialize()` is awaited in
+  the builder and any failure is `VaultBuildError::InitFailed`, which aborts
+  `MaiServer::run` before any socket binds.
+- **V8 core — measured readiness**: the unconditional
+  `vault_opened = Pass("vault opened")` fabrication is gone. `probe_vault`
+  runs a storage round-trip (store → load → byte-compare, unique per-boot id)
+  through the live `VaultInterface` and its outcome feeds `PROD-VAULT-100`;
+  a missing probe fails closed. `mai_ship_validate` runs the same probe.
+  Gate: `vault_bootstrap.rs` proves the probe passes on an initialized vault
+  and FAILS on the stub (which the old code would have certified).
+
+## Phase V — V4 sealed storage + V7 cryptographic erasure
+
+- **V4 encrypted model storage**: `ZfsVault::store_model_package` seals
+  weights at rest through `PqcProvider::encrypt_model_weights` (ML-KEM-1024 +
+  AES-256-GCM, key-derived with the model id as context) when a PQC engine is
+  wired — which the V2 builder always does for the ZFS backend. The manifest
+  records a `weights_format` (`mlkem1024-aesgcm-v1`); `load_model_weights`
+  dispatches on it, decrypting v1 and reading legacy `plaintext-v0` for
+  migration. Encrypted weights presented to an engine-less vault **fail
+  closed** rather than returning ciphertext. Integrity hashes are computed
+  over the stored (cipher) bytes, so verification needs no key. Gates in
+  `zfs.rs`: sealed-at-rest (plaintext never appears in the file) + round-trip,
+  legacy-plaintext load, engine-less fail-closed.
+- **V7 cryptographic erasure**: the former `secure_overwrite_passes` /
+  `secure_wipe` model was false on copy-on-write ZFS — overwriting a file
+  writes new blocks and the originals persist (indefinitely in any snapshot).
+  Replaced by `PqcProvider::crypto_erase_model`, which retires the model's KEM
+  key (scrubs + drops the secret); once gone, the at-rest envelope — on disk
+  and in every retained snapshot — is permanently undecryptable.
+  `ZfsVault::remove_model` calls it and its comment now states the real
+  guarantee; `RemoveOptions`/`RemovalResult` and the API `ModelRemoveResponse`
+  carry `crypto_erased` instead of `secure_wipe`, with snapshot-retention
+  effects documented on the fields. Gate proves retained ciphertext is
+  undecryptable after erasure.
+
+## Phase V — V9 key persistence + restart recovery
+
+The blocker under V9's "restart, verify/decrypt" leg was that the per-model
+KEM keys `encrypt_model_weights` mints lived only in memory — a process
+restart lost them, so V4-sealed weights became undecryptable across exactly
+the reboot V9 must survive. Fixed in `PqcEngine`:
+
+- **Persisted, wrapped keys**: on first use the engine loads-or-creates a
+  32-byte key-encryption key at `<key_store>/kek.bin`; each per-model KEM
+  secret is AES-256-GCM-wrapped under it and written to
+  `<key_store>/model-keys/<key_id>.json` (public key + metadata clear, secret
+  never plaintext on disk). `ensure_model_keypair` recovers a persisted key
+  before minting a new one, and `decrypt_model_weights` lazily loads it on a
+  cold cache — so re-sealing reuses the key and a fresh process decrypts
+  weights sealed before the restart. Persist failure is an error, not a
+  warning (a key that can't durably store wouldn't survive a reboot).
+- **Erasure survives restart (V7 completion)**: `crypto_erase_model` now
+  deletes the persisted key file as well as the in-memory copy, using the
+  deterministic key id so it works whether or not the key was loaded this
+  boot. A reborn engine over the same store cannot resurrect an erased key.
+- Gates (`pqc.rs`): `v9_model_key_survives_restart` (seal → drop engine →
+  fresh engine decrypts) and `v9_crypto_erase_survives_restart` (erase → drop
+  → fresh engine cannot decrypt retained ciphertext). Test fixtures moved to
+  per-call unique key stores so on-disk state can't leak across tests.
+
+In production the key store sits on the encrypted ZFS dataset (V4/V5) and the
+KEK should additionally be TPM-sealed; the dev/no-TPM path keeps it as a
+plaintext file on that still-encrypted dataset.
+
+**V9 migration** (the last unimplemented V9 code path):
+`ZfsVault::migrate_model_to_encrypted` reads a legacy `plaintext-v0` model,
+seals it under the model's KEM key, and rewrites the weights file + manifest
+as `mlkem1024-aesgcm-v1`. Idempotent on already-encrypted models; refuses
+without a wired engine (never leaves plaintext silently). The doc notes the
+CoW caveat: migration seals the *live* copy, but a pre-existing snapshot from
+the plaintext era still retains the old blocks — snapshot afresh and retire
+the pre-migration ones. Gates: `v9_migrate_legacy_plaintext_to_encrypted`
+(seal-in-place + round-trip + idempotent) and `v9_migrate_requires_a_pqc_engine`.
+
+The **V9 live gate** (`mai-vault/tests/live_zfs.rs`, env-gated on
+`MAI_ZFS_TEST_DATASET`) now also exercises, on a real dataset: (1) restart
+recovery — seal a model, drop the whole vault, bring a fresh one up over the
+same dataset + key store, decrypt; and (2) legacy-plaintext migration in
+place. It skips cleanly where there is no ZFS.
+
+Remaining for AF-005: **running** the V9 live gate on a real ZFS+TPM host
+(this container has neither `zfs` nor `/dev/tpm*`) — every V9 code path is now
+implemented, unit-proven, and wired into the ready-to-run live gate; only the
+host execution + TPM-sealed-KEK hardening are deferred.
+
+## Phase Q/M3 — quality + supply-chain gates (AQ-001, AQ-002, AS-001)
+
+- **AQ-001** (clippy): the workspace is clean under the CI flags
+  (`-D warnings -A clippy::pedantic`, 0 errors); the `doc_lazy_continuation`
+  the finding cited at `mai-core/src/cache.rs:109` no longer exists (the
+  cacheability doc list is properly continued). No code change needed.
+- **AQ-002** (Python gates collect reliably): the SDK uses a `src/` layout,
+  so tests importing `mai` only resolved with an editable install — the
+  "does not collect" root cause. Added a local `[tool.pytest.ini_options]`
+  to `mai-sdk-python` (`pythonpath = ["src"]`, `testpaths`, `asyncio_mode`)
+  so the gate is self-contained and rootdir is the SDK dir. Whole-tree ruff
+  had 3 findings, all in the appliance mock-llm demo server (two missing
+  annotations + an intentional bind-all-interfaces now `# noqa`'d with
+  rationale) — fixed. Verified: SDK 179 pytest pass + mypy clean; whole-tree
+  ruff clean; whole tree collects 1310 tests with 0 errors once requirements
+  are installed.
+- **AS-001** (image pinning): every **third-party** base/service image is now
+  digest-pinned across the three deployment Dockerfiles
+  (`rust`, `debian`, `node`, `nginx`) and the four compose stacks
+  (`openbao`, `postgres`, `minio`, `python`); digests resolved 2026-07-07 via
+  `docker buildx imagetools inspect` (registry manifest reachable through the
+  agent proxy; layer pulls are not, so `RepoDigests` was unavailable). The
+  release `Dockerfile` was already digest-pinned. First-party
+  `islandmountain/*` / `wsf-api` references stay tagged — they are local
+  `build:` outputs, not registry pulls, so a digest can't precede the build.
+
+## Session close (2026-07-07 — paused for owner audit)
+
+State at pause: every finding is FIXED or PROVEN; none OPEN, none yet CLOSED
+(CLOSED requires the Phase X independent re-scan). AF-001/002/003/004/006/007
+PROVEN with live gates; AF-005 FIXED (V1–V8 + V9 persistence/restart/migration,
+all unit-proven and wired into the env-gated ZFS live gate); AQ-001/AQ-002/
+AS-001 FIXED. See the register's "Session status" block for the deferral list
+(V9 live-host run, `cargo audit`/`gitleaks`/`detect-secrets` executions, Phase
+F/X audits) — each blocked on hardware or on independent-review scope, not on
+further implementation.
+
+Governance/commit convention reaffirmed at close: the canonical commit footer
+is `Authored and reviewed by Basho Parks, copyright 2026` with **no** AI
+co-author credit — enforced by `.githooks/commit-msg` (+ `footer-filter.awk`),
+mirrored in `.integrity/hooks/`, the PowerShell port, and the
+`.github/workflows/commit-msg-check.yml` CI gate. This pass unified the two
+stray `Copyright` (capital-C) variants in the `.integrity/` mirror and
+`HANDOFF.md` to the lowercase `copyright` canon and loosened the mirror's strip
+regex to the `^Authored and reviewed by` prefix so re-stamping stays idempotent.
+Branch `claude/live-gates-docker-zfs-qoe2bc`; all work pushed to origin.

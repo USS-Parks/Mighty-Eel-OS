@@ -603,7 +603,10 @@ pub struct DiscoveredPackage {
 pub struct ModelRemoveResponse {
     pub model_id: String,
     pub status: String,
-    pub secure_wipe: bool,
+    /// V7: the model's encryption key was retired (cryptographic erasure) —
+    /// the honest deletion guarantee on copy-on-write storage. Replaces the
+    /// former `secure_wipe` overwrite claim.
+    pub crypto_erased: bool,
     pub snapshot_created: bool,
     pub message: String,
 }
