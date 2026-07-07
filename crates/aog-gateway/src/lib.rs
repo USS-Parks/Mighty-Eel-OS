@@ -199,9 +199,12 @@ impl Gateway {
         }
 
         // Budget pre-flight (G1 static caps + G9 session-cumulative runtime spend).
+        // Metering is keyed by the attenuation lineage (T5) so sibling children
+        // share one atomic counter and cannot each spend the parent's remaining.
         if let Some(b) = &token.budget {
             let mut effective = b.clone();
-            self.spend.fold(&token.token_id, &mut effective);
+            self.spend
+                .fold(fabric_token::lineage_key(&token), &mut effective);
             if budget_exhausted(&effective) {
                 return Err(GatewayError::BudgetExhausted);
             }
@@ -211,13 +214,16 @@ impl Gateway {
         Ok(ResolvedContext { token, tenant_id })
     }
 
-    /// Record one completed call's usage against a token's budget (G9). The next
-    /// [`resolve_and_check`](Self::resolve_and_check) for the same token folds in
-    /// the cumulative spend and rejects pre-flight once a cap is reached — so
-    /// budget exhaustion blocks a session mid-flight, not just at issue time.
-    pub fn record_spend(&self, token_id: &str, tokens: u64, usd_cents: u64, tool_calls: u32) {
+    /// Record one completed call's usage against a token's budget (G9). `key`
+    /// must be the token's [`fabric_token::lineage_key`] (T5) so sibling children
+    /// accrue against one shared counter; the next
+    /// [`resolve_and_check`](Self::resolve_and_check) folds the cumulative spend
+    /// and rejects pre-flight once a cap is reached — so budget exhaustion blocks
+    /// a session mid-flight, not just at issue time. (A root token's lineage key
+    /// is its own id.)
+    pub fn record_spend(&self, key: &str, tokens: u64, usd_cents: u64, tool_calls: u32) {
         self.spend.add(
-            token_id,
+            key,
             Spent {
                 tokens,
                 usd_cents,

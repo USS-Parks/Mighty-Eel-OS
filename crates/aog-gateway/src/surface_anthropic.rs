@@ -165,7 +165,7 @@ async fn messages(
                 // Budget decrement (G9): accrue this call's usage against the token;
                 // the next resolve folds it in and rejects once a cap is reached.
                 state.gateway.record_spend(
-                    &ctx.token.token_id,
+                    fabric_token::lineage_key(&ctx.token),
                     u64::from(r.usage.input_tokens) + u64::from(r.usage.output_tokens),
                     state.prices.cost(
                         &provider_name,

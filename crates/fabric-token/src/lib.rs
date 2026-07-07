@@ -139,6 +139,27 @@ pub fn is_expired(token: &TrustToken, now: DateTime<Utc>) -> Result<bool, TokenE
     Ok(exp <= now)
 }
 
+/// The shared budget-metering key for a token's attenuation lineage (plan T5).
+///
+/// Sibling children of one parent must draw from a *single* shared spend
+/// counter, or each could independently spend the parent's full remaining
+/// budget (a concurrent double-spend). Keying spend by the immediate parent —
+/// the anchor all siblings share — makes their combined spend meter against one
+/// atomic counter, so it can never exceed the parent ceiling. A root token
+/// (no parent) keys by its own id, unchanged.
+///
+/// This binds one level of siblings to their parent's pool. Accounting a full
+/// deep subtree against the lineage *root* additionally needs the chain, which
+/// lives in the receipt ledger (Phase L) — documented, not silently assumed.
+#[must_use]
+pub fn lineage_key(token: &TrustToken) -> &str {
+    token
+        .attenuation
+        .parent_id
+        .as_deref()
+        .unwrap_or(&token.token_id)
+}
+
 /// The privileged operation a verification is guarding (plan T1). Carried for
 /// receipts and so a call site declares intent explicitly.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
