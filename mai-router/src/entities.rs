@@ -10,6 +10,8 @@
 //! shipped baseline for their domain.
 
 use serde::{Deserialize, Serialize};
+use unicode_normalization::UnicodeNormalization;
+use unicode_normalization::char::is_combining_mark;
 
 /// Category of compliance entity detected.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -121,11 +123,12 @@ impl EntityScanner {
     /// Scan `text` and return every dictionary hit. Matches preserve order
     /// of first occurrence within the text.
     pub fn scan(&self, text: &str) -> Vec<EntityMatch> {
-        // Case-fold with a byte-offset map back to the ORIGINAL text. `to_lowercase`
-        // can change byte lengths on non-ASCII input (e.g. 'İ' -> "i̇"), so indexing
-        // the original with lowercased-haystack offsets drifts (audit G7). The map
-        // lets `find_all` report spans in original coordinates.
-        let (haystack, offsets) = fold_lower_with_offsets(text);
+        // Normalize (case-fold + compatibility decomposition + mark strip +
+        // homoglyph fold + whitespace collapse) with a byte-offset map back to the
+        // ORIGINAL text, so obfuscated terms are caught (audit G7) and `find_all`
+        // still reports spans in original coordinates even though the fold changed
+        // byte lengths.
+        let (haystack, offsets) = normalize_with_offsets(text);
         let mut matches = Vec::new();
         find_all(
             &haystack,
@@ -160,27 +163,88 @@ fn lower(terms: &[String]) -> Vec<String> {
     terms.iter().map(|t| t.to_lowercase()).collect()
 }
 
-/// Lowercase `text`, returning the folded string plus a byte-offset map: for
-/// each byte index `i` of the folded string, `offsets[i]` is the byte offset in
-/// the ORIGINAL text of the char that produced it, and `offsets[folded.len()]`
-/// is `text.len()`. A match at folded `[hs, he)` maps to original
-/// `(offsets[hs], offsets[he])`. This keeps spans in original coordinates even
-/// when a char's lowercase form differs in byte length (audit G7).
-fn fold_lower_with_offsets(text: &str) -> (String, Vec<usize>) {
+/// Normalize `text` for obfuscation-resistant matching, returning the folded
+/// string plus a byte-offset map: for each byte index `i` of the folded string,
+/// `offsets[i]` is the byte offset in the ORIGINAL text of the char that produced
+/// it, and `offsets[folded.len()]` is `text.len()`. A match at folded `[hs, he)`
+/// maps to original `(offsets[hs], offsets[he])`, so spans stay in original
+/// coordinates regardless of how much the fold changed byte lengths (audit G7).
+///
+/// Per-char pipeline: lowercase -> compatibility decomposition (folds full-width
+/// `ｐ`, ligatures `ﬁ`, and splits accents into base + combining mark) -> drop
+/// combining marks (strips diacritics; defeats mark-splicing) -> map common
+/// Cyrillic/Greek homoglyphs to their Latin lookalike. Runs of Unicode whitespace
+/// collapse to a single ASCII space. Over-folding only ever *widens* detection
+/// (fail-safe: a false hit routes local), never hides a term.
+fn normalize_with_offsets(text: &str) -> (String, Vec<usize>) {
     let mut folded = String::with_capacity(text.len());
     let mut offsets = Vec::with_capacity(text.len() + 1);
     let mut buf = [0u8; 4];
+    let mut prev_was_space = false;
     for (ob, ch) in text.char_indices() {
-        for lc in ch.to_lowercase() {
-            let s = lc.encode_utf8(&mut buf);
-            for _ in 0..s.len() {
+        if ch.is_whitespace() {
+            // Collapse a run of whitespace to one ASCII space.
+            if !prev_was_space {
                 offsets.push(ob);
+                folded.push(' ');
+                prev_was_space = true;
             }
-            folded.push_str(s);
+            continue;
+        }
+        prev_was_space = false;
+        for lc in ch.to_lowercase() {
+            for nf in std::iter::once(lc).nfkd() {
+                if is_combining_mark(nf) {
+                    continue;
+                }
+                let mapped = fold_homoglyph(nf);
+                let s = mapped.encode_utf8(&mut buf);
+                for _ in 0..s.len() {
+                    offsets.push(ob);
+                }
+                folded.push_str(s);
+            }
         }
     }
     offsets.push(text.len());
     (folded, offsets)
+}
+
+/// Map a curated set of common Cyrillic/Greek homoglyphs to their Latin
+/// lookalike (lowercase). Not exhaustive — the widely-abused confusables that
+/// spoof the Latin letters in the compliance vocabulary. Non-homoglyph chars
+/// pass through unchanged.
+fn fold_homoglyph(c: char) -> char {
+    match c {
+        // Cyrillic -> Latin
+        'а' => 'a',
+        'в' => 'b',
+        'е' | 'ё' => 'e',
+        'к' => 'k',
+        'м' => 'm',
+        'н' => 'h',
+        'о' => 'o',
+        'р' => 'p',
+        'с' => 'c',
+        'т' => 't',
+        'у' => 'y',
+        'х' => 'x',
+        'і' | 'ї' => 'i',
+        'ј' => 'j',
+        'ѕ' => 's',
+        // Greek -> Latin
+        'ο' => 'o',
+        'α' => 'a',
+        'ρ' => 'p',
+        'ι' => 'i',
+        'ν' => 'v',
+        'τ' => 't',
+        'κ' => 'k',
+        'μ' => 'm',
+        'χ' => 'x',
+        'ε' => 'e',
+        other => other,
+    }
 }
 
 fn find_all(
@@ -253,6 +317,54 @@ mod tests {
             &text[a..b],
             "patient",
             "span must slice the original 'patient'"
+        );
+    }
+
+    #[test]
+    fn obfuscated_terms_are_detected_after_normalization() {
+        // Audit G7: normalization catches homoglyph / full-width / diacritic /
+        // whitespace obfuscation of the compliance vocabulary.
+        let s = EntityScanner::baseline();
+
+        // Full-width Latin: ｐｒｅｓｃｒｉｐｔｉｏｎ -> prescription.
+        let full_width: String = "prescription"
+            .chars()
+            .map(|c| char::from_u32(c as u32 - 0x61 + 0xFF41).unwrap())
+            .collect();
+        let fw = s.scan(&full_width);
+        assert!(
+            fw.iter().any(|m| m.kind == EntityKind::Medical),
+            "full-width 'prescription' must be detected"
+        );
+        // Span still indexes the (heavily length-changed) original validly.
+        let m = fw.iter().find(|m| m.kind == EntityKind::Medical).unwrap();
+        assert!(
+            full_width.get(m.span.0..m.span.1).is_some(),
+            "span must be valid original-coordinate bytes"
+        );
+
+        // Diacritics: pátîent -> patient (compat-decompose + strip marks).
+        assert!(
+            s.scan("p\u{00e1}t\u{00ee}ent")
+                .iter()
+                .any(|m| m.kind == EntityKind::Medical),
+            "accented 'patient' must be detected"
+        );
+
+        // Cyrillic homoglyphs: р(er) + h + і(dotted i) -> phi.
+        assert!(
+            s.scan("\u{0440}h\u{0456}")
+                .iter()
+                .any(|m| m.kind == EntityKind::Medical),
+            "homoglyph 'phi' must be detected"
+        );
+
+        // Collapsed whitespace: two non-breaking spaces -> single space.
+        assert!(
+            s.scan("medical\u{00a0}\u{00a0}record")
+                .iter()
+                .any(|m| m.kind == EntityKind::Medical),
+            "'medical record' with obfuscated whitespace must be detected"
         );
     }
 

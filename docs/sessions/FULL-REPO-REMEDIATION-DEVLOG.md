@@ -759,3 +759,26 @@ Verify: fmt; clippy -D warnings PASS; `cargo test -p mai-router entities` PASS (
 `match_span_is_original_coordinates_after_length_changing_fold` ("İ patient today" -> the
 'patient' span slices the original correctly, which drifted before); existing ASCII detection
 suites unchanged (fold is identity for ASCII). Commit: (this change set).
+
+### G7b - obfuscation-resistant entity normalization (M, part 2 of 2)
+
+Extended the G7a offset-mapped fold into a full normalization so the entity scanner catches
+obfuscated compliance terms (audit G7, "obfuscated PHI/ITAR still detected"). `normalize_with_
+offsets` now, per char: lowercase -> compatibility decomposition (`nfkd`, folding full-width
+`ｐ` and ligatures, and splitting accents into base + combining mark) -> drop combining marks
+(strips diacritics, defeats mark-splicing) -> map a curated set of Cyrillic/Greek homoglyphs to
+their Latin lookalike; runs of Unicode whitespace collapse to one ASCII space. The byte-offset
+map is preserved throughout, so spans stay in original coordinates under heavy folding.
+Over-folding only ever *widens* detection (fail-safe: a spurious hit routes local), never hides
+a term. Added `unicode-normalization = "0.1"`.
+
+Scope note: this covers the **entity scanner** (the substring path that drives the router's
+forced-local `has_medical` / `has_export_controlled` / `has_tribal`, G3). Normalizing the
+regex-based `SensitivityClassifier` input is the "before regex" slice - tracked as G7c below.
+
+Verify: fmt; `cargo clippy -p mai-router --all-targets -- -D warnings -A clippy::pedantic` PASS;
+`cargo test -p mai-router entities` PASS (10) - new `obfuscated_terms_are_detected_after_
+normalization` (full-width `ｐｒｅｓｃｒｉｐｔｉｏｎ`, accented `pátîent`, Cyrillic-homoglyph `рhі`, and
+NBSP-doubled `medical record` all detected; full-width span still indexes the original validly).
+`cargo deny check bans licenses` PASS (no new duplicate/license violation from the dep). Commit:
+(this change set).

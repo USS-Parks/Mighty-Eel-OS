@@ -16,6 +16,9 @@ tracing = { workspace = true }
 blake3 = { workspace = true }
 chrono = { workspace = true }
 regex = "1"
+# G7: fold input to a canonical form (compatibility decomposition + mark strip)
+# before entity matching so homoglyph / full-width / diacritic obfuscation is caught.
+unicode-normalization = "0.1"
 
 [lints]
 workspace = true
