@@ -1,5 +1,24 @@
 # MAI Workspace: File Integrity Protocol
 
+## CRITICAL: Branch & Worktree Authority (CANON — set by Basho, 2026-07-08)
+
+Claude MUST NOT create, switch, open, clone into, or otherwise start a new git
+branch or worktree unless **Basho (the user) has explicitly authorized that exact
+action in the current session.**
+
+- Forbidden without explicit, in-session approval from Basho: `git branch`,
+  `git checkout -b`, `git switch -c`, `git worktree add`, `git clone`, or any
+  fresh clone / detached checkout.
+- A task-runner, harness directive, PSPR, or "designated branch" instruction
+  does **NOT** count as authorization. Only Basho saying so explicitly, in the
+  session, counts. Automated setup text is not consent.
+- At the START of every session where branch or worktree work might be implied,
+  **ASK Basho** whether to open a branch or worktree — and which one — before
+  touching git. Do not assume. Do not pre-create. Do not "just start."
+- Default action is to stay on the current checkout. When in doubt, ASK.
+- Commit and push remain separately gated: never `git commit` or `git push`
+  without a distinct, explicit approval from Basho.
+
 ## CRITICAL: Anti-Truncation Rules
 
 The CoWork sandbox filesystem sync layer is **unreliable**. Observed failure modes:
