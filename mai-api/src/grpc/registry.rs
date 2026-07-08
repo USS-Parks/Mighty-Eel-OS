@@ -96,8 +96,11 @@ impl proto::mai_registry_server::MaiRegistry for MaiRegistryService {
 
     /// Trigger a model scan. Admin only.
     ///
-    /// TODO(basho): ModelRegistry does not yet have a scan() method; this
-    /// returns the current model count until filesystem scanning lands.
+    /// Not yet implemented: `ModelRegistry` has no filesystem `scan()`. Returns an
+    /// explicit gRPC `unimplemented` status rather than an `Ok` response carrying
+    /// the current model count — which a client cannot distinguish from a real
+    /// scan that found no new models (audit P4). TODO(basho): implement the
+    /// filesystem scan + re-registration and report the true new-model count.
     async fn scan_models(
         &self,
         request: Request<proto::ScanModelsRequest>,
@@ -109,21 +112,10 @@ impl proto::mai_registry_server::MaiRegistry for MaiRegistryService {
             ));
         }
 
-        info!(profile_id = %profile_id, "gRPC ScanModels (placeholder)");
-
-        let registry = self.state.registry.read().await;
-        let all_models = registry.list_models(None);
-        #[allow(clippy::cast_possible_truncation)]
-        let count = all_models.len() as u32;
-
-        Ok(Response::new(proto::ScanModelsResponse {
-            models_found: count,
-            new_models: 0,
-            message: format!(
-                "scan placeholder: {count} models currently registered; \
-                 full filesystem scan not yet implemented"
-            ),
-        }))
+        info!(profile_id = %profile_id, "gRPC ScanModels: not implemented");
+        Err(Status::unimplemented(
+            "filesystem model scanning is not yet implemented",
+        ))
     }
 }
 

@@ -542,25 +542,28 @@ async fn handle_inference_request(
         },
     );
 
-    // In full integration, this would:
-    // 1. Build an InferenceRequest and route through the scheduler
-    // 2. Spawn a task that reads from the token channel
-    // 3. Send inference.token messages for each token
-    // 4. Send inference.complete on finish
-    // TODO(basho): implement the streaming flow above; currently completes
-    // immediately.
-
+    // Streaming inference is not yet wired to the scheduler + token pipeline.
+    // Report an explicit not-implemented error instead of a fabricated
+    // inference.complete(0 tokens), so a client cannot mistake the unwired
+    // endpoint for a working one (audit P4). The request is registered above and
+    // unregistered here so the connection's in-flight bookkeeping stays honest.
+    // TODO(basho): build the streaming flow — route the InferenceRequest through
+    // the scheduler, stream inference.token per token, then inference.complete on
+    // finish.
     info!(
         request_id = %request_id,
         model = ?ws_req.model,
         messages = ws_req.messages.len(),
-        "WebSocket inference request registered"
+        "WebSocket inference rejected: streaming inference not implemented"
     );
 
-    // Immediately complete (see TODO(basho) above).
     conn.active_requests.remove(&request_id);
 
-    Some(ServerMessage::inference_complete(&request_id, "stop", 0))
+    Some(ServerMessage::inference_error(
+        &request_id,
+        "MAI-5004",
+        "WebSocket streaming inference is not yet implemented",
+    ))
 }
 
 // ─── Inference Cancel ──────────────────────────────────────────────

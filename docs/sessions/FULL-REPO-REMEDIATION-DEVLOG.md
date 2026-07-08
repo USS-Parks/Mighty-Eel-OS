@@ -917,3 +917,36 @@ refused, and public-hardened-with-key starts. The consolidated startup-refusal +
 integration view is P5. This is a path-only dep add (`wsf-hardening`), so `cargo audit`/`deny`
 are unaffected. P1 gate ("a public bind without the key refuses to start") holds. Commit: (this
 change set).
+
+### P4 - canned-success endpoints return an explicit not-implemented status (M)
+
+Five wired endpoints returned a success a client could not tell apart from a working call
+(audit P4 / the line-65 canned-success set):
+- gRPC `MaiInference::embed` routed through the scheduler then returned `EmbeddingResponse {
+  object: "list", data: [empty vector per input], usage: {..} }` - a 200-equivalent with no
+  embeddings.
+- gRPC `MaiInference::chat_completion_stream` spawned a task that emitted a role chunk + a
+  `finish_reason: "stop"` chunk with empty content - a fabricated empty stream.
+- gRPC `MaiRegistry::scan_models` returned `Ok(ScanModelsResponse { new_models: 0, .. })` whose
+  "not implemented" admission lived only in a human-readable `message` field (gRPC status = OK).
+- WS `inference.request` registered the request then replied `inference.complete(finish=stop,
+  0 tokens)` - a fake completion.
+- REST `GET /v1/profiles` (`list_profiles`) documented "admin sees all" but silently returned
+  only the caller, misrepresenting a partial view as the full set for an admin.
+
+Fix: each returns an explicit not-implemented signal instead of a fake success. The three gRPC
+methods return `Status::unimplemented(..)` after authenticating (probing still needs a valid
+principal + permission); the scheduler side effects are dropped. WS returns
+`inference.error(MAI-5004, "...not yet implemented")`, keeping the register/unregister lifecycle
+bookkeeping. `list_profiles` returns a new `ApiError::NotImplemented` (-> HTTP 501, code
+MAI-5004) for an admin, while a non-admin keeps its correct own-profile view. The new
+`ApiError::NotImplemented(String)` variant carries all four match arms (code / status / type /
+message). The gRPC unary `chat_completion` is outside the audit's named set and left untouched.
+
+Verify: fmt; `cargo clippy -p mai-api --all-targets -- -D warnings -A clippy::pedantic` PASS;
+`cargo test -p mai-api` PASS (355, +1) - new `errors::not_implemented_maps_to_501`. The WS
+`inference_complete` builder is now (like the pre-existing `inference_token`) exercised only by
+its unit test, kept as scaffolding for the real streaming flow. The consolidated
+endpoint-honesty harness (calling each endpoint and asserting the not-implemented signal) is P5.
+P4 gate ("no wired endpoint returns indistinguishable fake success") holds. Commit: (this change
+set).

@@ -79,6 +79,10 @@ pub enum ApiError {
     /// operators can tell "endpoint disabled by config" from "route
     /// missing from build".
     EndpointDisabled(String),
+    /// MAI-5004: A wired endpoint whose behavior is not yet implemented.
+    /// Returned instead of a fabricated success so a client can distinguish an
+    /// unimplemented endpoint from a working one (audit P4). Maps to HTTP 501.
+    NotImplemented(String),
 }
 
 impl ApiError {
@@ -107,6 +111,7 @@ impl ApiError {
             Self::ConfigError(_) => "MAI-5001",
             Self::AirGapViolation(_) => "MAI-5002",
             Self::EndpointDisabled(_) => "MAI-5003",
+            Self::NotImplemented(_) => "MAI-5004",
         }
     }
 
@@ -133,6 +138,7 @@ impl ApiError {
                 StatusCode::UNAUTHORIZED
             }
             Self::EndpointDisabled(_) => StatusCode::GONE,
+            Self::NotImplemented(_) => StatusCode::NOT_IMPLEMENTED,
         }
     }
 
@@ -161,6 +167,7 @@ impl ApiError {
             Self::ConfigError(_) | Self::AirGapViolation(_) | Self::EndpointDisabled(_) => {
                 "config_error"
             }
+            Self::NotImplemented(_) => "server_error",
         }
     }
 
@@ -209,6 +216,9 @@ impl ApiError {
                     "Endpoint disabled by active profile: {}",
                     sanitize_error_detail(detail)
                 )
+            }
+            Self::NotImplemented(detail) => {
+                format!("Not implemented: {}", sanitize_error_detail(detail))
             }
         }
     }
@@ -399,6 +409,15 @@ mod tests {
             ApiError::InternalError.status(),
             StatusCode::INTERNAL_SERVER_ERROR
         );
+    }
+
+    #[test]
+    fn not_implemented_maps_to_501() {
+        let err = ApiError::NotImplemented("listing all profiles".into());
+        assert_eq!(err.code(), "MAI-5004");
+        assert_eq!(err.status(), StatusCode::NOT_IMPLEMENTED);
+        assert_eq!(err.error_type(), "server_error");
+        assert!(err.safe_message().starts_with("Not implemented"));
     }
 
     #[test]

@@ -352,16 +352,20 @@ pub async fn get_audit_log(
 
 /// GET /v1/profiles
 ///
-/// Admin sees all profiles. Non-admin users see only their own profile.
-/// Profile data comes from the profile store.
-/// TODO(basho): return all profiles for admins; currently returns only
-/// the requesting profile.
+/// A non-admin sees only their own profile (correct and complete). "Admin sees
+/// all profiles" is not yet wired to the vault profile store, so for an admin
+/// this returns an explicit 501 Not Implemented rather than silently returning
+/// only the caller — which would misrepresent a partial view as the full set
+/// (audit P4). TODO(basho): enumerate all profiles from the vault store for admins.
 pub async fn list_profiles(
     State(_state): State<AppState>,
     profile: ProfileInfo,
 ) -> Result<impl IntoResponse, ApiError> {
-    // TODO(basho): query the profile store from vault for admins; currently
-    // returns the requesting profile as a single-item list.
+    if profile.role == crate::types::ProfileRole::Admin {
+        return Err(ApiError::NotImplemented(
+            "listing all profiles requires the vault profile store".to_string(),
+        ));
+    }
     let profiles = vec![ProfileResponse {
         id: profile.profile_id.clone(),
         name: profile

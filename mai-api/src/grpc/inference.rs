@@ -150,226 +150,46 @@ impl proto::mai_inference_server::MaiInference for MaiInferenceService {
     /// Server-streaming chat completion. Streams tokens as ChatCompletionChunk.
     type ChatCompletionStreamStream = ReceiverStream<Result<proto::ChatCompletionChunk, Status>>;
 
+    /// Not yet wired to the adapter IPC token stream. Returns an explicit gRPC
+    /// `unimplemented` status rather than a fabricated empty stream (a role chunk
+    /// followed by a `stop` chunk with no content), so a client cannot mistake
+    /// the unwired endpoint for a working one (audit P4). TODO(basho): route
+    /// through the scheduler and stream real adapter tokens.
     async fn chat_completion_stream(
         &self,
         request: Request<proto::ChatCompletionRequest>,
     ) -> Result<Response<Self::ChatCompletionStreamStream>, Status> {
-        let (profile_id, role) = authenticate_grpc(&self.state, &request).await?;
+        let (_profile_id, role) = authenticate_grpc(&self.state, &request).await?;
         if !role_has_permission(&role, "inference") {
             return Err(Status::permission_denied(
                 "profile lacks inference permission",
             ));
         }
-
-        let req = request.into_inner();
-        let request_uuid = Uuid::new_v4();
-        let request_id = request_uuid.to_string();
-        let profile_uuid = Uuid::parse_str(&profile_id)
-            .map_err(|e| Status::internal(format!("invalid profile_id: {e}")))?;
-        let model = req.model.clone();
-
-        debug!(
-            request_id = %request_id,
-            profile_id = %profile_id,
-            model = %model,
-            "gRPC ChatCompletionStream request"
-        );
-
-        let messages: Vec<ChatMessage> = req
-            .messages
-            .iter()
-            .map(|m| ChatMessage {
-                role: m.role.clone(),
-                content: m.content.clone(),
-            })
-            .collect();
-
-        #[allow(clippy::cast_possible_truncation)]
-        let estimated_tokens: u32 = messages.iter().map(|m| (m.content.len() / 4) as u32).sum();
-
-        let inference_req = InferenceRequest {
-            id: request_uuid,
-            profile_id: profile_uuid,
-            model_name: if req.model.is_empty() {
-                None
-            } else {
-                Some(req.model.clone())
-            },
-            request_type: RequestType::Chat,
-            payload: RequestPayload::Chat { messages },
-            priority: RequestPriority::Normal,
-            timeout: Duration::from_secs(300),
-            streaming: true,
-            enqueued_at: Instant::now(),
-            estimated_tokens,
-        };
-
-        // Route through new scheduler
-        let model_alias = if req.model.is_empty() {
-            "default"
-        } else {
-            &req.model
-        };
-        let sched_req = ScheduleRequest::new(model_alias, SchedulerPriority::Normal);
-        let session_id = sched_req.session_id;
-
-        let decision = self.state.scheduler.schedule(&sched_req).map_err(|e| {
-            error!(request_id = %request_id, error = %e, "streaming route failed");
-            Status::internal("streaming inference routing failed")
-        })?;
-
-        let adapter_id = decision.instance_id.to_string();
-        let model_id = decision.instance_id.to_string();
-
-        // Create channel for streaming chunks to client
-        let (tx, rx) = tokio::sync::mpsc::channel(64);
-        let rid = request_id.clone();
-        let state = self.state.clone();
-
-        // Spawn streaming task
-        // TODO(basho): wire real adapter IPC streaming; this task currently
-        // sends a single completion chunk.
-        tokio::spawn(async move {
-            let created = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map_or(0, |duration| duration.as_secs());
-
-            // Send role chunk then done chunk
-            let role_chunk = proto::ChatCompletionChunk {
-                id: rid.clone(),
-                object: "chat.completion.chunk".to_string(),
-                created,
-                model: model_id.clone(),
-                choices: vec![proto::ChunkChoice {
-                    index: 0,
-                    delta: Some(proto::ChunkDelta {
-                        role: "assistant".to_string(),
-                        content: String::new(),
-                    }),
-                    finish_reason: String::new(),
-                }],
-            };
-
-            if tx.send(Ok(role_chunk)).await.is_err() {
-                return;
-            }
-
-            // Final chunk with finish_reason
-            let done_chunk = proto::ChatCompletionChunk {
-                id: rid.clone(),
-                object: "chat.completion.chunk".to_string(),
-                created,
-                model: model_id,
-                choices: vec![proto::ChunkChoice {
-                    index: 0,
-                    delta: Some(proto::ChunkDelta {
-                        role: String::new(),
-                        content: String::new(),
-                    }),
-                    finish_reason: "stop".to_string(),
-                }],
-            };
-
-            let _ = tx.send(Ok(done_chunk)).await;
-
-            // Mark request completed
-            state
-                .scheduler
-                .release_sequence(&mai_scheduler::InstanceId::new(&adapter_id), session_id);
-        });
-
-        Ok(Response::new(ReceiverStream::new(rx)))
+        Err(Status::unimplemented(
+            "streaming chat completion is not yet wired to the adapter pipeline",
+        ))
     }
 
     /// Unary embedding generation.
+    ///
+    /// Not yet wired to the adapter embedding pipeline. Returns an explicit gRPC
+    /// `unimplemented` status rather than an empty-vector "success" carrying token
+    /// usage, so a client cannot mistake an unwired endpoint for a working one
+    /// (audit P4). TODO(basho): route through the scheduler and return the
+    /// adapter-computed embeddings.
     async fn embed(
         &self,
         request: Request<proto::EmbeddingRequest>,
     ) -> Result<Response<proto::EmbeddingResponse>, Status> {
-        let (profile_id, role) = authenticate_grpc(&self.state, &request).await?;
+        let (_profile_id, role) = authenticate_grpc(&self.state, &request).await?;
         if !role_has_permission(&role, "inference") {
             return Err(Status::permission_denied(
                 "profile lacks inference permission",
             ));
         }
-
-        let req = request.into_inner();
-        let request_uuid = Uuid::new_v4();
-        let request_id = request_uuid.to_string();
-        let profile_uuid = Uuid::parse_str(&profile_id)
-            .map_err(|e| Status::internal(format!("invalid profile_id: {e}")))?;
-
-        debug!(
-            request_id = %request_id,
-            profile_id = %profile_id,
-            inputs = req.input.len(),
-            "gRPC Embed request"
-        );
-
-        #[allow(clippy::cast_possible_truncation)]
-        let estimated_tokens: u32 = req.input.iter().map(|t| (t.len() / 4) as u32).sum();
-
-        let inference_req = InferenceRequest {
-            id: request_uuid,
-            profile_id: profile_uuid,
-            model_name: if req.model.is_empty() {
-                None
-            } else {
-                Some(req.model.clone())
-            },
-            request_type: RequestType::Embedding,
-            payload: RequestPayload::Embedding {
-                texts: req.input.clone(),
-            },
-            priority: RequestPriority::Normal,
-            timeout: Duration::from_secs(120),
-            streaming: false,
-            enqueued_at: Instant::now(),
-            estimated_tokens,
-        };
-
-        let model_alias = if req.model.is_empty() {
-            "default-embedding"
-        } else {
-            &req.model
-        };
-        let sched_req = ScheduleRequest::new(model_alias, SchedulerPriority::Normal);
-        let session_id = sched_req.session_id;
-
-        let decision = self.state.scheduler.schedule(&sched_req).map_err(|e| {
-            error!(request_id = %request_id, error = %e, "embedding route failed");
-            Status::internal("embedding request routing failed")
-        })?;
-
-        self.state
-            .scheduler
-            .release_sequence(&decision.instance_id, session_id);
-
-        // TODO(basho): wire actual embedding computation via adapter IPC;
-        // currently returns empty embeddings.
-        let embeddings: Vec<proto::EmbeddingData> = req
-            .input
-            .iter()
-            .enumerate()
-            .map(|(i, _)| proto::EmbeddingData {
-                object: "embedding".to_string(),
-                embedding: Vec::new(), // Populated by adapter pipeline
-                #[allow(clippy::cast_possible_truncation)]
-                index: i as u32,
-            })
-            .collect();
-
-        let response = proto::EmbeddingResponse {
-            object: "list".to_string(),
-            data: embeddings,
-            model: decision.instance_id.to_string(),
-            usage: Some(proto::EmbeddingUsage {
-                prompt_tokens: estimated_tokens,
-                total_tokens: estimated_tokens,
-            }),
-        };
-
-        Ok(Response::new(response))
+        Err(Status::unimplemented(
+            "embedding generation is not yet wired to the adapter pipeline",
+        ))
     }
 }
 
