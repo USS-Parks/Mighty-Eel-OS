@@ -112,7 +112,16 @@ impl Ring3Cache {
     /// The connectivity state at `now_secs`.
     #[must_use]
     pub fn connectivity(&self, now_secs: u64) -> ConnectivityState {
-        let age_secs = now_secs.saturating_sub(self.last_refresh_secs);
+        // Clock fail-closed (audit P2): a clock at or before the last refresh did
+        // not advance — a rollback, a rewound/stopped clock, or a pre-epoch `now`
+        // (which `decide` maps to 0). `saturating_sub` would floor the age to 0,
+        // read as freshest = online, and re-open cloud egress. Treat non-advancing
+        // time as maximally stale so freshness decays to Expired (LocalOnly), never
+        // widens. Routed through `evaluate` so a sticky air-gap still takes
+        // precedence.
+        let age_secs = now_secs
+            .checked_sub(self.last_refresh_secs)
+            .unwrap_or(u64::MAX);
         evaluate(
             &Freshness {
                 reachable: self.reachable,
@@ -284,6 +293,50 @@ mod tests {
             "cloud narrowed to local"
         );
         assert!(!d.allows_new_session);
+    }
+
+    #[test]
+    fn clock_rollback_does_not_reopen_cloud() {
+        // Audit P2: refresh fresh, then present a clock rolled back to before the
+        // refresh. Freshness must not floor to 0 (Online) and re-open cloud — it
+        // fails closed.
+        let signer = RustCryptoMlDsa87::generate("anchor").unwrap();
+        let mut cache = Ring3Cache::new(signer.public_key().to_vec(), TTL);
+        let snap = fabric_revocation::sign(
+            RevocationSnapshot::new("s1", "2026-07-03T00:00:00Z", "2027-01-01T00:00:00Z"),
+            &signer,
+        )
+        .unwrap();
+        let refresh_secs = now_secs();
+        cache.refresh(snap, refresh_secs).unwrap();
+
+        let rolled_back =
+            DateTime::from_timestamp(i64::try_from(refresh_secs).unwrap() - 90_000, 0).unwrap();
+        let tok = token(&signer, vec![Route::CloudAllowed]);
+        let d = cache.decide(&tok, rolled_back);
+        assert_eq!(d.connectivity, ConnectivityState::Expired);
+        assert_eq!(d.route_ceiling, Route::LocalOnly);
+        assert!(!d.effective_routes.contains(&Route::CloudAllowed));
+    }
+
+    #[test]
+    fn pre_epoch_clock_is_expired() {
+        // Audit P2: a pre-epoch (negative) timestamp is nonsense; it must not read
+        // as freshest (age 0). It fails closed to Expired / local-only.
+        let signer = RustCryptoMlDsa87::generate("anchor").unwrap();
+        let mut cache = Ring3Cache::new(signer.public_key().to_vec(), TTL);
+        let snap = fabric_revocation::sign(
+            RevocationSnapshot::new("s1", "2026-07-03T00:00:00Z", "2027-01-01T00:00:00Z"),
+            &signer,
+        )
+        .unwrap();
+        cache.refresh(snap, now_secs()).unwrap();
+
+        let pre_epoch = DateTime::from_timestamp(-1_000_000, 0).unwrap();
+        let tok = token(&signer, vec![Route::CloudAllowed]);
+        let d = cache.decide(&tok, pre_epoch);
+        assert_eq!(d.connectivity, ConnectivityState::Expired);
+        assert!(!d.effective_routes.contains(&Route::CloudAllowed));
     }
 
     #[test]

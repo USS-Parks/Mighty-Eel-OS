@@ -490,3 +490,26 @@ new `unvetted_none_route_fails_closed_to_local` (None -> LocalOnly, not Allow) a
 `disabled_module_is_unvetted_not_cloud_allowed` (HIPAA disabled -> empty vetting set -> not
 cloud-allowed). The G1 egress gate ("disabling HIPAA does not egress PHI in Enforce") holds.
 Commit: (this change set).
+
+## Phase P - posture & auth hardening (wsf-cache, ...)
+
+### P2 - wsf-cache clock fail-closed (M, clock rollback re-opens cloud)
+
+`Ring3Cache::connectivity` computed `age_secs = now_secs.saturating_sub(last_refresh_secs)`.
+A clock **rollback** (now < last refresh) saturates the age to 0 - read as freshest = Online -
+so a rewound clock re-opened cloud egress on an appliance that should have decayed to
+local-only. A **pre-epoch** `now` hit the same floor: `decide` maps a non-representable
+(negative) timestamp to `now_secs = 0`, which then subtracts to 0.
+
+Fix (`connectivity`): `now_secs.checked_sub(last_refresh_secs).unwrap_or(u64::MAX)` - time at
+or before the last refresh did not advance, so the age is treated as maximal and freshness
+decays to `Expired` (route ceiling local-only). It still routes through `evaluate`, so a
+sticky operator air-gap keeps precedence. The pre-epoch case flows through the same guard
+(0 < last_refresh -> max age) once a refresh has happened; the never-refreshed initial state
+is already non-fresh (`reachable == false`, `last_refresh_secs == 0`).
+
+Verify: fmt; `cargo clippy -p wsf-cache --all-targets -- -D warnings -A clippy::pedantic` PASS;
+`cargo test -p wsf-cache` PASS (8) - new `clock_rollback_does_not_reopen_cloud` (refresh fresh,
+present a day-earlier clock -> Expired, no CloudAllowed) and `pre_epoch_clock_is_expired`
+(negative timestamp -> Expired, no CloudAllowed); the fresh / hard-TTL / air-gap suites stay
+green. P2 gate ("clock rollback cannot re-open cloud egress") holds. Commit: (this change set).
