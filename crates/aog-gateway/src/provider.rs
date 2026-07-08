@@ -25,6 +25,30 @@ use futures::StreamExt;
 use futures::stream::BoxStream;
 use serde::{Deserialize, Serialize};
 
+/// Connect timeout for provider HTTP clients: bounds TCP+TLS establishment so a
+/// dead or unroutable backend fails fast instead of hanging (audit H11 / D3).
+const PROVIDER_CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+/// Idle read timeout: the maximum gap between bytes of a response. Bounds a
+/// backend that connects then stalls. There is deliberately NO total request
+/// `timeout` — completions stream over SSE and legitimately run long, so a total
+/// timeout would truncate healthy streams; an idle timeout catches a genuine hang
+/// without that. Generous enough for slow first-token / prefill latency on a large
+/// local model.
+const PROVIDER_READ_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(120);
+
+/// The shared provider HTTP client, with hang guards (D3/H11): a `connect_timeout`
+/// and an idle `read_timeout` bound a dead or stalled backend, while omitting a
+/// total `timeout` keeps long SSE completions intact. The config is static, so
+/// `build` only fails on a TLS-backend init fault (an unrecoverable deployment
+/// error) — the same invariant `reqwest::Client::new` asserts internally.
+pub(crate) fn build_http_client() -> reqwest::Client {
+    reqwest::Client::builder()
+        .connect_timeout(PROVIDER_CONNECT_TIMEOUT)
+        .read_timeout(PROVIDER_READ_TIMEOUT)
+        .build()
+        .expect("provider HTTP client config (timeouts only) is valid")
+}
+
 /// A chat role in the neutral request model.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]

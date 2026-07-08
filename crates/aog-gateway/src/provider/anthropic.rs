@@ -38,7 +38,7 @@ impl AnthropicProvider {
         Self {
             base_url: base_url.into().trim_end_matches('/').to_string(),
             api_key: api_key.into(),
-            client: reqwest::Client::new(),
+            client: super::build_http_client(),
         }
     }
 

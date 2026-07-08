@@ -387,3 +387,26 @@ owner-gated (0.2), not a unilateral remediation edit. H4 therefore remains **ope
 counts against §0.6 stop-ship at re-ship) with the gap now accurately documented and tracked
 in-code, and two closure options spelled out for the owner. Verify: fmt; clippy -D warnings
 PASS; `cargo test -p aog-scheduler` PASS (unchanged behavior). Commit: (this change set).
+
+## Phase D - DoS / panic-safety (aog-gateway, mai-api, ...)
+
+### D3 - provider HTTP client hang guards (H11)
+
+The OpenAI and Anthropic provider clients (`aog-gateway/src/provider/{openai,anthropic}.rs`)
+were built with bare `reqwest::Client::new()` - no timeouts. A hung or unroutable backend
+could stall a request (and the gateway worker behind it) indefinitely.
+
+Fix: a shared `provider::build_http_client()` both providers now use, with a `connect_timeout`
+(10s, bounds TCP+TLS establishment) and an idle `read_timeout` (120s, bounds the gap between
+response bytes). Crucially it sets **no total `timeout`**: these clients stream chat
+completions over SSE, which legitimately run long, so a total request timeout (as in the
+non-streaming `spend.rs` KV client) would truncate healthy streams. An idle read timeout
+catches a genuine hang - a backend that connects then sends nothing - without that side
+effect. The static builder only fails on a TLS-backend init fault (unrecoverable), mirroring
+`reqwest::Client::new`'s internal `expect`.
+
+Verify: fmt; `cargo clippy -p aog-gateway --all-targets -- -D warnings -A clippy::pedantic`
+PASS; `cargo test -p aog-gateway` PASS (existing OpenAI/Anthropic surface + streaming tests
+unaffected - normal operation intact). A timing-based hung-backend proof is a flaky unit test
+by nature; it belongs to the D9 fuzz/soak gate, not here. H11 closed at the client config.
+Commit: (this change set).
