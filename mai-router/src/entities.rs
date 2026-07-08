@@ -121,10 +121,15 @@ impl EntityScanner {
     /// Scan `text` and return every dictionary hit. Matches preserve order
     /// of first occurrence within the text.
     pub fn scan(&self, text: &str) -> Vec<EntityMatch> {
-        let haystack = text.to_lowercase();
+        // Case-fold with a byte-offset map back to the ORIGINAL text. `to_lowercase`
+        // can change byte lengths on non-ASCII input (e.g. 'İ' -> "i̇"), so indexing
+        // the original with lowercased-haystack offsets drifts (audit G7). The map
+        // lets `find_all` report spans in original coordinates.
+        let (haystack, offsets) = fold_lower_with_offsets(text);
         let mut matches = Vec::new();
         find_all(
             &haystack,
+            &offsets,
             &self.medical,
             EntityKind::Medical,
             text,
@@ -132,6 +137,7 @@ impl EntityScanner {
         );
         find_all(
             &haystack,
+            &offsets,
             &self.tribal,
             EntityKind::Tribal,
             text,
@@ -139,6 +145,7 @@ impl EntityScanner {
         );
         find_all(
             &haystack,
+            &offsets,
             &self.export_controlled,
             EntityKind::ExportControlled,
             text,
@@ -153,8 +160,32 @@ fn lower(terms: &[String]) -> Vec<String> {
     terms.iter().map(|t| t.to_lowercase()).collect()
 }
 
+/// Lowercase `text`, returning the folded string plus a byte-offset map: for
+/// each byte index `i` of the folded string, `offsets[i]` is the byte offset in
+/// the ORIGINAL text of the char that produced it, and `offsets[folded.len()]`
+/// is `text.len()`. A match at folded `[hs, he)` maps to original
+/// `(offsets[hs], offsets[he])`. This keeps spans in original coordinates even
+/// when a char's lowercase form differs in byte length (audit G7).
+fn fold_lower_with_offsets(text: &str) -> (String, Vec<usize>) {
+    let mut folded = String::with_capacity(text.len());
+    let mut offsets = Vec::with_capacity(text.len() + 1);
+    let mut buf = [0u8; 4];
+    for (ob, ch) in text.char_indices() {
+        for lc in ch.to_lowercase() {
+            let s = lc.encode_utf8(&mut buf);
+            for _ in 0..s.len() {
+                offsets.push(ob);
+            }
+            folded.push_str(s);
+        }
+    }
+    offsets.push(text.len());
+    (folded, offsets)
+}
+
 fn find_all(
     haystack: &str,
+    offsets: &[usize],
     needles: &[String],
     kind: EntityKind,
     original: &str,
@@ -166,16 +197,18 @@ fn find_all(
         }
         let mut start = 0;
         while let Some(pos) = haystack[start..].find(needle.as_str()) {
-            let absolute = start + pos;
-            let end = absolute + needle.len();
-            let matched_slice = original.get(absolute..end).unwrap_or("");
+            let h_start = start + pos;
+            let h_end = h_start + needle.len();
+            // Map the folded-haystack span back to original-text coordinates.
+            let (o_start, o_end) = (offsets[h_start], offsets[h_end]);
+            let matched_slice = original.get(o_start..o_end).unwrap_or("");
             out.push(EntityMatch {
                 kind,
-                span: (absolute, end),
+                span: (o_start, o_end),
                 matched_hash: hash_match(matched_slice),
                 confidence: 1.0,
             });
-            start = end;
+            start = h_end;
         }
     }
 }
@@ -201,6 +234,26 @@ mod tests {
         let s = EntityScanner::baseline();
         let matches = s.scan("The patient received a prescription for...");
         assert!(matches.iter().any(|m| m.kind == EntityKind::Medical));
+    }
+
+    #[test]
+    fn match_span_is_original_coordinates_after_length_changing_fold() {
+        // Audit G7: 'İ' (U+0130, 2 bytes) lowercases to "i̇" (3 bytes), so the folded
+        // haystack and the original diverge in byte length. The reported span must
+        // index the ORIGINAL text, not the folded haystack.
+        let s = EntityScanner::baseline();
+        let text = "İ patient today";
+        let m = s
+            .scan(text)
+            .into_iter()
+            .find(|m| m.kind == EntityKind::Medical)
+            .expect("'patient' detected");
+        let (a, b) = m.span;
+        assert_eq!(
+            &text[a..b],
+            "patient",
+            "span must slice the original 'patient'"
+        );
     }
 
     #[test]

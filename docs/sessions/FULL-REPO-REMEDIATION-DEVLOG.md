@@ -738,3 +738,24 @@ keys; person type and deployment profile each distinguish; same (bundle, actor) 
 existing stability / request-id-invariance / classification-sensitivity suites unchanged. G6
 gate ("two identical-bundle different-actor requests do not collide") holds. Commit: (this
 change set).
+
+### G7a - entity-scanner span offset-drift on non-ASCII (M, part 1 of 2)
+
+`EntityScanner::scan` (`mai-router/src/entities.rs`) built `haystack = text.to_lowercase()`,
+searched it, then indexed the **original** text with the lowercased-haystack byte offsets.
+`to_lowercase` can change byte length on non-ASCII input (e.g. 'İ' U+0130 -> "i̇", 2 -> 3 bytes),
+so after any such char the reported span drifts - `original.get(absolute..end)` slices the wrong
+bytes (or `None` -> empty hash), and the emitted `span` points at the wrong region (audit G7,
+"audit offsets correct").
+
+Fix: `fold_lower_with_offsets` returns the folded haystack plus a byte-offset map (folded byte
+-> original byte of the producing char, with a `text.len()` sentinel). `find_all` maps each
+folded match `[hs, he)` back to original `(offsets[hs], offsets[he])`, so spans and the hashed
+slice are always in original coordinates. Matching behavior is unchanged (still case-folded
+substring); only the coordinates are corrected. The obfuscation-normalization leg (NFKC /
+homoglyph / whitespace) is G7b, built on this same offset map.
+
+Verify: fmt; clippy -D warnings PASS; `cargo test -p mai-router entities` PASS (9) - new
+`match_span_is_original_coordinates_after_length_changing_fold` ("İ patient today" -> the
+'patient' span slices the original correctly, which drifted before); existing ASCII detection
+suites unchanged (fold is identity for ASCII). Commit: (this change set).
