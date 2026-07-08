@@ -299,7 +299,7 @@ impl ToolProxy {
         // A trip blocks outright (no escalation) and is receipted.
         let guardrail_trip = if self.guardrails.is_active() {
             let mut usage = self.task_usage.lock().expect("task usage lock");
-            let entry = usage.entry(ctx.session_id.clone()).or_default();
+            let entry = task_usage_entry(&mut usage, &ctx.session_id);
             self.guardrails.check(call, ctx, entry)
         } else {
             None
@@ -402,12 +402,8 @@ impl ToolProxy {
 
         // Record the admitted call against the task's blast-radius usage (T8).
         if self.guardrails.is_active() {
-            self.task_usage
-                .lock()
-                .expect("task usage lock")
-                .entry(ctx.session_id.clone())
-                .or_default()
-                .record(ctx);
+            let mut usage = self.task_usage.lock().expect("task usage lock");
+            task_usage_entry(&mut usage, &ctx.session_id).record(ctx);
         }
 
         // Mint the per-call credential (T2), if a minter is configured. It lives only
@@ -417,7 +413,16 @@ impl ToolProxy {
             None => None,
         };
 
-        let mut result = executor.execute(&tool, call, cred.as_ref()).await;
+        // Bound a hung tool: honour `tool.timeout` so a stuck executor cannot hang
+        // the agent loop; on elapse return a failed ToolResult rather than blocking
+        // forever (audit D6). The lease revoke + receipt below still run.
+        let mut result =
+            match tokio::time::timeout(tool.timeout, executor.execute(&tool, call, cred.as_ref()))
+                .await
+            {
+                Ok(r) => r,
+                Err(_) => timed_out_result(call, tool.timeout),
+            };
 
         // End the lease at call end (its TTL also bounds it).
         if let (Some(m), Some(c)) = (&self.minter, &cred) {
@@ -593,6 +598,39 @@ fn blocked_result(call: &ToolCall, reason: &str) -> ToolResult {
     }
 }
 
+/// The failed result returned when an executor exceeds `tool.timeout` (audit D6).
+fn timed_out_result(call: &ToolCall, timeout: Duration) -> ToolResult {
+    ToolResult {
+        call_id: call.call_id.clone(),
+        tool_id: call.tool_id.clone(),
+        success: false,
+        output: serde_json::Value::Null,
+        error: Some(format!("tool timed out after {} ms", timeout.as_millis())),
+        duration_ms: u64::try_from(timeout.as_millis()).unwrap_or(u64::MAX),
+    }
+}
+
+/// Cap on distinct sessions tracked for the T8 blast-radius tally. Bounds memory
+/// against a session-id flood (audit D6); at the cap, admitting a new session
+/// evicts one existing entry (a rare, attack-only tally reset — far cheaper than
+/// an unbounded map).
+const MAX_TRACKED_SESSIONS: usize = 4096;
+
+/// Get (or create) the usage entry for `session_id`, first evicting one tracked
+/// session if the map is at [`MAX_TRACKED_SESSIONS`] and this session is new.
+fn task_usage_entry<'a>(
+    usage: &'a mut BTreeMap<String, TaskUsage>,
+    session_id: &str,
+) -> &'a mut TaskUsage {
+    if usage.len() >= MAX_TRACKED_SESSIONS
+        && !usage.contains_key(session_id)
+        && let Some(evict) = usage.keys().next().cloned()
+    {
+        usage.remove(&evict);
+    }
+    usage.entry(session_id.to_string()).or_default()
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
@@ -665,6 +703,77 @@ mod tests {
             untrusted: true,
             ..ctx(role)
         }
+    }
+
+    /// An executor that hangs far past any tool timeout.
+    struct HangingExecutor;
+
+    #[async_trait]
+    impl ToolExecutor for HangingExecutor {
+        async fn execute(
+            &self,
+            _tool: &ToolDefinition,
+            call: &ToolCall,
+            _cred: Option<&MintedCredential>,
+        ) -> ToolResult {
+            tokio::time::sleep(Duration::from_secs(3600)).await;
+            ToolResult {
+                call_id: call.call_id.clone(),
+                tool_id: call.tool_id.clone(),
+                success: true,
+                output: serde_json::Value::Null,
+                error: None,
+                duration_ms: 0,
+            }
+        }
+    }
+
+    fn tool_with_timeout(id: &str, timeout: Duration) -> ToolDefinition {
+        ToolDefinition {
+            timeout,
+            ..tool(id, false, ToolAccessRole::Guest)
+        }
+    }
+
+    #[tokio::test]
+    async fn hung_tool_times_out_and_is_receipted() {
+        // Audit D6: a hung executor must not block the agent loop; tool.timeout
+        // bounds it and yields a failed result (still receipted).
+        let proxy = ToolProxy::new();
+        proxy
+            .register(tool_with_timeout("slow.op", Duration::from_millis(50)))
+            .unwrap();
+        let r = proxy
+            .invoke(
+                &call("c1", "slow.op"),
+                &ctx(ToolAccessRole::Guest),
+                &HangingExecutor,
+            )
+            .await
+            .unwrap();
+        assert!(!r.success, "a hung tool must yield a failed result");
+        assert!(
+            r.error.as_deref().unwrap_or("").contains("timed out"),
+            "error: {:?}",
+            r.error
+        );
+        assert_eq!(proxy.receipt_count(), 1, "the timeout is still receipted");
+    }
+
+    #[test]
+    fn task_usage_map_is_bounded_against_session_flood() {
+        // Audit D6: a flood of distinct session ids must not grow the blast-radius
+        // map without limit.
+        let c = ctx(ToolAccessRole::Guest);
+        let mut usage = BTreeMap::new();
+        for i in 0..(MAX_TRACKED_SESSIONS + 100) {
+            task_usage_entry(&mut usage, &format!("sess-{i:07}")).record(&c);
+        }
+        assert_eq!(
+            usage.len(),
+            MAX_TRACKED_SESSIONS,
+            "map is bounded at the cap"
+        );
     }
 
     #[tokio::test]

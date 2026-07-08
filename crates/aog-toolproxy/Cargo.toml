@@ -17,8 +17,8 @@ thiserror = { workspace = true }
 chrono = { workspace = true }
 async-trait = { workspace = true }
 hex = "0.4"
-
-[dev-dependencies]
+# D6: tokio::time::timeout bounds a hung tool executor (the proxy's invoke path is
+# already async and runs under tokio). Also serves the #[tokio::test] suite.
 tokio = { workspace = true }
 
 [lints]

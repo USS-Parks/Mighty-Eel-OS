@@ -821,3 +821,24 @@ U1 stripped boundary sig -> `SignatureMissing`; P2 clock rollback -> `Expired`/l
 intent - every fail-closed path proven to deny on error/empty - is therefore met by
 construction; a separate consolidated suite would only duplicate these (CANON 13, no
 gold-plating). No code change. Commit: (this change set, docs-only).
+
+### D6 - toolproxy hung-tool timeout + session-flood bound (M)
+
+Two DoS gaps in `aog-toolproxy` (`ToolProxy::invoke`):
+- **Hung tool.** The executor was awaited unbounded (`executor.execute(..).await`), so a stuck
+  tool hung the agent loop forever despite `ToolDefinition.timeout` being declared. Now wrapped
+  in `tokio::time::timeout(tool.timeout, ..)`; on elapse it returns a failed `ToolResult`
+  (`timed_out_result`) - the lease revoke + receipt still run. `tokio` promoted from a
+  dev-dependency to a runtime one (the proxy's invoke path is already async).
+- **Session-id flood.** `task_usage: BTreeMap<session_id, TaskUsage>` (the T8 blast-radius
+  tally) grew one entry per distinct session id, unbounded. Both insertion sites now go through
+  `task_usage_entry`, which caps the map at `MAX_TRACKED_SESSIONS` (4096) and evicts one entry
+  when a new session would exceed it. Eviction under flood only resets a tally (rare,
+  attack-only) - far cheaper than an unbounded map.
+
+Verify: fmt; `cargo clippy -p aog-toolproxy --all-targets -- -D warnings -A clippy::pedantic`
+PASS; `cargo test -p aog-toolproxy` PASS (53) - new `hung_tool_times_out_and_is_receipted`
+(50 ms timeout on a 1-hour-hang executor -> failed "timed out" result, still receipted, returns
+promptly) and `task_usage_map_is_bounded_against_session_flood` (MAX+100 distinct sessions ->
+map stays at the cap). D6 gate ("session-id flood bounded; hung tool times out") holds. Commit:
+(this change set).
