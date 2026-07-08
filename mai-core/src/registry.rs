@@ -231,11 +231,37 @@ impl From<VaultError> for RegistryError {
     }
 }
 
+/// Validate a USB package directory name (finding F5-NEW-2). It must be a single
+/// path component that cannot escape the USB mount root — model package dirs look
+/// like `qwen3-14b.mai-pkg`.
+fn validate_package_name(name: &str) -> Result<(), RegistryError> {
+    let bad = || RegistryError::UsbPackageError(format!("unsafe package name: {name:?}"));
+    if name.is_empty() || name.len() > 255 {
+        return Err(bad());
+    }
+    if name.contains('/')
+        || name.contains('\\')
+        || name.contains("..")
+        || name.starts_with('.')
+        || name.chars().any(char::is_control)
+    {
+        return Err(bad());
+    }
+    let mut comps = Path::new(name).components();
+    match (comps.next(), comps.next()) {
+        (Some(std::path::Component::Normal(_)), None) => Ok(()),
+        _ => Err(bad()),
+    }
+}
+
 /// Model registry main struct
 pub struct ModelRegistry {
     pub(crate) models: HashMap<ModelId, ModelEntry>,
     vault: Box<dyn VaultInterface>,
     storage: Option<Box<dyn ModelStorage>>,
+    /// When set, a USB install requires an authenticated, weights-bound manifest
+    /// (finding DF-01A). Production sets this; defaults off for back-compat.
+    require_signed_manifest: bool,
 }
 
 /// Internal entry tracking model state and location
@@ -254,12 +280,22 @@ impl ModelRegistry {
             models: HashMap::new(),
             vault,
             storage: None,
+            require_signed_manifest: false,
         }
     }
 
     /// Attach a ModelStorage implementation for extended operations
     pub fn with_storage(mut self, storage: Box<dyn ModelStorage>) -> Self {
         self.storage = Some(storage);
+        self
+    }
+
+    /// Require an authenticated, weights-bound manifest on every USB install
+    /// (finding DF-01A). Production deployments set this so a legacy unsigned
+    /// package is refused rather than trusted for its manifest fields.
+    #[must_use]
+    pub fn with_signed_manifest_required(mut self, required: bool) -> Self {
+        self.require_signed_manifest = required;
         self
     }
 
@@ -451,6 +487,9 @@ impl ModelRegistry {
     ) -> Result<InstallResult, RegistryError> {
         use crate::models::package::ModelPackage;
 
+        // F5-NEW-2: `package_name` is caller-controlled; it must name a single
+        // directory on the USB mount, never escape it via `..`/separators.
+        validate_package_name(package_name)?;
         let package_dir = usb_mount_point.join(package_name);
         let pkg = ModelPackage::open(&package_dir).map_err(|e| {
             RegistryError::UsbPackageError(format!(
@@ -460,10 +499,12 @@ impl ModelRegistry {
         })?;
 
         let current_version = env!("CARGO_PKG_VERSION");
+        let require_signed_manifest = self.require_signed_manifest;
         let &mut Self {
             ref mut models,
             ref vault,
             ref storage,
+            ..
         } = self;
 
         crate::models::install::install_package(
@@ -472,6 +513,7 @@ impl ModelRegistry {
             &**vault as &dyn VaultInterface,
             storage.as_deref(),
             current_version,
+            require_signed_manifest,
             None,
         )
         .await

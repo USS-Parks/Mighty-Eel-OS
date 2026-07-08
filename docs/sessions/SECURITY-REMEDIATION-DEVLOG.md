@@ -660,3 +660,59 @@ stray `Copyright` (capital-C) variants in the `.integrity/` mirror and
 `HANDOFF.md` to the lowercase `copyright` canon and loosened the mirror's strip
 regex to the `^Authored and reviewed by` prefix so re-stamping stays idempotent.
 Branch `claude/live-gates-docker-zfs-qoe2bc`; all work pushed to origin.
+
+## Phase F — deferred high-impact frontier closure
+
+Phase F audits the deferred high-impact shards (F1-F9). Each prompt was reviewed
+by an independent read-only auditor against its PSPR gate, then every High/Critical
+claim was confirmed against source before any fix. Reachable, bounded,
+host-testable findings are fixed with regression tests; feature-scale (full adapter
+resource isolation) and hardware-blocked (real ZFS/TPM) items are dispositioned as
+tracked deferrals, never fake-closed. Per-prompt dispositions:
+`test-evidence/security-remediation/M3/`.
+
+### F5(a) - model-package integrity (DF-01A, DF-01B, F5-NEW-1/2)
+
+Objective: close the model-package trust-boundary findings - arbitrary out-of-vault
+write via an unsanitized manifest-derived id (DF-01B), and the manifest-not-
+authenticated gap (DF-01A) - plus two correctness fixes.
+
+Confirmed against source (`mai-core/src/models/verify.rs:116`,
+`mai-vault/src/{zfs,file_dev}.rs`): `verify_signature` signed only the weights, so
+the manifest - and the `model_id = name:version:quant` derived from it - was
+unauthenticated; that `model_id` was then joined onto the vault root with no
+sanitization, giving arbitrary directory creation + file write outside the vault on
+a crafted manifest name.
+
+Changed:
+- DF-01B: `mai_core::vault::validate_model_id` rejects path separators, `..`,
+  absolute/drive-qualified, empty/over-long, control chars, and non-`[A-Za-z0-9._:-]`
+  ids, and requires a single Normal path component. Enforced at the storage boundary
+  in both `ZfsVault` and `FileDevVault` on store/load/migrate before any join.
+- DF-01A: `verify_package` authenticates the manifest. A v2 package carries
+  `manifest.mldsa` (ML-DSA over the canonical `manifest.toml` bytes) and declares
+  `security.integrity_hash_tree` equal to the weights hash-tree root; a present-but-
+  invalid manifest signature, or a manifest not bound to the signed weights, is a
+  hard `verified=false`. A legacy unsigned package stays installable outside strict
+  mode (back-compat) but reports `manifest_authenticated=false`;
+  `ModelRegistry::with_signed_manifest_required(true)` (production) refuses it at the
+  install boundary. `pkg-builder --manifest-signature` emits v2 and gates the
+  manifest-to-weights binding at build time.
+- F5-NEW-1: model install/remove audit entries built with `serde_json`, not string
+  interpolation, so an untrusted id/name cannot forge JSON.
+- F5-NEW-2: `install_from_usb` validates the caller-supplied `package_name` as a
+  single safe path component before joining it onto the USB mount.
+
+Verify (raw cargo, changed crates): fmt clean; `cargo check -p mai-core -p mai-vault`
+PASS; `cargo clippy -p mai-core -p mai-vault -p mai-pkg-builder --all-targets -- -D
+warnings -A clippy::pedantic` PASS; `cargo test` PASS (285 tests; new regressions:
+validate_model_id accept/reject matrix, file_dev store rejects traversal id +
+nothing written outside root, verify manifest-authenticated / binding-mismatch-fails
+/ strict-mode-rejects-unsigned).
+
+Residual (honest scope): DF-01B fully closed. DF-01A closed at the consumer for v2
+packages and enforceable in production via strict mode; the operational completion
+is the offline signer emitting `manifest.mldsa` and deployments constructing the
+registry in strict mode. DF-01A / DF-01B -> CODE-FIXED.
+
+Commit: (this change set).

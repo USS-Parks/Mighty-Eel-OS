@@ -28,7 +28,7 @@ use tracing::{debug, info, warn};
 
 use mai_core::vault::{
     AuditStore, IntegrityResult, ModelStorage, PqcProvider, SnapshotInfo, StorageInfo, VaultError,
-    VaultInterface,
+    VaultInterface, validate_model_id,
 };
 
 use crate::audit::AuditWriter;
@@ -198,6 +198,7 @@ impl FileDevVault {
 #[async_trait]
 impl VaultInterface for FileDevVault {
     async fn load_model_weights(&self, model_id: &str) -> Result<Vec<u8>, VaultError> {
+        validate_model_id(model_id)?; // DF-01B
         let index = self.model_index.read().await;
         let entry = index
             .get(model_id)
@@ -215,6 +216,8 @@ impl VaultInterface for FileDevVault {
     }
 
     async fn store_model_package(&self, model_id: &str, data: &[u8]) -> Result<(), VaultError> {
+        // DF-01B: untrusted manifest-derived id must not escape the vault root.
+        validate_model_id(model_id)?;
         {
             let index = self.model_index.read().await;
             if index.contains_key(model_id) {
@@ -527,5 +530,24 @@ mod tests {
         let info = vault.storage_info().await.unwrap();
         assert_eq!(info.model_count, 1);
         assert!(info.used_bytes > 0);
+    }
+
+    #[tokio::test]
+    async fn test_store_rejects_path_traversal_id() {
+        // DF-01B: a manifest-derived id that would escape the vault root is
+        // refused before any filesystem write.
+        let tmp = TempDir::new().unwrap();
+        let vault = FileDevVault::new(test_config(&tmp));
+        vault.initialize().await.unwrap();
+        for bad in ["../escape", "../../etc/cron.d/x", "a/b", "/abs", ".."] {
+            let r = vault.store_model_package(bad, b"data").await;
+            assert!(
+                matches!(r, Err(VaultError::InvalidModelId(_))),
+                "store must reject {bad:?}, got {r:?}"
+            );
+        }
+        // Nothing was created outside the vault root.
+        assert!(!tmp.path().parent().unwrap().join("escape").exists());
+        assert!(vault.load_model_weights("../escape").await.is_err());
     }
 }

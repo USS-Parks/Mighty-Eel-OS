@@ -40,8 +40,8 @@
 | AF-17B | ROI endpoint computes recommendations from every tenant | Medium | PSPR-15 | `crates/aog-gateway/src/surface_openai.rs:259` | 28, 31 | pending | pending | pending | pending | OPEN |
 | AF-19 | Restore accepts unsigned/unverified manifests by default | Medium | PSPR-22 | `tools/mai-admin/src/main.rs:123` | 29, 31 | pending | pending | pending | pending | OPEN |
 | AF-20 | Production-like deployment images use mutable tags | Medium | PSPR-25 | `deployment/wsf-ha/docker-compose.yml:57` | 30, 31 | pending | pending | pending | pending | OPEN |
-| DF-01A | Model package signature authenticates weights but not manifest identity | High | PSPR-17 | `mai-core/src/models/verify.rs:120` | 29, 31 | pending | pending | pending | pending | OPEN |
-| DF-01B | Manifest-derived model ID can escape the vault root | Medium | PSPR-18 | `mai-vault/src/zfs.rs:275` | 29, 31 | pending | pending | pending | pending | OPEN |
+| DF-01A | Model package signature authenticates weights but not manifest identity | High | PSPR-17 | `mai-core/src/models/verify.rs` | 29, 31 | `mai-core` manifest-auth tests (authenticated / binding-mismatch / strict-reject) | `M3/F5` | v2 = `manifest.mldsa` + weights-bound `integrity_hash_tree`; strict mode denies legacy | consumer closed; prod runs `with_signed_manifest_required(true)` + offline signer emits `manifest.mldsa` | CODE-FIXED |
+| DF-01B | Manifest-derived model ID can escape the vault root | Medium | PSPR-18 | `mai-vault/src/{zfs,file_dev}.rs` via `mai_core::vault::validate_model_id` | 29, 31 | `validate_model_id` accept/reject matrix + `file_dev` traversal-store rejection | `M3/F5` | id validated at both backends before any path join | closed | CODE-FIXED |
 
 ## Deferred runtime surfaces (2)
 

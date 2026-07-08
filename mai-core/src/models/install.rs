@@ -72,6 +72,7 @@ pub(crate) async fn install_package(
     vault: &dyn VaultInterface,
     storage: Option<&dyn ModelStorage>,
     current_mai_version: &str,
+    require_signed_manifest: bool,
     progress: Option<&(dyn Fn(InstallProgress) + Sync)>,
 ) -> Result<InstallResult, RegistryError> {
     let start = Instant::now();
@@ -95,6 +96,16 @@ pub(crate) async fn install_package(
                 .first()
                 .cloned()
                 .unwrap_or_else(|| "Package verification failed".to_string()),
+        ));
+    }
+    // DF-01A: in strict mode a package must carry an authenticated, weights-bound
+    // manifest. A legacy unsigned manifest is refused rather than silently
+    // trusted for its identity/permission fields.
+    if require_signed_manifest && !verify_result.manifest_authenticated {
+        return Err(RegistryError::SignatureVerificationFailed(
+            "manifest is not authenticated (no valid manifest signature) and strict manifest \
+             verification is enabled"
+                .to_string(),
         ));
     }
     let _ = progress.map(|p| p(InstallProgress::Verifying { step: 1, total: 3 }));
@@ -129,11 +140,16 @@ pub(crate) async fn install_package(
 
     let _ = progress.map(|p| p(InstallProgress::Auditing));
 
-    // 6. Write audit entry
-    let audit_entry = format!(
-        "{{\"event\":\"model_installed\",\"model_id\":\"{model_id}\",\"source\":\"usb\",\"package\":\"{}\"}}",
-        pkg.name
-    );
+    // 6. Write audit entry. Build it with a JSON serializer, never string
+    // interpolation: model_id and pkg.name derive from the untrusted package and
+    // must not be able to break out of the JSON structure (finding F5-NEW-1).
+    let audit_entry = serde_json::json!({
+        "event": "model_installed",
+        "model_id": model_id,
+        "source": "usb",
+        "package": pkg.name,
+    })
+    .to_string();
     if let Err(e) = vault.append_audit_entry(audit_entry.as_bytes()).await {
         warn!(error = %e, "Failed to write audit entry for USB install");
     }
@@ -312,6 +328,7 @@ changelog = "Initial"
             vault_ref,
             storage_ref,
             "0.2.0",
+            false,
             None,
         )
         .await;
@@ -414,11 +431,100 @@ changelog = "Initial"
             vault_ref,
             storage_ref,
             "0.2.0",
+            false,
             None,
         )
         .await;
         assert!(result.is_err());
 
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    fn create_signed_test_package(dir: &Path, correct_binding: bool) -> ModelPackage {
+        use crate::models::verify::compute_hash_tree_root;
+        use std::fs;
+        let pkg_dir = dir.join("signed-model.mai-pkg");
+        fs::create_dir_all(&pkg_dir).unwrap();
+        let weights = vec![7u8; 128];
+        let root = compute_hash_tree_root(&weights);
+        let declared = if correct_binding {
+            root.clone()
+        } else {
+            "deadbeefdeadbeef".to_string()
+        };
+        let manifest = format!(
+            "[model]\nname = \"signed-model\"\nversion = \"1.0.0\"\nformat = \"GGUF\"\n\
+             quantization = \"Q4_K_M\"\nsize_bytes = 128\nrequired_vram_bytes = 256\n\n\
+             [compatibility]\nmin_mai_version = \"0.1.0\"\nsupported_backends = [\"ollama\"]\n\
+             hardware_classes = [\"cpu\"]\n\n[capabilities]\nchat = true\ncompletion = true\n\
+             embedding = false\nvision = false\nstructured_output = false\n\
+             max_context_tokens = 4096\nsupported_languages = [\"en\"]\n\n[security]\n\
+             signature_algorithm = \"ML-DSA-87\"\npublic_key_fingerprint = \"sha256:test\"\n\
+             integrity_hash_tree = \"{declared}\"\n\n[metadata]\nlicense = \"MIT\"\n\
+             changelog = \"Initial\"\n"
+        );
+        fs::write(pkg_dir.join("manifest.toml"), &manifest).unwrap();
+        fs::write(pkg_dir.join("weights.bin"), &weights).unwrap();
+        fs::write(pkg_dir.join("signature.mldsa"), vec![1u8; 64]).unwrap();
+        fs::write(pkg_dir.join("hash_tree.sha256"), format!("{root}\n")).unwrap();
+        // Presence of manifest.mldsa marks a v2 (manifest-authenticated) package.
+        fs::write(pkg_dir.join("manifest.mldsa"), vec![2u8; 64]).unwrap();
+        ModelPackage::open(&pkg_dir).unwrap()
+    }
+
+    #[tokio::test]
+    async fn test_manifest_authenticated_when_signed_and_bound() {
+        // DF-01A: a valid manifest signature whose declared integrity root
+        // matches the weights hash tree yields an authenticated manifest.
+        let dir = std::env::temp_dir().join("test_df01a_auth_ok");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let pkg = create_signed_test_package(&dir, true);
+        let vault = MockVault;
+        let result = verify::verify_package(&pkg, &vault, "0.2.0").await;
+        assert!(result.verified, "{:?}", result.messages);
+        assert!(result.manifest_authenticated);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test]
+    async fn test_manifest_binding_mismatch_fails_verification() {
+        // DF-01A: a signed manifest that does not bind to the weights (declared
+        // integrity root differs) is a hard verification failure.
+        let dir = std::env::temp_dir().join("test_df01a_mismatch");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let pkg = create_signed_test_package(&dir, false);
+        let vault = MockVault;
+        let result = verify::verify_package(&pkg, &vault, "0.2.0").await;
+        assert!(!result.verified);
+        assert!(!result.manifest_authenticated);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test]
+    async fn test_strict_mode_rejects_unsigned_manifest() {
+        // DF-01A: a legacy package with no manifest signature is refused when
+        // strict manifest verification is enabled.
+        let dir = std::env::temp_dir().join("test_df01a_strict");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let pkg = create_test_package(&dir);
+        let vault = MockVault;
+        let mut registry = ModelRegistry::new(Box::new(MockVault));
+        let vault_ref: &dyn VaultInterface = &vault;
+        let storage_ref: Option<&dyn ModelStorage> = Some(&vault);
+        let result = install_package(
+            &pkg,
+            &mut registry.models,
+            vault_ref,
+            storage_ref,
+            "0.2.0",
+            true, // require_signed_manifest
+            None,
+        )
+        .await;
+        assert!(result.is_err(), "strict mode must reject unsigned manifest");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

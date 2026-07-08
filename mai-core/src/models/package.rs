@@ -10,6 +10,10 @@ pub const MANIFEST_FILE: &str = "manifest.toml";
 pub const WEIGHTS_FILE: &str = "weights.bin";
 pub const SIGNATURE_FILE: &str = "signature.mldsa";
 pub const HASH_TREE_FILE: &str = "hash_tree.sha256";
+/// Optional ML-DSA signature over the canonical `manifest.toml` bytes. Its
+/// presence marks a manifest-authenticated (v2) package. Without it the
+/// manifest's identity/permission fields are unauthenticated (finding DF-01A).
+pub const MANIFEST_SIG_FILE: &str = "manifest.mldsa";
 
 /// Package suffix expected for model packages on USB/media
 pub const PACKAGE_SUFFIX: &str = ".mai-pkg";
@@ -134,6 +138,29 @@ impl ModelPackage {
         std::fs::read_to_string(&path)
             .map(|s| s.trim().to_string())
             .map_err(|e| PackageError::ReadError(HASH_TREE_FILE.to_string(), e.to_string()))
+    }
+
+    /// Read the raw `manifest.toml` bytes — the exact signed preimage for
+    /// manifest authentication (finding DF-01A). Reads the on-disk bytes rather
+    /// than re-serializing the parsed struct so verification is byte-exact.
+    pub fn read_manifest_bytes(&self) -> Result<Vec<u8>, PackageError> {
+        let path = self.package_dir.join(MANIFEST_FILE);
+        std::fs::read(&path)
+            .map_err(|e| PackageError::ReadError(MANIFEST_FILE.to_string(), e.to_string()))
+    }
+
+    /// Read the optional manifest signature. `Ok(None)` means the package
+    /// carries no `manifest.mldsa` (a legacy, manifest-unauthenticated package).
+    pub fn read_manifest_signature(&self) -> Result<Option<Vec<u8>>, PackageError> {
+        let path = self.package_dir.join(MANIFEST_SIG_FILE);
+        match std::fs::read(&path) {
+            Ok(bytes) => Ok(Some(bytes)),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(e) => Err(PackageError::ReadError(
+                MANIFEST_SIG_FILE.to_string(),
+                e.to_string(),
+            )),
+        }
     }
 
     /// Compute the model ID string from manifest

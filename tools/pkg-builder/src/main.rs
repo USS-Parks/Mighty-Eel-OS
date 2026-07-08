@@ -36,6 +36,12 @@ struct Cli {
     /// Overwrite existing output directory
     #[arg(long, default_value_t = false)]
     force: bool,
+
+    /// Optional ML-DSA signature over the canonical manifest.toml bytes. When
+    /// provided, the output is a manifest-authenticated (v2) package and the
+    /// manifest must declare the correct weights hash-tree root (finding DF-01A).
+    #[arg(long)]
+    manifest_signature: Option<PathBuf>,
 }
 
 fn main() -> Result<()> {
@@ -122,6 +128,31 @@ fn main() -> Result<()> {
         fs::write(&dest, data)
             .with_context(|| format!("Failed to write {file_name} to {}", dest.display()))?;
         tracing::info!("  Wrote {} ({} bytes)", dest.display(), data.len());
+    }
+
+    // DF-01A: a manifest-authenticated (v2) package carries a signature over the
+    // manifest and must bind the manifest to the weights by declaring the
+    // computed hash-tree root, so the consumer can prove the pair belongs
+    // together.
+    if let Some(msig_path) = &cli.manifest_signature {
+        if _manifest.security.integrity_hash_tree.trim() != hash_root {
+            anyhow::bail!(
+                "manifest security.integrity_hash_tree ({}) does not equal the computed weights \
+                 hash-tree root ({hash_root}); a manifest-signed package must bind them",
+                _manifest.security.integrity_hash_tree
+            );
+        }
+        let msig = fs::read(msig_path).with_context(|| {
+            format!("Failed to read manifest signature: {}", msig_path.display())
+        })?;
+        let dest = output_dir.join("manifest.mldsa");
+        fs::write(&dest, &msig)
+            .with_context(|| format!("Failed to write manifest.mldsa to {}", dest.display()))?;
+        tracing::info!(
+            "  Wrote {} ({} bytes) [manifest-authenticated v2]",
+            dest.display(),
+            msig.len()
+        );
     }
 
     tracing::info!("Package created successfully at {}", output_dir.display());

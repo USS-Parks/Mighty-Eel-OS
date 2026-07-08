@@ -131,10 +131,15 @@ pub(crate) async fn remove_model(
     // Remove from registry
     models.remove(model_id);
 
-    // Write audit entry
-    let audit_entry = format!(
-        "{{\"event\":\"model_removed\",\"model_id\":\"{model_id}\",\"crypto_erased\":{crypto_erased}, \"snapshot\":{snapshot_created}}}",
-    );
+    // Write audit entry with a JSON serializer, never string interpolation:
+    // model_id is untrusted and must not break out of the JSON (finding F5-NEW-1).
+    let audit_entry = serde_json::json!({
+        "event": "model_removed",
+        "model_id": model_id,
+        "crypto_erased": crypto_erased,
+        "snapshot": snapshot_created,
+    })
+    .to_string();
     if let Err(e) = vault.append_audit_entry(audit_entry.as_bytes()).await {
         warn!(error = %e, "Failed to write audit entry for model removal");
     }

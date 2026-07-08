@@ -27,7 +27,7 @@ use tracing::{debug, info, warn};
 
 use mai_core::vault::{
     AuditStore, IntegrityResult, ModelStorage, PqcProvider, SnapshotInfo, StorageInfo,
-    VaultAuditAction, VaultAuditStatus, VaultError, VaultInterface,
+    VaultAuditAction, VaultAuditStatus, VaultError, VaultInterface, validate_model_id,
 };
 
 use crate::audit::{AuditWriter, build_audit_entry};
@@ -344,6 +344,7 @@ impl ZfsVault {
     /// [`VaultError::ModelNotFound`] if the model or its manifest is absent;
     /// [`VaultError::PqcError`] if no engine is wired or the format is unknown.
     pub async fn migrate_model_to_encrypted(&self, model_id: &str) -> Result<bool, VaultError> {
+        validate_model_id(model_id)?; // DF-01B: untrusted id -> path component
         let model_dir = self.config.storage.mount_point.join(model_id);
         let weights_path = model_dir.join("weights.bin");
         let manifest_path = model_dir.join("manifest.json");
@@ -414,6 +415,10 @@ impl VaultInterface for ZfsVault {
             )));
         }
 
+        // DF-01B defense in depth: even though `entry.path` comes from the
+        // index, reject an untrusted id before it can influence any path.
+        validate_model_id(model_id)?;
+
         info!(model_id, path = %weights_path.display(), "Loading model weights from vault");
 
         let stored = tokio::fs::read(&weights_path)
@@ -448,6 +453,9 @@ impl VaultInterface for ZfsVault {
     }
 
     async fn store_model_package(&self, model_id: &str, data: &[u8]) -> Result<(), VaultError> {
+        // DF-01B: the id is derived from an untrusted package manifest. Refuse
+        // anything that could escape the vault root before any path join.
+        validate_model_id(model_id)?;
         // Check if model already exists
         {
             let index = self.model_index.read().await;

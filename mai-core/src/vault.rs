@@ -50,6 +50,8 @@ pub enum VaultError {
     // -- ZFS / storage (new) --
     #[error("Model already exists in vault: {0}")]
     ModelAlreadyExists(String),
+    #[error("Invalid model identifier (unsafe as a storage path): {0}")]
+    InvalidModelId(String),
     #[error("Insufficient vault storage: need {needed} bytes, have {available} bytes")]
     InsufficientStorage { needed: u64, available: u64 },
     #[error("Snapshot not found: {0}")]
@@ -109,6 +111,85 @@ pub enum VaultError {
 impl From<std::io::Error> for VaultError {
     fn from(e: std::io::Error) -> Self {
         VaultError::IoError(e.to_string())
+    }
+}
+
+/// Validate a model identifier before it is joined onto the vault root as a
+/// storage path component (finding DF-01B).
+///
+/// The model id is derived from an air-gap package manifest, which is
+/// attacker-influenced until the signature and manifest bindings are proven.
+/// A backend must therefore treat it as untrusted and refuse anything that
+/// could escape the vault root. Permitted set matches the `name:version:quant`
+/// grammar (ASCII alphanumerics plus `. _ - :`); rejected: path separators,
+/// parent/current-dir references, absolute or drive/UNC-qualified paths, empty,
+/// over-long, and control characters. As a final defense the id must resolve to
+/// exactly one `Normal` OS path component (this also rejects a Windows drive
+/// prefix such as `c:`).
+pub fn validate_model_id(model_id: &str) -> Result<(), VaultError> {
+    let invalid = || VaultError::InvalidModelId(model_id.to_string());
+
+    if model_id.is_empty() || model_id.len() > 256 {
+        return Err(invalid());
+    }
+    if model_id.contains('/')
+        || model_id.contains('\\')
+        || model_id.contains("..")
+        || model_id.starts_with('.')
+        || model_id.starts_with('-')
+        || model_id.chars().any(char::is_control)
+    {
+        return Err(invalid());
+    }
+    if !model_id
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-' | ':'))
+    {
+        return Err(invalid());
+    }
+    // Must be exactly one normal path component (rejects `C:` drive prefixes,
+    // root/prefix components, and any residual traversal the checks above miss).
+    let mut comps = std::path::Path::new(model_id).components();
+    match (comps.next(), comps.next()) {
+        (Some(std::path::Component::Normal(_)), None) => Ok(()),
+        _ => Err(invalid()),
+    }
+}
+
+#[cfg(test)]
+mod model_id_validation_tests {
+    use super::validate_model_id;
+
+    #[test]
+    fn accepts_well_formed_ids() {
+        for id in [
+            "qwen3-14b:1.0.0:Q4_K_M",
+            "test-model:1.0.0:native",
+            "a",
+            "model_name.v2",
+        ] {
+            assert!(validate_model_id(id).is_ok(), "should accept {id}");
+        }
+    }
+
+    #[test]
+    fn rejects_traversal_and_absolute() {
+        for id in [
+            "",
+            "..",
+            "../etc/passwd",
+            "../../../../etc/cron.d/x:1.0.0:native",
+            "a/b",
+            "a\\b",
+            "/abs/path",
+            "c:evil",
+            ".hidden",
+            "-leading-dash",
+            "name\0nul",
+            "spa ce",
+        ] {
+            assert!(validate_model_id(id).is_err(), "should reject {id:?}");
+        }
     }
 }
 

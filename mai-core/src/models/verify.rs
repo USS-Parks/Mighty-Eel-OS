@@ -17,6 +17,10 @@ pub struct VerificationResult {
     pub hash_tree_valid: bool,
     /// Platform compatibility status
     pub compatible: bool,
+    /// Whether the manifest itself is cryptographically authenticated and bound
+    /// to the signed weights (DF-01A). `false` for legacy packages carrying no
+    /// `manifest.mldsa`; such packages are accepted only outside strict mode.
+    pub manifest_authenticated: bool,
     /// Detailed messages for any failures
     pub messages: Vec<String>,
 }
@@ -86,11 +90,34 @@ pub async fn verify_package(
         }
     };
 
-    let verified = sig_valid && hash_valid && compatible;
+    let manifest_auth = verify_manifest(pkg, vault).await;
+    let manifest_authenticated = matches!(manifest_auth, ManifestAuth::Authenticated);
+    match &manifest_auth {
+        ManifestAuth::Authenticated => {
+            messages.push("Manifest signature verified and bound to weights".to_string());
+        }
+        ManifestAuth::Unsigned => {
+            messages.push(
+                "Manifest is not signed (legacy package); manifest fields are unauthenticated"
+                    .to_string(),
+            );
+        }
+        ManifestAuth::Failed(why) => {
+            messages.push(format!("Manifest authentication failed: {why}"));
+        }
+    }
+
+    // A present-but-invalid manifest signature (or a manifest not bound to the
+    // signed weights) is a hard failure. A legacy package with no manifest
+    // signature does not fail here (back-compat); a strict caller enforces
+    // `manifest_authenticated` at the install boundary.
+    let manifest_ok = !matches!(manifest_auth, ManifestAuth::Failed(_));
+    let verified = sig_valid && hash_valid && compatible && manifest_ok;
 
     if verified {
         info!(
             package = %pkg.name,
+            manifest_authenticated,
             "Package verification passed"
         );
     } else {
@@ -99,6 +126,7 @@ pub async fn verify_package(
             sig = sig_valid,
             hash = hash_valid,
             compat = compatible,
+            manifest_ok,
             "Package verification failed"
         );
     }
@@ -108,7 +136,55 @@ pub async fn verify_package(
         signature_valid: sig_valid,
         hash_tree_valid: hash_valid,
         compatible,
+        manifest_authenticated,
         messages,
+    }
+}
+
+/// Outcome of manifest authentication (finding DF-01A).
+enum ManifestAuth {
+    /// `manifest.mldsa` present, signature valid under the trust anchor, and the
+    /// manifest's declared integrity root matches the package hash tree.
+    Authenticated,
+    /// No `manifest.mldsa` — a legacy, manifest-unauthenticated package.
+    Unsigned,
+    /// A manifest signature was present but did not verify, or the manifest is
+    /// not bound to the weights.
+    Failed(String),
+}
+
+/// Authenticate the manifest against the trust anchor and bind it to the signed
+/// weights (finding DF-01A). The weights signature alone leaves the manifest —
+/// model identity, capabilities, compatibility, security metadata —
+/// unauthenticated, so a signed weights blob can be re-paired with an
+/// attacker-authored manifest. A v2 package carries `manifest.mldsa` over the
+/// canonical `manifest.toml` bytes and declares `security.integrity_hash_tree`
+/// equal to the weights hash-tree root.
+async fn verify_manifest(pkg: &ModelPackage, vault: &dyn VaultInterface) -> ManifestAuth {
+    let signature = match pkg.read_manifest_signature() {
+        Ok(Some(sig)) => sig,
+        Ok(None) => return ManifestAuth::Unsigned,
+        Err(e) => return ManifestAuth::Failed(e.to_string()),
+    };
+    let manifest_bytes = match pkg.read_manifest_bytes() {
+        Ok(b) => b,
+        Err(e) => return ManifestAuth::Failed(e.to_string()),
+    };
+    match vault.verify_signature(&manifest_bytes, &signature).await {
+        Ok(true) => {}
+        Ok(false) => return ManifestAuth::Failed("signature does not match".to_string()),
+        Err(e) => return ManifestAuth::Failed(e.to_string()),
+    }
+    // Bind the authenticated manifest to the signed weights: its declared
+    // integrity root must equal the package hash-tree root (which
+    // `verify_hash_tree` independently ties to the signed weights bytes).
+    let declared = pkg.manifest.security.integrity_hash_tree.trim().to_string();
+    match pkg.read_hash_tree() {
+        Ok(root) if !declared.is_empty() && declared == root.trim() => ManifestAuth::Authenticated,
+        Ok(_) => ManifestAuth::Failed(
+            "manifest integrity_hash_tree does not match the weights hash tree".to_string(),
+        ),
+        Err(e) => ManifestAuth::Failed(e.to_string()),
     }
 }
 
