@@ -892,3 +892,28 @@ PASS; `cargo test -p aog-gateway` PASS (62) - new `poisoned_receipt_ledger_recov
 poisons a real `Mutex<ReceiptLedger>` (panic under the held guard), then asserts the hardened
 pattern still yields a usable guard whose pre-panic receipt and chain are intact. D4 gate
 ("poisoned lock does not cascade") holds for the request path. Commit: (this change set).
+
+### P1 - wsf-api production startup posture guard (M)
+
+`wsf-api`'s `run()` chose the authenticator purely from `WSF_WORKLOAD_AUTHORITY_KEY`: with the
+key -> `WorkloadAuthenticator`, without it -> `LocalDevAuthenticator` (a printed warning, but it
+still served). A comment claimed the loopback default "keeps the dev fallback off any public
+interface", but nothing enforced that - an operator who set `WSF_LISTEN=0.0.0.0:8300` without
+the key would expose the local-dev authenticator on a public interface, and
+`wsf-hardening::assert_production_ready` was never called (audit P1 / M-posture).
+
+Fix: a new `wsf_api::posture` module. `is_public_bind` resolves `WSF_LISTEN` and flags any
+non-loopback address (`0.0.0.0` / `::` / routable). `enforce_startup_posture(public, has_key,
+cfg)` leaves a loopback bind unrestricted (the dev fallback is host-only) but, on a public bind,
+refuses to start unless BOTH `assert_production_ready` passes (no `http://` OpenBao, no dev root
+token, no weak/uniform subject-HMAC key) AND a workload-authority key is present. `run()` calls
+it right after computing the bind, before service construction, and the authenticator match now
+consumes the already-captured key - so the local-dev authenticator can only answer loopback.
+
+Verify: fmt; `cargo clippy -p wsf-api --all-targets -- -D warnings -A clippy::pedantic` PASS;
+`cargo test -p wsf-api` PASS (38, +6) - the new `posture::tests` cover loopback-vs-public
+classification, loopback-unrestricted, public-without-key refused, public-with-dev-fixtures
+refused, and public-hardened-with-key starts. The consolidated startup-refusal + endpoint
+integration view is P5. This is a path-only dep add (`wsf-hardening`), so `cargo audit`/`deny`
+are unaffected. P1 gate ("a public bind without the key refuses to start") holds. Commit: (this
+change set).

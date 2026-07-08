@@ -15,6 +15,7 @@ wsf-bridge = { path = "../wsf-bridge" }
 wsf-broker = { path = "../wsf-broker" }
 wsf-seal = { path = "../wsf-seal" }
 wsf-ledger = { path = "../wsf-ledger" }
+wsf-hardening = { path = "../wsf-hardening" }
 axum = { workspace = true }
 tokio = { workspace = true }
 serde = { workspace = true }

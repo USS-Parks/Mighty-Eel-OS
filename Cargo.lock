@@ -5317,6 +5317,7 @@ dependencies = [
  "uuid",
  "wsf-bridge",
  "wsf-broker",
+ "wsf-hardening",
  "wsf-ledger",
  "wsf-seal",
 ]

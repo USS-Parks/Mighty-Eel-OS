@@ -5,6 +5,7 @@
 //! keys, and writes a shared env file the service container sources before exec.
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
+use std::net::ToSocketAddrs;
 use std::sync::{Arc, Mutex};
 
 use base64::Engine;
@@ -101,13 +102,32 @@ async fn run() -> Result<(), String> {
     // authenticated ingress. The demo/appliance composes set WSF_LISTEN themselves.
     let listen = env_or("WSF_LISTEN", "127.0.0.1:8300");
 
-    // A2 authenticator: production requires a trusted workload-credential
-    // authority key; without it we fall back to the explicit local-dev
-    // principal (never production-grade). The default loopback bind keeps the
-    // dev fallback off any public interface.
-    let authenticator: Arc<dyn WsfAuthenticator> = match std::env::var("WSF_WORKLOAD_AUTHORITY_KEY")
-    {
-        Ok(k) => {
+    // P1 production startup posture. A public (non-loopback) bind must present a
+    // real workload-credential authority key AND a hardened OpenBao/HMAC config,
+    // or we refuse to start — the local-dev authenticator and dev fixtures never
+    // answer a public interface. A loopback bind stays unrestricted (host-only).
+    let resolved: Vec<std::net::SocketAddr> = listen
+        .to_socket_addrs()
+        .map_err(|e| format!("WSF_LISTEN '{listen}' did not resolve: {e}"))?
+        .collect();
+    let public_bind = wsf_api::posture::is_public_bind(&resolved);
+    let workload_key = std::env::var("WSF_WORKLOAD_AUTHORITY_KEY").ok();
+    wsf_api::posture::enforce_startup_posture(
+        public_bind,
+        workload_key.is_some(),
+        &wsf_hardening::DeploymentConfig {
+            mode: wsf_hardening::DeployMode::Production,
+            openbao_address: addr.clone(),
+            openbao_token: secret_id.clone(),
+            subject_hmac_key: hmac.clone(),
+        },
+    )?;
+
+    // A2 authenticator: a workload-credential authority key selects the
+    // production authenticator; without it we fall back to the explicit
+    // local-dev principal — which the P1 posture above confines to a loopback bind.
+    let authenticator: Arc<dyn WsfAuthenticator> = match workload_key {
+        Some(k) => {
             let key = base64::engine::general_purpose::STANDARD
                 .decode(k.trim())
                 .map_err(|e| format!("WSF_WORKLOAD_AUTHORITY_KEY not base64: {e}"))?;
@@ -118,7 +138,7 @@ async fn run() -> Result<(), String> {
             println!("wsf-api: workload-credential authenticator (audience=wsf)");
             Arc::new(a)
         }
-        Err(_) => {
+        None => {
             let tenant = env_or("WSF_DEV_TENANT", "local-dev-tenant");
             println!("wsf-api: LOCAL-DEV authenticator (tenant={tenant}) — not for production");
             Arc::new(LocalDevAuthenticator::for_wsf(tenant))

@@ -17,6 +17,7 @@ pub mod auth;
 pub mod client;
 pub mod grants;
 pub mod policy;
+pub mod posture;
 
 use std::sync::{Arc, Mutex};
 
