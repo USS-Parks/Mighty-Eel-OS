@@ -65,7 +65,13 @@ jobs:
 
       - name: Verify no unsafe in mai-core
         run: |
-          if grep -rn "unsafe" mai-core/src/ | grep -v '^\s*//' | grep -v '//.*unsafe'; then
+          # Match the `unsafe` keyword in code position — an unsafe block / fn /
+          # impl / trait / extern — not the substring inside a string literal or
+          # comment. The old `grep -rn "unsafe"` flagged legitimate error messages
+          # ("unsafe package name", "unsafe as a storage path") as false positives,
+          # and its `grep -v '^\s*//'` filters never matched (grep -rn prefixes each
+          # line with the file path, so the line never starts with `//`).
+          if grep -rnE '(^|[^A-Za-z0-9_])unsafe[[:space:]]*(\{|fn|impl|trait|extern)' mai-core/src/; then
             echo "ERROR: unsafe code found in mai-core"
             exit 1
           fi
