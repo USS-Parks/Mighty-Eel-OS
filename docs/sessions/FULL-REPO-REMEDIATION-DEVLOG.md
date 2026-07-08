@@ -950,3 +950,30 @@ its unit test, kept as scaffolding for the real streaming flow. The consolidated
 endpoint-honesty harness (calling each endpoint and asserting the not-implemented signal) is P5.
 P4 gate ("no wired endpoint returns indistinguishable fake success") holds. Commit: (this change
 set).
+
+### P5 - posture gate: startup-refusal + endpoint-honesty tests (M, closes M-posture)
+
+The consolidated posture gate over P1 (startup refusal) + P4 (endpoint honesty).
+
+- **Startup refusal (P1):** covered by `wsf-api`'s `posture::tests` (6 unit tests over the
+  decision surface: loopback-vs-public classification, loopback-unrestricted, public-without-key
+  refused, public-with-dev-fixtures refused, public-hardened-with-key starts). The process-level
+  refusal (the binary exits non-zero on a public bind) is inherently a spawn/e2e check and
+  belongs to the X-phase live suite, not a unit gate.
+- **Endpoint honesty (P4):** 5 new integration tests, each authenticated as Admin so auth +
+  permission are cleared and the only remaining outcome is the honest signal:
+  - `grpc_integration.rs` (reusing `start_test_grpc_server`): `posture_grpc_embed_*`,
+    `posture_grpc_stream_*`, `posture_grpc_scan_models_*` assert `tonic::Code::Unimplemented`.
+  - `system_integration.rs` (reusing `build_router` + `oneshot`): `posture_list_profiles_admin_*`
+    asserts HTTP 501, `posture_list_profiles_nonadmin_sees_only_self` asserts the non-admin still
+    gets 200.
+  - WS `inference.request` honesty is enforced in code (returns `inference.error(MAI-5004)`) and
+    verified by construction + the P4 gate; a WS-frame integration test needs a WebSocket client
+    harness that does not exist in-tree (the streaming tests drive SSE over `oneshot`), so it is
+    an X-phase live-suite item, noted rather than silently skipped.
+
+Verify: fmt; `cargo clippy -p mai-api --all-targets -- -D warnings -A clippy::pedantic` PASS;
+`cargo test -p mai-api --test grpc_integration --test system_integration` PASS (16; the 5
+`posture_*` tests pass, 11 pre-existing unaffected). P5 gate ("M-posture closed") holds for the
+harness-testable surface; the two process/WS live checks are enumerated for X. Commit: (this
+change set).

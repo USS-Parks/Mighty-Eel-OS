@@ -286,3 +286,95 @@ async fn test_grpc_auth_rejects_unprivileged() {
         );
     }
 }
+
+// -- P5 posture gate: gRPC endpoint honesty (audit P4) ---------------------
+//
+// The unwired gRPC endpoints must return an explicit UNIMPLEMENTED status — not
+// a fabricated success (empty embeddings, an empty stream, a placeholder scan).
+// Each call is authenticated as Admin, so it clears auth + permission and the
+// only remaining outcome is the honest not-implemented status.
+
+#[tokio::test]
+async fn posture_grpc_embed_is_unimplemented_not_empty_success() {
+    let addr = start_test_grpc_server().await;
+    let mut client = mai_api::grpc::proto::mai_inference_client::MaiInferenceClient::connect(
+        format!("http://{addr}"),
+    )
+    .await
+    .unwrap();
+    let mut request = Request::new(mai_api::grpc::proto::EmbeddingRequest {
+        model: "embed-1".to_string(),
+        input: vec!["hello".to_string()],
+        profile_id: "admin-1".to_string(),
+        ..Default::default()
+    });
+    request
+        .metadata_mut()
+        .insert("x-im-profile", "admin-1:Admin".parse().unwrap());
+    let status = client
+        .embed(request)
+        .await
+        .expect_err("embed must return an explicit error, not empty-vector success");
+    assert_eq!(
+        status.code(),
+        tonic::Code::Unimplemented,
+        "expected UNIMPLEMENTED, got {status:?}"
+    );
+}
+
+#[tokio::test]
+async fn posture_grpc_stream_is_unimplemented_not_empty_stream() {
+    let addr = start_test_grpc_server().await;
+    let mut client = mai_api::grpc::proto::mai_inference_client::MaiInferenceClient::connect(
+        format!("http://{addr}"),
+    )
+    .await
+    .unwrap();
+    let mut request = Request::new(mai_api::grpc::proto::ChatCompletionRequest {
+        model: "phi-4-mini".to_string(),
+        messages: vec![mai_api::grpc::proto::ChatMessage {
+            role: "user".to_string(),
+            content: "Hello".to_string(),
+            name: String::new(),
+        }],
+        profile_id: "admin-1".to_string(),
+        ..Default::default()
+    });
+    request
+        .metadata_mut()
+        .insert("x-im-profile", "admin-1:Admin".parse().unwrap());
+    let status = client
+        .chat_completion_stream(request)
+        .await
+        .expect_err("streaming must return an explicit error, not a fabricated empty stream");
+    assert_eq!(
+        status.code(),
+        tonic::Code::Unimplemented,
+        "expected UNIMPLEMENTED, got {status:?}"
+    );
+}
+
+#[tokio::test]
+async fn posture_grpc_scan_models_is_unimplemented_not_placeholder_ok() {
+    let addr = start_test_grpc_server().await;
+    let mut client = mai_api::grpc::proto::mai_registry_client::MaiRegistryClient::connect(
+        format!("http://{addr}"),
+    )
+    .await
+    .unwrap();
+    let mut request = Request::new(mai_api::grpc::proto::ScanModelsRequest {
+        profile_id: "admin-1".to_string(),
+    });
+    request
+        .metadata_mut()
+        .insert("x-im-profile", "admin-1:Admin".parse().unwrap());
+    let status = client
+        .scan_models(request)
+        .await
+        .expect_err("scan_models must return an explicit error, not a placeholder OK");
+    assert_eq!(
+        status.code(),
+        tonic::Code::Unimplemented,
+        "expected UNIMPLEMENTED, got {status:?}"
+    );
+}

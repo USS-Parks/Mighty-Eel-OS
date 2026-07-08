@@ -346,3 +346,33 @@ async fn session34_authed_get_reaches_handler_end_to_end() {
     metadata.insert("status", resp.status().to_string());
     assert!(metadata.contains_key("status"));
 }
+
+// -- 6. P5 posture gate: REST list_profiles honesty (audit P4) ------------
+//
+// GET /v1/profiles documented "admin sees all" but returned only the caller. An
+// admin now gets an explicit 501 (rather than a partial list masquerading as the
+// full set); a non-admin legitimately sees only their own profile.
+
+#[tokio::test]
+async fn posture_list_profiles_admin_is_501_not_a_partial_list() {
+    let app = build_router(build_app_state());
+    let req = json_request("GET", "/v1/profiles", "", "admin-1:Admin");
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(
+        resp.status(),
+        StatusCode::NOT_IMPLEMENTED,
+        "admin list_profiles must be an explicit 501, not a fabricated partial list",
+    );
+}
+
+#[tokio::test]
+async fn posture_list_profiles_nonadmin_sees_only_self() {
+    let app = build_router(build_app_state());
+    let req = json_request("GET", "/v1/profiles", "", "adult-1:Adult");
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(
+        resp.status(),
+        StatusCode::OK,
+        "a non-admin must still get its own profile (200), not a 501",
+    );
+}
