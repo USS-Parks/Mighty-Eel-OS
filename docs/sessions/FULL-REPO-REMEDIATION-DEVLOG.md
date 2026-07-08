@@ -688,3 +688,29 @@ follow-ons (not build-roster provenance), so they pass the current no-slop gate.
 audit-finding references distinct from CANON roster step-codes when the scanner is tightened.
 
 Branch `session/AUDIT-FIX-1`; no push (awaiting explicit approval per §0.4 / project CLAUDE.md).
+
+---
+
+## Follow-on STS — session/AUDIT-FIX-2 (remaining roster)
+
+Continues the same PSPR on `session/AUDIT-FIX-2` (off `main` @ 583d9f9, which carries the
+first STS + the CI no-unsafe-gate fix). Scope: the reachable Mediums/Lows dispositioned at the
+prior session close — G5-G8, D4/D6/D7, P1/P4/P5, Q1-Q7. Same discipline: commit per prompt,
+gates green, no push without approval.
+
+### G5 - de-id `{idx}` token substituted (M, docs-vs-reality)
+
+`DeidConfig.placeholder_template` documented two tokens (`{kind}`, `{idx}`), but
+`Redactor::redact` (`mai-compliance/src/deid.rs`) only `.replace("{kind}", ..)` - a template
+using the documented `{idx}` rendered a literal `{idx}` in the redacted output.
+
+Fix: substitute `{idx}` with the span's 1-based position in original (ascending) order.
+Replacement runs in descending span order for index stability, so a hit at descending position
+`i` has ascending rank `hit_count - i`. Both tokens now render; a template no longer leaks a
+literal `{idx}`.
+
+Verify: fmt; `cargo clippy -p mai-compliance --all-targets -- -D warnings -A clippy::pedantic`
+PASS; `cargo test -p mai-compliance deid` PASS (11) - new `test_idx_token_is_substituted`
+(template `[PHI:{kind}#{idx}]` -> `[PHI:ssn#1]` + `[PHI:email_address#2]`, no literal `{idx}`);
+default `[PHI:{kind}]` suite unchanged. G5 gate ("template output has no literal `{idx}`") holds.
+Commit: (this change set).

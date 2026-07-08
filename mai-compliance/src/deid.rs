@@ -94,9 +94,15 @@ impl Redactor {
         // Replace spans in reverse so indices stay stable.
         let mut hits = report.hits.clone();
         hits.sort_by_key(|hit| Reverse(hit.span.0));
+        // `{idx}` is a span's 1-based position in original (ascending) order.
+        // We iterate in descending order for stable replacement, so a hit at
+        // descending position `i` has ascending rank `hit_count - i` (audit G5:
+        // the token was documented but never substituted, leaving a literal
+        // `{idx}` in the output of any template that used it).
+        let hit_count = hits.len();
 
         let mut redacted = String::from(text);
-        for hit in &hits {
+        for (i, hit) in hits.iter().enumerate() {
             let (start, end) = hit.span;
             if end > redacted.len()
                 || !redacted.is_char_boundary(start)
@@ -106,10 +112,12 @@ impl Redactor {
                 // from a different text. Better to no-op than to panic.
                 continue;
             }
+            let idx = hit_count - i;
             let placeholder = self
                 .config
                 .placeholder_template
-                .replace("{kind}", hit.identifier.as_str());
+                .replace("{kind}", hit.identifier.as_str())
+                .replace("{idx}", &idx.to_string());
             redacted.replace_range(start..end, &placeholder);
         }
 
@@ -180,6 +188,35 @@ mod tests {
         let r = round_trip("SSN 123-45-6789");
         assert!(r.redacted_text.contains("[PHI:ssn]"));
         assert!(!r.redacted_text.contains("123-45-6789"));
+    }
+
+    #[test]
+    fn test_idx_token_is_substituted() {
+        // Audit G5: a template using the documented `{idx}` token must render the
+        // span's 1-based position, never leave a literal "{idx}".
+        let text = "SSN 123-45-6789 and email a@b.co";
+        let report = PhiDetector::baseline().scan(text);
+        let redactor = Redactor::new(DeidConfig {
+            placeholder_template: "[PHI:{kind}#{idx}]".to_string(),
+            ..DeidConfig::default()
+        });
+        let r = redactor.redact(text, &report);
+        assert!(
+            !r.redacted_text.contains("{idx}"),
+            "no literal token expected: {}",
+            r.redacted_text
+        );
+        // SSN is the first span (idx 1), the email the second (idx 2).
+        assert!(
+            r.redacted_text.contains("[PHI:ssn#1]"),
+            "{}",
+            r.redacted_text
+        );
+        assert!(
+            r.redacted_text.contains("[PHI:email_address#2]"),
+            "{}",
+            r.redacted_text
+        );
     }
 
     #[test]
