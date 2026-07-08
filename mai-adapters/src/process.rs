@@ -23,6 +23,47 @@ use crate::config::{DiscoveredAdapter, FrameworkConfig};
 use crate::errors::FrameworkError;
 use mai_hil::traits::AdapterCapabilities;
 
+/// Maximum bytes in a single adapter stdout/stderr frame (finding F4). A hostile
+/// or buggy adapter that never emits a newline must not grow the trusted
+/// parent's memory without bound; the reader closes on an over-long frame.
+const MAX_ADAPTER_FRAME_BYTES: usize = 8 * 1024 * 1024;
+
+/// Read one newline-delimited frame from `reader` into `buf`, bounded to
+/// [`MAX_ADAPTER_FRAME_BYTES`]. Returns `Ok(None)` at EOF, `Ok(Some(len))` for a
+/// complete frame (newline consumed, not included), or an `InvalidData` error
+/// once the accumulated frame exceeds the cap (finding F4). Unlike
+/// `AsyncBufReadExt::lines`, this never buffers an unbounded no-newline stream.
+async fn read_bounded_frame<R>(reader: &mut R, buf: &mut Vec<u8>) -> std::io::Result<Option<usize>>
+where
+    R: AsyncBufReadExt + Unpin,
+{
+    buf.clear();
+    loop {
+        let chunk = reader.fill_buf().await?;
+        if chunk.is_empty() {
+            return Ok(if buf.is_empty() {
+                None
+            } else {
+                Some(buf.len())
+            });
+        }
+        if let Some(pos) = chunk.iter().position(|&b| b == b'\n') {
+            buf.extend_from_slice(&chunk[..pos]);
+            reader.consume(pos + 1);
+            return Ok(Some(buf.len()));
+        }
+        buf.extend_from_slice(chunk);
+        let consumed = chunk.len();
+        reader.consume(consumed);
+        if buf.len() > MAX_ADAPTER_FRAME_BYTES {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "adapter frame exceeded maximum length",
+            ));
+        }
+    }
+}
+
 /// State of an adapter process.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum ProcessState {
@@ -221,6 +262,32 @@ impl AdapterProcess {
                 reason: "Failed to capture stdout".to_string(),
             })?;
 
+        // Drain stderr so a chatty adapter cannot fill the OS pipe buffer and
+        // deadlock on write (finding F4). Frames are bounded like stdout.
+        if let Some(stderr) = child.stderr.take() {
+            let adapter = name.clone();
+            tokio::spawn(async move {
+                let mut reader = BufReader::new(stderr);
+                let mut buf: Vec<u8> = Vec::with_capacity(1024);
+                loop {
+                    match read_bounded_frame(&mut reader, &mut buf).await {
+                        Ok(None) => break,
+                        Ok(Some(_)) => {
+                            let text = String::from_utf8_lossy(&buf);
+                            let text = text.trim();
+                            if !text.is_empty() {
+                                debug!(adapter = %adapter, "adapter stderr: {text}");
+                            }
+                        }
+                        Err(e) => {
+                            warn!(adapter = %adapter, error = %e, "adapter stderr frame error");
+                            break;
+                        }
+                    }
+                }
+            });
+        }
+
         let (stdin_tx, mut stdin_rx) = mpsc::channel::<String>(64);
         let (event_tx, event_rx) = mpsc::channel::<String>(256);
 
@@ -248,20 +315,30 @@ impl AdapterProcess {
         let pending_clone = Arc::clone(&self.pending);
         let adapter_name = name.clone();
         tokio::spawn(async move {
-            let reader = BufReader::new(stdout);
-            let mut lines = reader.lines();
+            let mut reader = BufReader::new(stdout);
+            let mut buf: Vec<u8> = Vec::with_capacity(4096);
 
-            while let Ok(Some(line)) = lines.next_line().await {
-                if line.trim().is_empty() {
+            loop {
+                match read_bounded_frame(&mut reader, &mut buf).await {
+                    Ok(None) => break, // EOF
+                    Ok(Some(_)) => {}
+                    Err(e) => {
+                        warn!(adapter = %adapter_name, error = %e, "adapter stdout frame error; closing reader");
+                        break;
+                    }
+                }
+                let text = String::from_utf8_lossy(&buf);
+                let line = text.trim();
+                if line.is_empty() {
                     continue;
                 }
 
                 // Try IPC NDJSON event first (has "type" and "request_id" fields)
-                if let Ok(ipc_event) = serde_json::from_str::<IpcEvent>(&line) {
+                if let Ok(ipc_event) = serde_json::from_str::<IpcEvent>(line) {
                     let _ = ipc_event_tx.send(ipc_event).await;
                 }
                 // Fallback: legacy RpcResponse (has "id" field)
-                else if let Ok(response) = serde_json::from_str::<RpcResponse>(&line) {
+                else if let Ok(response) = serde_json::from_str::<RpcResponse>(line) {
                     let mut pending = pending_clone.lock().await;
                     if let Some(req) = pending.remove(&response.id) {
                         let result = if let Some(err) = response.error {
@@ -279,7 +356,7 @@ impl AdapterProcess {
                     }
                 } else {
                     // Unknown format - send as raw event
-                    let _ = event_tx.send(line).await;
+                    let _ = event_tx.send(line.to_string()).await;
                 }
             }
         });
@@ -607,5 +684,36 @@ impl AdapterProcess {
         } else {
             false
         }
+    }
+}
+
+#[cfg(test)]
+mod frame_tests {
+    use super::read_bounded_frame;
+    use tokio::io::BufReader;
+
+    #[tokio::test]
+    async fn bounded_frame_reads_lines_then_eof() {
+        let data = b"one\ntwo\nthree";
+        let mut r = BufReader::new(&data[..]);
+        let mut buf = Vec::new();
+        assert_eq!(read_bounded_frame(&mut r, &mut buf).await.unwrap(), Some(3));
+        assert_eq!(&buf, b"one");
+        assert_eq!(read_bounded_frame(&mut r, &mut buf).await.unwrap(), Some(3));
+        assert_eq!(&buf, b"two");
+        // Final frame has no trailing newline.
+        assert_eq!(read_bounded_frame(&mut r, &mut buf).await.unwrap(), Some(5));
+        assert_eq!(&buf, b"three");
+        assert_eq!(read_bounded_frame(&mut r, &mut buf).await.unwrap(), None);
+    }
+
+    #[tokio::test]
+    async fn bounded_frame_rejects_oversized() {
+        // A no-newline stream larger than the cap is refused, not buffered.
+        let big = vec![b'x'; super::MAX_ADAPTER_FRAME_BYTES + 16];
+        let mut r = BufReader::new(&big[..]);
+        let mut buf = Vec::new();
+        let err = read_bounded_frame(&mut r, &mut buf).await.unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
     }
 }

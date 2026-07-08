@@ -47,7 +47,7 @@
 
 | ID | Surface | Owner prompt | Root-control location | Live/final proof | Status |
 |:--|:--|:--:|:--|:--:|:--:|
-| DEF-1 | Adapter resource isolation runtime (CPU/mem/fs/proc/net) | PSPR-26 | `mai-adapters/src/process.rs` | 30, 31 | OPEN |
+| DEF-1 | Adapter resource isolation runtime (CPU/mem/fs/proc/net) | PSPR-26 | `mai-adapters/src/process.rs` | 30, 31 | OPEN (F4: bounded stdout frame + stderr drain landed; CPU/mem/fs/proc/net isolation needs a Linux+cgroups host) |
 | DEF-2 | Signed, bounded update transport (SSRF/rollback resistant) | PSPR-27 | `mai-core/src/models/update.rs`; `mai-api/src/handlers/updates.rs` | 30, 31 | OPEN |
 
 ## Quality follow-up (1)

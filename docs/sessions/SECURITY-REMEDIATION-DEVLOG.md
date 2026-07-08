@@ -853,3 +853,32 @@ run as a documented manual step). Both are Low, demo/ops-plane items outside AF-
 production scope. AF-20 -> CODE-FIXED.
 
 Commit: (this change set).
+### F4 - adapter isolation runtime (bounded DoS fixes + honest DEF-1 deferral)
+
+The adapter framework IS production-wired (`mai-api/src/server.rs:311-347`:
+AdapterManager::new -> discover -> start_adapter), so the trusted parent reads a
+spawned adapter's stdout/stderr. The audit found two reachable DoS vectors plus the
+DEF-1 core (resource isolation) unimplemented.
+
+Fixed (bounded, host-testable):
+- Unbounded stdout frame (F4 item3, High): the reader used `AsyncBufReadExt::lines`,
+  which buffers a no-newline stream without limit -> OOM in the trusted parent from a
+  hostile/buggy adapter. Replaced with `read_bounded_frame` capped at 8 MiB; an
+  over-long frame closes the reader instead of growing memory.
+- Undrained stderr (F4-N3): stderr was piped but never read, so a chatty adapter
+  filling the ~64 KiB pipe buffer blocks on write (hang). stderr is now drained on its
+  own task with the same bounded reader.
+
+Verify: fmt clean; `cargo clippy -p mai-adapters --all-targets -- -D warnings -A
+clippy::pedantic` PASS; `cargo test -p mai-adapters` PASS (new: bounded-frame line
+framing + EOF; oversized-frame rejected).
+
+Deferred honestly (DEF-1 remains a deferred runtime surface, PSPR-26): the CPU/memory
+cgroup path is `cfg(target_os="linux")`-only AND its config fields are never populated
+by `FrameworkConfig::from_toml`, so in every shipping config adapters run unconfined.
+Full CPU/mem/fs/proc/net isolation with fail-closed semantics needs a Linux+cgroups
+host and is out of reach here. F4-item4/N1 (cgroup wiring + env-clear on the cgroup
+path) and item6 (crash-loop counter reset, in the unwired restart path) are
+dispositioned to the DEF-1 lane, not fixed. DEF-1 stays OPEN.
+
+Commit: (this change set).
