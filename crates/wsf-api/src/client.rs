@@ -29,6 +29,7 @@ pub enum ClientError {
 pub struct WsfClient {
     base: String,
     http: reqwest::Client,
+    credential: Option<String>,
 }
 
 impl WsfClient {
@@ -38,7 +39,16 @@ impl WsfClient {
         Self {
             base: base.into(),
             http: reqwest::Client::new(),
+            credential: None,
         }
+    }
+
+    /// Attach a bearer credential sent as `Authorization: Bearer` on every call
+    /// (required by the authenticated issuance surface).
+    #[must_use]
+    pub fn with_credential(mut self, credential: impl Into<String>) -> Self {
+        self.credential = Some(credential.into());
+        self
     }
 
     async fn post<Req: serde::Serialize, Resp: serde::de::DeserializeOwned>(
@@ -46,12 +56,11 @@ impl WsfClient {
         path: &str,
         body: &Req,
     ) -> Result<Resp, ClientError> {
-        let resp = self
-            .http
-            .post(format!("{}{path}", self.base))
-            .json(body)
-            .send()
-            .await?;
+        let mut builder = self.http.post(format!("{}{path}", self.base)).json(body);
+        if let Some(cred) = &self.credential {
+            builder = builder.bearer_auth(cred);
+        }
+        let resp = builder.send().await?;
         let status = resp.status();
         if !status.is_success() {
             return Err(ClientError::Api {

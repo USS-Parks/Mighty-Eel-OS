@@ -224,13 +224,31 @@ async fn sdk_round_trips_every_endpoint() {
             RustCryptoMlDsa87::generate("wsf-api-ledger").unwrap(),
         )))),
         token_public_key: Arc::new(anchor),
+        authenticator: Arc::new(wsf_api::auth::StaticAuthenticator::new().with_principal(
+            "test-issuer",
+            wsf_api::auth::WsfPrincipal {
+                service_identity: "test-issuer".to_string(),
+                tenant_id: TENANT.to_string(),
+                roles: vec!["clinician".to_string()],
+                audience: "test-aud".to_string(),
+                budget_ceiling: None,
+                allowed_models: vec![],
+                permissions: wsf_api::auth::IssuancePermissions {
+                    self_scoped: true,
+                    delegated: true,
+                    service: true,
+                    admin: true,
+                },
+            },
+        )),
+        rate_limiter: Arc::new(wsf_api::auth::RateLimiter::default()),
     };
 
     let app = wsf_api::router(state);
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let base = format!("http://{}", listener.local_addr().unwrap());
     let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
-    let sdk = WsfClient::new(base);
+    let sdk = WsfClient::new(base).with_credential("test-issuer");
 
     // OpenAPI published.
     assert!(sdk.openapi().await.unwrap().contains("WSF API"));
@@ -243,6 +261,7 @@ async fn sdk_round_trips_every_endpoint() {
             roles: vec!["clinician".to_string()],
             budget: None,
             allowed_models: vec![],
+            issuance_kind: None,
         })
         .await
         .expect("issue");

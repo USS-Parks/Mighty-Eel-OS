@@ -117,6 +117,11 @@ async fn run() -> Result<(), String> {
         )),
         ledger: Arc::new(Mutex::new(Ledger::new(ledger_signer))),
         token_public_key: Arc::new(anchor),
+        // Fail-closed default: a production deployment wires an mTLS / workload-
+        // identity authenticator here; until then the HTTP issuance surface mints
+        // nothing. TODO(basho): wire the production WSF authenticator.
+        authenticator: Arc::new(wsf_api::auth::DenyAllAuthenticator),
+        rate_limiter: Arc::new(wsf_api::auth::RateLimiter::default()),
     };
 
     let app = wsf_api::router(state);

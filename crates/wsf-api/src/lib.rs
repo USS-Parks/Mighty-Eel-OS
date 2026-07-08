@@ -12,12 +12,13 @@
 //! folding the SDK into `mai-sdk-rs` and a gRPC/tonic-0.14 surface are follow-ons
 //! (the axum-0.8 half of the 0.2d pin is exercised here and in W3).
 
+pub mod auth;
 pub mod client;
 
 use std::sync::{Arc, Mutex};
 
 use axum::extract::{Query, State};
-use axum::http::{StatusCode, header};
+use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
@@ -47,6 +48,11 @@ pub struct AppState {
     pub ledger: Arc<Mutex<Ledger>>,
     /// Trust-anchor public key for verifying presented tokens.
     pub token_public_key: Arc<Vec<u8>>,
+    /// Authenticates callers to a server-side [`auth::WsfPrincipal`]; fails closed
+    /// by default ([`auth::DenyAllAuthenticator`]).
+    pub authenticator: Arc<dyn auth::Authenticator>,
+    /// Per-principal issuance rate limiter.
+    pub rate_limiter: Arc<auth::RateLimiter>,
 }
 
 /// Mount all routes over `state`.
@@ -79,9 +85,12 @@ pub struct IssueReq {
     /// Optional budget strand.
     #[serde(default)]
     pub budget: Option<Budget>,
-    /// Optional model allowlist.
+    /// Optional model allowlist (narrows the principal's allowlist).
     #[serde(default)]
     pub allowed_models: Vec<String>,
+    /// Issuance kind: `self` | `delegated` (default) | `service`.
+    #[serde(default)]
+    pub issuance_kind: Option<String>,
 }
 
 /// Issue-token response.
@@ -224,15 +233,71 @@ fn b64_decode(s: &str) -> Result<Vec<u8>, ApiError> {
 
 async fn issue(
     State(s): State<AppState>,
+    headers: HeaderMap,
     Json(req): Json<IssueReq>,
 ) -> Result<Json<TokenResp>, ApiError> {
-    let ir = IssueTokenRequest::new(req.tenant_id, req.subject_id, req.roles)
-        .with_models(req.allowed_models);
-    let ir = if let Some(b) = req.budget {
-        ir.with_budget(b)
-    } else {
-        ir
+    // 1. Authenticate — fail closed. No principal ⇒ no signing.
+    let principal = match s.authenticator.authenticate(&headers) {
+        Ok(p) => p,
+        Err(e) => {
+            receipt_issue_denied(&s, "-", "unauthenticated", &e.message());
+            return Err(ApiError::new(e.status(), e.message()));
+        }
     };
+
+    // 2. Per-principal issuance rate limit.
+    if !s
+        .rate_limiter
+        .check(&principal.service_identity, Utc::now().timestamp())
+    {
+        receipt_issue_denied(&s, &principal.service_identity, "rate_limited", "");
+        return Err(ApiError::new(
+            StatusCode::TOO_MANY_REQUESTS,
+            "issuance rate limit exceeded".to_string(),
+        ));
+    }
+
+    // 3. Derive the authority to sign — the body may only NARROW the principal.
+    let kind = match req.issuance_kind.as_deref() {
+        None => auth::IssuanceKind::Delegated,
+        Some(k) => auth::IssuanceKind::parse(k).ok_or_else(|| {
+            ApiError::new(
+                StatusCode::BAD_REQUEST,
+                format!("unknown issuance_kind '{k}'"),
+            )
+        })?,
+    };
+    let ireq = auth::IssuanceRequest {
+        kind,
+        requested_tenant: (!req.tenant_id.is_empty()).then_some(req.tenant_id.as_str()),
+        subject_id: &req.subject_id,
+        requested_roles: &req.roles,
+        requested_budget: req.budget.as_ref(),
+        requested_models: &req.allowed_models,
+    };
+    let authority = match auth::derive_issue_authority(&principal, &ireq) {
+        Ok(a) => a,
+        Err(e) => {
+            receipt_issue_denied(
+                &s,
+                &principal.service_identity,
+                "authority_denied",
+                &e.message(),
+            );
+            return Err(ApiError::new(e.status(), e.message()));
+        }
+    };
+
+    // 4. Sign with the SERVER-DERIVED authority — never a caller-authored field.
+    let mut ir = IssueTokenRequest::new(
+        authority.tenant_id.clone(),
+        authority.subject_id.clone(),
+        authority.roles.clone(),
+    )
+    .with_models(authority.allowed_models.clone());
+    if let Some(b) = authority.budget.clone() {
+        ir = ir.with_budget(b);
+    }
     let token = s.bridge.issue_token(&ir).await.map_err(|e| match e {
         wsf_bridge::BridgeError::OpenBao(_) => {
             ApiError::new(StatusCode::BAD_GATEWAY, e.to_string())
@@ -242,6 +307,9 @@ async fn issue(
         }
         _ => ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
     })?;
+
+    // 5. Receipt the allow (metadata only), then the bridge correlation.
+    receipt_issue_allowed(&s, &principal, &authority);
     let correlation = s.bridge.audit_correlation(&token);
     if let Ok(value) = serde_json::to_value(&correlation) {
         let _ = s
@@ -251,6 +319,41 @@ async fn issue(
             .ingest("wsf-bridge", value);
     }
     Ok(Json(TokenResp { token }))
+}
+
+/// Receipt a denied issuance (metadata only — never token or credential material).
+fn receipt_issue_denied(s: &AppState, identity: &str, reason: &str, detail: &str) {
+    let value = serde_json::json!({
+        "event": "issue_denied",
+        "service_identity": identity,
+        "reason": reason,
+        "detail": detail,
+    });
+    let _ = s
+        .ledger
+        .lock()
+        .expect("ledger lock")
+        .ingest("wsf-api-auth", value);
+}
+
+/// Receipt an allowed issuance (server-derived authority; no token material).
+fn receipt_issue_allowed(
+    s: &AppState,
+    principal: &auth::WsfPrincipal,
+    authority: &auth::DerivedAuthority,
+) {
+    let value = serde_json::json!({
+        "event": "issue_allowed",
+        "service_identity": principal.service_identity,
+        "tenant": authority.tenant_id,
+        "audience": authority.audience,
+        "roles": authority.roles,
+    });
+    let _ = s
+        .ledger
+        .lock()
+        .expect("ledger lock")
+        .ingest("wsf-api-auth", value);
 }
 
 async fn verify(State(s): State<AppState>, Json(req): Json<VerifyReq>) -> Json<VerifyResp> {
