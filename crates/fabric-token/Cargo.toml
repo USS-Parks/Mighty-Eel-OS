@@ -20,6 +20,8 @@ hex = "0.4"
 
 [dev-dependencies]
 tokio = { workspace = true }
+# Deterministic (seeded) randomized attenuation-monotonicity property suite (K4).
+rand = "0.8"
 
 [features]
 # (Retired) The AF-001/AF-006 adversarial fixtures in tests/security_regression.rs

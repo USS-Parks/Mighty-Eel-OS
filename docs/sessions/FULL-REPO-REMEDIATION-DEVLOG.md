@@ -168,3 +168,31 @@ Verify: fmt; clippy -D warnings PASS; `cargo test -p fabric-crypto` PASS - exist
 still verifies: no double-free / cross-talk). The wipe itself is a Drop-time guarantee of the
 `zeroize` crate, verified by code review + preserved-function tests (not observable post-free
 without UB). Commit: (this change set).
+
+### K4 - attenuation-monotonicity property suite (H1 breadth)
+
+K1 fixed the empty-model-list widening; K4 proves the invariant holds across *every* axis,
+not just the one the audit named. New `fabric-token/tests/attenuation_property.rs`: a
+deterministic seeded (`StdRng::seed_from_u64`, no flakes) generator that, over 1000
+iterations round-robining all seven narrowable axes, constructs a genuine *widening* on the
+chosen axis - later expiry; a route / model / role / compliance-scope the parent lacks; the
+H1 empty-model sentinel; a classification above the parent ceiling; a budget cap over the
+parent's remaining - and asserts each returns `AttenuationWidens { axis }` for exactly that
+axis. A companion control (`valid_narrowing_on_every_axis_succeeds`) proves a legitimate
+narrowing on each axis is *accepted*, so the rejection suite is not passing vacuously; it
+also documents the routes/scopes-vs-models asymmetry (empty routes/scopes = narrowing; empty
+models = widening). `rand` 0.8 added as a dev-dep (repo convention; no proptest in-tree).
+
+Verify: fmt; clippy -D warnings PASS (factored the control's fn-pointer vec behind a
+`Narrowing` type alias for `clippy::type_complexity`); `cargo test -p fabric-token` PASS -
+`randomized_widening_on_every_axis_is_rejected` (1000 iters, every axis hit >100x, zero
+widenings admitted) + the narrowing control green. Offline mode is monotone by construction
+(`set_offline_mode` only forces offline on; no widening input exists) - noted, not generated.
+
+### K5 - DEFERRED (live attenuation/revocation gate)
+
+The black-box live proof of H1/H2 through real OpenBao custody (Appendix A: H1,H2 live =
+K5) is a live-gate prompt in the same class as A6 / U5 / V6 / X2. Deferred to the
+owner/hardware lane per PSPR 0.2 alongside the other live proofs; the in-process proofs
+(K1/K2 regression tests + the K4 property suite) close H1/H2 at the code boundary in the
+meantime. Critical path continues at Phase U (audit-chain verification, reachable).
