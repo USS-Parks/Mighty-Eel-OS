@@ -27,3 +27,20 @@ evidence tree test-evidence/full-repo-remediation/{M0..M6}. Finding register is 
 report's tables + the PSPR Appendix A closure matrix.
 
 Verify: branch created clean off 700cf2b; docs land under docs/ (no-slop exempt). Commit: (this change set).
+### 0.2 - Emergency containment (C1/C2)
+
+Objective: stop off-host reach to the unauthenticated `/admin/*` and plaintext `/raft/*`
+surfaces before the real auth/mTLS fixes (phase A) - contain by network exposure.
+
+Confirmed: `AOGD_LISTEN` is a required operator-set SocketAddr with no default
+(`aogd/src/lib.rs:108`), so a `0.0.0.0` bind exposes both surfaces; `main.rs:20` bound it
+with no guard.
+
+Changed (`crates/aogd/src/main.rs`): `check_bind_containment` refuses a non-loopback bind
+before `TcpListener::bind` - loopback proceeds; non-loopback (incl. all-interfaces
+`0.0.0.0`) fails closed with a message pointing at phase A, unless the operator sets
+`AOGD_ALLOW_INSECURE_BIND=1` to accept the risk on an isolated network.
+
+Verify: fmt clean; `cargo clippy -p aogd --all-targets -- -D warnings -A clippy::pedantic`
+PASS; `cargo test -p aogd` PASS (new: loopback-ok / non-loopback-refused / opt-in matrix).
+C1/C2 CONTAINED (root fixes owned by A1/A2). Commit: (this change set).
