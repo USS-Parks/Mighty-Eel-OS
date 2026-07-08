@@ -247,7 +247,8 @@ async fn modes_change_the_same_phi_request() {
     let models =
         Arc::new(ModelMap::new().route("gpt-4o-mini", Target::new("openai", "upstream-x")));
 
-    let shadow = AppState::new(gateway.clone(), registry.clone(), models.clone());
+    let shadow = AppState::new(gateway.clone(), registry.clone(), models.clone())
+        .with_mode(PolicyMode::Shadow);
     let enforce = AppState::new(gateway, registry, models).with_mode(PolicyMode::Enforce);
 
     let shadow_base = spawn(aog_gateway::surface_openai::router(shadow)).await;

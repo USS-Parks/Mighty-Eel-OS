@@ -287,6 +287,7 @@ async fn status(State(state): State<AppState>) -> Json<Value> {
     };
     Json(status_json(
         state.mode.header(),
+        state.profile.header(),
         &state.registry.names(),
         &state.models.model_ids(),
         receipts,
@@ -297,6 +298,7 @@ async fn status(State(state): State<AppState>) -> Json<Value> {
 
 fn status_json(
     mode: &str,
+    profile: &str,
     providers: &[String],
     models: &[String],
     receipts: usize,
@@ -305,6 +307,7 @@ fn status_json(
 ) -> Value {
     json!({
         "mode": mode,
+        "profile": profile,
         "providers": providers,
         "models": models,
         "receipts": receipts,
@@ -470,14 +473,16 @@ mod tests {
     #[test]
     fn status_json_shape() {
         let v = status_json(
-            "shadow",
+            "enforce",
+            "production",
             &["anthropic".to_string(), "openai".to_string()],
             &["gpt-4o".to_string()],
             3,
             "abcd",
             true,
         );
-        assert_eq!(v["mode"], "shadow");
+        assert_eq!(v["mode"], "enforce");
+        assert_eq!(v["profile"], "production");
         assert_eq!(v["providers"][0], "anthropic");
         assert_eq!(v["models"][0], "gpt-4o");
         assert_eq!(v["receipts"], 3);
