@@ -1,9 +1,10 @@
 ﻿# MAI Document Index
 
 **Project:** Island Mountain Model Abstraction Interface (MAI)
-**Last Updated:** 2026-05-26 (post-RC1.2 governance sweep, see [LOCAL-GITDOCTOR-EVIDENCE-2026-05-26.md](scans/LOCAL-GITDOCTOR-EVIDENCE-2026-05-26.md))
+**Last Updated:** 2026-07-07 (canonical stem-to-stern audit and P-SPR drafted)
 
-> **Current build state (2026-05-26)**
+> **Current build state (2026-07-07)**
+> - **Stem-to-stern remediation lane: READY FOR USER APPROVAL / STOP-SHIP** — the repository audit validates 24 security findings (11 high, 13 medium), six functional-truth gaps, and release-governance defects. Start with the [audit](scans/REPOSITORY-STEM-TO-STERN-AUDIT-2026-07-07.md) and execute only the [canonical Plan-Sequential Prompt Roster](scans/REPOSITORY-STEM-TO-STERN-PSPR-2026-07-07.md); execution has not started.
 > - **Mainline (Sessions 1-46 + BF-1..BF-7): CLOSED** — Gate D shipped at commit `22f0f66`.
 > - **Ship hardening (SHIP-01..SHIP-17): CLOSED 2026-05-23** — final hotfix at `dceaabc`.
 > - **RC1 release (RC-01..RC-10): CLOSED 2026-05-24** — RC1.0 to John Dougherty (`e2d9ea6`).
@@ -39,6 +40,8 @@
 | Upgrading or rolling back a release | [UPGRADE-ROLLBACK.md](operations/UPGRADE-ROLLBACK.md) |
 | Backing up or restoring a node | [BACKUP-RESTORE.md](operations/BACKUP-RESTORE.md) |
 | Planning tester packaging and production shipping | [COGENT-DEPLOYMENT-ROADMAP.md](product/COGENT-DEPLOYMENT-ROADMAP.md) |
+| Reviewing the repository-wide audit | [REPOSITORY-STEM-TO-STERN-AUDIT-2026-07-07.md](scans/REPOSITORY-STEM-TO-STERN-AUDIT-2026-07-07.md) |
+| Planning canonical repository remediation | [REPOSITORY-STEM-TO-STERN-PSPR-2026-07-07.md](scans/REPOSITORY-STEM-TO-STERN-PSPR-2026-07-07.md) |
 | Planning copyright, patent, and IP protection | [IP-COPYRIGHT-PATENT-ROADMAP.md](product/IP-COPYRIGHT-PATENT-ROADMAP.md) |
 | Starting as a new engineer | [HANDOFF.md](HANDOFF.md) |
 | Troubleshooting a first-run error | [KNOWN-ISSUES.md](KNOWN-ISSUES.md) |
@@ -120,6 +123,8 @@ on the project. Read them before writing code.
 | [SESSION-46-PLAN.md](sessions/SESSION-46-PLAN.md) | Session 46 plan: scope, file layout, test inventory, perf targets, Gate D checklist | Session 46 implementer |
 | [COGENT-DEPLOYMENT-ROADMAP.md](product/COGENT-DEPLOYMENT-ROADMAP.md) | Session-by-session roadmap from Gate D codebase to RC1 tester bundle, hardened release candidate, and production appliance | Release planning; deployment hardening |
 | [IP-COPYRIGHT-PATENT-ROADMAP.md](product/IP-COPYRIGHT-PATENT-ROADMAP.md) | Step-by-step owner-side process for copyright, patent, trade secret, licensing, disclosure, and release gates | IP planning; external release preparation |
+| [REPOSITORY-STEM-TO-STERN-AUDIT-2026-07-07.md](scans/REPOSITORY-STEM-TO-STERN-AUDIT-2026-07-07.md) | Repository-wide security, functional, build, CI, supply-chain, documentation, and governance audit | Establishing the release posture and validated finding set |
+| [REPOSITORY-STEM-TO-STERN-PSPR-2026-07-07.md](scans/REPOSITORY-STEM-TO-STERN-PSPR-2026-07-07.md) | Canonical 46-session baseline-to-release remediation roster | Preparing or executing the stem-to-stern remediation lane |
 | [INDEX.md](INDEX.md) | This file | Finding anything |
 
 ---
