@@ -70,8 +70,9 @@ impl BundleVerifier for MlDsaBundleVerifier {
     }
 }
 
-/// Bring-up / test helper: accepts every signature. Rejected in production by
-/// the same guard pattern mai-compliance uses. Never wire into a real path.
+/// Bring-up / test helper: accepts every signature. Never wire into a real
+/// path — no runtime guard currently rejects it, so callers must not select it
+/// outside tests (finding F6-N7).
 #[derive(Debug, Default, Clone, Copy)]
 pub struct AcceptAllBundleVerifier;
 

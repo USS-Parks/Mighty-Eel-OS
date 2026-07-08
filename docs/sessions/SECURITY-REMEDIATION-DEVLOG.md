@@ -882,3 +882,56 @@ path) and item6 (crash-loop counter reset, in the unwired restart path) are
 dispositioned to the DEF-1 lane, not fixed. DEF-1 stays OPEN.
 
 Commit: (this change set).
+### F3, F6, F7 - dispositions (pre-integration / behind-defaults / design-note)
+
+These prompts are audits whose gates are reportable/suppressed dispositions with
+evidence. Every High/Med claim was confirmed against source; none is a reachable
+stop-ship issue requiring a fix in this lane, so each is dispositioned honestly with
+its fix direction, and the residual is tracked.
+
+F3 - tool-proxy + approval (`crates/aog-toolproxy`, `aog-approvals`): PRE-INTEGRATION.
+`ToolProxy::invoke` has no production caller (constructed only in in-crate tests), and
+the signed tool-grant enforcement (`aog-controller::EdgeGrantCache`) is not yet wired
+into the proxy. Unauthenticated/overwritable tool manifests (N1), the "egress" scanner
+inspecting only inbound results not outbound arguments (N2), session-id-rotation evading
+blast-radius caps (N3), approvals lacking principal-auth/nonce/expiry/args-digest (N4),
+and the caller-set `untrusted` flag being violable via manifest control are real but
+unreachable until the proxy is wired into a serving path. REPORTABLE (pre-integration);
+fix direction recorded; tracked to the tool-proxy integration lane, not force-fixed into
+an unwired crate.
+
+F6 - compliance/audit-proof (`fabric-proof`, `wsf-ledger`, `mai-compliance`): the signed
+trust-bundle/claim path, receipt canonicalization, report certification, and in-memory
+chain tamper all have negative controls and are sound. The gaps - sign-before-mutate
+invalidating periodic audit signatures (N1), non-atomic finalize->mutate->restore forking
+the chain under concurrency (N2), verify_chain not requiring signatures at interval
+boundaries (N3), composer fail-open on missing/errored module input (N6), and
+NullSigner/NullSealer/AcceptAll defaults with no production guard (N7) - sit on the
+audit-chain `record()` path, which ships with Null crypto by default. Fixed here: the
+fabric-proof `AcceptAllBundleVerifier` comment no longer claims a non-existent production
+guard (N7 dangling reference / CANON §11). Dispositioned to the audit-integrity
+hardening lane (a production crypto guard + sign-after-mutate + interval-signature
+assertion + fail-closed composer are a feature set, not a boundary bug); REPORTABLE with
+fix direction.
+
+F7 - host/HIL/scheduler: mostly ALREADY-FIXED - validated ZFS argv with anti-injection
+tests, loopback-only air-gap egress a request cannot re-enable, admin-gated + audited
+power transitions (no OS poweroff wired), all channels bounded, scheduler queue + KV pool
+capped. Residual is Low design-note: no per-tenant fairness (one authenticated caller can
+saturate the global 256-slot queue; edge rate limit is per-route-global and off by
+default), the `mai-router` cloud-routing layer does not itself gate on connectivity
+(inert - not wired into the appliance request path), and the air-gap switch reader is a
+dev stub (fail-safe: defaults air-gapped). SUPPRESSED/design-note for the single-operator
+appliance model; per-tenant quota is a multi-tenant hardening item.
+
+### F9 - coverage reconciliation
+
+Phase F closed the reachable trust-boundary findings with tests + gates: AF-03 (F1),
+DF-01A/DF-01B + F5-NEW-1/2 (F5a), AF-11/AF-19 (F5b), AF-15B + gateway revocation
+completeness/freshness (F2), AF-20 (F8), and the F1 REST analogs (NEW-1/NEW-3). F4 landed
+the reachable adapter DoS bounds; DEF-1 (full cgroup isolation) and DEF-2 (signed bounded
+update transport) stay OPEN as deferred runtime surfaces (Linux/feature). F3 and the F6
+audit-chain hardening are REPORTABLE pre-integration/feature items with recorded fix
+direction. F7 is hardened bar Low multi-tenant design notes. No new unexplained
+high-impact row remains beyond these tracked deferrals. Per-prompt dispositions + verify
+results: `test-evidence/security-remediation/M3/README.md`.

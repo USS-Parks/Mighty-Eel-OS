@@ -67,8 +67,12 @@ independent re-scan (plan Phase X). Deferred to the owner's audit lane:
   container: no `zfs`, no `/dev/tpm*`).
 - Executing the `cargo audit` / `gitleaks` / `detect-secrets` tool runs (Q5/Q6
   configs are correct and doc-backed; binaries not installed here).
-- Phase F frontier audits (F1–F9) and the Phase X independent re-scan, which
-  move PROVEN → CLOSED by fresh-eyes review rather than further implementation.
+- The Phase X independent re-scan (X4), which moves findings to CLOSED by
+  fresh-eyes review rather than further implementation. Phase F frontier audits
+  (F1–F9) are now **executed** (see the DEVLOG Phase F section + the LEDGER): they
+  surfaced and closed AF-03, DF-01A/DF-01B, AF-11, AF-19, AF-15B, and AF-20 with
+  tests + gates, and left DEF-1/DEF-2 and the F3/F6 hardening items as tracked
+  follow-ons.
 
 This register and [the DEVLOG](../sessions/SECURITY-REMEDIATION-DEVLOG.md) are
 the source of truth for status; each entry links to the commit and gate that
