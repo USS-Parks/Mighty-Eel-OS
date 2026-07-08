@@ -6,12 +6,17 @@ console — plus Postgres + MinIO (reserved for service state / evidence) and a
 mock on-prem model so a governed request completes end to end.
 
 **Dev-mode OpenBao — not production.** The production HA topology is `../wsf-ha/`.
+The whole stack is gated behind the `demo` compose profile, binds only to the
+loopback interface, and requires demo secrets to be injected from `.env`. A bare
+`docker compose up` starts nothing. Validate before use:
+`python validate_profile.py --profile demo docker-compose.yml`.
 
 ## Bring-up
 
 ```bash
 cd deployment/appliance
-docker compose up --build
+cp .env.example .env            # then set OPENBAO_DEV_ROOT_TOKEN + WSF_OPENBAO_SECRET_ID
+docker compose --profile demo up --build
 ```
 
 The first build compiles the Rust workspace in release inside the image
@@ -28,7 +33,7 @@ and writes a shared env file the services source before starting.
 | Console | http://localhost:8088 |
 | AOG gateway (OpenAI/Anthropic-compatible) | http://localhost:8080 |
 | WSF API | http://localhost:8081 |
-| OpenBao (dev, root token `root`) | http://localhost:8200 |
+| OpenBao (dev, loopback only; root token from `$OPENBAO_DEV_ROOT_TOKEN`) | http://127.0.0.1:8200 |
 
 ## The gate — *a governed request succeeds*
 

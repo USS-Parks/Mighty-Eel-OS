@@ -1,0 +1,13 @@
+# UNSAFE fixture: dev-mode trust core that is loopback-bound and token-injected
+# but NOT gated behind a compose profile, so a bare `up` (production) inherits
+# it. Expected: rejected under --profile demo (rule: demo-not-gated).
+name: unsafe-demo-not-gated
+services:
+  openbao:
+    image: openbao/openbao:latest
+    command: ["server", "-dev", "-dev-root-token-id=${OPENBAO_DEV_ROOT_TOKEN:?inject}"]
+    ports: ["127.0.0.1:8200:8200"]
+    networks: [trust]
+networks:
+  trust:
+    driver: bridge

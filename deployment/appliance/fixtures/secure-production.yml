@@ -1,0 +1,15 @@
+# SECURE fixture: a production-shaped trust core. Non-dev (config-file driven),
+# no host-published trust port (reachable only on the internal trust network),
+# no baked credentials. Expected: passes --profile production with zero
+# violations.
+name: secure-production
+services:
+  openbao:
+    image: openbao/openbao:2.1.0
+    command: ["server", "-config=/openbao/config/openbao.hcl"]
+    environment:
+      BAO_ADDR: https://openbao:8200
+    networks: [trust]
+networks:
+  trust:
+    driver: bridge

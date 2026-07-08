@@ -1,44 +1,70 @@
 name: aog-wsf-appliance
 
-# One-command AOG/WSF appliance (D1): OpenBao trust core + the WSF trust plane
-# (wsf-api) + the AOG gateway + the console, with Postgres + MinIO reserved for
-# service state / evidence, and a mock local model so a governed request
-# completes end-to-end. Dev-mode OpenBao — NOT production. See README.md.
+# ============================================================================
+# DEMO / NON-PRODUCTION appliance composition (AF-12 containment, PSPR-01).
+#
+#   * The ENTIRE stack is gated behind the `demo` compose profile. A bare
+#     `docker compose up` starts NOTHING. Bring the demo up explicitly:
+#         docker compose --profile demo up --build
+#   * The OpenBao trust core runs in DEV MODE (in-memory, unsealed) and is
+#     published to the LOOPBACK interface only (127.0.0.1:8200) — never the
+#     host network. It must never be used in production. The production HA
+#     topology lives in `../wsf-ha/`; a production trust core is provisioned
+#     in PSPR-24.
+#   * The dev root token and AppRole secret are INJECTED from the environment
+#     (OPENBAO_DEV_ROOT_TOKEN, WSF_OPENBAO_SECRET_ID); they are NOT baked into
+#     this file. Copy `.env.example` to `.env` and set them before bring-up.
+#   * Validate before use:  python validate_profile.py --profile demo docker-compose.yml
+#     A production composition must pass `--profile production`; this demo does
+#     not, by design (it runs dev mode).
+# ============================================================================
 
 services:
-  # ── Trust core ──────────────────────────────────────────────────────────
+  # ── Trust core (DEV MODE — demo only, loopback-published) ───────────────
   openbao:
     image: openbao/openbao:latest
+    profiles: ["demo"]
     cap_add: [IPC_LOCK]
-    command: server -dev -dev-root-token-id=root -dev-listen-address=0.0.0.0:8200
-    ports: ["8200:8200"]
+    command:
+      - server
+      - -dev
+      - -dev-root-token-id=${OPENBAO_DEV_ROOT_TOKEN:?set OPENBAO_DEV_ROOT_TOKEN in .env for the demo}
+      - -dev-listen-address=0.0.0.0:8200
+    networks: [appliance]
+    ports: ["127.0.0.1:8200:8200"] # loopback only — never host-exposed
     healthcheck:
       test: ["CMD", "bao", "status", "-address=http://127.0.0.1:8200"]
       interval: 3s
       timeout: 3s
       retries: 20
 
-  # ── Reserved data stores (topology per plan; M1 services do not wire them yet)
+  # ── Reserved data stores (topology per plan; M1 services do not wire them)
   postgres: # reserved for WSF service state
     image: postgres:17-alpine
+    profiles: ["demo"]
     environment:
       POSTGRES_DB: wsf
       POSTGRES_USER: wsf
-      POSTGRES_PASSWORD: wsf-dev
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-wsf-dev}
+    networks: [appliance]
     volumes: ["pg-data:/var/lib/postgresql/data"]
 
   objectstore: # reserved for sealed envelopes + evidence packs (MinIO)
     image: minio/minio:latest
+    profiles: ["demo"]
     command: server /data
     environment:
       MINIO_ROOT_USER: wsf
-      MINIO_ROOT_PASSWORD: wsf-dev-secret
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-wsf-dev-secret}
+    networks: [appliance]
     volumes: ["minio-data:/data"]
 
   # ── Mock on-prem model (OpenAI-compatible) so the gateway has a backend ──
   mock-llm:
     image: python:3.12-slim
+    profiles: ["demo"]
     command: ["python", "/app/app.py"]
+    networks: [appliance]
     volumes: ["./mock-llm:/app:ro"]
 
   # ── One-shot init: provision OpenBao, mint anchor keys, seed the demo token ─
@@ -47,14 +73,16 @@ services:
       context: ../..
       dockerfile: deployment/appliance/Dockerfile
     image: islandmountain/aog-wsf-appliance:latest
+    profiles: ["demo"]
     user: "0:0" # writes the shared /seed volume
     command: ["/usr/local/bin/wsf-seed"]
     environment:
       WSF_OPENBAO_ADDR: http://openbao:8200
-      WSF_OPENBAO_TOKEN: root
+      WSF_OPENBAO_TOKEN: ${OPENBAO_DEV_ROOT_TOKEN:?set OPENBAO_DEV_ROOT_TOKEN in .env for the demo}
       WSF_OPENBAO_ROLE_ID: appliance
-      WSF_OPENBAO_SECRET_ID: appliance-secret
+      WSF_OPENBAO_SECRET_ID: ${WSF_OPENBAO_SECRET_ID:?set WSF_OPENBAO_SECRET_ID in .env for the demo}
       WSF_SEED_OUT: /seed/appliance.env
+    networks: [appliance]
     volumes: ["seed-data:/seed"]
     depends_on:
       openbao: { condition: service_healthy }
@@ -63,25 +91,33 @@ services:
   # ── WSF trust plane ─────────────────────────────────────────────────────
   wsf-api:
     image: islandmountain/aog-wsf-appliance:latest
+    profiles: ["demo"]
     command: ["sh", "-c", "set -a && . /seed/appliance.env && exec /usr/local/bin/wsf-api serve"]
     environment:
       WSF_LISTEN: 0.0.0.0:8300
       WSF_AWS_ENDPOINT: https://sts.amazonaws.com
+    networks: [appliance]
     volumes: ["seed-data:/seed:ro"]
-    ports: ["8081:8300"]
+    ports: ["127.0.0.1:8081:8300"] # loopback only
     depends_on:
       seed: { condition: service_completed_successfully }
 
-  # ── AOG gateway (shadow mode — the M1 posture) ──────────────────────────
+  # ── AOG gateway (shadow mode — the M1 posture; PSPR-02 owns prod default) ─
   aog-gateway:
     image: islandmountain/aog-wsf-appliance:latest
+    profiles: ["demo"]
     command: ["sh", "-c", "set -a && . /seed/appliance.env && exec /usr/local/bin/aog-gateway serve"]
     environment:
       AOG_LISTEN: 0.0.0.0:8080
       AOG_LOCAL_BASE: http://mock-llm:8000
+      # Demo runs shadow (never blocks). Shadow is development-only: production
+      # profiles reject it and default to enforce. This explicit opt-in is why
+      # the demo must declare development.
+      AOG_PROFILE: development
       AOG_MODE: shadow
+    networks: [appliance]
     volumes: ["seed-data:/seed:ro"]
-    ports: ["8080:8080"]
+    ports: ["127.0.0.1:8080:8080"] # loopback only
     depends_on:
       seed: { condition: service_completed_successfully }
       mock-llm: { condition: service_started }
@@ -92,8 +128,14 @@ services:
       context: ../..
       dockerfile: deployment/appliance/Dockerfile.console
     image: islandmountain/aog-wsf-console:latest
-    ports: ["8088:80"]
+    profiles: ["demo"]
+    networks: [appliance]
+    ports: ["127.0.0.1:8088:80"] # loopback only
     depends_on: [wsf-api, aog-gateway]
+
+networks:
+  appliance:
+    driver: bridge
 
 volumes:
   seed-data:

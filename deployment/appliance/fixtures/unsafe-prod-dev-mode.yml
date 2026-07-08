@@ -1,0 +1,11 @@
+# UNSAFE fixture: production-intended composition running a dev-mode trust core.
+# Expected: rejected under --profile production (rule: dev-mode).
+name: unsafe-prod-dev-mode
+services:
+  openbao:
+    image: openbao/openbao:latest
+    command: ["server", "-dev", "-dev-listen-address=0.0.0.0:8200"]
+    networks: [trust]
+networks:
+  trust:
+    driver: bridge

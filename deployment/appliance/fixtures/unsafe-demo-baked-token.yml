@@ -1,0 +1,14 @@
+# UNSAFE fixture: gated, loopback-bound demo, but the root token is a baked
+# known-weak literal. Expected: rejected under --profile demo
+# (rules: known-token, weak-token).
+name: unsafe-demo-baked-token
+services:
+  openbao:
+    image: openbao/openbao:latest
+    profiles: ["demo"]
+    command: ["server", "-dev", "-dev-root-token-id=root"]
+    ports: ["127.0.0.1:8200:8200"]
+    networks: [trust]
+networks:
+  trust:
+    driver: bridge

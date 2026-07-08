@@ -1,0 +1,17 @@
+# UNSAFE fixture: non-dev trust core, but a consumer bakes a known-weak token.
+# Expected: rejected under --profile production (rules: credential-not-injected,
+# weak-credential).
+name: unsafe-prod-known-token
+services:
+  openbao:
+    image: openbao/openbao:2.1.0
+    command: ["server", "-config=/openbao/config.hcl"]
+    networks: [trust]
+  seed:
+    image: islandmountain/appliance:1.0.0
+    environment:
+      WSF_OPENBAO_TOKEN: root
+    networks: [trust]
+networks:
+  trust:
+    driver: bridge

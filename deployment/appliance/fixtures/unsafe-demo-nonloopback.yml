@@ -1,0 +1,14 @@
+# UNSAFE fixture: gated demo with an injected token, but the trust port is
+# published on all interfaces instead of loopback. Expected: rejected under
+# --profile demo (rule: trust-exposed-nonloopback).
+name: unsafe-demo-nonloopback
+services:
+  openbao:
+    image: openbao/openbao:latest
+    profiles: ["demo"]
+    command: ["server", "-dev", "-dev-root-token-id=${OPENBAO_DEV_ROOT_TOKEN:?inject}"]
+    ports: ["8200:8200"]
+    networks: [trust]
+networks:
+  trust:
+    driver: bridge

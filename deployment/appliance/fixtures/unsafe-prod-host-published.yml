@@ -1,0 +1,15 @@
+# UNSAFE fixture: non-dev trust core with an injected token, but the trust port
+# is host-published. Expected: rejected under --profile production
+# (rule: host-published-trust).
+name: unsafe-prod-host-published
+services:
+  openbao:
+    image: openbao/openbao:2.1.0
+    command: ["server", "-config=/openbao/config.hcl"]
+    environment:
+      BAO_ROOT_TOKEN: ${BAO_ROOT_TOKEN:?inject the token}
+    ports: ["8200:8200"]
+    networks: [trust]
+networks:
+  trust:
+    driver: bridge
