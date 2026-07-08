@@ -314,3 +314,47 @@ Verify: fmt; clippy -D warnings PASS; `cargo test -p mai-compliance` PASS (336 t
 restart test green. With U1 (boundary sigs), U2 (from-head WAL), U3 (long-log false positive)
 and now U5 (restart evidence), H7/H8 are closed at the code boundary; the only U item open is
 K5-class live infra (U-live, owner lane). Commit: (this change set).
+
+## Phase V - vault integrity truth (mai-vault)
+
+### V2 + V3 - full-field audit hash + honest primitive label (H6)
+
+`AuditWriter::compute_entry_hash` (`mai-vault/src/audit.rs`) hashed only 5 of the
+`VaultAuditEntry`'s 13 fields - `previous_hash`, `timestamp`, `profile_id`, `action`,
+`status`. The other eight (`entry_id`, `model_id`, `tokens_in/out`, `latency_ms`,
+`adapter_id`, `error_code`, `ip_source`) were outside the hash, so an attacker could rewrite
+which model ran, which adapter, the source IP, the error code, or the token counts of a
+persisted entry without breaking the chain (H6). Separately, the module + field docs claimed
+`SHA3-256` while the code computed BLAKE3 - a false control claim (CANON 0.5).
+
+V2: `compute_entry_hash` now takes the whole `&VaultAuditEntry` and hashes the canonical
+serialization with the two *output* fields (`entry_hash`, `pqc_signature`) blanked - binding
+every security-relevant field. The three callers (append verify, `verify_chain` loop,
+`build_audit_entry`) go through the one function, so producer and verifier stay consistent;
+`build_audit_entry` now populates the struct then hashes it. This changes `entry_hash` values
+(a format change), acceptable because the vault is pre-production (H5 TPM sealing not done, so
+no certified vault chain exists to migrate). V3: the module doc and the `mai-core`
+`previous_hash`/`entry_hash` field docs now say BLAKE3-256, matching the code (the `sha3` crate
+stays in use for HKDF in `tpm.rs`/`pqc.rs` - unrelated to the audit hash).
+
+Verify: fmt; `cargo clippy -p mai-vault -p mai-core --all-targets -- -D warnings -A
+clippy::pedantic` PASS; `cargo test -p mai-vault` PASS (84) + `mai-core` (83) - new
+`entry_hash_covers_previously_unhashed_fields` (flipping `entry_id`/`model_id`/`adapter_id`/
+`error_code`/`ip_source`/`tokens_out`/`latency_ms` each breaks the digest); existing
+chain-integrity / broken-chain / checkpoint-signature suites green. H6 closed.
+
+### V1 / V4 / V5 / V6 - DEFERRED (TPM hardware + convergence follow-on)
+
+- **V1 (H5) master-key TPM seal** and **V4 KEK TPM seal**: `mai-vault/src/tpm.rs` is a
+  software simulation (BLAKE3 over a fixed PCR string), and this host has no `/dev/tpm*`
+  (PSPR 0.2 baseline). Real sealing, or the "fail-closed + production guard that refuses to
+  certify readiness without a real seal + honest non-production doc on the simulated TPM"
+  alternative, is owner/hardware-lane work (with the TPM/attestation legs S1-S4 and V6). It
+  wants its own prompt - a vault-readiness production guard - not a drive-by.
+- **V5 audit-chain convergence**: dedupe the two divergent chain implementations
+  (mai-vault vs the `mai-compliance` full-canonical model) onto one. Reachable but a pure
+  refactor with no open vuln (both are individually correct after V2); scheduled as a
+  maintainability follow-on rather than ahead of the open Phase D/G/P robustness Highs.
+- **V6 live ZFS+TPM gate**: needs the real ZFS+TPM host (0.2), owner lane with X2/X3.
+
+Critical path continues at Phase D (DoS / panic-safety, reachable).

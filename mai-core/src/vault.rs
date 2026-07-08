@@ -415,9 +415,9 @@ pub struct VaultAuditEntry {
     pub error_code: Option<String>,
     /// Source IP (always 127.0.0.1 for air-gapped systems).
     pub ip_source: String,
-    /// Hash of the previous entry (hex SHA3-256).
+    /// Hash of the previous entry (hex BLAKE3-256).
     pub previous_hash: String,
-    /// Hash of this entry (hex SHA3-256).
+    /// Hash of this entry (hex BLAKE3-256).
     pub entry_hash: String,
     /// PQC signature over entry_hash (hex ML-DSA, optional).
     pub pqc_signature: Option<String>,

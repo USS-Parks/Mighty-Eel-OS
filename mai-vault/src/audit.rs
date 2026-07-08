@@ -5,8 +5,9 @@
 //!
 //! # Hash Chain
 //!
-//! Each entry's `entry_hash` is computed as:
-//!   SHA3-256(previous_hash || timestamp || profile_id || action || status)
+//! Each entry's `entry_hash` is BLAKE3 over the canonical serialization of the
+//! entry with its two output fields (`entry_hash`, `pqc_signature`) blanked, so
+//! every security-relevant field is bound into the chain — not just a subset.
 //!
 //! The chain starts with a genesis hash of all zeros.
 //!
@@ -136,22 +137,20 @@ impl AuditWriter {
 
     /// Compute the hash for an audit entry.
     ///
-    /// Hash = BLAKE3(previous_hash || timestamp || profile_id || action_str || status_str)
-    /// Using BLAKE3 as stand-in for SHA3-256 (same security level, faster).
-    fn compute_entry_hash(
-        previous_hash: &str,
-        timestamp: u64,
-        profile_id: &str,
-        action: &VaultAuditAction,
-        status: &VaultAuditStatus,
-    ) -> String {
-        let mut hasher = blake3::Hasher::new();
-        hasher.update(previous_hash.as_bytes());
-        hasher.update(&timestamp.to_le_bytes());
-        hasher.update(profile_id.as_bytes());
-        hasher.update(format!("{action:?}").as_bytes());
-        hasher.update(format!("{status:?}").as_bytes());
-        hasher.finalize().to_hex().to_string()
+    /// BLAKE3 over the canonical serialization of **every security-relevant
+    /// field** — the whole entry with its two output fields (`entry_hash` and
+    /// `pqc_signature`) blanked. This binds `entry_id`, `model_id`, token counts,
+    /// `latency_ms`, `adapter_id`, `error_code`, and `ip_source` into the chain,
+    /// not just the original five (audit H6: editing any persisted field now
+    /// breaks `verify`). Producer and verifier share this function, so the digest
+    /// is self-consistent across the chain.
+    fn compute_entry_hash(entry: &VaultAuditEntry) -> String {
+        let mut canonical = entry.clone();
+        canonical.entry_hash = String::new();
+        canonical.pqc_signature = None;
+        let bytes =
+            serde_json::to_vec(&canonical).expect("VaultAuditEntry serialization is infallible");
+        blake3::hash(&bytes).to_hex().to_string()
     }
 
     /// Persist entries to disk.
@@ -191,13 +190,7 @@ impl AuditStore for AuditWriter {
         }
 
         // Verify the entry hash is correct
-        let expected_hash = Self::compute_entry_hash(
-            &entry.previous_hash,
-            entry.timestamp,
-            &entry.profile_id,
-            &entry.action,
-            &entry.status,
-        );
+        let expected_hash = Self::compute_entry_hash(entry);
         if entry.entry_hash != expected_hash {
             return Err(VaultError::AuditChainBroken {
                 index: entries.len() as u64,
@@ -299,13 +292,7 @@ impl AuditStore for AuditWriter {
             }
 
             // Recompute and verify entry hash
-            let computed = Self::compute_entry_hash(
-                &entry.previous_hash,
-                entry.timestamp,
-                &entry.profile_id,
-                &entry.action,
-                &entry.status,
-            );
+            let computed = Self::compute_entry_hash(entry);
             if entry.entry_hash != computed {
                 return Err(VaultError::AuditChainBroken {
                     index: i as u64,
@@ -412,10 +399,7 @@ pub fn build_audit_entry(
     error_code: Option<String>,
     previous_hash: String,
 ) -> VaultAuditEntry {
-    let entry_hash =
-        AuditWriter::compute_entry_hash(&previous_hash, timestamp, &profile_id, &action, &status);
-
-    VaultAuditEntry {
+    let mut entry = VaultAuditEntry {
         entry_id,
         timestamp,
         profile_id,
@@ -429,9 +413,12 @@ pub fn build_audit_entry(
         error_code,
         ip_source: "127.0.0.1".to_string(),
         previous_hash,
-        entry_hash,
+        entry_hash: String::new(),
         pqc_signature: None,
-    }
+    };
+    // Hash over the fully-populated entry (every field but the two outputs).
+    entry.entry_hash = AuditWriter::compute_entry_hash(&entry);
+    entry
 }
 
 // ============================================================================
@@ -557,6 +544,43 @@ mod tests {
         );
         let result = writer.append(&bad_entry).await;
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn entry_hash_covers_previously_unhashed_fields() {
+        // Audit H6/V2: the entry hash now binds every security-relevant field, not
+        // just previous_hash/timestamp/profile_id/action/status. Editing a field
+        // the old 5-field hash ignored must change the digest.
+        let base = make_entry(
+            "e1",
+            1000,
+            "admin",
+            VaultAuditAction::ModelLoad,
+            GENESIS_HASH,
+        );
+        assert_eq!(
+            base.entry_hash,
+            AuditWriter::compute_entry_hash(&base),
+            "the builder's hash must be self-consistent"
+        );
+        let tampers: [fn(&mut VaultAuditEntry); 7] = [
+            |e| e.entry_id = "e-forged".into(),
+            |e| e.model_id = Some("swapped-model".into()),
+            |e| e.adapter_id = Some("other-adapter".into()),
+            |e| e.error_code = Some("E-forged".into()),
+            |e| e.ip_source = "10.0.0.9".into(),
+            |e| e.tokens_out = Some(999_999),
+            |e| e.latency_ms = 42,
+        ];
+        for tamper in tampers {
+            let mut t = base.clone();
+            tamper(&mut t);
+            assert_ne!(
+                t.entry_hash,
+                AuditWriter::compute_entry_hash(&t),
+                "a tampered formerly-unhashed field must break the entry hash"
+            );
+        }
     }
 
     #[tokio::test]
