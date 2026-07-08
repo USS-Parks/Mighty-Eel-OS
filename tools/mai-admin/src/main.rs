@@ -96,14 +96,14 @@ enum RestoreCmd {
         #[arg(long)]
         target: PathBuf,
         /// Path to a 2592-byte ML-DSA-87 public key file matching the
-        /// manifest's `anchor_id`. When omitted the signature is not
-        /// checked unless `--require-signed` forces a hard failure.
+        /// manifest's `anchor_id`. Required to verify a signed manifest unless
+        /// `--allow-unsigned` is passed.
         #[arg(long)]
         verifying_key: Option<PathBuf>,
-        /// Fail if the manifest is unsigned or no verifying key was
-        /// supplied. Recommended in ship mode.
+        /// Skip the signed-manifest requirement and plan a restore of an
+        /// unsigned or unverified backup (AF-19: verification is on by default).
         #[arg(long, default_value_t = false)]
-        require_signed: bool,
+        allow_unsigned: bool,
         /// Emit machine-readable JSON instead of the human report.
         #[arg(long, default_value_t = false)]
         json: bool,
@@ -119,8 +119,10 @@ enum RestoreCmd {
         target: PathBuf,
         #[arg(long)]
         verifying_key: Option<PathBuf>,
+        /// Skip the signed-manifest requirement (AF-19: verification is on by
+        /// default).
         #[arg(long, default_value_t = false)]
-        require_signed: bool,
+        allow_unsigned: bool,
         /// Overwrite existing files / populated directory trees inside
         /// the target. Refuse to operate on a non-empty target without
         /// this flag (per SHIP-HARDENING-PLAN §9.5: restore must
@@ -164,14 +166,14 @@ enum BackupCmd {
         #[arg(long)]
         backup_dir: PathBuf,
         /// Path to a 2592-byte ML-DSA-87 public key file matching the
-        /// `anchor_id` recorded in the manifest. When omitted the
-        /// signature check is skipped (and `--require-signed` becomes a
-        /// hard failure).
+        /// `anchor_id` recorded in the manifest. Required to verify a signed
+        /// manifest unless `--allow-unsigned` is passed.
         #[arg(long)]
         verifying_key: Option<PathBuf>,
-        /// Fail if the manifest is unsigned. Recommended in ship mode.
+        /// Skip the signed-manifest requirement and verify an unsigned or
+        /// unverified backup (AF-19: verification is on by default).
         #[arg(long, default_value_t = false)]
-        require_signed: bool,
+        allow_unsigned: bool,
         /// Emit machine-readable JSON instead of the human report.
         #[arg(long, default_value_t = false)]
         json: bool,
@@ -191,28 +193,28 @@ fn main() -> ExitCode {
         Command::Backup(BackupCmd::Verify {
             backup_dir,
             verifying_key,
-            require_signed,
+            allow_unsigned,
             json,
-        }) => run_backup_verify(&backup_dir, verifying_key, require_signed, json),
+        }) => run_backup_verify(&backup_dir, verifying_key, !allow_unsigned, json),
         Command::Restore(RestoreCmd::Plan {
             backup_dir,
             target,
             verifying_key,
-            require_signed,
+            allow_unsigned,
             json,
-        }) => run_restore_plan(&backup_dir, &target, verifying_key, require_signed, json),
+        }) => run_restore_plan(&backup_dir, &target, verifying_key, !allow_unsigned, json),
         Command::Restore(RestoreCmd::Apply {
             backup_dir,
             target,
             verifying_key,
-            require_signed,
+            allow_unsigned,
             force,
             json,
         }) => run_restore_apply(
             &backup_dir,
             &target,
             verifying_key,
-            require_signed,
+            !allow_unsigned,
             force,
             json,
         ),

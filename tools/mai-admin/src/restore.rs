@@ -74,6 +74,19 @@ pub enum ActionKind {
     Tree,
 }
 
+/// Validate a manifest-supplied component path (finding AF-11). It must be a
+/// relative path composed only of `Normal` components — no absolute/root, no
+/// drive prefix, no `.`/`..` — so joining it onto the backup or target root
+/// cannot escape that root. Returns the validated relative path.
+fn validate_component_path(raw: &str) -> Result<PathBuf, RestoreError> {
+    use std::path::Component;
+    let p = Path::new(raw);
+    if raw.is_empty() || p.components().any(|c| !matches!(c, Component::Normal(_))) {
+        return Err(RestoreError::UnsafeComponentPath(raw.to_string()));
+    }
+    Ok(p.to_path_buf())
+}
+
 /// A path inside the target that already exists and would be
 /// overwritten without `force`.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -206,6 +219,8 @@ pub enum RestoreError {
     },
     #[error("backup component {0} is missing on disk")]
     SourceMissing(String),
+    #[error("backup component path {0:?} is unsafe (escapes the backup/target root)")]
+    UnsafeComponentPath(String),
     #[error("audit chain replay failed for {component} at entry {index}: {detail}")]
     AuditChainBroken {
         component: String,
@@ -289,7 +304,10 @@ pub fn plan_restore(
     // apply() so a corrupt backup cannot ever touch the target.
     let mut actions: Vec<RestoreAction> = Vec::with_capacity(manifest.components.len());
     for component in &manifest.components {
-        let source_abs = backup_dir.join(&component.path);
+        // AF-11: refuse any component path that could escape the backup/target
+        // root before it is joined onto either.
+        let safe_rel = validate_component_path(&component.path)?;
+        let source_abs = backup_dir.join(&safe_rel);
         if !source_abs.exists() {
             return Err(RestoreError::SourceMissing(component.name.clone()));
         }
@@ -314,8 +332,8 @@ pub fn plan_restore(
         }
         actions.push(RestoreAction {
             name: component.name.clone(),
-            source_in_backup: PathBuf::from(&component.path),
-            target_relative: PathBuf::from(&component.path),
+            source_in_backup: safe_rel.clone(),
+            target_relative: safe_rel,
             kind,
             expected_sha3: component.sha3_256.clone(),
         });
@@ -638,6 +656,23 @@ mod tests {
         let target = tempfile::tempdir().unwrap();
         let err = plan_restore(backup.path(), target.path(), None, true).unwrap_err();
         assert!(matches!(err, RestoreError::UnsignedManifest));
+    }
+
+    #[test]
+    fn component_path_validation_rejects_escape() {
+        // AF-11: manifest-supplied component paths must stay within the root.
+        for bad in ["../etc/passwd", "/abs/path", "a/../../b", ""] {
+            assert!(
+                matches!(
+                    validate_component_path(bad),
+                    Err(RestoreError::UnsafeComponentPath(_))
+                ),
+                "should reject {bad:?}"
+            );
+        }
+        for ok in ["audit/api", "trust/anchors", "auth/key-hashes.json"] {
+            assert!(validate_component_path(ok).is_ok(), "should accept {ok}");
+        }
     }
 
     #[test]

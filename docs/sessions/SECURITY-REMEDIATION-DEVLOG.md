@@ -797,3 +797,34 @@ streaming budget/tokenize follow-on and the unwired lease-based SpendLedger (F2 
 remain documented follow-ons that predate this audit. AF-15B -> CODE-FIXED.
 
 Commit: (this change set).
+### F5(b) - backup/restore boundary (AF-11 path escape, AF-19 unsigned-by-default)
+
+Objective: close the two restore-tool findings - a restore manifest whose component
+paths escape the backup/target roots (AF-11), and restore accepting unsigned or
+unverified manifests by default (AF-19).
+
+Confirmed against source (`tools/mai-admin/src/restore.rs:292/402`, `main.rs`):
+`component.path` (manifest-controlled) was joined onto `backup_dir` and `target_dir`
+with no containment check - an `apply` with a crafted manifest could copy from,
+delete, or write outside the target. And `require_signed` defaulted false, with a
+signed-but-no-key manifest treated as `Signed` without actually verifying, so
+`restore apply` ran against a fully unverified manifest by default - which is what
+made AF-11 reachable.
+
+Changed:
+- AF-11: `validate_component_path` requires every component path to be relative and
+  composed only of `Normal` components (no `..`, absolute, root, drive prefix);
+  `plan_restore` validates each once and uses the validated relative path for both the
+  backup-side read and the target-side write, so neither join can escape.
+- AF-19: signature verification is on by default for `restore plan`, `restore apply`,
+  and `backup verify`; the escape hatch is an explicit `--allow-unsigned`. With
+  verification on, an unsigned manifest or a signed manifest presented without a
+  verifying key both hard-fail rather than proceeding on a warning.
+
+Verify: fmt clean; `cargo clippy -p mai-admin --all-targets -- -D warnings -A
+clippy::pedantic` PASS; `cargo test -p mai-admin` PASS (new: component-path validation
+accept/reject matrix; existing plan_require_signed_rejects_unsigned still green).
+
+AF-11 / AF-19 -> CODE-FIXED.
+
+Commit: (this change set).
