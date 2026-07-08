@@ -207,7 +207,12 @@ impl PolicyEngine {
         // M1 slice: the HIPAA module. The composer denies-wins over the set it is
         // given; ITAR/OCAP modules join in M2.
         let aggregate = self.composer.compose([ModuleDecision::from_hipaa(&baa)]);
-        let allowed_cloud = aggregate.allowed;
+        // Fail closed when no compliance module actually vetted the request — e.g.
+        // the HIPAA module is disabled, so the composer dropped its decision and
+        // `allowed` is vacuously true over the empty set. An unvetted request is
+        // not cloud-eligible; route it local rather than egress potential PHI
+        // (audit G1).
+        let allowed_cloud = aggregate.allowed && !aggregate.modules_applied.is_empty();
         let policy_route = if allowed_cloud {
             Route::CloudAllowed
         } else {
@@ -540,6 +545,33 @@ mod tests {
             composer
                 .compose([ModuleDecision::from_hipaa(&allow)])
                 .allowed
+        );
+    }
+
+    #[test]
+    fn disabled_module_is_unvetted_not_cloud_allowed() {
+        // Audit G1: with the only compliance module disabled, the composer drops its
+        // decision, leaving an empty set whose `allowed` is vacuously true. The
+        // enforce guard must treat that as NOT cloud-allowed — an unvetted request
+        // never egresses.
+        let mut cfg = ComposerConfig::default();
+        cfg.enabled.remove(&mai_compliance::ModuleId::Hipaa);
+        let composer = PolicyComposer::new(cfg);
+        let clear = BaaDecision {
+            allowed: true,
+            reason: "clear".into(),
+            violations: vec![],
+        };
+        let aggregate = composer.compose([ModuleDecision::from_hipaa(&clear)]);
+        // Precondition: HIPAA disabled -> nothing vetted, vacuous allow.
+        assert!(aggregate.modules_applied.is_empty());
+        assert!(aggregate.allowed);
+        // The G1 enforce guard (mirrors `evaluate`): a vacuous allow over an empty
+        // set is not cloud-eligible.
+        let allowed_cloud = aggregate.allowed && !aggregate.modules_applied.is_empty();
+        assert!(
+            !allowed_cloud,
+            "an unvetted request must not be cloud-allowed"
         );
     }
 }

@@ -75,13 +75,13 @@ impl RoutingDecision {
     /// the four-outcome audit vocabulary.
     pub fn from_aggregate(decision: &AggregateDecision) -> Self {
         match (decision.allowed, decision.route) {
-            // No modules ran → treat as allow, since nothing
-            // restricted the request. Same outcome as an explicit
-            // Cloud route — both surface as `Allow` in the audit
-            // vocabulary; the caller may record `audit.no_modules`
-            // as a flag.
-            (true, Some(Destination::Cloud) | None) => Self::Allow,
-            (true, Some(Destination::Local)) => Self::LocalOnly,
+            // An explicit Cloud route from an allowed request.
+            (true, Some(Destination::Cloud)) => Self::Allow,
+            // A Local route, OR no module vetted the request (route `None`): fail
+            // closed to local-only. An unvetted request must never be recorded (or
+            // routed) as cloud-eligible (audit G1) — previously `None` collapsed
+            // onto `Allow`, mislabelling a disabled-module egress as permitted.
+            (true, Some(Destination::Local) | None) => Self::LocalOnly,
             // Quarantine implies "held for review" regardless of the
             // allowed flag — the composer always sets allowed=false
             // when route=Quarantine today, but the audit vocabulary
@@ -412,6 +412,23 @@ mod tests {
         assert_eq!(
             RoutingDecision::from_aggregate(&deny),
             RoutingDecision::Deny
+        );
+    }
+
+    #[test]
+    fn unvetted_none_route_fails_closed_to_local() {
+        // Audit G1: an empty/unvetted decision set (no module ran -> route None)
+        // must NOT map to Allow (cloud-eligible); it fails closed to LocalOnly.
+        let unvetted = AggregateDecision {
+            allowed: true,
+            route: None,
+            flags: vec![],
+            reasons: vec![],
+            modules_applied: vec![],
+        };
+        assert_eq!(
+            RoutingDecision::from_aggregate(&unvetted),
+            RoutingDecision::LocalOnly
         );
     }
 

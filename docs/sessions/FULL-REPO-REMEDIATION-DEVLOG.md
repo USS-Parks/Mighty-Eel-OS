@@ -464,3 +464,29 @@ dispositioned closed at the code boundary; docs-only.
 closed. The Phase D **Mediums** (D4 lock-poison, D5 breaker `from_secs_f64`, D6 toolproxy TTL,
 D7 SSE slot release, D8 streaming budget) and the D9 fuzz/soak gate remain as reachable
 robustness follow-ons below the Critical/High bar. Commit: (this change set, docs-only).
+
+## Phase G - compliance / routing fail-closed (mai-compliance, aog-gateway)
+
+### G1 - composer fail-open on an unvetted request (M, PHI egress)
+
+Two sites treated an **empty** compliance decision set (no module vetted the request) as
+permissive, so disabling the HIPAA module could egress PHI to cloud:
+- **Enforce path** (`aog-gateway/src/policy.rs::evaluate`): `allowed_cloud = aggregate.allowed`.
+  `allowed` is vacuously `true` over an empty set, so a disabled HIPAA module (composer drops
+  its decision -> empty set) yielded `allowed_cloud = true -> CloudAllowed`. Fixed:
+  `allowed_cloud = aggregate.allowed && !aggregate.modules_applied.is_empty()` - an unvetted
+  request is not cloud-eligible and routes local.
+- **Audit vocabulary** (`mai-compliance/src/audit/entry.rs::from_aggregate`): `(true,
+  Some(Cloud) | None) => Allow` collapsed a `None` (unvetted) route onto `Allow`, mislabelling
+  the egress as permitted. Split so `None` fails closed to `LocalOnly`.
+
+aog-apiserver's `policy.rs` empty->allowed was checked and left as-is: there an empty set means
+the resource declares no compliance scopes (nothing to enforce), a different, correct semantic -
+not a PHI-cloud-routing fail-open.
+
+Verify: fmt; `cargo clippy -p mai-compliance -p aog-gateway --all-targets -- -D warnings -A
+clippy::pedantic` PASS; `cargo test -p mai-compliance -p aog-gateway` PASS (337 + gateway) -
+new `unvetted_none_route_fails_closed_to_local` (None -> LocalOnly, not Allow) and
+`disabled_module_is_unvetted_not_cloud_allowed` (HIPAA disabled -> empty vetting set -> not
+cloud-allowed). The G1 egress gate ("disabling HIPAA does not egress PHI in Enforce") holds.
+Commit: (this change set).
