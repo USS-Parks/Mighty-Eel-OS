@@ -219,6 +219,17 @@ impl ReceiptLedger {
         out
     }
 
+    /// Aggregate spend for a single tenant — the caller's own view. Tenant scope
+    /// is mandatory for ordinary callers so one tenant cannot read another's
+    /// provider/model/spend estate.
+    #[must_use]
+    pub fn aggregate_for_tenant(&self, tenant_id: &str) -> Vec<TaskUsage> {
+        self.aggregate()
+            .into_iter()
+            .filter(|u| u.tenant_id == tenant_id)
+            .collect()
+    }
+
     /// Total cost (cents) for one task across every call in the chain.
     #[must_use]
     pub fn cost_per_task(&self, workflow_id: &str) -> u64 {
@@ -340,6 +351,32 @@ mod tests {
             .unwrap();
         assert_eq!(t1.calls, 2);
         assert_eq!(t1.spend_cents, 20);
+    }
+
+    #[test]
+    fn aggregate_for_tenant_isolates_tenants() {
+        let mut a = receipt("task-1", "openai", 10);
+        a.tenant_id = "tenant-a".to_string();
+        let mut b = receipt("task-2", "anthropic", 999);
+        b.tenant_id = "tenant-b".to_string();
+        let mut led = ReceiptLedger::new();
+        led.append(a);
+        led.append(b);
+
+        let a_view = led.aggregate_for_tenant("tenant-a");
+        assert_eq!(a_view.len(), 1, "tenant-a sees only its own group");
+        assert!(a_view.iter().all(|u| u.tenant_id == "tenant-a"));
+        assert!(
+            a_view.iter().all(|u| u.provider != "anthropic"),
+            "tenant-a must not learn tenant-b's provider/spend"
+        );
+        assert_eq!(a_view.iter().map(|u| u.spend_cents).sum::<u64>(), 10);
+        // Tenant A's scoped view is invariant to tenant B's activity.
+        assert_eq!(
+            led.aggregate().len(),
+            2,
+            "global view still has both groups"
+        );
     }
 
     #[test]

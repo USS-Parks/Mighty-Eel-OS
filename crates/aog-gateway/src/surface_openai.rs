@@ -228,15 +228,21 @@ async fn chat_completions(
     crate::tokenize::tag(resp, tokenized_spans)
 }
 
-/// `GET /v1/usage` — aog-meter aggregates (per tenant/provider/model/task) +
-/// the receipt-chain head + a live chain-verify. Authenticated.
+/// `GET /v1/usage` — aog-meter aggregates (per provider/model/task) +
+/// the receipt-chain head + a live chain-verify. Authenticated and scoped to the
+/// caller's own tenant — one tenant never sees another's provider/model/spend.
 async fn usage(State(state): State<AppState>, headers: HeaderMap) -> Response {
-    if let Err(e) = authorize(&state, &headers).await {
-        return e.into_response();
-    }
+    let ctx = match authorize(&state, &headers).await {
+        Ok(ctx) => ctx,
+        Err(e) => return e.into_response(),
+    };
     let (aggregates, head, verified) = {
         let led = state.receipts.lock().expect("receipt ledger lock");
-        (led.aggregate(), led.head_hex(), led.verify())
+        (
+            led.aggregate_for_tenant(&ctx.tenant_id),
+            led.head_hex(),
+            led.verify(),
+        )
     };
     Json(json!({
         "aggregates": aggregates,
@@ -255,15 +261,17 @@ struct RoiQuery {
 
 /// `GET /v1/roi` — the G10 break-even + on-prem/upgrade/stay recommendation over
 /// the metered spend (aog-meter aggregates). `?summit_cost_cents=&window_days=`
-/// override the appliance cost + window. Authenticated (like `/v1/usage`).
+/// override the appliance cost + window. Authenticated; the recommendation is
+/// computed only over the caller's own tenant spend (like `/v1/usage`).
 async fn roi(
     State(state): State<AppState>,
     headers: HeaderMap,
     Query(q): Query<RoiQuery>,
 ) -> Response {
-    if let Err(e) = authorize(&state, &headers).await {
-        return e.into_response();
-    }
+    let ctx = match authorize(&state, &headers).await {
+        Ok(ctx) => ctx,
+        Err(e) => return e.into_response(),
+    };
     let defaults = crate::recommend::RoiInputs::default();
     let inputs = crate::recommend::RoiInputs {
         summit_cost_cents: q.summit_cost_cents.unwrap_or(defaults.summit_cost_cents),
@@ -271,7 +279,7 @@ async fn roi(
     };
     let aggregates = {
         let led = state.receipts.lock().expect("receipt ledger lock");
-        led.aggregate()
+        led.aggregate_for_tenant(&ctx.tenant_id)
     };
     Json(crate::recommend::recommend(&aggregates, inputs)).into_response()
 }
