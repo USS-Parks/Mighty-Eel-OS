@@ -430,9 +430,13 @@ async fn completions(
     headers: HeaderMap,
     Json(body): Json<Value>,
 ) -> Response {
-    if let Err(e) = authorize(&state, &headers).await {
-        return e.into_response();
-    }
+    // AF-10: the legacy completion endpoint runs the SAME governance pipeline as
+    // chat — auth, classify/route, policy, tokenize egress, meter/receipt, budget
+    // — never a bare provider call.
+    let ctx = match authorize(&state, &headers).await {
+        Ok(c) => c,
+        Err(e) => return e.into_response(),
+    };
     let inbound_model = body
         .get("model")
         .and_then(Value::as_str)
@@ -442,6 +446,9 @@ async fn completions(
         Ok(pair) => pair,
         Err(e) => return e.into_response(),
     };
+    let target_cloud = crate::policy::target_is_cloud(&target);
+    let provider_name = target.provider.clone();
+    let workflow_id = crate::meter::workflow_from(&headers);
     let prompt = match body.get("prompt") {
         Some(Value::String(s)) => s.clone(),
         Some(Value::Array(a)) => a
@@ -457,8 +464,59 @@ async fn completions(
         max_tokens: opt_u32(&body, "max_tokens"),
         temperature: opt_f32(&body, "temperature"),
     };
-    match provider.complete(&neutral).await {
-        Ok(r) => {
+    let query = crate::route::query_text(&neutral.messages);
+
+    // Classify + route (G5).
+    let decision = crate::route::classify_and_route(
+        state.router.as_ref(),
+        &query,
+        crate::route::estimate_tokens(neutral.max_tokens, &query),
+        &ctx.tenant_id,
+        ctx.token.roles.first().map_or("user", String::as_str),
+    );
+    // Policy + modes (G6): enforce blocks a classified-data cloud egress.
+    let (policy_decision, outcome) =
+        match crate::policy::gate(&state, target_cloud, &query, &decision) {
+            Ok(pair) => pair,
+            Err(blocked) => return blocked,
+        };
+    // Tokenize sensitive spans before cloud egress (G8).
+    let egress = crate::tokenize::egress(state.detector.as_ref(), target_cloud, &neutral.messages);
+    let tokenized_spans = egress.span_count();
+    let dispatched = CompletionRequest {
+        messages: egress.messages,
+        ..neutral.clone()
+    };
+    let resp = match provider.complete(&dispatched).await {
+        Ok(mut r) => {
+            r.content = crate::tokenize::restore(&r.content, &egress.map);
+            // Metering + receipt (G7).
+            crate::meter::record(
+                &state.receipts,
+                &state.prices,
+                &crate::meter::Completion {
+                    ctx: &ctx,
+                    provider: &provider_name,
+                    model: &inbound_model,
+                    route: &decision,
+                    allowed_cloud: policy_decision.allowed_cloud,
+                    usage: r.usage,
+                    workflow_id: workflow_id.clone(),
+                    tokenized_spans,
+                },
+            );
+            // Budget decrement (G9).
+            state.gateway.record_spend(
+                fabric_token::lineage_key(&ctx.token),
+                u64::from(r.usage.input_tokens) + u64::from(r.usage.output_tokens),
+                state.prices.cost(
+                    &provider_name,
+                    &inbound_model,
+                    r.usage.input_tokens,
+                    r.usage.output_tokens,
+                ),
+                0,
+            );
             let total = u64::from(r.usage.input_tokens) + u64::from(r.usage.output_tokens);
             Json(json!({
                 "id": new_id("cmpl-"),
@@ -475,7 +533,10 @@ async fn completions(
             .into_response()
         }
         Err(e) => provider_http(&e).into_response(),
-    }
+    };
+    let resp = crate::route::tag_route(resp, &decision);
+    let resp = crate::policy::tag_policy(resp, &policy_decision, state.mode, outcome);
+    crate::tokenize::tag(resp, tokenized_spans)
 }
 
 // ---- /v1/embeddings ------------------------------------------------------
