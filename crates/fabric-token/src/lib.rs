@@ -87,11 +87,17 @@ pub enum TokenError {
     LegacyAttenuationDenied(String),
 }
 
-/// BLAKE3-32 over the canonical payload (signature field removed).
+/// BLAKE3-32 over the canonical payload. Only the signature **bytes**
+/// (`signature.value`) are excluded — `signature.alg` and `signature.key_id`
+/// are signed, so the signature binds its own declared algorithm and key
+/// identity (JWS-style). A swapped `key_id`/`alg` then invalidates the token
+/// rather than riding along unsigned.
 fn signing_hash(token: &TrustToken) -> Result<[u8; 32], TokenError> {
     let mut v = serde_json::to_value(token).map_err(|e| TokenError::Serialize(e.to_string()))?;
-    if let Some(obj) = v.as_object_mut() {
-        obj.remove("signature");
+    // Strip only the signature bytes (absent at signing time); keep alg + key_id
+    // in the signed payload.
+    if let Some(sig) = v.get_mut("signature").and_then(|s| s.as_object_mut()) {
+        sig.remove("value");
     }
     canonical_hash(&v).map_err(|e| TokenError::Serialize(e.to_string()))
 }

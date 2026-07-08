@@ -112,3 +112,35 @@ Verify: fmt; `cargo clippy -p fabric-token --all-targets -- -D warnings -A clipp
 PASS; `cargo test -p fabric-token` PASS - new `attenuation_monotonicity_tests`: empty-child-
 vs-restricted-parent refused, subset narrows, empty-child-vs-unrestricted-parent ok. H1
 closed at the primitive. Commit: (this change set).
+
+### K2 - bind key_id + alg into the token signature (H2)
+
+`signing_hash` (`fabric-token/src/lib.rs`) removed the *entire* `signature` object before
+hashing, so `signature.alg` and `signature.key_id` were signed over by nothing - they sat
+outside the signed payload. `issue` writes alg+key_id, then hashes, then fills the value.
+
+Severity correction (adversarial re-trace at fix time, honest per CANON 10). The audit filed
+H2 as a "revocation bypass". Re-checked against the actual token verification path, it is NOT
+currently exploitable: `Authenticator` (`aog-apiserver/src/auth.rs`) verifies every token
+against a single fixed trust-anchor public key with a hardcoded `MlDsa87Verifier`, and
+revocation keys off `token_id` / `subject_hash` - never the signing `key_id`, and the
+algorithm is never selected from `token.signature.alg`. So mutating key_id/alg on a token in
+flight buys an attacker nothing today (the value must still verify under the anchor). This is
+a **latent** key-identity / algorithm-substitution gap, not a live bypass - downgraded from
+High-exploitable to defense-in-depth hardening.
+
+It becomes live the moment token verification either resolves the key *by* key_id (multi-key
+/ rotation - the `fabric-proof` bundle keyring already does exactly this for proof artifacts)
+or picks the verify algorithm from the token. Binding both fields now, JWS-style, closes the
+class before that seam opens.
+
+Changed: `signing_hash` strips only `signature.value` (the bytes, absent at signing time) and
+keeps `alg` + `key_id` in the signed payload. `issue` and `verify` share `signing_hash`, so
+they stay mutually consistent; no persisted golden signatures exist to break (all fixtures
+mint fresh - verified by grep + the downstream suites).
+
+Verify: fmt; clippy -D warnings PASS; `cargo test -p fabric-token` PASS - new
+`tampered_key_id_or_alg_fails_verification` (swap key_id -> InvalidSignature; swap alg ->
+InvalidSignature; fails on the old code, passes now). Blast radius clean: `cargo test -p
+aog-apiserver -p wsf-bridge -p wsf-cache -p aogd -p fabric-revocation` all green (mint+verify
+round-trips unaffected). Commit: (this change set).

@@ -73,6 +73,30 @@ fn tampered_token_fails_verification() {
 }
 
 #[test]
+fn tampered_key_id_or_alg_fails_verification() {
+    // K2 (audit H2): the signature binds its own key_id + alg. Swapping the
+    // declared signing-key identity or algorithm on a minted token invalidates it.
+    // Without this binding those fields sit outside the signed payload and a
+    // substitution rides along undetected — latent the moment a verifier resolves
+    // the key by key_id or picks the algorithm from the token.
+    let signer = RustCryptoMlDsa87::generate("bridge-q3").unwrap();
+
+    let mut swap_kid = issue(base_token("2099-01-01T00:00:00Z"), &signer).unwrap();
+    swap_kid.signature.key_id = "attacker-key".into();
+    assert_eq!(
+        verify(&swap_kid, &MlDsa87Verifier, signer.public_key()),
+        Err(TokenError::InvalidSignature)
+    );
+
+    let mut swap_alg = issue(base_token("2099-01-01T00:00:00Z"), &signer).unwrap();
+    swap_alg.signature.alg = "ed25519".into();
+    assert_eq!(
+        verify(&swap_alg, &MlDsa87Verifier, signer.public_key()),
+        Err(TokenError::InvalidSignature)
+    );
+}
+
+#[test]
 fn revoked_token_is_rejected() {
     let signer = RustCryptoMlDsa87::generate("k").unwrap();
     let mut t = base_token("2099-01-01T00:00:00Z");
