@@ -539,10 +539,13 @@ fn narrow_child(
         child.allowed_routes = routes.clone();
     }
     if let Some(models) = &restrictions.allowed_models {
-        // Narrowing when the parent restricts: child ⊆ parent. When the parent
-        // is unrestricted (empty), *any* explicit list is a narrowing.
+        // Narrowing when the parent restricts: child ⊆ parent. When the parent is
+        // unrestricted (empty), *any* explicit list is a narrowing. But an EMPTY
+        // child list means "unrestricted = all models" (audit H1), so against a
+        // restricted parent it is a WIDENING — reject it rather than granting the
+        // child every model the parent was walled off from.
         if !parent.allowed_models.is_empty()
-            && !models.iter().all(|m| parent.allowed_models.contains(m))
+            && (models.is_empty() || !models.iter().all(|m| parent.allowed_models.contains(m)))
         {
             return Err(TokenError::AttenuationWidens {
                 axis: "allowed_models",
@@ -637,4 +640,85 @@ pub fn try_spend(
     b.usd_spent_cents = new_usd;
     b.tool_calls_spent = new_calls;
     Ok(())
+}
+
+#[cfg(test)]
+mod attenuation_monotonicity_tests {
+    use super::{TokenError, TokenRestrictions, narrow_child};
+    use chrono::{DateTime, TimeZone, Utc};
+    use fabric_contracts::{Attenuation, Classification, RevocationStatus, Signature, TrustToken};
+
+    fn parent_with_models(models: Vec<String>) -> TrustToken {
+        TrustToken {
+            token_id: "parent".into(),
+            issued_at: "2026-07-03T00:00:00Z".into(),
+            expires_at: "2099-01-01T00:00:00Z".into(),
+            issuer: "wsf-bridge".into(),
+            trust_bundle_version: "2026.07.v2".into(),
+            tenant_id: "baap".into(),
+            subject_id: None,
+            subject_hash: "hmac:abc".into(),
+            service_identity: None,
+            identity_id: None,
+            roles: vec![],
+            compliance_scopes: vec![],
+            allowed_routes: vec![],
+            allowed_models: models,
+            max_data_classification: Classification::Restricted,
+            country: None,
+            person_type: None,
+            offline_mode: false,
+            revocation_status: RevocationStatus::Unknown,
+            budget: None,
+            attenuation: Attenuation::default(),
+            signature: Signature {
+                alg: String::new(),
+                key_id: String::new(),
+                value: String::new(),
+            },
+        }
+    }
+
+    fn now() -> DateTime<Utc> {
+        Utc.with_ymd_and_hms(2026, 7, 4, 0, 0, 0).unwrap()
+    }
+
+    #[test]
+    fn empty_child_models_is_a_widening_against_a_restricted_parent() {
+        // Audit H1: an empty child list means "all models"; against a restricted
+        // parent that is a WIDENING and must be refused.
+        let parent = parent_with_models(vec!["gpt-4".into()]);
+        let r = TokenRestrictions {
+            allowed_models: Some(vec![]),
+            ..TokenRestrictions::new("child")
+        };
+        assert!(matches!(
+            narrow_child(&parent, &r, now(), None),
+            Err(TokenError::AttenuationWidens {
+                axis: "allowed_models"
+            })
+        ));
+    }
+
+    #[test]
+    fn subset_child_models_narrows_ok() {
+        let parent = parent_with_models(vec!["gpt-4".into(), "gpt-3".into()]);
+        let r = TokenRestrictions {
+            allowed_models: Some(vec!["gpt-4".into()]),
+            ..TokenRestrictions::new("child")
+        };
+        let child = narrow_child(&parent, &r, now(), None).unwrap();
+        assert_eq!(child.allowed_models, vec!["gpt-4".to_owned()]);
+    }
+
+    #[test]
+    fn empty_child_models_ok_when_parent_unrestricted() {
+        // Parent already unrestricted (empty = all): an empty child stays unrestricted.
+        let parent = parent_with_models(vec![]);
+        let r = TokenRestrictions {
+            allowed_models: Some(vec![]),
+            ..TokenRestrictions::new("child")
+        };
+        assert!(narrow_child(&parent, &r, now(), None).is_ok());
+    }
 }

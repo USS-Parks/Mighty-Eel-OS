@@ -91,3 +91,24 @@ needs a CA + a >=3-node cluster to provision and prove; A4 (quorum-fenced reads 
 to implement and gate; A6 is the >=3-node live gate itself. C1 is contained (0.2) + auth-
 gated (A1) and H3 is fixed in the meantime; the transport-security + consensus-fence legs
 land when a cluster host is available. Critical path continues at Phase K (safe next prompt).
+
+## Phase K - trust primitives (fabric-token / fabric-crypto)
+
+### K1 - attenuation empty-model-list widening (H1)
+
+An empty `allowed_models` list means "every model" (the unrestricted sentinel). The child
+narrowing check (`fabric-token/src/lib.rs`, `narrow_child`) only rejected a child model that
+was *absent from* a restricted parent's set - so a child restriction of `Some(vec![])`
+against a parent restricted to e.g. `["gpt-4"]` passed the `iter().all(..)` vacuously and
+*widened* the child back to all models. A monotonicity break: attenuation must only narrow.
+
+Changed (`fabric-token/src/lib.rs`): the `allowed_models` guard now also refuses an empty
+child list when the parent is restricted -
+`if !parent.allowed_models.is_empty() && (models.is_empty() || !models.iter().all(..))` ->
+`AttenuationWidens { axis: "allowed_models" }`. An empty child against an *unrestricted*
+parent stays legal (both mean "all"); a genuine subset still narrows.
+
+Verify: fmt; `cargo clippy -p fabric-token --all-targets -- -D warnings -A clippy::pedantic`
+PASS; `cargo test -p fabric-token` PASS - new `attenuation_monotonicity_tests`: empty-child-
+vs-restricted-parent refused, subset narrows, empty-child-vs-unrestricted-parent ok. H1
+closed at the primitive. Commit: (this change set).
