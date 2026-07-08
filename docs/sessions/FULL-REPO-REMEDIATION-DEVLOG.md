@@ -803,3 +803,21 @@ Disposition: G7's concrete targets - the `entities.rs` offset-drift and obfuscat
 detection - are closed (G7a/b). The case-preserving regex-detector normalization is a bounded
 follow-on. G7 gate ("obfuscated PHI/ITAR still detected; audit offsets correct") is met on the
 primary entity-routing path. Commit: (this change set, docs-only).
+
+### G8 - negative-control gate (satisfied by the per-prompt regressions)
+
+"A negative control for every fail-closed path (deny on error/empty)." Each Phase-G
+fail-closed path fixed in this remediation shipped with exactly such a control - an
+error/empty input asserted to produce the safe (deny / local) outcome:
+- **G1** `unvetted_none_route_fails_closed_to_local` (route `None` -> LocalOnly, not Allow) and
+  `disabled_module_is_unvetted_not_cloud_allowed` (empty decision set -> not cloud-eligible).
+- **G2** `test_empty_regulated_tier_is_rejected` (empty required tier -> construction error).
+- **G3** `test_medical_entity_forces_local_below_ceiling` (medical entity under a low
+  classifier score -> forced local).
+- **G4** `test_upstream_phi_hint_raises_floor` (a `phi` hint -> Regulated floor -> Local/Denied).
+
+The earlier phases' fail-closed fixes carry the same shape (K1 widening -> `AttenuationWidens`;
+U1 stripped boundary sig -> `SignatureMissing`; P2 clock rollback -> `Expired`/local). G8's
+intent - every fail-closed path proven to deny on error/empty - is therefore met by
+construction; a separate consolidated suite would only duplicate these (CANON 13, no
+gold-plating). No code change. Commit: (this change set, docs-only).
