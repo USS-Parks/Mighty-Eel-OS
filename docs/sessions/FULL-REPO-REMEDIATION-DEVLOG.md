@@ -298,3 +298,19 @@ deferred with A2 / K5 / V1 / V6. Until it lands, the chain's tamper-evidence is 
 
 Verify: no code change this prompt (the two live legs already exist and are gated); disposition
 recorded here. Commit: (this change set, docs-only).
+
+### U5 - restart + tamper gate (H7/H8 restart evidence)
+
+The remaining U evidence: verification must survive a process restart. After a restart the
+in-memory tail is empty, so verification has to lean on the durable WAL - exactly the U2 path.
+New unit test `verify_full_survives_restart_via_wal`: record entries into a WAL-backed log,
+drop it (simulate restart), build a *fresh* `AuditLog` on the same WAL path (asserting its
+in-memory tail is empty), and confirm `verify_full` re-reads the WAL and verifies; then tamper
+a persisted entry on disk and confirm a third fresh instance detects it (`LinkBroken`). This is
+a single-process restart simulation (the multi-node live gate is A6, deferred); it closes the
+in-process restart-evidence leg for H7/H8.
+
+Verify: fmt; clippy -D warnings PASS; `cargo test -p mai-compliance` PASS (336 tests) - the new
+restart test green. With U1 (boundary sigs), U2 (from-head WAL), U3 (long-log false positive)
+and now U5 (restart evidence), H7/H8 are closed at the code boundary; the only U item open is
+K5-class live infra (U-live, owner lane). Commit: (this change set).

@@ -758,6 +758,57 @@ mod tests {
     }
 
     #[test]
+    fn verify_full_survives_restart_via_wal() {
+        // Audit H7/H8/U5: verification must survive a process restart. The
+        // in-memory tail is gone after a restart, but the durable WAL is re-read
+        // from its head — a clean WAL verifies, and a tamper of a persisted entry
+        // is caught on the fresh instance.
+        let path =
+            std::env::temp_dir().join(format!("mai-u5-restart-{}.jsonl", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+        let cfg = AuditStoreConfig {
+            wal_path: Some(path.clone()),
+            ..AuditStoreConfig::default()
+        };
+        {
+            let log1 = AuditLog::builder().store_config(cfg.clone()).build();
+            let bundle = sample_bundle();
+            for _ in 0..5 {
+                log1.record(record_input(
+                    &bundle,
+                    &sample_decision(true, Destination::Local),
+                ))
+                .unwrap();
+            }
+        } // log1 dropped: simulate a process restart.
+
+        // Fresh instance: empty in-memory tail, same WAL on disk.
+        let log2 = AuditLog::builder().store_config(cfg.clone()).build();
+        assert!(
+            log2.store().entries().is_empty(),
+            "post-restart in-memory tail is empty"
+        );
+        log2.verify_full(None::<&MlDsaBundleVerifier>)
+            .expect("a clean WAL verifies after restart");
+
+        // Tamper a persisted entry, then verify on another fresh instance.
+        let raw = std::fs::read_to_string(&path).unwrap();
+        let mut lines: Vec<String> = raw.lines().map(str::to_owned).collect();
+        let mut entry: AuditEntry =
+            serde_json::from_slice(&hex::decode(&lines[2]).unwrap()).unwrap();
+        entry.routing_reason = "tampered-across-restart".into();
+        lines[2] = hex::encode(serde_json::to_vec(&entry).unwrap());
+        std::fs::write(&path, format!("{}\n", lines.join("\n"))).unwrap();
+
+        let log3 = AuditLog::builder().store_config(cfg).build();
+        let err = log3
+            .verify_full(None::<&MlDsaBundleVerifier>)
+            .expect_err("a cross-restart tamper must be detected");
+        assert!(matches!(err, ChainError::LinkBroken { .. }));
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
     fn integrity_status_reflects_counts() {
         let log = AuditLog::default();
         let bundle = sample_bundle();
