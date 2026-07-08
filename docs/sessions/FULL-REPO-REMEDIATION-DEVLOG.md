@@ -491,6 +491,26 @@ new `unvetted_none_route_fails_closed_to_local` (None -> LocalOnly, not Allow) a
 cloud-allowed). The G1 egress gate ("disabling HIPAA does not egress PHI in Enforce") holds.
 Commit: (this change set).
 
+### G2 - classifier fail-closed on an empty required tier (M)
+
+`RuleBasedClassifier::new` (`mai-router/src/classifier.rs`) compiled whatever pattern set it
+was handed and never checked a tier was populated. A config that omits or mis-keys the
+`regulated` tier (its patterns catch PHI/SSN) compiled to zero regulated regexes, so regulated
+data matched nothing and classified as `Public` -> cloud-eligible. A test even enshrined it
+(`test_empty_config_classifies_everything_public`).
+
+Fix: after compiling, `new` fails with the new `ClassifierError::EmptyRequiredTier` when
+`regulated` has no patterns - a mis-keyed/stripped config is refused at construction, never
+silently accepted. Compilation still runs first, so a bad regex is still `InvalidPattern`. The
+lower tiers (internal/sensitive) and `critical` stay operator-optional per deployment, matching
+the audit gate's focus ("never classifies regulated as Public"); production uses `baseline()`,
+which populates regulated, so it is unaffected.
+
+Verify: fmt; clippy -D warnings PASS; `cargo test -p mai-router` PASS (63) - the fail-open test
+flipped to `test_empty_regulated_tier_is_rejected` (empty -> `EmptyRequiredTier`), plus
+`test_regulated_only_config_constructs` (regulated-only config builds and classifies). Commit:
+(this change set).
+
 ## Phase P - posture & auth hardening (wsf-cache, ...)
 
 ### P2 - wsf-cache clock fail-closed (M, clock rollback re-opens cloud)

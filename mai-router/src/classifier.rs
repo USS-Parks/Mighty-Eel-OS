@@ -55,6 +55,14 @@ pub enum ClassifierError {
         /// Underlying regex error.
         source: regex::Error,
     },
+    /// A required classification tier had zero patterns. Fail construction rather
+    /// than silently under-classifying its data (audit G2): an empty `regulated`
+    /// tier would let PHI/SSN fall through to `Public` and egress.
+    #[error("required classification tier '{tier}' has no patterns")]
+    EmptyRequiredTier {
+        /// Name of the empty required tier.
+        tier: &'static str,
+    },
 }
 
 /// Per-level pattern set loaded from TOML.
@@ -123,12 +131,21 @@ pub struct RuleBasedClassifier {
 impl RuleBasedClassifier {
     /// Compile a classifier from a config.
     pub fn new(config: &ClassifierConfig) -> Result<Self, ClassifierError> {
-        Ok(Self {
+        let classifier = Self {
             internal: compile(&config.internal, Classification::Internal)?,
             sensitive: compile(&config.sensitive, Classification::Sensitive)?,
             regulated: compile(&config.regulated, Classification::Regulated)?,
             critical: compile(&config.critical, Classification::Critical)?,
-        })
+        };
+        // Fail closed if the regulated tier is unpopulated: with no regulated
+        // patterns, PHI/SSN would classify as Public and could egress (audit G2).
+        // A mis-keyed or stripped config is refused at construction, never silently
+        // accepted. The lower tiers (internal/sensitive) and `critical` stay
+        // operator-optional per deployment.
+        if classifier.regulated.is_empty() {
+            return Err(ClassifierError::EmptyRequiredTier { tier: "regulated" });
+        }
+        Ok(classifier)
     }
 
     /// Default classifier with the baseline pattern set.
@@ -278,11 +295,26 @@ mod tests {
     }
 
     #[test]
-    fn test_empty_config_classifies_everything_public() {
-        let c = RuleBasedClassifier::new(&ClassifierConfig::default()).unwrap();
-        assert_eq!(
-            c.classify("contact alice@example.com"),
-            Classification::Public
-        );
+    fn test_empty_regulated_tier_is_rejected() {
+        // Audit G2: a config with no `regulated` patterns is refused at
+        // construction — it must never silently classify PHI/SSN as Public.
+        let empty = ClassifierConfig::default();
+        assert!(matches!(
+            RuleBasedClassifier::new(&empty),
+            Err(ClassifierError::EmptyRequiredTier { tier: "regulated" })
+        ));
+    }
+
+    #[test]
+    fn test_regulated_only_config_constructs() {
+        // Only the required `regulated` tier is mandatory; the other tiers may be
+        // empty. A regulated match still classifies; unmatched text is Public.
+        let cfg = ClassifierConfig {
+            regulated: vec![r"\b\d{3}-\d{2}-\d{4}\b".to_string()],
+            ..ClassifierConfig::default()
+        };
+        let c = RuleBasedClassifier::new(&cfg).expect("regulated-only config is valid");
+        assert_eq!(c.classify("ssn 123-45-6789"), Classification::Regulated);
+        assert_eq!(c.classify("nothing sensitive here"), Classification::Public);
     }
 }
