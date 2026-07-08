@@ -358,3 +358,32 @@ chain-integrity / broken-chain / checkpoint-signature suites green. H6 closed.
 - **V6 live ZFS+TPM gate**: needs the real ZFS+TPM host (0.2), owner lane with X2/X3.
 
 Critical path continues at Phase D (DoS / panic-safety, reachable).
+
+## Phase S - attested scheduling (aog-scheduler)
+
+### S4-doc - reconcile the attestation filter's overstated claim (H4, §0.5)
+
+H4: attested placement trusts self-declared attestation. `AttestationFilter`
+(`aog-scheduler/src/filters.rs`) requires, for a Restricted+ ceiling, that the node declare a
+hardware platform (TPM/Nitro/SEV-SNP) + a recorded PCR - a bare claim is refused. But the
+`platform`/`pcr` are the node's **self-declared** values (`NodeSnapshot` projects the node's
+own `spec.attestation`); the filter checks their *presence*, never a control-plane-verified
+hardware quote. Its doc, however, claimed placement was "provably held" via "a real hardware
+root … backed by" - a control the code does not implement (a §0.5 / §11 docs-vs-reality
+overstatement layered on the H4 trust gap).
+
+Changed (doc/comment only): rewrote the filter doc to state honestly that platform+PCR are
+self-declared and their *presence* is checked, not a verified quote, with the CP quote-
+verification (signed quote + AK cert chain + pinned PCRs + fresh nonce) marked deferred to the
+hardware lane; added a `TODO(basho)` at the check site recording the same. No behavior/test
+change - the doc now matches the code.
+
+**Root fix DEFERRED (S1-S3, hardware).** Actually closing H4 needs CP verification of a real
+hardware quote (vendor roots + pinned reference PCRs + nonce), which needs TPM/attestation
+hardware (PSPR 0.2, with V1/V4/V6). The audit's S4 fail-closed alternative - *deny* Restricted+
+placement outright until verification lands - is reachable but removes a placement capability
+(it flips `ring3_secret_placed_on_attested_node` to Pending), a product decision that is
+owner-gated (0.2), not a unilateral remediation edit. H4 therefore remains **open** (honest:
+counts against §0.6 stop-ship at re-ship) with the gap now accurately documented and tracked
+in-code, and two closure options spelled out for the owner. Verify: fmt; clippy -D warnings
+PASS; `cargo test -p aog-scheduler` PASS (unchanged behavior). Commit: (this change set).

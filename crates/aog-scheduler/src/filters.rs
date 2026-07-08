@@ -87,14 +87,22 @@ impl Filter for RingFilter {
     }
 }
 
-/// Hard filter — the attested-placement differentiator (S4, A1.3.2). A workload
-/// is placed only where its data-classification ceiling is provably held:
-/// `classification_ceiling <= node.attestation_floor`, and for any sensitive
-/// workload (ceiling `>= Restricted`) that floor must be backed by a real
-/// hardware root — an attestation platform (TPM / Nitro / SEV-SNP) with a
-/// recorded measurement (PCR). A node that merely *claims* a high floor with no
-/// hardware backing is under-attested; the workload is refused and stays Pending
-/// rather than force-placed to relieve pressure (doctrine I-2 / I-4).
+/// Hard filter — the attested-placement guard (A1.3.2). A workload is placed
+/// only where its data-classification ceiling is within the node's attestation
+/// floor (`classification_ceiling <= node.attestation_floor`), and any sensitive
+/// workload (ceiling `>= Restricted`) additionally requires the node to declare
+/// a hardware attestation platform (TPM / Nitro / SEV-SNP) with a recorded PCR.
+/// A bare high-floor claim with no platform/PCR is refused and the workload
+/// stays Pending rather than force-placed to relieve pressure (doctrine I-2/I-4).
+///
+/// LIMITATION (2026-07-08 audit, finding H4): the `platform` + `pcr` are the
+/// node's **self-declared** values — this filter checks their *presence*, it does
+/// not yet verify a control-plane-checked hardware quote (signed quote + AK cert
+/// chain + pinned reference PCRs + fresh nonce). That verification needs real
+/// TPM/attestation hardware and is deferred to the hardware lane; until it lands
+/// a node that asserts a platform + PCR is trusted for Restricted+ placement.
+/// Fully closing H4 is either that verification or an owner decision to deny
+/// Restricted+ fail-closed (a placement-capability change, so owner-gated).
 #[derive(Debug, Clone, Copy, Default)]
 pub struct AttestationFilter;
 
@@ -120,6 +128,10 @@ impl Filter for AttestationFilter {
         // A sensitive ceiling demands a hardware-rooted floor: a bare assertion
         // is not attestation (I-4). Public / Internal need no hardware root.
         if ceiling >= Classification::Restricted {
+            // TODO(basho): the platform + pcr below are node-self-declared
+            // (2026-07-08 audit, finding H4). Verify a control-plane-checked
+            // hardware quote (AK cert chain + pinned PCRs + fresh nonce) before
+            // trusting them; blocked on TPM/attestation hardware.
             if node.attestation.platform == AttestationPlatform::None {
                 return FilterVerdict::unfit(
                     "attestation",
