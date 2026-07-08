@@ -511,6 +511,27 @@ flipped to `test_empty_regulated_tier_is_rejected` (empty -> `EmptyRequiredTier`
 `test_regulated_only_config_constructs` (regulated-only config builds and classifies). Commit:
 (this change set).
 
+### G3 - router forces Local on a medical entity (M, PHI egress)
+
+`DefaultRouter::route` (`mai-router/src/router.rs`) forced Local for an export-controlled
+(`has_export_controlled`) or tribal (`has_tribal`) entity regardless of classification, but
+computed no `has_medical` - a medical/PHI entity had no entity-floor. It stayed local only if
+the *classifier* independently rated the text at/above the cloud ceiling; a medical entity the
+classifier scored low (the baseline dictionary flags "hospital", which is not a regulated
+classifier pattern) fell through to the default cloud route - PHI egress.
+
+Fix: compute `has_medical` and force Local on it in step 2, mirroring export-controlled/tribal
+(reason "medical/PHI entity detected (HIPAA baseline)"). The entity floor is now independent of
+the classifier for all three regulated entity kinds. (The config-driven rules engine already
+had the HIPAA medical->local rule in `rules-config/hipaa.toml`; this closes the *hardcoded*
+`DefaultRouter` path that omitted it.)
+
+Verify: fmt; clippy -D warnings PASS; `cargo test -p mai-router` PASS (64) - new
+`test_medical_entity_forces_local_below_ceiling` ("is there a hospital nearby" -> Local via the
+medical entity, which previously routed cloud); existing `test_phi_query_routes_local` /
+export / tribal cases green. G3 gate ("a medical-context query routes Local") holds. Commit:
+(this change set).
+
 ## Phase P - posture & auth hardening (wsf-cache, ...)
 
 ### P2 - wsf-cache clock fail-closed (M, clock rollback re-opens cloud)

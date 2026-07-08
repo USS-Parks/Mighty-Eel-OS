@@ -218,6 +218,7 @@ impl Router for DefaultRouter {
             .iter()
             .any(|m| m.kind == EntityKind::ExportControlled);
         let has_tribal = entity_hits.iter().any(|m| m.kind == EntityKind::Tribal);
+        let has_medical = entity_hits.iter().any(|m| m.kind == EntityKind::Medical);
 
         // 1. Hard deny at or above the configured floor.
         if classification >= self.config.deny_at {
@@ -232,9 +233,11 @@ impl Router for DefaultRouter {
             });
         }
 
-        // 2. Export-controlled or tribal data must stay local regardless of
-        //    classification (Lamprey ITAR / OCAP baseline). The policy
-        //    runtime will let operators tighten further.
+        // 2. Export-controlled, tribal, or medical/PHI data must stay local
+        //    regardless of classification (Lamprey ITAR / OCAP / HIPAA baseline).
+        //    The entity floor is independent of the classifier — a medical entity
+        //    the classifier does not rate high (e.g. "hospital") must still stay
+        //    local (audit G3). The policy runtime lets operators tighten further.
         if has_export_controlled {
             return Ok(RoutingDecision::Local {
                 reason: "export-controlled entity detected (ITAR/EAR baseline)".to_string(),
@@ -244,6 +247,12 @@ impl Router for DefaultRouter {
         if has_tribal {
             return Ok(RoutingDecision::Local {
                 reason: "tribal data sovereignty (OCAP baseline)".to_string(),
+                classification,
+            });
+        }
+        if has_medical {
+            return Ok(RoutingDecision::Local {
+                reason: "medical/PHI entity detected (HIPAA baseline)".to_string(),
                 classification,
             });
         }
@@ -362,6 +371,24 @@ mod tests {
             }
             RoutingDecision::Local { reason, .. } => assert!(reason.contains("export-controlled")),
             other => panic!("unexpected decision {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_medical_entity_forces_local_below_ceiling() {
+        // Audit G3: a medical/PHI entity forces local even when the classifier does
+        // not rate the text high, mirroring export-controlled / tribal. "hospital"
+        // is a medical entity but not a regulated-classifier pattern, so without the
+        // entity floor this query would route to cloud.
+        let r = router();
+        match r.route(&req("is there a hospital nearby")).unwrap() {
+            RoutingDecision::Local { reason, .. } => {
+                assert!(
+                    reason.contains("medical") || reason.contains("PHI"),
+                    "expected a medical-entity reason, got: {reason}"
+                );
+            }
+            other => panic!("expected Local for a medical entity, got {other:?}"),
         }
     }
 
