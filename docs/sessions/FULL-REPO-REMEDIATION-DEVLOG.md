@@ -842,3 +842,25 @@ PASS; `cargo test -p aog-toolproxy` PASS (53) - new `hung_tool_times_out_and_is_
 promptly) and `task_usage_map_is_bounded_against_session_flood` (MAX+100 distinct sessions ->
 map stays at the cap). D6 gate ("session-id flood bounded; hung tool times out") holds. Commit:
 (this change set).
+
+### D7 - SSE scheduler slot released on stream end, not a fixed timer (M)
+
+`handle_sse_chat` (`mai-api/src/streaming/sse.rs`) spawned a task that
+`sleep(Duration::from_secs(300)).await` then `release_sequence(..)`. The scheduler's streaming
+slot was thus pinned for a flat 300s regardless of when the stream actually ended, so an
+abandoned or short stream held its slot for five minutes - slot exhaustion under churn (audit
+D7, "abandoned streams free their slot promptly").
+
+Fix: a `SequenceGuard` (RAII) holding `(scheduler, instance, seq_id)` releases the sequence in
+its `Drop`. It is moved into the SSE producing task, so the slot frees the moment that task
+ends - which the token loop already does promptly on every terminal path (final chunk,
+adapter-done, token timeout, or `event_tx.send` error = client disconnect, caught within the
+15s heartbeat at worst). The 300s cleanup task is deleted. `release_sequence` is invoked via
+UFCS so the guard does not depend on the `Scheduler` trait being in scope; `seq_id` is an
+`Option` taken in `Drop` (no `Copy` assumption).
+
+Verify: fmt; `cargo clippy -p mai-api --all-targets -- -D warnings -A clippy::pedantic` PASS;
+`cargo test -p mai-api --lib streaming` PASS (29) - existing SSE/WS suites unchanged. The
+release-on-drop timing is verified by construction (guard lives in the task; the loop breaks
+promptly on disconnect/complete); a wall-clock disconnect test would be inherently flaky and
+belongs to the live suite. D7 gate holds. Commit: (this change set).

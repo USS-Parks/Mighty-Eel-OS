@@ -19,6 +19,7 @@
 //! - **Final event:** `data: [DONE]\n\n` per OpenAI spec.
 
 use std::collections::VecDeque;
+use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use axum::http::StatusCode;
@@ -260,8 +261,17 @@ pub async fn handle_sse_chat(
         debug!(request_id = %spawn_id, tokens = seq, "Streaming token producer finished");
     });
 
+    // Release the scheduler's streaming slot when the stream actually ends
+    // (completion / token timeout / client disconnect), not on a fixed 300s timer
+    // (audit D7). The guard is moved into the producing task and drops on its exit.
+    let slot_guard = SequenceGuard {
+        scheduler: state.scheduler.clone(),
+        instance: decision.instance_id.clone(),
+        seq_id: Some(session_id),
+    };
+
     // Build the SSE byte stream
-    let sse_stream = build_sse_stream(rx, request_id, model_id.clone(), last_event_id);
+    let sse_stream = build_sse_stream(rx, request_id, model_id.clone(), last_event_id, slot_guard);
 
     // Build response with SSE headers
     let body = axum::body::Body::from_stream(sse_stream);
@@ -283,40 +293,54 @@ pub async fn handle_sse_chat(
         "SSE stream started"
     );
 
-    // Mark request as streaming in scheduler (completed on stream end).
-    // Cleanup happens when the stream is dropped.
-    let state_cleanup = state.clone();
-    let cleanup_instance = decision.instance_id.clone();
-    tokio::spawn(async move {
-        // This task waits for the response body to be fully sent,
-        // then releases the sequence. In practice, axum drops the
-        // stream when the client disconnects.
-        tokio::time::sleep(Duration::from_secs(300)).await;
-        state_cleanup
-            .scheduler
-            .release_sequence(&cleanup_instance, session_id);
-    });
-
     Ok(response)
 }
 
 // ─── SSE Stream Construction ───────────────────────────────────────
 
+/// Releases the scheduler's streaming sequence slot when dropped. It lives inside
+/// the SSE producing task, so the slot frees the moment the stream ends - normal
+/// completion, token timeout, or client disconnect - instead of after a fixed
+/// 300s timer that pinned the slot even for an abandoned stream (audit D7).
+struct SequenceGuard {
+    scheduler: Arc<dyn mai_scheduler::Scheduler>,
+    instance: mai_scheduler::InstanceId,
+    seq_id: Option<mai_scheduler::SequenceId>,
+}
+
+impl Drop for SequenceGuard {
+    fn drop(&mut self) {
+        if let Some(seq) = self.seq_id.take() {
+            // UFCS so the call does not depend on the `Scheduler` trait being in scope.
+            mai_scheduler::Scheduler::release_sequence(
+                self.scheduler.as_ref(),
+                &self.instance,
+                seq,
+            );
+        }
+    }
+}
+
 /// Build the SSE byte stream from a token receiver.
 ///
 /// Returns a `Stream<Item = Result<bytes::Bytes, std::io::Error>>` that
-/// axum can serve as a streaming response body.
+/// axum can serve as a streaming response body. `slot_guard` is moved into the
+/// producing task and released when the stream ends (audit D7).
 fn build_sse_stream(
     mut rx: TokenReceiver,
     request_id: Uuid,
     model_id: String,
     resume_from: Option<u64>,
+    slot_guard: SequenceGuard,
 ) -> impl Stream<Item = Result<bytes::Bytes, std::io::Error>> {
     // We use an async_stream-style approach via futures_util.
     // The stream yields SSE-formatted byte chunks.
     let (event_tx, event_rx) = mpsc::channel::<Result<bytes::Bytes, std::io::Error>>(128);
 
     tokio::spawn(async move {
+        // Held for the task's lifetime; on task end (stream complete / timeout /
+        // client disconnect breaks the loop below) it drops and frees the slot.
+        let _slot_guard = slot_guard;
         let mut backpressure = BackpressureMonitor::new(BACKPRESSURE_CAPACITY);
         let mut replay_buffer: VecDeque<(u64, bytes::Bytes)> =
             VecDeque::with_capacity(BACKPRESSURE_CAPACITY);
