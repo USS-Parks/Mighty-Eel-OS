@@ -963,3 +963,67 @@ Verify: fmt clean; `cargo clippy -p mai-api -p mai-core --all-targets -- -D warn
 clippy::pedantic` PASS; `cargo test -p mai-api -p mai-core` PASS.
 
 Commit: (this change set).
+## Phase X - migration, live validation, independent re-scan, re-ship gate
+
+### X1 - migration / compatibility rehearsal
+
+Token v1->v2 compatibility (`fabric-token` `token_versioning`: production denies legacy
+by default, bounded verify-only migration, no v1 attenuation) PASS; envelope v1->v2 and
+plaintext->encrypted model migration are exercised by the `fabric-envelope` and
+`mai-vault` suites (offline) and by the E5/V9 paths. Mixed-version denial holds
+(legacy token/envelope refused in production).
+
+### X2 - full live integration suite (Dockerized OpenBao + Moto)
+
+Stood up `openbao/openbao:latest` (dev) + `moto` 5.2 on this host and ran the live gates
+with `WSF_OPENBAO_ADDR`/`WSF_OPENBAO_TOKEN`/`WSF_AWS_ENDPOINT` set. GREEN, no SKIPs:
+`wsf-api` (issuance authz A5, attenuation T7, broker grants B6, ledger+export W6/L4,
+revocation propagation R6), `wsf-seal` (E7/E2), `wsf-broker`, `aog-gateway`
+(kill-switch / live-gateway - the path my F2 revocation fix touches), `wsf-ledger` (W4).
+One parallel-run failure (`aog-controller::packs_replicas_beyond_node_count`) was a
+shared-OpenBao concurrency artifact between parallel test binaries - it PASSES in
+isolation, and my commits never touch aog-controller. Zero mock-only trust closure.
+
+### X3 - failure injection / burn-in
+
+Revoke-mid-session denial is proven live (R6 `live_revocation`: publish a sequence-2
+snapshot revoking the tenant -> unseal + credential-exchange deny 403 with no restart).
+DEFERRED (no hardware here): the AF-005 V9 vault gate on real ZFS+TPM, and the 72-hour
+soak on target hardware. These are host/time-gated, not code-gated.
+
+### X5 - buyer/operator red-team (the seven original attacks)
+
+Each original audit attack is denied by a landed control with a live or unit gate:
+AF-001 signer-oracle attenuation -> parent authenticated (T7 live); AF-002 unauth
+issuance -> A2 principal + issuance authz (A5 live); AF-003 cross-tenant unseal ->
+envelope binding (E7 live); AF-004 arbitrary cloud role -> named grants (B6 live);
+AF-005 false vault readiness -> measured probe (V8; V9 live on ZFS+TPM deferred);
+AF-006 ignored revocation -> consumed everywhere + gateway completeness (R6 live + F2);
+AF-007 open receipt ledger -> authenticated + tenant-scoped (L4 live). The AF-03 gRPC
+and DF-01A/B/AF-11/AF-19 Phase-F attacks are denied by this session's gates.
+
+### X6 - supply-chain + build gates (software portion)
+
+Ran the full software gate ladder green: `cargo fmt --check`; `cargo clippy --workspace
+-- -D warnings -A clippy::pedantic` (per changed crate); `cargo test` (all changed
+crates + the live suites); `cargo audit` (518 deps, 0 vulnerabilities); `cargo deny
+check` (advisories/bans/licenses/sources ok); `gitleaks detect` (no leaks after the
+vetted-fixture allowlist); `detect-secrets` (baselined, gate clean). DEFERRED (no
+infra / not authorized): signed-artifact build + SBOM + cosign + the CDN ship pipeline
+(needs the signing infra + an explicit push), and `mai-ship-validate` on a full ship
+profile + state dir.
+
+### X7 - claim-to-evidence
+
+External "controls live outside the model / cannot leak context" claims map one-to-one
+to the landed controls above; the go/no-go report enumerates the mapping.
+
+### Go / no-go (Appendix D)
+
+CONDITIONAL GO. Every reachable Critical/High is CODE-FIXED and verified (independent
+X4 re-scan found no new reachable Critical/High); the live trust plane is proven
+end-to-end against OpenBao + Moto; all software + supply-chain + secret gates are green.
+Final GO remains gated on OWNER/HARDWARE items that cannot be cleared here: the V9 vault
+live gate on real ZFS+TPM, the signed-artifact ship (SBOM + cosign + CDN), and the
+owner's formal sign-off on the deferred lane. Full report:
+`../../../SECURITY-REMEDIATION-FX-REPORT.md` (top-level project folder).
