@@ -219,3 +219,25 @@ PASS; `cargo test -p mai-compliance` PASS (332 tests) - new
 boundary signature -> `SignatureMissing { id: 1 }`). Existing signed/unsigned/tamper/monotonic
 suites green (no legitimate unsigned-boundary-with-verifier path regressed). H7 closed at the
 verifier; the persisted-WAL leg is U2. Commit: (this change set).
+
+### U3 - fix the >8192-entry HeadHashNonZero false positive (H8, part 1)
+
+`verify_full` verifies `store.entries()` - the in-memory tail, capped at
+`max_in_memory` (default 8192). Once the log outgrows that cap the genesis entry (id 0) is
+evicted, so the tail's first entry has a non-zero `previous_hash`; `verify_chain`'s
+`first.is_chain_head()` assertion then fired `HeadHashNonZero` on a perfectly clean chain -
+a false positive that made a healthy long-running log report as tampered.
+
+Changed: split `verify_chain` (asserts the genesis head, unchanged public signature) from a
+new `pub(crate) verify_segment` (linkage + monotonicity + boundary-signature checks, no head
+assertion); `verify_chain` now delegates to it. `verify_full` verifies from genesis while the
+tail still holds id 0 and switches to `verify_segment` once the head is evicted
+(`entries.first().is_none_or(|e| e.id == 0)`). The genesis guarantee is retained for the
+from-head path; only the evicted-tail case drops the assertion that no longer applies. The
+evicted prefix's own tamper-evidence comes from the WAL in U2.
+
+Verify: fmt; clippy -D warnings PASS; `cargo test -p mai-compliance` PASS (333 tests) - new
+`verify_full_passes_after_head_eviction` (max_in_memory=4, 10 entries -> head evicted -> clean
+log verifies). U1's stripped-signature regression and the head-nonzero/tamper/monotonic
+suites stay green (the genesis check still fires when the slice starts at id 0). Commit: (this
+change set).

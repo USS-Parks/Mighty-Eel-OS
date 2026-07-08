@@ -308,7 +308,17 @@ impl AuditLog {
     pub fn verify_full<V: BundleVerifier>(&self, verifier: Option<&V>) -> Result<(), ChainError> {
         let entries = self.store.entries();
         let cfg = self.chain.config();
-        let result = super::chain::verify_chain(&entries, cfg, verifier);
+        // Verify from genesis while the tail still holds the head (id 0). Once the
+        // log outgrows `max_in_memory` the head is evicted and the retained tail is
+        // a segment, so verify linkage/signatures without the genesis head-check
+        // (audit H8/U3 — that check false-positived on a clean long log). The
+        // evicted prefix is verified from the WAL in U2.
+        let starts_at_genesis = entries.first().is_none_or(|e| e.id == 0);
+        let result = if starts_at_genesis {
+            super::chain::verify_chain(&entries, cfg, verifier)
+        } else {
+            super::chain::verify_segment(&entries, cfg, verifier)
+        };
         let mut guard = self.inner.lock().expect("audit log poisoned");
         match &result {
             Ok(()) => {
@@ -617,6 +627,39 @@ mod tests {
             .unwrap();
         }
         log.verify_full(None::<&MlDsaBundleVerifier>).unwrap();
+        assert_eq!(
+            log.integrity_status().last_verify,
+            VerificationStatus::Verified
+        );
+    }
+
+    #[test]
+    fn verify_full_passes_after_head_eviction() {
+        // Audit H8/U3: once more entries than max_in_memory are recorded the head
+        // (id 0) is evicted from the in-memory tail. A clean log must still verify;
+        // the old code false-positived HeadHashNonZero because the retained tail no
+        // longer began at genesis.
+        let log = AuditLog::builder()
+            .store_config(AuditStoreConfig {
+                max_in_memory: 4,
+                ..AuditStoreConfig::default()
+            })
+            .build();
+        let bundle = sample_bundle();
+        for _ in 0..10 {
+            log.record(record_input(
+                &bundle,
+                &sample_decision(true, Destination::Local),
+            ))
+            .unwrap();
+        }
+        // Precondition: the head was evicted, so the tail starts past id 0.
+        assert!(
+            log.store().entries()[0].id > 0,
+            "test precondition: head must be evicted"
+        );
+        log.verify_full(None::<&MlDsaBundleVerifier>)
+            .expect("a clean post-eviction log must verify");
         assert_eq!(
             log.integrity_status().last_verify,
             VerificationStatus::Verified

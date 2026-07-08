@@ -298,20 +298,33 @@ impl HashChainManager {
     }
 }
 
-/// Verify a full chain segment. Checks id monotonicity,
-/// `previous_hash` linkage, and any periodic signatures.
+/// Verify a full chain from its genesis head: assert the first entry is the
+/// chain head (all-zero `previous_hash`), then check id monotonicity,
+/// `previous_hash` linkage, and periodic signatures via [`verify_segment`].
 pub fn verify_chain<V: BundleVerifier>(
     entries: &[AuditEntry],
     config: &ChainConfig,
     verifier: Option<&V>,
 ) -> Result<(), ChainError> {
-    let Some(first) = entries.first() else {
-        return Ok(());
-    };
-    if !first.is_chain_head() {
+    if let Some(first) = entries.first()
+        && !first.is_chain_head()
+    {
         return Err(ChainError::HeadHashNonZero { id: first.id });
     }
+    verify_segment(entries, config, verifier)
+}
 
+/// Verify id monotonicity, `previous_hash` linkage, and periodic signatures
+/// across a chain *segment*, WITHOUT asserting the first entry is the genesis
+/// head. An in-memory tail whose genesis has been evicted (a log longer than
+/// `max_in_memory`) is verified through here: the head-hash assertion belongs
+/// only to a from-genesis verification and would false-positive on a legitimate
+/// tail (audit H8/U3). Verifying the evicted prefix from the WAL is U2.
+pub(crate) fn verify_segment<V: BundleVerifier>(
+    entries: &[AuditEntry],
+    config: &ChainConfig,
+    verifier: Option<&V>,
+) -> Result<(), ChainError> {
     for window in entries.windows(2) {
         let prev = &window[0];
         let curr = &window[1];
