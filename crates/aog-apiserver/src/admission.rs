@@ -259,6 +259,20 @@ impl Admission {
                     name: req.name.clone(),
                 })?;
                 let meta = current.object.metadata();
+                // A3 (audit H3): authorize the delete against the loaded target. The
+                // K7 policy gate is skipped for deletes (validate sees object=None),
+                // which let any authenticated principal delete any object incl. a
+                // RevocationIntent (reversing a live kill). Run the same policy here,
+                // and bind a tenant-scoped principal to its own tenant.
+                self.policy.evaluate(&current.object, principal)?;
+                if let (Some(pt), Some(ot)) = (principal.tenant.as_ref(), meta.tenant.as_ref())
+                    && pt != ot
+                {
+                    return Err(ApiError::Forbidden(format!(
+                        "principal tenant {pt} may not delete {}/{} owned by tenant {ot}",
+                        req.kind, req.name
+                    )));
+                }
                 let before_digest = digest(&current.object);
                 // Two-phase delete (R2). No finalizers: remove now. Finalizers
                 // present: stamp deletion_timestamp (soft delete) and let the

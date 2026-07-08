@@ -65,3 +65,29 @@ Verify: fmt; clippy -D warnings; `cargo test -p aogd` PASS (new admin-role gate;
 daemon/edge/auth_crud suites green - they run anchorless so bootstrap stays open). The full
 authenticated-refusal black-box proof is the A6 multi-node live gate (deferred - needs a
 >=3-node host). C1 root-fixed at the code boundary. Commit: (this change set).
+### A3 - authorize deletes against the target (H3)
+
+`validate` ran K7 policy only `if let Some(object)` (`admission.rs:168`) and deletes carry
+`object: None` (`handlers.rs:164`), so any authenticated principal could delete any object
+incl. a `RevocationIntent` (reversing a live kill).
+
+Changed (`aog-apiserver/src/admission.rs`, Verb::Delete): after loading the target, run the
+same `self.policy.evaluate(&target, principal)` the create/update path uses, and refuse a
+cross-tenant delete (tenant-scoped principal may only delete objects in its own tenant).
+Deletes now traverse the K7 authorization gate.
+
+Verify: fmt; clippy -D warnings; `cargo test -p aog-apiserver` PASS (35 tests; existing
+create/update/delete flows green under the added check). Cross-tenant / kill-reversal
+black-box proof is the A6 live gate. Residual: a kind-level "RevocationIntent delete
+requires the aog-admin authority" rule beyond classification/compliance is a tracked
+follow-on. Commit: (this change set).
+
+### A2 / A4 / A5 / A6 - DEFERRED (multi-node + cert infra)
+
+These need resources absent on this host and are dispositioned to the owner/hardware lane
+per PSPR 0.2: A2 (wire `aog-wire::NodeTls` mTLS into the serve path + https peer URLs)
+needs a CA + a >=3-node cluster to provision and prove; A4 (quorum-fenced reads via
+`confirm_leadership`) and A5 (durable/replicated receipt ledger) need a multi-node estate
+to implement and gate; A6 is the >=3-node live gate itself. C1 is contained (0.2) + auth-
+gated (A1) and H3 is fixed in the meantime; the transport-security + consensus-fence legs
+land when a cluster host is available. Critical path continues at Phase K (safe next prompt).
