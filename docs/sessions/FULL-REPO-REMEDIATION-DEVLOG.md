@@ -782,3 +782,24 @@ normalization` (full-width `ｐｒｅｓｃｒｉｐｔｉｏｎ`, accented `pá
 NBSP-doubled `medical record` all detected; full-width span still indexes the original validly).
 `cargo deny check bans licenses` PASS (no new duplicate/license violation from the dep). Commit:
 (this change set).
+
+### G7c - regex-detector input normalization (deferred, bounded)
+
+The "before regex" leg: normalize the input to the regex-based `SensitivityClassifier`
+(`mai-router/src/classifier.rs`) and the `mai-compliance` `PhiDetector`. Not done this
+prompt, for two concrete reasons, recorded so it is not lost:
+- **Case-sensitivity conflict.** The entity fold (G7a/b) lowercases; the classifier's ICD-10
+  pattern `\b[A-TV-Z][0-9][0-9AB]...` is *case-sensitive*, so feeding it lowercased input would
+  break ICD-10 detection. A safe classifier normalization needs a **case-preserving** variant
+  (NFKD + mark-strip + whitespace-collapse + both-case homoglyphs, no lowercase). Bounded, but a
+  distinct helper.
+- **Incremental value.** Obfuscated *keywords* (patient, itar, tribal, ...) are already caught
+  by the now-normalized entity scanner, which is what drives the router's forced-local
+  decision (G3). The classifier's unique patterns are structural (SSN / email / ICD-10);
+  normalization there mainly adds full-width-digit folding - a narrow vector. The
+  `PhiDetector` variant additionally needs the offset map (it produces redaction spans).
+
+Disposition: G7's concrete targets - the `entities.rs` offset-drift and obfuscated-entity
+detection - are closed (G7a/b). The case-preserving regex-detector normalization is a bounded
+follow-on. G7 gate ("obfuscated PHI/ITAR still detected; audit offsets correct") is met on the
+primary entity-routing path. Commit: (this change set, docs-only).
