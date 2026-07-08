@@ -9,7 +9,7 @@
 use axum::response::sse::{Event, Sse};
 use axum::response::{IntoResponse, Response};
 use axum::routing::post;
-use axum::{Json, Router, extract::State, http::HeaderMap};
+use axum::{Json, Router, extract::State, http::HeaderMap, http::StatusCode};
 use futures::StreamExt;
 use serde_json::{Value, json};
 
@@ -130,9 +130,28 @@ async fn messages(
 
     let mut tokenized_spans = 0u32;
     let resp = if body.get("stream").and_then(Value::as_bool).unwrap_or(false) {
-        match provider.stream(&neutral).await {
-            Ok(chunks) => messages_sse(inbound_model, chunks),
-            Err(e) => provider_http(&e).into_response(),
+        // AF-09 fail-closed: the streaming path does not yet tokenize egress or
+        // meter/receipt per chunk. Until it does, refuse a stream that would send
+        // un-tokenized sensitive spans to a cloud provider rather than leak them.
+        let spans =
+            crate::tokenize::egress(state.detector.as_ref(), target_cloud, &neutral.messages)
+                .span_count();
+        if target_cloud && spans > 0 {
+            let err = json!({
+                "type": "error",
+                "error": {
+                    "type": "invalid_request_error",
+                    "message": "streaming is unavailable for classified data over a cloud \
+                                provider; retry without stream=true (the non-streaming path \
+                                tokenizes egress before dispatch)",
+                }
+            });
+            (StatusCode::BAD_REQUEST, Json(err)).into_response()
+        } else {
+            match provider.stream(&neutral).await {
+                Ok(chunks) => messages_sse(inbound_model, chunks),
+                Err(e) => provider_http(&e).into_response(),
+            }
         }
     } else {
         // Tokenize sensitive spans before cloud egress (G8): the cloud provider
