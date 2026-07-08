@@ -13,11 +13,14 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
+use aog_apiserver::auth::{Authenticator, TOKEN_HEADER};
 use aog_store::raft::RaftNode;
 use aog_store::raft::types::{NodeId, RaftResponse};
 use aog_store::{Op, Versioned};
-use axum::extract::State;
+use axum::extract::{Request, State};
 use axum::http::{HeaderMap, StatusCode};
+use axum::middleware::Next;
+use axum::response::Response;
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use openraft::BasicNode;
@@ -29,29 +32,80 @@ type AdminResult<T> = Result<T, (StatusCode, String)>;
 /// Marks a write already forwarded once, so the leader hop cannot loop.
 const FORWARDED_HEADER: &str = "x-loom-forwarded";
 
+/// The trust role a WSF token must carry to use the mutating admin API (A1).
+pub const AOG_ADMIN_ROLE: &str = "aog-admin";
+
 /// Shared admin state: the Raft node plus an HTTP client for forwarding writes to
 /// the current leader.
 #[derive(Clone)]
 pub struct AdminState {
     node: Arc<RaftNode>,
     http: reqwest::Client,
+    /// The front-door authenticator, present once a trust anchor is provisioned.
+    /// When present, the mutating `/admin/*` routes require an admin-scoped token;
+    /// when absent (pre-anchor bootstrap) the daemon is loopback-contained (0.2).
+    authenticator: Option<Arc<Authenticator>>,
 }
 
 /// The admin + health routes, backed by `node`.
-pub fn router(node: Arc<RaftNode>) -> Router {
+pub fn router(node: Arc<RaftNode>, authenticator: Option<Arc<Authenticator>>) -> Router {
     let state = AdminState {
         node,
         http: reqwest::Client::new(),
+        authenticator,
     };
-    Router::new()
-        .route("/healthz", get(healthz))
+    // A1 (audit C1): the mutating admin routes require an admin-scoped principal once
+    // an anchor is provisioned; `/healthz` and the read-only `/admin/leader` stay open.
+    // The pre-anchor bootstrap is guarded by the 0.2 loopback containment.
+    let guarded = Router::new()
         .route("/admin/initialize", post(initialize))
         .route("/admin/add-learner", post(add_learner))
         .route("/admin/change-membership", post(change_membership))
         .route("/admin/write", post(write))
         .route("/admin/get", post(get_key))
+        .route_layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            require_admin,
+        ));
+    Router::new()
+        .route("/healthz", get(healthz))
         .route("/admin/leader", get(leader))
+        .merge(guarded)
         .with_state(state)
+}
+
+/// A1 middleware: authenticate an admin request against the front-door authenticator
+/// (when provisioned) and require the `aog-admin` role. No authenticator means the
+/// pre-anchor bootstrap posture, which the 0.2 loopback containment gates.
+async fn require_admin(
+    State(state): State<AdminState>,
+    req: Request,
+    next: Next,
+) -> AdminResult<Response> {
+    if let Some(auth) = &state.authenticator {
+        let principal = auth.authenticate(req.headers()).map_err(|_| {
+            (
+                StatusCode::UNAUTHORIZED,
+                "admin trust token required".to_owned(),
+            )
+        })?;
+        let is_admin = principal
+            .token
+            .as_ref()
+            .is_some_and(|t| roles_include_admin(&t.roles));
+        if !is_admin {
+            return Err((
+                StatusCode::FORBIDDEN,
+                format!("admin role '{AOG_ADMIN_ROLE}' required"),
+            ));
+        }
+    }
+    Ok(next.run(req).await)
+}
+
+/// Whether a token's roles include the admin role.
+fn roles_include_admin(roles: &[String]) -> bool {
+    roles.iter().any(|r| r == AOG_ADMIN_ROLE)
 }
 
 /// Map any node/raft failure to a 500 carrying its reason (fail-closed: the harness
@@ -149,19 +203,21 @@ async fn write(
             "no leader currently known; retry".to_owned(),
         ));
     };
-    let resp = state
+    // Propagate the caller's trust token so the leader re-authenticates the original
+    // caller end-to-end — the forward hop is not itself trusted (mTLS is phase A2).
+    let mut fwd = state
         .http
         .post(format!("{url}/admin/write"))
-        .header(FORWARDED_HEADER, "1")
-        .json(&op)
-        .send()
-        .await
-        .map_err(|e| {
-            (
-                StatusCode::BAD_GATEWAY,
-                format!("forwarding to leader failed: {e}"),
-            )
-        })?;
+        .header(FORWARDED_HEADER, "1");
+    if let Some(tok) = headers.get(TOKEN_HEADER) {
+        fwd = fwd.header(TOKEN_HEADER, tok.clone());
+    }
+    let resp = fwd.json(&op).send().await.map_err(|e| {
+        (
+            StatusCode::BAD_GATEWAY,
+            format!("forwarding to leader failed: {e}"),
+        )
+    })?;
     let status = StatusCode::from_u16(resp.status().as_u16()).unwrap_or(StatusCode::BAD_GATEWAY);
     if !status.is_success() {
         return Err((status, resp.text().await.unwrap_or_default()));
@@ -188,4 +244,19 @@ async fn leader(State(state): State<AdminState>) -> Json<LeaderStatus> {
         leader: state.node.current_leader(),
         is_leader: state.node.is_leader(),
     })
+}
+
+#[cfg(test)]
+mod admin_auth_tests {
+    use super::{AOG_ADMIN_ROLE, roles_include_admin};
+
+    #[test]
+    fn admin_role_gate() {
+        assert!(roles_include_admin(&[
+            "x".to_owned(),
+            AOG_ADMIN_ROLE.to_owned()
+        ]));
+        assert!(!roles_include_admin(&["adult".to_owned()]));
+        assert!(!roles_include_admin(&[]));
+    }
 }

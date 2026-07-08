@@ -44,3 +44,24 @@ before `TcpListener::bind` - loopback proceeds; non-loopback (incl. all-interfac
 Verify: fmt clean; `cargo clippy -p aogd --all-targets -- -D warnings -A clippy::pedantic`
 PASS; `cargo test -p aogd` PASS (new: loopback-ok / non-loopback-refused / opt-in matrix).
 C1/C2 CONTAINED (root fixes owned by A1/A2). Commit: (this change set).
+## Phase A - AOG control-plane auth & transport
+
+### A1 - authenticate the aogd admin API (C1 root fix)
+
+The `/admin/*` surface was mounted with no auth layer and merged onto the daemon socket
+alongside the authenticated `/apis/**` CRUD (`aogd/src/lib.rs`), so any peer could commit
+arbitrary Raft `Op`s.
+
+Changed: the admin router now takes the front-door `Authenticator` (threaded from the
+daemon's `AppState` when an anchor is provisioned) and gates the mutating routes
+(initialize / add-learner / change-membership / write / get) behind a `require_admin`
+middleware - a valid WSF token carrying the `aog-admin` role; `/healthz` and read-only
+`/admin/leader` stay open. The write leader-forward hop propagates the caller's
+`x-wsf-token` so the leader re-authenticates the original caller (the hop is not trusted
+until mTLS lands in A2). Pre-anchor bootstrap (no authenticator) relies on the 0.2 loopback
+containment.
+
+Verify: fmt; clippy -D warnings; `cargo test -p aogd` PASS (new admin-role gate; existing
+daemon/edge/auth_crud suites green - they run anchorless so bootstrap stays open). The full
+authenticated-refusal black-box proof is the A6 multi-node live gate (deferred - needs a
+>=3-node host). C1 root-fixed at the code boundary. Commit: (this change set).

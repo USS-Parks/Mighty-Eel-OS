@@ -196,8 +196,12 @@ impl Daemon {
     /// The combined axum app: the `aog-wire` Raft peer endpoints (`/raft/*`) merged
     /// with the admin API (`/admin/*`, `/healthz`).
     pub fn app(&self) -> Router {
-        let mut app =
-            aog_wire::router(Arc::clone(&self.node)).merge(admin::router(Arc::clone(&self.node)));
+        let mut app = aog_wire::router(Arc::clone(&self.node)).merge(admin::router(
+            Arc::clone(&self.node),
+            self.state
+                .as_ref()
+                .map(aog_apiserver::AppState::authenticator),
+        ));
         // VH5b: the authenticated CRUD surface, when an anchor is provisioned.
         if let Some(state) = &self.state {
             app = app.merge(aog_apiserver::api_router(state.clone()));
