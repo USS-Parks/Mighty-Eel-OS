@@ -114,6 +114,11 @@ pub enum ChainError {
         /// Id of the boundary entry missing its signature.
         id: u64,
     },
+    /// The persisted WAL could not be read or decoded for from-head
+    /// verification. Fail closed (audit H8/U2): unreadable durable history is
+    /// treated as unverifiable, never as verified.
+    #[error("persisted WAL could not be read: {0}")]
+    WalRead(String),
 }
 
 /// Pluggable signer used by the chain manager.
@@ -372,6 +377,27 @@ pub(crate) fn verify_segment<V: BundleVerifier>(
     }
 
     Ok(())
+}
+
+/// Verify a persisted WAL that may hold several chain *segments* — a daily
+/// rotation resets the chain to a fresh genesis, so the append-only WAL is a
+/// concatenation of independent from-head chains. Split at each chain head
+/// (all-zero `previous_hash`) and verify every segment from its true head
+/// (audit H8/U2), so tampering with an entry evicted from the in-memory tail is
+/// still caught.
+pub(crate) fn verify_wal<V: BundleVerifier>(
+    entries: &[AuditEntry],
+    config: &ChainConfig,
+    verifier: Option<&V>,
+) -> Result<(), ChainError> {
+    let mut start = 0;
+    for i in 1..entries.len() {
+        if entries[i].is_chain_head() {
+            verify_chain(&entries[start..i], config, verifier)?;
+            start = i;
+        }
+    }
+    verify_chain(&entries[start..], config, verifier)
 }
 
 #[cfg(test)]

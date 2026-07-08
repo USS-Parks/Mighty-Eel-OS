@@ -301,23 +301,33 @@ impl AuditLog {
             .map(|entry| AuditQueryRow { entry, status })
     }
 
-    /// Run a full-chain verification across the in-memory tail.
-    /// Updates the stored verification status and returns a
-    /// summary. When the verifier returns an error, also surfaces a
-    /// [`Escalation::ChainBreak`] critical event.
+    /// Run a full-chain verification. Prefers the durable WAL (the full history
+    /// from the true head) so tampering with an entry already evicted from the
+    /// in-memory tail is caught (audit H8/U2); absent a WAL it verifies the
+    /// in-memory tail. Updates the stored verification status and returns a
+    /// summary.
     pub fn verify_full<V: BundleVerifier>(&self, verifier: Option<&V>) -> Result<(), ChainError> {
-        let entries = self.store.entries();
         let cfg = self.chain.config();
-        // Verify from genesis while the tail still holds the head (id 0). Once the
-        // log outgrows `max_in_memory` the head is evicted and the retained tail is
-        // a segment, so verify linkage/signatures without the genesis head-check
-        // (audit H8/U3 — that check false-positived on a clean long log). The
-        // evicted prefix is verified from the WAL in U2.
-        let starts_at_genesis = entries.first().is_none_or(|e| e.id == 0);
-        let result = if starts_at_genesis {
-            super::chain::verify_chain(&entries, cfg, verifier)
+        // Prefer the durable WAL: it retains the full history from the true head,
+        // so tampering with an entry already evicted from the in-memory tail is
+        // detected (audit H8/U2). A WAL read/decode failure is fail-closed. Absent
+        // a WAL, verify the in-memory tail — from genesis while it still holds the
+        // head, else as a segment (U3: the head having been evicted, the genesis
+        // head-check no longer applies and would false-positive).
+        let result = if self.store.has_wal() {
+            match self.store.read_wal() {
+                Ok(Some(wal)) => super::chain::verify_wal(&wal, cfg, verifier),
+                Ok(None) => Ok(()),
+                Err(e) => Err(ChainError::WalRead(e.to_string())),
+            }
         } else {
-            super::chain::verify_segment(&entries, cfg, verifier)
+            let entries = self.store.entries();
+            let starts_at_genesis = entries.first().is_none_or(|e| e.id == 0);
+            if starts_at_genesis {
+                super::chain::verify_chain(&entries, cfg, verifier)
+            } else {
+                super::chain::verify_segment(&entries, cfg, verifier)
+            }
         };
         let mut guard = self.inner.lock().expect("audit log poisoned");
         match &result {
@@ -664,6 +674,87 @@ mod tests {
             log.integrity_status().last_verify,
             VerificationStatus::Verified
         );
+    }
+
+    #[test]
+    fn verify_full_detects_tampering_with_evicted_entry() {
+        // Audit H8/U2: an entry evicted from the in-memory tail but retained in the
+        // WAL must still be tamper-checked. Verifying only the tail (old behavior)
+        // would miss this.
+        let path = std::env::temp_dir().join(format!("mai-u2-tamper-{}.jsonl", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+        let log = AuditLog::builder()
+            .store_config(AuditStoreConfig {
+                max_in_memory: 4,
+                wal_path: Some(path.clone()),
+                ..AuditStoreConfig::default()
+            })
+            .build();
+        let bundle = sample_bundle();
+        for _ in 0..10 {
+            log.record(record_input(
+                &bundle,
+                &sample_decision(true, Destination::Local),
+            ))
+            .unwrap();
+        }
+        // Clean log verifies from the WAL head.
+        log.verify_full(None::<&MlDsaBundleVerifier>)
+            .expect("clean WAL verifies from head");
+
+        // Tamper an EVICTED entry (id 0) directly in the WAL: decode, alter, re-frame.
+        let raw = std::fs::read_to_string(&path).unwrap();
+        let mut lines: Vec<String> = raw.lines().map(str::to_owned).collect();
+        let bytes = hex::decode(&lines[0]).unwrap();
+        let mut entry: AuditEntry = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(entry.id, 0, "line 0 is the evicted genesis entry");
+        entry.routing_reason = "tampered-after-eviction".into();
+        lines[0] = hex::encode(serde_json::to_vec(&entry).unwrap());
+        std::fs::write(&path, format!("{}\n", lines.join("\n"))).unwrap();
+
+        let err = log
+            .verify_full(None::<&MlDsaBundleVerifier>)
+            .expect_err("tampering with an evicted entry must be detected");
+        assert!(matches!(err, ChainError::LinkBroken { .. }));
+        assert_eq!(
+            log.integrity_status().last_verify,
+            VerificationStatus::Tampered
+        );
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn verify_full_verifies_sealed_wal_from_head() {
+        // Audit H8/U2 with the production AEAD sealer: sealed (binary) records are
+        // hex-framed on disk and unsealed by the reader, so a clean sealed WAL
+        // verifies from its true head.
+        use crate::audit::sealer::AeadSealer;
+        let path = std::env::temp_dir().join(format!("mai-u2-sealed-{}.jsonl", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+        let log = AuditLog::builder()
+            .sealer(Arc::new(AeadSealer::with_ephemeral_key()))
+            .store_config(AuditStoreConfig {
+                max_in_memory: 4,
+                wal_path: Some(path.clone()),
+                ..AuditStoreConfig::default()
+            })
+            .build();
+        let bundle = sample_bundle();
+        for _ in 0..10 {
+            log.record(record_input(
+                &bundle,
+                &sample_decision(true, Destination::Local),
+            ))
+            .unwrap();
+        }
+        // Reads back through unseal + hex framing and verifies from the head.
+        log.verify_full(None::<&MlDsaBundleVerifier>)
+            .expect("clean sealed WAL verifies from head");
+        assert_eq!(
+            log.integrity_status().last_verify,
+            VerificationStatus::Verified
+        );
+        let _ = std::fs::remove_file(&path);
     }
 
     #[test]

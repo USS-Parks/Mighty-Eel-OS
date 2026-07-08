@@ -17,7 +17,7 @@ use aes_gcm::{Aes256Gcm, Key, Nonce};
 use rand::RngCore;
 use rand::rngs::OsRng;
 
-use super::store::StoreSealer;
+use super::store::{StoreError, StoreSealer};
 
 /// Length of the sealed-record nonce prefix (96 bits, per AES-GCM).
 pub const AEAD_SEALER_NONCE_LEN: usize = 12;
@@ -96,6 +96,12 @@ impl fmt::Debug for AeadSealer {
 }
 
 impl StoreSealer for AeadSealer {
+    fn unseal(&self, sealed: &[u8]) -> Result<Vec<u8>, StoreError> {
+        // Delegate to the inherent decrypt; map the opaque AEAD failure to the
+        // store's fail-closed error (wrong key or tampered ciphertext).
+        AeadSealer::unseal(self, sealed).map_err(|_| StoreError::WalUnseal)
+    }
+
     fn seal(&self, plaintext: &[u8]) -> Vec<u8> {
         let mut nonce_bytes = [0u8; AEAD_SEALER_NONCE_LEN];
         OsRng.fill_bytes(&mut nonce_bytes);

@@ -241,3 +241,33 @@ Verify: fmt; clippy -D warnings PASS; `cargo test -p mai-compliance` PASS (333 t
 log verifies). U1's stripped-signature regression and the head-nonzero/tamper/monotonic
 suites stay green (the genesis check still fires when the slice starts at id 0). Commit: (this
 change set).
+
+### U2 - verify the persisted WAL from the true head (H8, part 2)
+
+U3 stopped the false positive but `verify_full` still only saw the in-memory tail, so tampering
+with an entry already *evicted* to the WAL went undetected. U2 makes `verify_full` verify the
+durable WAL from its true head.
+
+Two coupled gaps had to be closed first:
+- **Read path.** `StoreSealer` was write-only (`seal`); there was no way to read a sealed WAL
+  back. Added `unseal` to the trait - `NullSealer` returns the bytes; `AeadSealer` delegates to
+  its existing decrypt, mapping the AEAD failure to a fail-closed `StoreError::WalUnseal`.
+- **Framing.** The WAL wrote `sealed || '\n'`. Sealed (AES-GCM) records are binary and can
+  contain `0x0A`, so newline framing could not round-trip them - the sealed WAL was effectively
+  unreadable. Records are now **hex-framed** (`hex(sealed) || '\n'`), one record per line, safe
+  for arbitrary bytes. No external reader consumes this WAL (grep-confirmed) and no correctly-
+  readable sealed WAL existed before, so this establishes the format rather than migrating data.
+
+Added `AuditStore::read_wal` (read -> hex-decode -> unseal -> JSON per line, every failure an
+error) and `has_wal`; `chain::verify_wal`, which splits the WAL at each chain head (all-zero
+`previous_hash`) so a daily-rotation-reset WAL of several from-genesis segments verifies
+segment-by-segment; and `ChainError::WalRead` so a read/decode failure surfaces fail-closed
+through `verify_full`'s existing signature. `verify_full` now prefers the WAL when configured
+and falls back to the U3 in-memory path otherwise.
+
+Verify: fmt; clippy -D warnings PASS; `cargo test -p mai-compliance` PASS (335 tests) - new
+`verify_full_detects_tampering_with_evicted_entry` (evict id 0 to WAL, tamper it on disk ->
+`LinkBroken`, status Tampered) and `verify_full_verifies_sealed_wal_from_head` (AeadSealer:
+clean sealed WAL round-trips through unseal + hex and verifies); `wal_roundtrip_in_temp_file`
+updated for hex framing. H8 closed (U1 boundary sigs + U3 false positive + U2 from-head WAL);
+the restart-tamper live proof is U5. Commit: (this change set).

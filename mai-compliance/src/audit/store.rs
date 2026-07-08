@@ -93,6 +93,12 @@ pub trait StoreSealer: Send + Sync + std::fmt::Debug {
     /// Transform plaintext bytes into the form that will be written
     /// to disk.
     fn seal(&self, plaintext: &[u8]) -> Vec<u8>;
+
+    /// Recover plaintext from a record produced by [`Self::seal`]. The audit
+    /// reader uses this to verify the persisted WAL from its true head (U2).
+    /// Errors when a record cannot be authenticated (wrong key or corruption) —
+    /// fail closed.
+    fn unseal(&self, sealed: &[u8]) -> Result<Vec<u8>, StoreError>;
 }
 
 /// No-op sealer. Used for bring-up and tests.
@@ -102,6 +108,10 @@ pub struct NullSealer;
 impl StoreSealer for NullSealer {
     fn seal(&self, plaintext: &[u8]) -> Vec<u8> {
         plaintext.to_vec()
+    }
+
+    fn unseal(&self, sealed: &[u8]) -> Result<Vec<u8>, StoreError> {
+        Ok(sealed.to_vec())
     }
 }
 
@@ -116,6 +126,15 @@ pub enum StoreError {
         /// Underlying I/O error.
         #[source]
         source: std::io::Error,
+    },
+    /// A persisted WAL record failed to unseal (wrong key or corrupt AEAD).
+    #[error("WAL record failed to unseal (wrong key or corrupt)")]
+    WalUnseal,
+    /// A persisted WAL record could not be decoded (bad hex framing or JSON).
+    #[error("WAL record is corrupt: {detail}")]
+    WalCorrupt {
+        /// What failed to decode.
+        detail: String,
     },
 }
 
@@ -213,8 +232,12 @@ impl AuditStore {
                     path: path.display().to_string(),
                     source,
                 })?;
+            // Frame each record as hex + '\n'. Sealed (AEAD) records are binary
+            // and may contain 0x0A, so raw bytes cannot be newline-delimited; hex
+            // keeps exactly one record per line and round-trips in `read_wal`.
             let mut w = BufWriter::new(&mut f);
-            w.write_all(&sealed)
+            let line = hex::encode(&sealed);
+            w.write_all(line.as_bytes())
                 .and_then(|()| w.write_all(b"\n"))
                 .map_err(|source| StoreError::WalIo {
                     path: path.display().to_string(),
@@ -238,6 +261,53 @@ impl AuditStore {
             .iter()
             .cloned()
             .collect()
+    }
+
+    /// `true` when a WAL path is configured (durable history exists on disk).
+    pub fn has_wal(&self) -> bool {
+        self.inner
+            .lock()
+            .expect("audit store poisoned")
+            .config
+            .wal_path
+            .is_some()
+    }
+
+    /// Read and unseal the entire persisted WAL in append (id) order. `Ok(None)`
+    /// when no WAL is configured; `Ok(Some(_))` (possibly empty) otherwise. Every
+    /// framing / unseal / decode failure is an error — fail-closed for the U2
+    /// verifier. O(total entries): the operator verify path, not the append hot
+    /// path.
+    pub fn read_wal(&self) -> Result<Option<Vec<AuditEntry>>, StoreError> {
+        let Some(path) = self.config().wal_path else {
+            return Ok(None);
+        };
+        let raw = match std::fs::read_to_string(&path) {
+            Ok(s) => s,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Some(Vec::new())),
+            Err(source) => {
+                return Err(StoreError::WalIo {
+                    path: path.display().to_string(),
+                    source,
+                });
+            }
+        };
+        let mut out = Vec::new();
+        for line in raw.lines() {
+            if line.is_empty() {
+                continue;
+            }
+            let sealed = hex::decode(line).map_err(|e| StoreError::WalCorrupt {
+                detail: format!("hex: {e}"),
+            })?;
+            let plaintext = self.sealer.unseal(&sealed)?;
+            let entry: AuditEntry =
+                serde_json::from_slice(&plaintext).map_err(|e| StoreError::WalCorrupt {
+                    detail: format!("json: {e}"),
+                })?;
+            out.push(entry);
+        }
+        Ok(Some(out))
     }
 
     /// Tail length.
@@ -412,14 +482,20 @@ mod tests {
         for i in 0..3 {
             store.append(entry(i)).unwrap();
         }
+        // On-disk framing is hex-per-line now (safe for binary/AEAD records).
         let raw = std::fs::read_to_string(&path).expect("read wal");
-        let lines: Vec<&str> = raw.lines().collect();
-        assert_eq!(lines.len(), 3);
-        // Replay: each line must round-trip to AuditEntry.
-        for (i, line) in lines.iter().enumerate() {
-            let parsed: AuditEntry = serde_json::from_str(line).expect("parse wal line");
-            assert_eq!(parsed.id, i as u64);
-        }
+        assert_eq!(raw.lines().count(), 3);
+        assert!(
+            raw.lines()
+                .all(|l| l.bytes().all(|b| b.is_ascii_hexdigit())),
+            "each WAL line must be hex"
+        );
+        // Replay through the reader: each record round-trips to its AuditEntry.
+        let replayed = store.read_wal().expect("read_wal").expect("wal configured");
+        assert_eq!(
+            replayed.iter().map(|e| e.id).collect::<Vec<_>>(),
+            vec![0, 1, 2]
+        );
         let _ = std::fs::remove_file(&path);
     }
 
