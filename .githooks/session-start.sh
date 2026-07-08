@@ -31,11 +31,16 @@ else
 fi
 
 # --- Branch & Worktree canon guard (set by Basho) ---
-# The harness checks out the session BEFORE this hook runs, so this can only
-# DETECT and loudly flag an unexpected branch/worktree at session start — it
-# cannot prevent the initial checkout. Canon: never create/switch a branch or
-# worktree without Basho's explicit in-session approval. This alert forces a
-# confirmation when a session did not start on the default branch.
+# The harness checks out its claude/* session branch BEFORE this hook runs,
+# so the initial checkout can't be prevented — but in remote (web) sessions
+# the block below moves the checkout back to the default branch. Standing
+# authorization from Basho (2026-07-08): this auto-switch never creates refs
+# and uses --ff-only, which cannot discard commits. The git proxy still pins
+# pushes to the session branch, so landing work on main remains claude/* ->
+# PR -> merge. The alert now fires only if the switch failed, or when a LOCAL
+# session starts off the default branch (local checkouts are never touched).
+# Canon otherwise unchanged: never create/switch a branch or worktree without
+# Basho's explicit in-session approval.
 default_branch="$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null | sed 's#^origin/##')"
 [ -z "$default_branch" ] && default_branch="main"
 current_branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo DETACHED)"
@@ -43,6 +48,22 @@ git_dir="$(git rev-parse --git-dir 2>/dev/null || echo)"
 common_dir="$(git rev-parse --git-common-dir 2>/dev/null || echo)"
 in_worktree="no"
 [ -n "$git_dir" ] && [ -n "$common_dir" ] && [ "$git_dir" != "$common_dir" ] && in_worktree="yes"
+
+# Remote sessions only: return the checkout to the default branch. The
+# container snapshot's local main can be days stale while the session branch
+# was cut from CURRENT main — fetch, switch, then fast-forward. Any failure
+# falls through to the alert below. Local sessions are deliberately excluded.
+if [ "${CLAUDE_CODE_REMOTE:-}" = "true" ] && [ "$current_branch" != "$default_branch" ] && [ "$in_worktree" = "no" ]; then
+  if git fetch origin "$default_branch" >/dev/null 2>&1 \
+     && git switch "$default_branch" >/dev/null 2>&1 \
+     && git merge --ff-only "origin/$default_branch" >/dev/null 2>&1; then
+    echo "[session-start] checkout moved: $current_branch -> $default_branch (canon auto-switch)" >&2
+    current_branch="$default_branch"
+  else
+    echo "[session-start] AUTO-SWITCH to $default_branch FAILED; checkout left as-is" >&2
+  fi
+fi
+
 if [ "$current_branch" != "$default_branch" ] || [ "$in_worktree" = "yes" ]; then
   echo "==================== BRANCH/WORKTREE CANON ALERT ====================" >&2
   echo "[session-start] This session did NOT start on the default branch." >&2
