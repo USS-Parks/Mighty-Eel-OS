@@ -1,0 +1,8 @@
+REJECTED (production): 7 violation(s) in deployment\appliance\docker-compose.yml
+  [dev-mode] service 'openbao': trust core runs dev mode: ['-dev', '-dev-root-token-id=root', '-dev-listen-address=0.0.0.0:8200']
+  [known-token] service 'openbao': root token baked in command: '-dev-root-token-id=root'
+  [weak-token] service 'openbao': known-weak root token: 'root'
+  [host-published-trust] service 'openbao': trust port 8200 host-published '8200:8200'; production trust core must not be host-exposed
+  [credential-not-injected] service 'seed': 'WSF_OPENBAO_TOKEN' is a baked literal 'root'; inject via env/secret ref
+  [weak-credential] service 'seed': 'WSF_OPENBAO_TOKEN' is a known-weak literal 'root'
+  [credential-not-injected] service 'seed': 'WSF_OPENBAO_SECRET_ID' is a baked literal 'appliance-secret'; inject via env/secret ref

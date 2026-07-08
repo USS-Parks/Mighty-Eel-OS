@@ -1,0 +1,39 @@
+Defaulting to user installation because normal site-packages is not writeable
+Obtaining file:///C:/Users/17076/Documents/Claude/Mighty%20Eel%20OS/mai/mai-sdk-python
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'done'
+  Checking if build backend supports build_editable: started
+  Checking if build backend supports build_editable: finished with status 'done'
+  Getting requirements to build editable: started
+  Getting requirements to build editable: finished with status 'done'
+  Installing backend dependencies: started
+  Installing backend dependencies: finished with status 'done'
+  Preparing editable metadata (pyproject.toml): started
+  Preparing editable metadata (pyproject.toml): finished with status 'done'
+Requirement already satisfied: httpx>=0.27 in C:\Users\17076\AppData\Roaming\Python\Python314\site-packages (from mai-sdk==0.2.0) (0.28.1)
+Requirement already satisfied: pydantic>=2.0 in C:\Users\17076\AppData\Roaming\Python\Python314\site-packages (from mai-sdk==0.2.0) (2.13.4)
+Requirement already satisfied: structlog>=24.0 in C:\Users\17076\AppData\Roaming\Python\Python314\site-packages (from mai-sdk==0.2.0) (25.5.0)
+Requirement already satisfied: anyio in C:\Users\17076\AppData\Roaming\Python\Python314\site-packages (from httpx>=0.27->mai-sdk==0.2.0) (4.13.0)
+Requirement already satisfied: certifi in C:\Users\17076\AppData\Roaming\Python\Python314\site-packages (from httpx>=0.27->mai-sdk==0.2.0) (2026.5.20)
+Requirement already satisfied: httpcore==1.* in C:\Users\17076\AppData\Roaming\Python\Python314\site-packages (from httpx>=0.27->mai-sdk==0.2.0) (1.0.9)
+Requirement already satisfied: idna in C:\Users\17076\AppData\Roaming\Python\Python314\site-packages (from httpx>=0.27->mai-sdk==0.2.0) (3.16)
+Requirement already satisfied: h11>=0.16 in C:\Users\17076\AppData\Roaming\Python\Python314\site-packages (from httpcore==1.*->httpx>=0.27->mai-sdk==0.2.0) (0.16.0)
+Requirement already satisfied: annotated-types>=0.6.0 in C:\Users\17076\AppData\Roaming\Python\Python314\site-packages (from pydantic>=2.0->mai-sdk==0.2.0) (0.7.0)
+Requirement already satisfied: pydantic-core==2.46.4 in C:\Users\17076\AppData\Roaming\Python\Python314\site-packages (from pydantic>=2.0->mai-sdk==0.2.0) (2.46.4)
+Requirement already satisfied: typing-extensions>=4.14.1 in C:\Users\17076\AppData\Roaming\Python\Python314\site-packages (from pydantic>=2.0->mai-sdk==0.2.0) (4.15.0)
+Requirement already satisfied: typing-inspection>=0.4.2 in C:\Users\17076\AppData\Roaming\Python\Python314\site-packages (from pydantic>=2.0->mai-sdk==0.2.0) (0.4.2)
+Building wheels for collected packages: mai-sdk
+  Building editable for mai-sdk (pyproject.toml): started
+  Building editable for mai-sdk (pyproject.toml): finished with status 'done'
+  Created wheel for mai-sdk: filename=mai_sdk-0.2.0-py3-none-any.whl size=1397 sha256=faec958f1d7784750e8dfdfdad4d61d852b087be75ca4fee326f03b2962dabfa
+  Stored in directory: C:\Users\17076\AppData\Local\Temp\pip-ephem-wheel-cache-xd3zej0w\wheels\9c\0c\55\c4f6d0b56853c7121d761dc72d172b828fc21697dbb6d2f63c
+Successfully built mai-sdk
+Installing collected packages: mai-sdk
+  Attempting uninstall: mai-sdk
+    Found existing installation: mai-sdk 0.2.0
+    Uninstalling mai-sdk-0.2.0:
+      Successfully uninstalled mai-sdk-0.2.0
+Successfully installed mai-sdk-0.2.0
+
+[notice] A new release of pip is available: 26.0.1 -> 26.1.2
+[notice] To update, run: python.exe -m pip install --upgrade pip

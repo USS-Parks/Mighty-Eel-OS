@@ -1,0 +1,3 @@
+pyproject.toml: note: unused section(s): module = ['adapters.*', 'adapters.*.tests.*', 'adapters.tests.*']
+Success: no issues found in 9 source files
+mypy --strict mai-sdk-python/src exit: 0

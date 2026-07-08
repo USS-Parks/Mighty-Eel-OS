@@ -5,7 +5,7 @@
 //! 2. Optionally runs the air-gap startup check
 //! 3. Initializes all mai-core components (scheduler, registry, health,
 //!    power, hotswap) and wraps them in shared `AppState`
-//! 3b. Loads API keys from config/auth_keys.toml
+//!    3b. Loads API keys from config/auth_keys.toml
 //! 4. Starts the REST server (axum, default port 8420) and the gRPC
 //!    server (tonic, default port 8421) concurrently
 //! 5. Listens for SIGTERM / SIGINT (Unix) or ctrl-c (all platforms) and
@@ -181,7 +181,7 @@ impl MaiServer {
     /// 1. Validate configuration
     /// 2. Air-gap verification (if enforcement enabled)
     /// 3. Initialize mai-core components
-    /// 3b. Load API key authentication
+    ///    3b. Load API key authentication
     /// 4. Build shared AppState
     /// 5. Start REST + gRPC servers concurrently
     /// 6. Block on shutdown signal (SIGTERM / SIGINT / ctrl-c)

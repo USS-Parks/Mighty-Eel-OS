@@ -1,0 +1,175 @@
+    Checking fabric-crypto v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\fabric-crypto)
+    Checking mai-hil v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\mai-hil)
+    Checking fabric-contracts v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\fabric-contracts)
+   Compiling mai-api v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\mai-api)
+    Checking mai-router v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\mai-router)
+   Compiling mai-launcher v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\tools\mai-launcher)
+    Checking mai-sdk-rs v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\mai-sdk-rs)
+    Checking fabric-proof v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\fabric-proof)
+    Checking fabric-token v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\fabric-token)
+    Checking fabric-revocation v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\fabric-revocation)
+    Checking fabric-envelope v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\fabric-envelope)
+    Checking wsf-ledger v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\wsf-ledger)
+    Checking fabric-cache v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\fabric-cache)
+    Checking fabric-identity v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\fabric-identity)
+    Checking rule-tester v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\tools\rule-tester)
+    Checking wsf-hardening v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\wsf-hardening)
+    Checking mai-core v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\mai-core)
+    Checking wsf-bridge v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\wsf-bridge)
+    Checking wsf-cache v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\wsf-cache)
+    Checking wsf-seal v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\wsf-seal)
+    Checking wsf-broker v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\wsf-broker)
+    Checking wsf-tenants v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\wsf-tenants)
+    Checking wsf-api v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\wsf-api)
+warning: doc list item without indentation
+   --> mai-core\src\cache.rs:109:9
+    |
+109 |     /// Request is streaming
+    |         ^
+    |
+    = help: if this is supposed to be its own paragraph, add a blank line
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#doc_lazy_continuation
+    = note: `-W clippy::doc-lazy-continuation` implied by `-W clippy::all`
+    = help: to override `-W clippy::all` add `#[allow(clippy::doc_lazy_continuation)]`
+help: indent this line
+    |
+109 |     ///   Request is streaming
+    |         ++
+
+warning: `mai-core` (lib) generated 1 warning
+    Checking mai-compliance v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\mai-compliance)
+    Checking mai-scheduler v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\mai-scheduler)
+    Checking mai-vault v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\mai-vault)
+    Checking mai-adapters v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\mai-adapters)
+    Checking mai-agent v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\mai-agent)
+    Checking mai-pkg-builder v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\tools\pkg-builder)
+warning: doc list item without indentation
+  --> mai-scheduler\src\scoring\mod.rs:11:5
+   |
+11 | //! `latency`: queue-based latency estimation
+   |     ^
+   |
+   = help: if this is supposed to be its own paragraph, add a blank line
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#doc_lazy_continuation
+   = note: `-W clippy::doc-lazy-continuation` implied by `-W clippy::all`
+   = help: to override `-W clippy::all` add `#[allow(clippy::doc_lazy_continuation)]`
+help: indent this line
+   |
+11 | //!   `latency`: queue-based latency estimation
+   |     ++
+
+warning: doc list item without indentation
+  --> mai-scheduler\src\scoring\mod.rs:12:5
+   |
+12 | //! `memory`: VRAM pressure penalty with configurable exponent
+   |     ^
+   |
+   = help: if this is supposed to be its own paragraph, add a blank line
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#doc_lazy_continuation
+help: indent this line
+   |
+12 | //!   `memory`: VRAM pressure penalty with configurable exponent
+   |     ++
+
+warning: doc list item without indentation
+  --> mai-scheduler\src\scoring\mod.rs:13:5
+   |
+13 | //! `topology`: GPU interconnect cost for tensor-parallel
+   |     ^
+   |
+   = help: if this is supposed to be its own paragraph, add a blank line
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#doc_lazy_continuation
+help: indent this line
+   |
+13 | //!   `topology`: GPU interconnect cost for tensor-parallel
+   |     ++
+
+warning: doc list item without indentation
+  --> mai-scheduler\src\scoring\mod.rs:14:5
+   |
+14 | //! `eviction`: eviction cost penalty
+   |     ^
+   |
+   = help: if this is supposed to be its own paragraph, add a blank line
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#doc_lazy_continuation
+help: indent this line
+   |
+14 | //!   `eviction`: eviction cost penalty
+   |     ++
+
+warning: doc list item without indentation
+  --> mai-scheduler\src\scoring\mod.rs:15:5
+   |
+15 | //! `batching`: batch fit benefit
+   |     ^
+   |
+   = help: if this is supposed to be its own paragraph, add a blank line
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#doc_lazy_continuation
+help: indent this line
+   |
+15 | //!   `batching`: batch fit benefit
+   |     ++
+
+warning: `mai-scheduler` (lib) generated 5 warnings
+    Checking aog-gateway v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\aog-gateway)
+    Checking aog-toolproxy v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\aog-toolproxy)
+    Checking mai-admin v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\tools\mai-admin)
+    Checking hipaa-pack v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\hipaa-pack)
+    Checking gen-trust-staging v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\tools\gen-trust-staging)
+    Checking aog-approvals v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\aog-approvals)
+warning: doc list item without indentation
+  --> mai-api\src\routes.rs:17:5
+   |
+17 | //! `/v1/trust/*` - Local trust cache surface
+   |     ^
+   |
+   = help: if this is supposed to be its own paragraph, add a blank line
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#doc_lazy_continuation
+   = note: `-W clippy::doc-lazy-continuation` implied by `-W clippy::all`
+   = help: to override `-W clippy::all` add `#[allow(clippy::doc_lazy_continuation)]`
+help: indent this line
+   |
+17 | //!   `/v1/trust/*` - Local trust cache surface
+   |     ++
+
+warning: doc list item without indentation
+  --> mai-api\src\routes.rs:18:5
+   |
+18 | //! `/v1/auth/exchange_token` - Local-dev token exchange stub
+   |     ^
+   |
+   = help: if this is supposed to be its own paragraph, add a blank line
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#doc_lazy_continuation
+help: indent this line
+   |
+18 | //!   `/v1/auth/exchange_token` - Local-dev token exchange stub
+   |     ++
+
+warning: doc list item without indentation
+ --> mai-api\src\server.rs:8:5
+  |
+8 | //! 3b. Loads API keys from config/auth_keys.toml
+  |     ^
+  |
+  = help: if this is supposed to be its own paragraph, add a blank line
+  = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#doc_lazy_continuation
+help: indent this line
+  |
+8 | //!    3b. Loads API keys from config/auth_keys.toml
+  |     +++
+
+warning: doc list item without indentation
+   --> mai-api\src\server.rs:184:9
+    |
+184 |     /// 3b. Load API key authentication
+    |         ^
+    |
+    = help: if this is supposed to be its own paragraph, add a blank line
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#doc_lazy_continuation
+help: indent this line
+    |
+184 |     ///    3b. Load API key authentication
+    |         +++
+
+warning: `mai-api` (lib) generated 4 warnings
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 10.96s

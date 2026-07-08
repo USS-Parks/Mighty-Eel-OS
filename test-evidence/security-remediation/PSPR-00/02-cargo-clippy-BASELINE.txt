@@ -1,0 +1,24 @@
+    Checking mai-core v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\mai-core)
+   Compiling pyo3-build-config v0.24.2
+   Compiling pyo3-ffi v0.24.2
+   Compiling pyo3-macros-backend v0.24.2
+   Compiling pyo3 v0.24.2
+   Compiling pyo3-macros v0.24.2
+error: doc list item without indentation
+   --> mai-core\src\cache.rs:109:9
+    |
+109 |     /// Request is streaming
+    |         ^
+    |
+    = help: if this is supposed to be its own paragraph, add a blank line
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#doc_lazy_continuation
+    = note: `-D clippy::doc-lazy-continuation` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::doc_lazy_continuation)]`
+help: indent this line
+    |
+109 |     ///   Request is streaming
+    |         ++
+
+error: could not compile `mai-core` (lib) due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+clippy exit code: 101

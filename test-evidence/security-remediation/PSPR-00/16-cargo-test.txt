@@ -1,0 +1,2714 @@
+   Compiling mai-hil v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\mai-hil)
+   Compiling fabric-crypto v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\fabric-crypto)
+   Compiling fabric-contracts v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\fabric-contracts)
+   Compiling pyo3-build-config v0.24.2
+   Compiling mai-router v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\mai-router)
+   Compiling mai-api v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\mai-api)
+   Compiling mai-sdk-rs v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\mai-sdk-rs)
+   Compiling mai-launcher v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\tools\mai-launcher)
+   Compiling fabric-cache v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\fabric-cache)
+   Compiling fabric-proof v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\fabric-proof)
+   Compiling fabric-token v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\fabric-token)
+   Compiling fabric-revocation v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\fabric-revocation)
+   Compiling mai-core v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\mai-core)
+   Compiling wsf-bridge v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\wsf-bridge)
+   Compiling fabric-envelope v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\fabric-envelope)
+   Compiling pyo3-ffi v0.24.2
+   Compiling pyo3-macros-backend v0.24.2
+   Compiling pyo3 v0.24.2
+   Compiling wsf-seal v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\wsf-seal)
+   Compiling wsf-ledger v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\wsf-ledger)
+   Compiling wsf-broker v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\wsf-broker)
+   Compiling wsf-cache v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\wsf-cache)
+   Compiling wsf-tenants v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\wsf-tenants)
+   Compiling wsf-api v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\wsf-api)
+   Compiling fabric-identity v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\fabric-identity)
+   Compiling wsf-hardening v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\wsf-hardening)
+   Compiling mai-compliance v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\mai-compliance)
+   Compiling mai-scheduler v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\mai-scheduler)
+   Compiling mai-vault v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\mai-vault)
+   Compiling mai-agent v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\mai-agent)
+   Compiling rule-tester v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\tools\rule-tester)
+   Compiling aog-gateway v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\aog-gateway)
+   Compiling mai-admin v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\tools\mai-admin)
+   Compiling aog-toolproxy v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\aog-toolproxy)
+   Compiling hipaa-pack v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\hipaa-pack)
+   Compiling mai-pkg-builder v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\tools\pkg-builder)
+   Compiling aog-approvals v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\aog-approvals)
+   Compiling pyo3-macros v0.24.2
+   Compiling mai-adapters v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\mai-adapters)
+   Compiling gen-trust-staging v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\tools\gen-trust-staging)
+warning: unused import: `OpenbaoHealth`
+ --> mai-api\tests\tlm42_e2e.rs:8:73
+  |
+8 | use mai_api::openbao_client::{OpenBaoBridgeClient, OpenBaoBridgeConfig, OpenbaoHealth};
+  |                                                                         ^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused imports: `LocalTrustCache` and `SnapshotStatus`
+ --> mai-api\tests\tlm42_e2e.rs:9:35
+  |
+9 | use mai_compliance::trust_cache::{LocalTrustCache, SnapshotStatus};
+  |                                   ^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^
+
+warning: `mai-api` (test "tlm42_e2e") generated 2 warnings (run `cargo fix --test "tlm42_e2e" -p mai-api` to apply 2 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1m 27s
+     Running unittests src\lib.rs (target\debug\deps\aog_approvals-3a0918008458b71e.exe)
+
+running 5 tests
+test tests::unknown_id_is_a_noop ... ok
+test tests::dropped_inbox_fails_closed_to_denied ... ok
+test tests::denial_blocks_the_call_and_receipts_the_reason ... ok
+test tests::mutating_call_blocks_until_approved_and_is_receipted ... ok
+test tests::proxy_routes_a_mutating_call_through_the_real_inbox ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+
+     Running unittests src\lib.rs (target\debug\deps\aog_gateway-cfb7571637c746b2.exe)
+
+running 39 tests
+test app::tests::model_map_no_default_misses ... ok
+test app::tests::model_map_routes_and_defaults ... ok
+test http::tests::error_status_mapping ... ok
+test policy::tests::composer_honors_a_module_deny ... ok
+test http::tests::bearer_extraction ... ok
+test http::tests::bearer_missing_or_malformed_rejected ... ok
+test meter::tests::pricebook_local_is_free_cloud_bills ... ok
+test provider::tests::registry_register_get_names ... ok
+test provider::anthropic::tests::sse_event_dispatch ... ok
+test provider::openai::tests::usage_frame_parsed ... ok
+test provider::openai::tests::done_sentinel_and_role_frame ... ok
+test meter::tests::tampering_breaks_the_chain ... ok
+test meter::tests::cost_per_task_sums_a_multi_call_chain_and_chain_verifies ... ok
+test recommend::tests::all_local_estate_has_no_break_even_and_reads_saturated ... ok
+test recommend::tests::attractive_break_even_recommends_moving_on_prem ... ok
+test recommend::tests::empty_telemetry_is_stable ... ok
+test recommend::tests::saturated_local_tier_recommends_upgrade ... ok
+test recommend::tests::slow_break_even_stays_on_cloud ... ok
+test route::tests::envelope_label_can_permit_cloud ... ok
+test provider::anthropic::tests::system_split_and_mandatory_max_tokens ... ok
+test route::tests::envelope_label_short_circuits_to_local ... ok
+test surface_anthropic::tests::content_blocks_flatten ... ok
+test route::tests::tag_route_writes_headers ... ok
+test surface_anthropic::tests::system_folds_to_a_system_turn_and_stop_maps ... ok
+test surface_openai::tests::status_json_shape ... ok
+test tests::accumulated_spend_exhausts_the_budget_mid_session ... ok
+test tests::budget_exhaustion_is_per_dimension ... ok
+test tests::spend_ledger_accumulates_and_folds_per_token ... ok
+test tokenize::tests::restore_is_noop_without_a_map ... ok
+test route::tests::benign_text_is_not_forced_local ... ok
+test route::tests::phi_text_is_forced_local ... ok
+test policy::tests::benign_allows_cloud ... ok
+test tokenize::tests::benign_cloud_text_untouched ... ok
+test tokenize::tests::local_dispatch_is_identity ... ok
+test tokenize::tests::multiple_spans_get_distinct_reversible_placeholders ... ok
+test tokenize::tests::response_detokenizes_inside_the_boundary ... ok
+test policy::tests::phi_denies_cloud_and_modes_differ ... ok
+test tokenize::tests::cloud_egress_swaps_placeholders_and_hides_the_raw_span ... ok
+test tokenize::tests::spans_across_messages_share_one_map ... ok
+
+test result: ok. 39 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+     Running unittests src\main.rs (target\debug\deps\aog_gateway-c72fa1c24bcd2cf0.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\anthropic_surface.rs (target\debug\deps\anthropic_surface-37abb84c40fee47c.exe)
+
+running 1 test
+test anthropic_client_completes_message_and_stream ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\kill_switch.rs (target\debug\deps\kill_switch-7bd3b60ce1d23cc3.exe)
+
+running 1 test
+test budget_exhaustion_and_revocation_halt_the_next_call ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\live_gateway.rs (target\debug\deps\live_gateway-f9bca2759a38bcae.exe)
+
+running 1 test
+test virtual_key_resolves_and_budget_preflights ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\metering.rs (target\debug\deps\metering-de8a594361402905.exe)
+
+running 1 test
+test cost_per_task_aggregates_and_chain_verifies ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\openai_surface.rs (target\debug\deps\openai_surface-a0253b1ba41d09d0.exe)
+
+running 1 test
+test openai_client_completes_chat_and_stream ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\policy_modes.rs (target\debug\deps\policy_modes-51285a5d0468b801.exe)
+
+running 1 test
+test modes_change_the_same_phi_request ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\providers.rs (target\debug\deps\providers-22ed2fc5a2b242e0.exe)
+
+running 1 test
+test same_request_two_providers_one_interface_with_streaming ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests\tokenization.rs (target\debug\deps\tokenization-57ed43ac3e3adc7b.exe)
+
+running 3 tests
+test tokenization_is_receipted_and_backward_compatible ... ok
+test cloud_provider_sees_placeholders_and_response_is_detokenized ... ok
+test local_dispatch_is_never_tokenized ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+     Running unittests src\lib.rs (target\debug\deps\aog_toolproxy-7a92627eb60cef92.exe)
+
+running 51 tests
+test mission::tests::empty_contract_admits_nothing ... ok
+test guard::tests::default_guardrails_are_inactive_and_permissive ... ok
+test guard::tests::call_cap_trips_when_reached ... ok
+test guard::tests::per_token_allowlist_denies_an_unlisted_tool ... ok
+test guard::tests::deny_unlisted_tokens_fails_closed ... ok
+test guard::tests::system_cap_trips_on_a_new_system_beyond_the_limit ... ok
+test mission::tests::call_ceiling_blocks_once_reached ... ok
+test mission::tests::spend_ceiling_blocks_when_exceeded ... ok
+test mission::tests::tool_not_in_contract_is_a_deviation ... ok
+test mission::tests::in_contract_tool_passes ... ok
+test mission::tests::system_outside_contract_is_a_deviation ... ok
+test session::tests::empty_session_replays_to_nothing ... ok
+test session::tests::head_advances_with_each_step ... ok
+test session::tests::full_loop_is_captured_in_order ... ok
+test session::tests::a_tampered_event_is_caught_on_replay ... ok
+test session::tests::a_broken_link_is_caught_on_replay ... ok
+test session::tests::replay_is_deterministic ... ok
+test tests::in_contract_call_passes ... ok
+test scan::tests::benign_output_is_unchanged ... ok
+test scan::tests::pem_private_key_block_is_redacted ... ok
+test scan::tests::redacts_string_values_nested_in_json ... ok
+test tests::call_ceiling_blocks_further_calls_mid_mission ... ok
+test tests::invoked_tool_executes_and_is_receipted ... ok
+test scan::tests::multiple_distinct_secrets_all_redacted ... ok
+test scan::tests::non_string_scalars_pass_through ... ok
+test tests::injected_instruction_in_a_tool_result_cannot_auto_trigger_a_mutation ... ok
+test tests::benign_tool_result_is_not_redacted ... ok
+test scan::tests::github_and_openai_tokens_are_redacted ... ok
+test tests::mints_a_per_call_credential_and_revokes_it_at_call_end ... ok
+test tests::no_minter_means_no_cred_on_the_receipt ... ok
+test tests::out_of_contract_tool_is_blocked_without_an_inbox ... ok
+test tests::blast_radius_call_cap_trips ... ok
+test scan::tests::aws_key_is_redacted ... ok
+test tests::per_token_allowlist_blocks_an_unlisted_tool ... ok
+test tests::proxy_calls_are_captured_in_the_session_and_replay_deterministically ... ok
+test scan::tests::asia_temp_key_is_redacted ... ok
+test tests::read_only_call_skips_the_gate ... ok
+test scan::tests::ssn_phi_is_redacted ... ok
+test tests::out_of_contract_call_escalates_to_the_inbox_when_configured ... ok
+test scan::tests::short_sk_prefix_is_not_a_false_positive ... ok
+test tests::no_mission_means_no_contract_constraint ... ok
+test tests::receipt_chain_links_multiple_calls ... ok
+test tests::role_below_required_is_denied_and_not_receipted ... ok
+test tests::tool_result_is_scanned_before_the_model_sees_it ... ok
+test tests::side_effecting_call_is_blocked_when_the_gate_denies ... ok
+test tests::trusted_mutation_without_inbox_still_executes ... ok
+test tests::side_effecting_call_proceeds_when_approved_and_records_the_approver ... ok
+test tests::unknown_tool_is_denied_fail_closed ... ok
+test tests::unregistered_tool_is_rejected_before_execution ... ok
+test tests::untrusted_mutation_routes_to_the_inbox_when_configured ... ok
+test tests::untrusted_read_only_call_executes_normally ... ok
+
+test result: ok. 51 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.87s
+
+     Running unittests src\lib.rs (target\debug\deps\fabric_cache-aa9ded72949af5ac.exe)
+
+running 5 tests
+test tests::air_gap_wins_over_everything ... ok
+test tests::degraded_when_fresh_but_unreachable ... ok
+test tests::connected_when_fresh_and_reachable ... ok
+test tests::expired_past_hard_ttl_forces_local_only ... ok
+test tests::stale_between_soft_and_hard ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (target\debug\deps\fabric_contracts-8f3c6d8dd3ea7a7d.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\contracts.rs (target\debug\deps\contracts-e2bd23078dfbe308.exe)
+
+running 5 tests
+test label_is_readable_without_seal_or_thread ... ok
+test mai_claim_deserializes_as_root_token ... ok
+test identity_round_trips ... ok
+test trust_token_round_trips ... ok
+test receipt_and_envelope_round_trip ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (target\debug\deps\fabric_crypto-d5bd9785dee274a5.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\signer.rs (target\debug\deps\signer-e15e1705249c2b6b.exe)
+
+running 4 tests
+test transit_signer_is_the_seam_and_fails_closed ... ok
+test rustcrypto_sign_verify_round_trip ... ok
+test tamper_and_wrong_key_fail_closed ... ok
+test from_keypair_reconstructs_a_usable_signer ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+
+     Running unittests src\lib.rs (target\debug\deps\fabric_envelope-83a3c37dc13fb871.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\envelope.rs (target\debug\deps\envelope-833ace6c739b93fd.exe)
+
+running 5 tests
+test seal_unseal_round_trip ... ok
+test tampering_the_ciphertext_breaks_the_thread ... ok
+test opening_with_the_wrong_public_key_fails ... ok
+test envelope_seals_opens_and_label_is_readable_without_the_key ... ok
+test tampering_the_label_breaks_the_thread ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+
+     Running unittests src\lib.rs (target\debug\deps\fabric_identity-9766bb1f1644785c.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\identity.rs (target\debug\deps\identity-dfd5944ca88a7e7f.exe)
+
+running 5 tests
+test pseudonymize_is_deterministic_and_guards_key_length ... ok
+test derive_child_rejects_non_session_task_kind ... ok
+test mint_then_verify_round_trip ... ok
+test tampered_identity_fails ... ok
+test derive_session_child_binds_parent_and_verifies ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+
+     Running unittests src\lib.rs (target\debug\deps\fabric_proof-0f7171b57b0cbc10.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\proof.rs (target\debug\deps\proof-6523deaaaedb8a09.exe)
+
+running 5 tests
+test chain_links_and_detects_a_break ... ok
+test canonical_json_matches_mai_compliance_byte_for_byte ... ok
+test combined_hash_matches_metadata_payload_construction ... ok
+test subject_hash_is_deterministic_and_tenant_scoped ... ok
+test bundle_signed_by_fabric_crypto_verifies_and_rejects_tampering ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+     Running unittests src\lib.rs (target\debug\deps\fabric_revocation-0a96a9a760443e6b.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\revocation.rs (target\debug\deps\revocation-4aca24ee39d9e860.exe)
+
+running 4 tests
+test emergency_snapshot_flag_round_trips ... ok
+test sign_verify_and_query ... ok
+test tampering_after_signing_fails ... ok
+test wrong_key_fails ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+
+     Running unittests src\lib.rs (target\debug\deps\fabric_token-69a9b42f421b7e3c.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\token.rs (target\debug\deps\token-ccadbcbf22e75f41.exe)
+
+running 8 tests
+test no_budget_means_metering_is_a_noop ... ok
+test expiry_check ... ok
+test budget_meters_and_stops_at_cap ... ok
+test attenuate_rejects_widening ... ok
+test tampered_token_fails_verification ... ok
+test revoked_token_is_rejected ... ok
+test issue_then_verify_round_trip ... ok
+test attenuate_narrows_and_binds_parent ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+
+     Running unittests src\main.rs (target\debug\deps\gen_trust_staging-adaa2fe4045bccbb.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (target\debug\deps\hipaa_pack-b92792724fc3b931.exe)
+
+running 5 tests
+test tests::transmission_security_unsatisfied_without_a_phi_local_receipt ... ok
+test tests::a_benign_request_may_route_cloud ... ok
+test tests::phi_request_is_governed_local_only ... ok
+test tests::a_tampered_pack_fails_hipaa_verification ... ok
+test tests::phi_request_produces_an_auditable_hipaa_pack ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s
+
+     Running unittests src\lib.rs (target\debug\deps\mai_adapters-328c342251d6cd36.exe)
+
+running 28 tests
+test audit::tests::test_audit_buffer_overflow ... ok
+test config::tests::test_default_config ... ok
+test audit::tests::test_audit_timer_success ... ok
+test audit::tests::test_audit_timer_failure ... ok
+test health::tests::test_heartbeat_resets_missed ... ok
+test health::tests::test_reset_clears_state ... ok
+test config::tests::test_parse_adapter_decorator ... ok
+test config::tests::test_parse_decorator_single_quotes ... ok
+test health::tests::test_dead_after_threshold ... ok
+test health::tests::test_healthy_initially ... ok
+test audit::tests::test_audit_buffer_push_drain ... ok
+test health::tests::test_report_accuracy ... ok
+test config::tests::test_extract_kwarg ... ok
+test validation::tests::empty_host_rejected ... ok
+test validation::tests::allow_list_consulted_only_when_connected ... ok
+test validation::tests::loopback_allowed_under_air_gap ... ok
+test validation::tests::framework_error_conversion_carries_reason ... ok
+test validation::tests::loopback_v4_v6_recognised ... ok
+test validation::tests::non_loopback_rejected_under_air_gap ... ok
+test validation::tests::non_loopback_rejected_under_expired ... ok
+test validation::tests::non_loopback_without_allow_list_fails_when_connected ... ok
+test validation::tests::wildcard_always_forbidden ... ok
+test validation::tests::wildcards_recognised ... ok
+test manager::tests::test_manager_creation ... ok
+test manager::tests::test_adapter_not_found ... ok
+test manager::tests::test_heartbeat_cycle_empty ... ok
+test manager::tests::test_health_reports_empty ... ok
+test manager::tests::test_shutdown_all_empty ... ok
+
+test result: ok. 28 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.02s
+
+     Running tests\benchmarks.rs (target\debug\deps\benchmarks-a2646e5320cd6ff3.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\e2e_integration.rs (target\debug\deps\e2e_integration-b998133a3e040b4c.exe)
+
+running 14 tests
+test test_health_monitoring ... ok
+test test_adapter_crash_recovery ... ok
+test test_ollama_chat ... ok
+test test_vllm_chat ... ok
+test test_llamacpp_grammar ... ok
+test test_ollama_embed ... ok
+test test_llamacpp_chat ... ok
+test test_multi_model ... ok
+test test_sentinel_promotion ... ok
+test test_air_gap_verification ... ok
+test test_vllm_tensor_parallel ... ok
+test test_scheduler_backpressure ... ok
+test test_fallback_chain ... ok
+test test_model_hotswap ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+     Running tests\integration_adapters.rs (target\debug\deps\integration_adapters-d623850c2d8b9241.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (target\debug\deps\mai_admin-79c910f32bc39a78.exe)
+
+running 29 tests
+test audit::tests::empty_chain_is_ok ... ok
+test manifest::tests::sign_with_wrong_length_key_errors ... ok
+test manifest::tests::component_lookup_finds_by_name ... ok
+test audit::tests::first_entry_must_chain_from_genesis ... ok
+test backup::tests::rfc3339_round_trips_seconds ... ok
+test audit::tests::single_entry_chains_from_genesis ... ok
+test audit::tests::chain_of_two_links_correctly ... ok
+test audit::tests::broken_linkage_is_detected ... ok
+test audit::tests::tampered_entry_hash_is_detected ... ok
+test backup::tests::default_backup_id_is_stable ... ok
+test manifest::tests::canonical_body_excludes_signatures ... ok
+test manifest::tests::canonical_body_is_deterministic_across_component_order ... ok
+test profile::tests::missing_sections_use_defaults ... ok
+test restore::tests::rel_string_normalises_separators ... ok
+test profile::tests::unknown_fields_are_tolerated ... ok
+test profile::tests::parses_realistic_ship_profile ... ok
+test restore::tests::plan_missing_manifest_errors ... ok
+test manifest::tests::write_then_load_round_trips ... ok
+test manifest::tests::sha3_file_matches_sha3_bytes ... ok
+test restore::tests::plan_with_empty_manifest_and_empty_target_has_no_obstacles ... ok
+test restore::tests::plan_require_signed_rejects_unsigned ... ok
+test manifest::tests::sha3_tree_is_stable_across_walks ... ok
+test restore::tests::plan_detects_source_digest_mismatch ... ok
+test restore::tests::apply_refuses_when_obstacles_and_force_false ... ok
+test restore::tests::apply_with_force_overwrites ... ok
+test manifest::tests::unsigned_manifest_returns_unsigned_outcome ... ok
+test manifest::tests::verify_rejects_tampered_body ... ok
+test manifest::tests::verify_rejects_wrong_public_key ... ok
+test manifest::tests::sign_then_verify_round_trips ... ok
+
+test result: ok. 29 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+
+     Running unittests src\main.rs (target\debug\deps\lamprey_mai_admin-d03db2a68f523e7b.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\backup_e2e.rs (target\debug\deps\backup_e2e-8170a842f877e4ff.exe)
+
+running 15 tests
+test signed_create_with_wrong_length_key_errors ... ok
+test auth_key_hashes_never_contain_raw_secrets ... ok
+test backup_dir_contains_manifest_and_components ... ok
+test audit_wal_last_entry_hash_recorded_in_manifest ... ok
+test duplicate_backup_id_refuses_to_overwrite ... ok
+test signed_create_with_missing_anchor_id_errors ... ok
+test unsigned_create_then_verify_passes ... ok
+test unsigned_require_signed_fails ... ok
+test verify_rejects_tampered_component_file ... ok
+test verify_reports_missing_component_file ... ok
+test verify_warns_when_signed_but_no_key_supplied ... ok
+test verify_rejects_tampered_signed_manifest ... ok
+test signed_create_then_verify_passes ... ok
+test verify_rejects_wrong_verifying_key ... ok
+test manifest_signature_length_matches_mldsa87 ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.35s
+
+     Running tests\restore_e2e.rs (target\debug\deps\restore_e2e-f5c75f4af347779c.exe)
+
+running 20 tests
+test missing_manifest_in_backup_dir_errors_with_exit_3_class ... ok
+test plan_require_signed_rejects_unsigned_backup ... ok
+test drill_audit_wal_tamper_after_backup_blocks_restore ... ok
+test drill_missing_model_registry_component_blocks_restore ... ok
+test plan_unsigned_backup_into_empty_target_has_no_obstacles ... ok
+test drill_missing_trust_bundle_component_blocks_restore ... ok
+test plan_actions_kind_matches_disk_shape ... ok
+test apply_refuses_populated_target_without_force ... ok
+test plan_detects_obstacles_in_populated_target ... ok
+test apply_keeps_source_manifest_byte_identical ... ok
+test apply_with_force_overwrites_populated_target ... ok
+test apply_unsigned_into_empty_target_round_trips ... ok
+test plan_warns_when_signed_but_no_verifying_key ... ok
+test drill_signed_manifest_tamper_blocks_restore ... ok
+test restored_tree_passes_audit_chain_replay ... ok
+test plan_signed_backup_verifies_signature_when_key_supplied ... ok
+test restore_report_is_round_trippable_through_json ... ok
+test plan_rejects_wrong_verifying_key ... ok
+test restored_tree_re_backs_up_to_byte_identical_state ... ok
+test apply_signed_records_anchor_in_report ... ok
+
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.57s
+
+     Running unittests src\lib.rs (target\debug\deps\mai_agent-39a4c47c376aa033.exe)
+
+running 65 tests
+test context::tests::test_estimate_tokens ... ok
+test rag::tests::test_collection_for_profile ... ok
+test rag::tests::test_cosine_similarity_orthogonal ... ok
+test rag::tests::test_cosine_similarity_dimension_mismatch ... ok
+test context::tests::test_create_session ... ok
+test context::tests::test_destroy_session ... ok
+test rag::tests::test_compute_point_id_deterministic ... ok
+test context::tests::test_list_sessions_by_profile ... ok
+test context::tests::test_system_prompt ... ok
+test rag::tests::test_cosine_similarity_identical ... ok
+test context::tests::test_conversation_flow ... ok
+test context::tests::test_update_model_expands_context ... ok
+test context::tests::test_tool_result_injection ... ok
+test context::tests::test_rag_injection ... ok
+test context::tests::test_context_report ... ok
+test context::tests::test_truncation_oldest_first ... ok
+test rag::tests::test_metrics_tracking ... ok
+test rag::tests::test_package_embeddings ... ok
+test rag::tests::test_package_embeddings_dimension_mismatch ... ok
+test rag::tests::test_prepare_embedding_batch ... ok
+test rag::tests::test_prepare_embedding_batch_exceeds_max ... ok
+test rag::tests::test_process_retrieval ... ok
+test rag::tests::test_process_retrieval_filters_low_score ... ok
+test rag::tests::test_semantic_cache_hit ... ok
+test rag::tests::test_semantic_cache_invalidation ... ok
+test rag::tests::test_semantic_cache_profile_isolation ... ok
+test stt::tests::test_cancel_transcription ... ok
+test stt::tests::test_complete_transcription ... ok
+test stt::tests::test_default_model ... ok
+test stt::tests::test_feed_audio_frames ... ok
+test stt::tests::test_record_partial ... ok
+test stt::tests::test_silence_detection ... ok
+test stt::tests::test_start_transcription ... ok
+test stt::tests::test_take_audio ... ok
+test stt::tests::test_validate_format_accepts_standard ... ok
+test stt::tests::test_validate_format_rejects_bad_sample_rate ... ok
+test tasks::tests::available_tools_and_profile ... ok
+test tasks::tests::await_and_resume_tools ... ok
+test tasks::tests::cancel_task ... ok
+test tasks::tests::complete_task ... ok
+test tasks::tests::concurrency_limit ... ok
+test tasks::tests::custom_budget_overrides ... ok
+test tasks::tests::fail_task ... ok
+test tasks::tests::get_response_for_terminal ... ok
+test tasks::tests::list_for_profile ... ok
+test tasks::tests::progress_tracking ... ok
+test tasks::tests::prune_completed ... ok
+test tasks::tests::submit_and_start ... ok
+test tasks::tests::task_not_found ... ok
+test tasks::tests::task_tool_audit_trail ... ok
+test tasks::tests::token_budget_exhaustion ... ok
+test tasks::tests::tool_call_budget_exhaustion ... ok
+test tools::tests::test_abort_chain ... ok
+test tools::tests::test_audit_trail ... ok
+test tools::tests::test_chain_step_limit ... ok
+test tools::tests::test_parallel_rejected_for_non_parallel_tool ... ok
+test tools::tests::test_parallel_tool_calls ... ok
+test tools::tests::test_remove_chain ... ok
+test tools::tests::test_role_filtering ... ok
+test tools::tests::test_register_and_list_tools ... ok
+test tools::tests::test_tool_chain_lifecycle ... ok
+test tools::tests::test_tools_for_model_format ... ok
+test tools::tests::test_unregister_tool ... ok
+test tools::tests::test_validate_tool_call ... ok
+test tools::tests::test_validate_unknown_tool ... ok
+
+test result: ok. 65 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests\rag_pipeline_test.rs (target\debug\deps\rag_pipeline_test-065f656b8b2cee96.exe)
+
+running 4 tests
+test collection_per_profile_isolation ... ok
+test dimension_mismatch_rejected ... ok
+test cache_profile_isolation ... ok
+test full_rag_pipeline_flow ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\task_lifecycle_test.rs (target\debug\deps\task_lifecycle_test-6a9b862bf05e95e9.exe)
+
+running 7 tests
+test concurrency_enforcement_per_profile ... ok
+test cancel_and_fail_paths ... ok
+test profile_task_listing ... ok
+test task_audit_trail_integrity ... ok
+test token_budget_exhaustion_stops_task ... ok
+test full_task_lifecycle_happy_path ... ok
+test tool_call_budget_exhaustion ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\tool_calling_test.rs (target\debug\deps\tool_calling_test-82d095d60366c125.exe)
+
+running 5 tests
+test parallel_tool_calls ... ok
+test role_access_denied ... ok
+test model_compatible_tool_format ... ok
+test full_tool_chain_round_trip ... ok
+test chain_step_limit_enforced ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (target\debug\deps\mai_api-5d640d9070bb049f.exe)
+
+running 204 tests
+test air_gap::tests::test_switch_position_safety ... ok
+test audit::tests::test_request_type_classification ... ok
+test audit::tests::test_genesis_chain ... ok
+test audit::tests::test_hash_sensitivity ... ok
+test audit::tests::test_hash_determinism ... ok
+test audit::tests::test_chain_verification_tampered ... ok
+test audit_wal::tests::genesis_hash_matches_audit_module ... ok
+test audit::tests::test_memory_writer_roundtrip ... ok
+test air_gap::tests::test_dev_reader_defaults_air_gapped ... ok
+test air_gap::tests::test_network_mode_verification ... ok
+test air_gap::tests::test_startup_check ... ok
+test air_gap::tests::test_switch_position_transition ... ok
+test air_gap::tests::test_verification_consistent_air_gap ... ok
+test air_gap::tests::test_verification_inconsistent_state ... ok
+test audit::tests::test_audit_manager_chain ... ok
+test audit_wal::tests::open_rejects_missing_dir ... ok
+test audit::tests::test_profile_filtering ... ok
+test audit::tests::test_chain_verification ... ok
+test auth::tests::test_check_permission_admin ... ok
+test auth::tests::test_check_permission_adult_denied ... ok
+test auth::tests::test_api_key_store_add_and_validate ... ok
+test auth::tests::test_api_key_store_hashed_add ... ok
+test auth::tests::test_check_permission_unknown ... ok
+test auth::tests::test_child_permissions ... ok
+test auth::tests::test_generate_api_key_format ... ok
+test auth::tests::test_is_auth_exempt ... ok
+test auth::tests::test_hash_api_key_deterministic ... ok
+test auth::tests::test_generate_api_key_is_unique ... ok
+test auth::tests::test_model_access_admin ... ok
+test auth::tests::test_model_access_guest ... ok
+test auth::tests::test_model_access_child ... ok
+test auth::tests::test_model_access_teen ... ok
+test auth::tests::test_parse_admin_profile ... ok
+test auth::tests::test_parse_empty_profile_id ... ok
+test auth::tests::test_parse_guest_default ... ok
+test auth::tests::test_parse_invalid_characters ... ok
+test auth::tests::test_parse_profile_with_display_name ... ok
+test auth::tests::test_parse_invalid_role ... ok
+test auth::tests::test_parse_malformed_header ... ok
+test auth::tests::test_teen_permissions ... ok
+test auth::tests::test_rate_limiter_different_keys_independent ... ok
+test auth::tests::test_rate_limiter_allows_within_limit ... ok
+test config::tests::test_default_config_is_valid ... ok
+test config::tests::test_pack_leader_tier_defaults ... ok
+test config::tests::test_ranger_tier_defaults ... ok
+test config::tests::test_reject_ipv6_wildcard_bind ... ok
+test config::tests::test_load_or_default_missing_file ... ok
+test config::tests::test_reject_wildcard_bind ... ok
+test config::tests::test_reject_zero_timeout ... ok
+test audit_wal::tests::empty_wal_returns_genesis_last_hash ... ok
+test config::tests::test_scout_tier_defaults ... ok
+test config::tests::test_stream_timeout_must_exceed_request ... ok
+test config::tests::test_validate_with_connectivity_rejects_non_loopback_under_airgap ... ok
+test errors::tests::test_display_impl ... ok
+test errors::tests::test_core_error_mapping ... ok
+test errors::tests::test_error_codes_match_categories ... ok
+test errors::tests::test_rate_limited_error ... ok
+test audit_wal::tests::unused_helpers_avoid_dead_code_warnings ... ok
+test errors::tests::test_sanitize_redacts_paths ... ok
+test errors::tests::test_sanitize_strips_backend_names ... ok
+test errors::tests::test_status_codes ... ok
+test grpc::audit::tests::test_audit_service_constructable ... ok
+test grpc::health::tests::test_health_services_constructable ... ok
+test grpc::health::tests::test_overall_status_mapping ... ok
+test grpc::health::tests::test_status_strings ... ok
+test grpc::health::tests::test_thermal_state_str ... ok
+test grpc::health::tests::test_vram_utilization_half ... ok
+test grpc::health::tests::test_vram_utilization_zero_total ... ok
+test grpc::inference::tests::test_inference_service_constructable ... ok
+test grpc::models::tests::test_models_service_constructable ... ok
+test grpc::power::tests::test_power_service_constructable ... ok
+test grpc::power::tests::test_parse_transition_actions ... ok
+test grpc::registry::tests::test_registry_service_constructable ... ok
+test grpc::server::tests::test_custom_config ... ok
+test grpc::server::tests::test_default_config ... ok
+test grpc::tests::test_api_error_to_status_mapping ... ok
+test grpc::tests::test_extract_grpc_profile_bad_format ... ok
+test grpc::tests::test_role_permissions ... ok
+test grpc::tests::test_extract_grpc_profile_valid ... ok
+test grpc::tests::test_extract_grpc_profile_missing ... ok
+test config::tests::test_toml_roundtrip ... ok
+test handlers::compliance::tests::parses_module_ids ... ok
+test grpc::tests::test_extract_grpc_profile_unknown_role ... ok
+test handlers::compliance::tests::parses_report_types_and_formats ... ok
+test handlers::compliance::tests::parses_routing_decisions ... ok
+test handlers::compliance::tests::parses_templates ... ok
+test handlers::trust::tests::test_snapshot_status_labels ... ok
+test handlers::trust::tests::test_trust_claim_from_snapshot ... ok
+test metrics::tests::test_gauge_set ... ok
+test metrics::tests::test_counter_increments ... ok
+test metrics::tests::test_histogram_observe ... ok
+test metrics::tests::test_label_value_strips_unsafe_bytes ... ok
+test metrics::tests::test_render_f64_no_trailing_decimals_for_ints ... ok
+test metrics::tests::test_label_name_sanitization ... ok
+test middleware::tests::test_normalize_route_templates_dynamic_ids ... ok
+test middleware::tests::test_sanitize_request_id_passes_uuid ... ok
+test middleware::tests::test_normalize_route_preserves_subactions ... ok
+test metrics::tests::test_ship_11_defaults_pre_declares_all_families ... ok
+test middleware::tests::test_normalize_route_handles_root_and_static ... ok
+test metrics::tests::test_label_value_truncates_long_strings ... ok
+test metrics::tests::test_label_value_redacts_secrets ... ok
+test middleware::tests::test_sanitize_request_id_strips_header_smuggling ... ok
+test middleware::tests::test_sanitize_request_id_caps_length ... ok
+test production_guard::tests::baseline_is_ship_ready_modulo_deferred ... ok
+test production_guard::tests::fail_audit_003_allow_memory_writer ... ok
+test production_guard::tests::fail_audit_001_memory_api_writer ... ok
+test production_guard::tests::deferred_runtime_checks_surface_session_id ... ok
+test production_guard::tests::fail_config_003_allow_demo_defaults ... ok
+test production_guard::tests::fail_dash_001_default_admin_token ... ok
+test production_guard::tests::fail_audit_005_allow_null_sealer ... ok
+test production_guard::tests::fail_auth_002_internal_profile_header ... ok
+test production_guard::tests::fail_net_002_wildcard_bind ... ok
+test production_guard::tests::fail_trust_001_accept_all_verifier ... ok
+test production_guard::tests::fail_trust_003_local_dev_exchange ... ok
+test production_guard::tests::fail_config_002_fail_closed_false ... ok
+test production_guard::tests::fail_vault_001_stub_backend ... ok
+test production_guard::tests::fail_paths_001_empty_state_dir ... ok
+test production_guard::tests::runtime_does_not_override_config_only_pass ... ok
+test production_guard::tests::json_roundtrip ... ok
+test production_guard::tests::fail_vault_002_allow_stub_true ... ok
+test audit_wal::tests::malformed_entry_fails_replay ... ok
+test production_guard::tests::human_render_marks_pass_and_fail ... ok
+test production_guard::tests::non_production_profile_skips_all_checks ... ok
+test production_guard::tests::runtime_flips_deferred_to_pass ... ok
+test production_guard::tests::runtime_flip_to_fail_blocks_ship_ready ... ok
+test production_guard::tests::report_contains_every_documented_check_id ... ok
+test rate_limit::tests::limiter_bounds_configured_prefix ... ok
+test rate_limit::tests::bucket_starts_full ... ok
+test production_guard::tests::runtime_partial_results_keep_others_deferred ... ok
+test rate_limit::tests::limiter_no_op_when_no_prefix_matches ... ok
+test rate_limit::tests::longest_prefix_wins ... ok
+test rate_limit::tests::retry_after_is_positive ... ok
+test routes::tests::test_router_builds ... ok
+test server::tests::test_default_scout_creates_server ... ok
+test server::tests::test_load_adapter_boot_config_missing_file ... ok
+test production_guard::tests::runtime_skipped_under_local_dev_stays_skipped ... ok
+test server::tests::test_server_error_display ... ok
+test server::tests::test_load_auth_state_no_config ... ok
+test server::tests::load_auth_state_non_production_first_boot_mirrors_profile_field ... ok
+test server::tests::test_with_config_accepts_custom ... ok
+test server::tests::test_with_adapter_config ... ok
+test ship_profile::tests::baseline_parses_and_validates ... ok
+test server::tests::load_auth_state_production_missing_file_fails_closed ... ok
+test server::tests::test_stub_vault_returns_not_found ... ok
+test ship_profile::tests::deserializes_openbao_section_with_custom_values ... ok
+test ship_profile::tests::openbao_section_absent_is_none ... ok
+test ship_profile::tests::deserializes_openbao_section_with_defaults ... ok
+test ship_profile::tests::local_dev_mode_skips_production_invariants ... ok
+test audit_wal::tests::last_entry_seed_from_rotated_file ... ok
+test ship_profile::tests::rejects_empty_profile_name ... ok
+test ship_profile::tests::rejects_allow_demo_defaults_true ... ok
+test ship_profile::tests::rejects_accept_all_verifier ... ok
+test ship_profile::tests::rejects_missing_audit_wal_dir ... ok
+test ship_profile::tests::rejects_fail_closed_false ... ok
+test air_gap::tests::test_staleness_detection ... ok
+test ship_profile::tests::rejects_memory_audit_writer ... ok
+test ship_profile::tests::rejects_require_trust_anchor_false ... ok
+test ship_profile::tests::rejects_stub_vault ... ok
+test ship_profile::tests::rejects_missing_trust_anchor_dir ... ok
+test ship_profile::tests::rejects_wildcard_bind ... ok
+test state::tests::test_appstate_is_clone_send_sync ... ok
+test streaming::sse::tests::test_buffer_event_overflow ... ok
+test streaming::sse::tests::test_format_sse_event ... ok
+test streaming::sse::tests::test_format_sse_event_final ... ok
+test streaming::sse::tests::test_validate_sse_request_empty_messages ... ok
+test streaming::sse::tests::test_validate_sse_request_bad_temp ... ok
+test server::tests::test_load_scoring_config_accepts_direct_toml ... ok
+test server::tests::test_load_scoring_config_from_wrapped_toml ... ok
+test streaming::sse::tests::test_build_chunk_content ... ok
+test streaming::sse::tests::test_build_chunk_finish ... ok
+test streaming::sse::tests::test_validate_sse_request_valid ... ok
+test streaming::tests::test_backpressure_monitor ... ok
+test streaming::tests::test_stream_id_uniqueness ... ok
+test streaming::tests::test_backpressure_consumed ... ok
+test streaming::tests::test_token_channel_drop_sender ... ok
+test streaming::tests::test_token_channel_send_recv ... ok
+test streaming::ws::tests::test_auth_handshake_deserialize ... ok
+test audit_wal::tests::write_persists_across_reopen ... ok
+test streaming::ws::tests::test_client_message_deserialize ... ok
+test streaming::ws::tests::test_handle_auth_handshake ... ok
+test streaming::ws::tests::test_connection_state_new ... ok
+test streaming::ws::tests::test_handle_auth_handshake_bad_role ... ok
+test streaming::ws::tests::test_handle_inference_cancel_success ... ok
+test streaming::tests::test_token_channel_drop_receiver ... ok
+test streaming::ws::tests::test_server_message_auth_success ... ok
+test streaming::ws::tests::test_server_message_inference_complete ... ok
+test streaming::ws::tests::test_handle_auth_handshake_duplicate ... ok
+test streaming::ws::tests::test_server_message_auth_error ... ok
+test streaming::ws::tests::test_handle_inference_cancel_not_found ... ok
+test streaming::ws::tests::test_server_message_inference_error ... ok
+test streaming::ws::tests::test_server_message_inference_token ... ok
+test streaming::ws::tests::test_server_message_to_ws_message ... ok
+test streaming::ws::tests::test_tool_result_deserialize ... ok
+test trust_builder::tests::anchor_file_constants_match_compliance_crate ... ok
+test trust_builder::tests::exchange_mode_label ... ok
+test streaming::ws::tests::test_transcription_messages ... ok
+test streaming::ws::tests::test_ws_inference_request_deserialize ... ok
+test ship_profile::tests::rejects_missing_persistent_paths ... ok
+test audit_wal::tests::replay_rejects_tampered_wal ... ok
+test server::tests::test_load_kv_and_topology_configs_from_files ... ok
+test audit_wal::tests::rotation_preserves_chain_across_files ... ok
+test rate_limit::tests::bucket_refills_over_time ... ok
+test server::tests::test_build_configured_scheduler_activates_runtime_handles ... ok
+test handlers::updates::tests::test_download_task_progress_completes ... ok
+
+test result: ok. 204 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+
+     Running unittests src\main.rs (target\debug\deps\lamprey_mai_api-563936985f93b5ab.exe)
+
+running 1 test
+test tests::test_parse_no_args ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src\bin\mai_ship_validate.rs (target\debug\deps\lamprey_mai_ship_validate-0349e936004d6a72.exe)
+
+running 5 tests
+test tests::parse_args_help_short_circuits ... ok
+test tests::parse_args_accepts_profile_and_flags ... ok
+test tests::parse_args_requires_profile ... ok
+test tests::parse_args_rejects_unknown_flag ... ok
+test tests::parse_args_rejects_dangling_profile ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\audit_wal.rs (target\debug\deps\audit_wal-3efd69bdec9b7be6.exe)
+
+running 7 tests
+test ship04_missing_wal_dir_fails_open ... ok
+test ship04_audit_write_failure_surfaces_error ... ok
+test ship04_chain_verifies_after_restart ... ok
+test ship04_api_audit_survives_restart ... ok
+test ship04_replay_outcome_reports_rotated_count ... ok
+test ship04_tampered_wal_fails_open ... ok
+test ship04_chain_verifies_across_rotation_boundaries ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+     Running tests\auth_bypass_consistency.rs (target\debug\deps\auth_bypass_consistency-e7966b608b9a3ee9.exe)
+
+running 3 tests
+test prod_auth_101_fail_blocks_ship_ready ... ok
+test prod_auth_101_passes_when_consistent ... ok
+test prod_auth_101_deferred_without_runtime ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\auth_gate_a.rs (target\debug\deps\auth_gate_a-4ff5ff9245c873ad.exe)
+
+running 6 tests
+test profile_header_alone_is_rejected_in_strict_mode ... ok
+test gate_a_valid_token_passes_auth ... ok
+test gate_a_invalid_token_returns_401 ... ok
+test gate_a_missing_token_returns_401 ... ok
+test health_endpoint_remains_auth_exempt_under_strict_mode ... ok
+test gate_a_rate_limit_returns_429 ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+
+     Running tests\compliance_integration.rs (target\debug\deps\compliance_integration-f8e057d83ac87893.exe)
+
+running 17 tests
+test s44_compliance_status_lists_standard_template_modules ... ok
+test s44_trust_bundle_status_shape ... ok
+test s44_compliance_audit_query_returns_empty_list_initially ... ok
+test s44_compliance_generate_rejects_inverted_date_range ... ok
+test s44_compliance_audit_integrity_starts_unknown ... ok
+test s44_compliance_unknown_module_returns_validation_error ... ok
+test s44_revocation_status_requires_claim_id ... ok
+test s44_trust_claims_admin_only_and_empty ... ok
+test s44_compliance_endpoints_require_auth ... ok
+test s44_revocation_status_unknown_for_unseen_claim ... ok
+test s44_compliance_module_toggle_emits_changed_flag ... ok
+test s44_compliance_audit_verify_succeeds_on_empty_chain ... ok
+test s44_compliance_apply_template_swaps_active_policy ... ok
+test s44_exchange_token_returns_local_dev_token ... ok
+test s44_compliance_policies_list_and_get ... ok
+test s44_compliance_reports_list_and_generate_round_trip ... ok
+test s44_trust_status_returns_air_gapped_by_default ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+
+     Running tests\grpc_integration.rs (target\debug\deps\grpc_integration-31c4bfb7920024e7.exe)
+
+running 4 tests
+test test_grpc_list_models ... ok
+test test_grpc_auth_rejects_unprivileged ... ok
+test test_grpc_chat_completion_no_model ... ok
+test test_grpc_health_check_serving ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.31s
+
+     Running tests\health_system_j13.rs (target\debug\deps\health_system_j13-9b66be6512b71c2d.exe)
+
+running 2 tests
+test resources_health_returns_legacy_system_shape ... ok
+test system_health_empty_registry_is_ok ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s
+
+     Running tests\http_integration.rs (target\debug\deps\http_integration-5f0636514f7589e7.exe)
+
+running 7 tests
+test test_missing_profile_defaults_to_guest ... ok
+test test_model_listing ... ok
+test test_error_format_spec ... ok
+test test_embeddings_endpoint_routes ... ok
+test test_admin_endpoint_rejected_for_adult ... ok
+test test_health_endpoint ... ok
+test test_chat_completions_no_model ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+
+     Running tests\production_guard.rs (target\debug\deps\production_guard-a95639e105300c45.exe)
+
+running 6 tests
+test production_guard_production_example_template_is_ship_ready ... ok
+test production_guard_baseline_profile_is_ship_ready ... ok
+test production_guard_cli_exit_code_2_on_missing_profile ... ok
+test production_guard_cli_exit_code_2_when_profile_flag_missing ... ok
+test production_guard_cli_exits_zero_on_baseline_profile ... ok
+test production_guard_cli_json_form_emits_parsable_report ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.87s
+
+     Running tests\sealer_bootstrap.rs (target\debug\deps\sealer_bootstrap-2c02da4c07303010.exe)
+
+running 7 tests
+test production_rejects_allow_null_sealer_true ... ok
+test production_requires_key_file ... ok
+test local_dev_allows_null_sealer_when_flag_set ... ok
+test local_dev_uses_ephemeral_aead_by_default ... ok
+test production_builds_aead_when_key_file_present ... ok
+test production_rejects_wrong_length_key_file ... ok
+test aead_sealer_produces_distinct_nonces ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests\sec_95_rate_limit.rs (target\debug\deps\sec_95_rate_limit-b749655762fe0cb5.exe)
+
+running 5 tests
+test sec_95_rate_limit_middleware_returns_429_with_retry_after ... ok
+test sec_95_rate_limit_429_is_counted_in_metrics ... ok
+test sec_95_rate_limit_longest_prefix_wins ... ok
+test sec_95_rate_limit_does_not_affect_non_matching_routes ... ok
+test sec_95_rate_limit_is_no_op_when_not_installed ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+
+     Running tests\ship_07b_endpoints.rs (target\debug\deps\ship_07b_endpoints-e7f4b374b6d1409d.exe)
+
+running 7 tests
+test exchange_token_disabled_returns_410_gone ... ok
+test exchange_token_openbao_bridge_returns_503_until_client_lands ... ok
+test exchange_token_disabled_still_validates_request_body ... ok
+test readiness_without_ship_profile_returns_422 ... ok
+test exchange_token_local_dev_synthetic_mints_token ... ok
+test readiness_rejects_non_admin_caller ... ok
+test readiness_with_ship_profile_returns_full_report ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+
+     Running tests\ship_11_observability.rs (target\debug\deps\ship_11_observability-4104f8852cd4b5e4.exe)
+
+running 13 tests
+test ship11_sanitize_label_value_preserves_normal_paths ... ok
+test ship11_sanitize_label_value_redacts_known_secret_prefixes ... ok
+test ship11_metrics_registry_starts_with_full_ship11_family_set ... ok
+test ship11_alert_file_has_all_required_rules ... ok
+test ship11_live_probe_is_unconditionally_ok ... ok
+test ship11_correlation_id_rejects_header_smuggling ... ok
+test ship11_ready_probe_fails_when_audit_writer_down ... ok
+test ship11_correlation_id_generated_when_absent ... ok
+test ship11_production_probe_reports_unsafe_when_audit_breaks ... ok
+test ship11_metrics_exposition_has_required_structure ... ok
+test ship11_correlation_id_echoed_when_supplied ... ok
+test ship11_metrics_endpoint_does_not_leak_secrets ... ok
+test ship11_metrics_middleware_counts_requests ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+
+     Running tests\ship_convergence.rs (target\debug\deps\ship_convergence-ed3b2962261a698f.exe)
+
+running 4 tests
+test mai_server_rejects_missing_ship_profile_path ... ok
+test runtime_pass_lifts_every_deferred_id_under_production_profile ... ok
+test runtime_fail_in_any_critical_id_blocks_ship_ready ... ok
+test all_builders_compose_under_local_dev_profile ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests\ship_profile.rs (target\debug\deps\ship_profile-912e978494f79a5f.exe)
+
+running 3 tests
+test ship_profile_production_example_template_parses_and_validates ... ok
+test deployment_ship_profile_parses_and_validates ... ok
+test parse_ship_profile_is_pure_string_path ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\streaming_integration.rs (target\debug\deps\streaming_integration-0e69793b7e1fdd3b.exe)
+
+running 5 tests
+test test_sse_heartbeat_timing ... ok
+test test_sse_done_terminates ... ok
+test test_non_streaming_still_works ... ok
+test test_sse_stream_delivers_events ... ok
+test test_concurrent_streaming_requests ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.34s
+
+     Running tests\system_integration.rs (target\debug\deps\system_integration-cfddc3b3c8b83c51.exe)
+
+running 7 tests
+test session34_air_gap_air_gapped_with_live_link_flags_anomaly ... ok
+test session34_air_gap_unknown_position_fails_safe_as_air_gapped ... ok
+test session34_audit_schema_does_not_carry_inference_content ... ok
+test session34_air_gap_air_gapped_with_quiet_network_is_consistent ... ok
+test session34_authed_get_reaches_handler_end_to_end ... ok
+test session34_family_profiles_isolation_matrix ... ok
+test session34_power_transition_via_api_walks_full_cycle ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.17s
+
+     Running tests\tlm42_e2e.rs (target\debug\deps\tlm42_e2e-165f78b4eeeeef60.exe)
+
+running 3 tests
+test tlm42_rotation_preserves_health_check ... ok
+test tlm42_credential_rotation_issues_claims_before_and_after ... ok
+test tlm42_rotation_can_initialize_empty_lock ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\trust_production.rs (target\debug\deps\trust_production-579454426e47ad9d.exe)
+
+running 25 tests
+test empty_bundle_cache_dir_rejected_in_production ... ok
+test empty_anchors_dir_path_rejected ... ok
+test local_dev_tolerates_missing_anchors_dir ... ok
+test production_rejects_accept_all_verifier ... ok
+test local_dev_allows_accept_all_when_flag_set ... ok
+test local_dev_synthetic_exchange_when_flag_set ... ok
+test production_rejects_allow_accept_all_true ... ok
+test returned_verifier_is_send_sync ... ok
+test production_rejects_empty_anchors_dir ... ok
+test production_rejects_local_dev_exchange_flag ... ok
+test production_rejects_missing_anchors_dir ... ok
+test production_rejects_require_bundle_on_boot_false ... ok
+test production_rejects_require_trust_anchor_false ... ok
+test production_rejects_malformed_anchor_file ... ok
+test production_builds_when_real_anchor_present ... ok
+test boot_bundle_rejected_when_garbage_json ... ok
+test missing_boot_bundle_blocks_boot ... ok
+test production_ignores_non_pub_files ... ok
+test local_dev_loads_anchors_when_present ... ok
+test boot_bundle_rejected_when_unknown_anchor_id ... ok
+test loaded_verifier_accepts_signed_bundle_round_trip ... ok
+test standalone_ml_dsa_verifier_matches_builder_output ... ok
+test valid_signed_bundle_verifies_on_boot ... ok
+test boot_bundle_rejected_when_expired ... ok
+test tampered_signed_bundle_blocks_boot ... ok
+
+test result: ok. 25 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+
+     Running tests\vault_bootstrap.rs (target\debug\deps\vault_bootstrap-4a133968476f549c.exe)
+
+running 9 tests
+test production_rejects_empty_root ... ok
+test production_rejects_missing_root ... ok
+test production_rejects_stub_backend ... ok
+test local_dev_allows_stub_when_flag_set ... ok
+test production_accepts_zfs_when_root_exists ... ok
+test production_rejects_allow_stub_true ... ok
+test local_dev_rejects_stub_when_flag_clear ... ok
+test local_dev_stub_responds_as_vault_interface ... ok
+test file_dev_backend_is_accepted ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (target\debug\deps\mai_compliance-824760c20e577fde.exe)
+
+running 331 tests
+test audit::chain::tests::finalize_links_to_previous_hash ... ok
+test audit::chain::tests::restore_from_picks_up_after_tail ... ok
+test audit::chain::tests::unsigned_chain_records_no_signatures ... ok
+test audit::chain::tests::reset_clears_cursor ... ok
+test audit::chain::tests::verify_chain_detects_non_monotonic_ids ... ok
+test audit::api::tests::record_routes_quarantine_through_to_audit_outcome ... ok
+test audit::api::tests::record_finalises_entry_and_links_chain ... ok
+test audit::api::tests::record_enqueues_bf5_correlation_event ... ok
+test audit::api::tests::integrity_status_reflects_counts ... ok
+test audit::api::tests::get_returns_matching_entry ... ok
+test audit::api::tests::correlation_never_carries_raw_subject_id ... ok
+test audit::chain::tests::verify_chain_detects_nonzero_head_hash ... ok
+test audit::api::tests::query_filters_by_timestamp_range ... ok
+test audit::api::tests::query_filters_by_module_and_decision_and_limit ... ok
+test audit::api::tests::verify_full_passes_on_clean_log ... ok
+test audit::chain::tests::verify_chain_detects_tampered_field ... ok
+test audit::entry::tests::chain_head_detection ... ok
+test audit::entry::tests::canonical_bytes_exclude_signature ... ok
+test audit::entry::tests::correlation_is_local_only_when_no_credential_event ... ok
+test audit::chain::tests::verify_chain_passes_on_clean_chain ... ok
+test audit::entry::tests::content_hash_changes_when_field_tampered ... ok
+test audit::entry::tests::routing_decision_maps_from_aggregate ... ok
+test audit::entry::tests::rule_match_from_reason_preserves_fields ... ok
+test audit::sealer::tests::from_slice_rejects_wrong_length ... ok
+test audit::sealer::tests::debug_does_not_leak_key ... ok
+test audit::entry::tests::signature_roundtrips_when_present ... ok
+test audit::entry::tests::entry_roundtrips_through_json ... ok
+test audit::sealer::tests::nonces_vary_per_call ... ok
+test audit::sealer::tests::wrong_key_fails_to_unseal ... ok
+test audit::sealer::tests::explicit_key_round_trip ... ok
+test audit::store::tests::default_retention_is_seven_years ... ok
+test audit::store::tests::append_and_snapshot ... ok
+test audit::store::tests::offline_queue_buffers_and_drains ... ok
+test audit::store::tests::offline_queue_caps_at_capacity ... ok
+test audit::store::tests::eviction_increments_drop_counter ... ok
+test audit::store::tests::rotate_if_due_only_fires_once_per_day ... ok
+test audit::triggers::tests::chain_break_is_critical ... ok
+test audit::triggers::tests::many_violations_promote_to_critical ... ok
+test audit::triggers::tests::non_violation_decisions_do_not_escalate ... ok
+test audit::triggers::tests::old_violations_drop_out_of_window ... ok
+test audit::triggers::tests::policy_change_always_emits_info ... ok
+test audit::triggers::tests::storage_quota_emits_on_severity_transitions_only ... ok
+test audit::triggers::tests::violations_accumulate_and_escalate_at_threshold ... ok
+test audit::triggers::tests::zero_capacity_storage_is_a_no_op ... ok
+test bundle::tests::anchor_count_reflects_registry ... ok
+test bundle::tests::canonical_json_is_key_ordered ... ok
+test bundle::tests::accept_all_verifier_passes_any_signature ... ok
+test audit::store::tests::wal_roundtrip_in_temp_file ... ok
+test bundle::tests::future_bundle_rejected ... ok
+test baa::tests::test_custom_blocks_explicit_above_threshold ... ok
+test baa::tests::test_strict_blocks_even_low_confidence ... ok
+test baa::tests::test_custom_never_leave_local_takes_precedence ... ok
+test bundle::tests::reject_all_verifier_fails_any_signature ... ok
+test baa::tests::test_decision_reason_always_populated ... ok
+test baa::tests::test_violations_carry_identifier_and_confidence ... ok
+test deid::tests::test_malformed_span_no_panic ... ok
+test baa::tests::test_custom_max_confidence_allows_below_threshold ... ok
+test bundle::tests::malformed_hex_rejected ... ok
+test baa::tests::test_standard_allows_no_phi ... ok
+test audit::chain::tests::ml_dsa_signer_produces_verifiable_signature ... ok
+test baa::tests::test_standard_blocks_any_phi ... ok
+test bundle::tests::expired_bundle_rejected ... ok
+test bundle::tests::tampered_metadata_rejected ... ok
+test ear::tests::test_ccl_category_digit_roundtrip ... ok
+test ear::tests::test_classification_ordering ... ok
+test deid::tests::test_email_replaced_with_placeholder ... ok
+test bundle::tests::unknown_anchor_rejected ... ok
+test deid::tests::test_multiple_phi_all_redacted ... ok
+test deid::tests::test_no_phi_text_unchanged_and_safe ... ok
+test bundle::tests::signed_claim_verifies ... ok
+test deid::tests::test_redaction_preserves_surrounding_text ... ok
+test deid::tests::test_risk_high_for_dense_phi ... ok
+test deid::tests::test_distinct_kinds_counted ... ok
+test deid::tests::test_risk_safe_threshold_respected ... ok
+test bundle::tests::tampered_payload_rejected ... ok
+test deid::tests::test_ssn_replaced_with_placeholder ... ok
+test ear::tests::test_de_minimis_at_or_above_threshold ... ok
+test bundle::tests::unsupported_algorithm_rejected ... ok
+test ear::tests::test_product_group_roundtrip ... ok
+test ear::tests::test_eccn_3a001_parses_to_electronics ... ok
+test ear::tests::test_de_minimis_below_threshold ... ok
+test ear::tests::test_eccn_technology_group_e ... ok
+test ear::tests::test_eccn_5a002_parses_to_telecom_crypto ... ok
+test ear::tests::test_eccn_software_group_d ... ok
+test ear::tests::test_eccn_uppercased_in_hit ... ok
+test itar::tests::test_export_classification_ordering ... ok
+test ear::tests::test_keyword_nuclear ... ok
+test deid::tests::test_no_phi_survives_double_scan ... ok
+test audit::chain::tests::periodic_signature_only_lands_on_interval_boundaries ... ok
+test ear::tests::test_keyword_only_promotes_to_ccl ... ok
+test ear::tests::test_generic_ear_promotes_to_ear99 ... ok
+test bundle::tests::valid_bundle_verifies ... ok
+test itar::tests::test_roman_numeral_lookup ... ok
+test ear::tests::test_license_exception_enc_parsed ... ok
+test ear::tests::test_multiple_eccns_sorted_by_span ... ok
+test ear::tests::test_neutral_text_uncontrolled ... ok
+test itar::tests::test_aircraft_f35_explicit ... ok
+test itar::tests::test_ambiguous_possible_defaults_to_itar ... ok
+test itar::tests::test_hits_sorted_by_span ... ok
+test jurisdiction::tests::test_country_code_validation ... ok
+test itar::tests::test_missile_text_classified_itar ... ok
+test itar::tests::test_ambiguous_can_be_disabled ... ok
+test itar::tests::test_directed_energy_explicit ... ok
+test itar::tests::test_matched_text_is_hashed_never_raw ... ok
+test itar::tests::test_chemical_weapon_explicit ... ok
+test jurisdiction::tests::test_person_eligibility_helper ... ok
+test itar::tests::test_explosives_explicit ... ok
+test itar::tests::test_nuclear_warhead_explicit ... ok
+test itar::tests::test_neutral_text_uncontrolled ... ok
+test itar::tests::test_min_confidence_filter_drops_possible ... ok
+test itar::tests::test_submarine_explicit ... ok
+test jurisdiction::tests::test_allowed_routes_local_only_collapses_uncontrolled_to_route_local ... ok
+test jurisdiction::tests::test_ambiguous_us_person_routes_local_with_ambiguity_reason ... ok
+test jurisdiction::tests::test_ambiguous_defaults_to_itar_then_blocks_non_us ... ok
+test jurisdiction::tests::test_blocked_country_overrides_uncontrolled ... ok
+test jurisdiction::tests::test_offline_mode_collapses_uncontrolled_to_route_local ... ok
+test jurisdiction::tests::test_missing_country_fails_closed_for_itar ... ok
+test jurisdiction::tests::test_neutral_text_allowed ... ok
+test jurisdiction::tests::test_eccn_only_routes_local_for_any_actor ... ok
+test jurisdiction::tests::test_revoked_check_runs_before_country_block ... ok
+test medical_entities::tests::test_icd10_rejects_bad_input ... ok
+test medical_entities::tests::test_icd10_extract_from_text ... ok
+test medical_entities::tests::test_icd10_valid_format ... ok
+test jurisdiction::tests::test_trust_scope_missing_denies_itar_query ... ok
+test medical_entities::tests::test_lab_values_multiple_in_one_string ... ok
+test medical_entities::tests::test_medication_dictionary_case_insensitive ... ok
+test medical_entities::tests::test_medication_dictionary_detects_baseline_drug ... ok
+test medical_entities::tests::test_medication_hits_sorted_by_span ... ok
+test medical_entities::tests::test_lab_values_rejects_pure_word_units ... ok
+test medical_entities::tests::test_lab_values_parsed_with_unit ... ok
+test jurisdiction::tests::test_itar_allows_us_person_but_routes_local ... ok
+test jurisdiction::tests::test_trust_revoked_short_circuits_to_deny ... ok
+test jurisdiction::tests::test_itar_blocks_non_us_person ... ok
+test jurisdiction::tests::test_trust_scope_missing_does_not_block_uncontrolled ... ok
+test jurisdiction::tests::test_service_identity_propagated_in_snapshot ... ok
+test jurisdiction::tests::test_trust_snapshot_recorded_on_every_decision ... ok
+test ocap::cultural::tests::detects_explicit_restricted_knowledge ... ok
+test ocap::cultural::tests::detects_elder_attribution ... ok
+test ocap::cultural::tests::detects_named_ceremony ... ok
+test ocap::cultural::tests::detects_funerary_content ... ok
+test ocap::ocap_rules::tests::consent_permits_processing_only_when_granted ... ok
+test ocap::cultural::tests::detects_sacred_knowledge ... ok
+test ocap::ocap_rules::tests::access_role_tier_ordering ... ok
+test jurisdiction::tests::test_unified_classification_itar_dominates_ear ... ok
+test ocap::cultural::tests::hits_are_ordered_by_span_start ... ok
+test ocap::cultural::tests::min_confidence_filters_possible_hits ... ok
+test ocap::cultural::tests::matched_text_is_hashed_not_stored ... ok
+test ocap::cultural::tests::nagpra_reference_is_funerary ... ok
+test ocap::ocap_rules::tests::outcome_wire_format_round_trips ... ok
+test ocap::ocap_rules::tests::possession_helpers_consistent ... ok
+test ocap::cultural::tests::possible_hits_dropped_when_min_is_probable ... ok
+test ocap::cultural::tests::neutral_text_produces_empty_report ... ok
+test ocap::cultural::tests::requires_review_is_false_when_only_possible_hits ... ok
+test jurisdiction::tests::test_unknown_actor_can_be_configured_open ... ok
+test jurisdiction::tests::test_unified_classification_takes_max ... ok
+test jurisdiction::tests::test_unknown_revocation_allows_uncontrolled_query ... ok
+test jurisdiction::tests::test_unknown_actor_fails_closed_for_itar ... ok
+test ocap::ocap_rules::tests::decision_records_trust_correlation_fields ... ok
+test ocap::ocap_rules::tests::cultural_review_quarantines_without_consent ... ok
+test jurisdiction::tests::test_unknown_revocation_denies_itar_query ... ok
+test ocap::ocap_rules::tests::local_only_trust_ceiling_routes_local_even_without_tribal_signal ... ok
+test ocap::ocap_rules::tests::force_review_quarantines_even_without_cultural_signal ... ok
+test ocap::ocap_rules::tests::neutral_text_allows ... ok
+test ocap::treaty::tests::detects_numbered_treaty_and_flags_unknown ... ok
+test ocap::treaty::tests::detects_jay_treaty ... ok
+test ocap::ocap_rules::tests::elder_attributed_material_requires_elder_role ... ok
+test ocap::ocap_rules::tests::revoked_claim_denies_access ... ok
+test ocap::ocap_rules::tests::cultural_review_proceeds_with_consent ... ok
+test ocap::treaty::tests::detects_year_prefixed_treaty ... ok
+test ocap::treaty::tests::treaty_id_rejects_empty_string ... ok
+test ocap::treaty::tests::hits_are_ordered_by_span_start ... ok
+test ocap::tribal_data::tests::confidence_order_matches_strictness ... ok
+test ocap::ocap_rules::tests::treaty_reference_forces_local ... ok
+test ocap::treaty::tests::recognise_single_reference ... ok
+test ocap::treaty::tests::no_treaty_reference_returns_empty_report ... ok
+test ocap::ocap_rules::tests::scope_missing_returns_error ... ok
+test ocap::treaty::tests::multiple_treaties_apply_most_restrictive ... ok
+test ocap::treaty::tests::registered_count_reflects_registry_size ... ok
+test ocap::ocap_rules::tests::sacred_material_requires_council_role ... ok
+test ocap::treaty::tests::registered_treaty_can_allow_cloud_if_operator_chose ... ok
+test ocap::treaty::tests::year_prefixed_only_matches_1700s_and_1800s ... ok
+test ocap::treaty::tests::registered_treaty_uses_registry_rules ... ok
+test ocap::ocap_rules::tests::tribal_data_on_sovereign_cloud_routes_local ... ok
+test ocap::ocap_rules::tests::tribal_data_on_third_party_cloud_quarantines ... ok
+test ocap::tribal_data::tests::detects_numbered_treaty ... ok
+test ocap::tribal_data::tests::detects_nation_reference ... ok
+test ocap::tribal_data::tests::detects_reserve_reference ... ok
+test ocap::tribal_data::tests::detects_traditional_knowledge ... ok
+test ocap::tribal_data::tests::detects_elder_attribution ... ok
+test ocap::tribal_data::tests::detects_sacred_site ... ok
+test ocap::tribal_data::tests::detects_year_prefixed_treaty ... ok
+test ocap::tribal_data::tests::detects_named_ceremony ... ok
+test ocap::ocap_rules::tests::unauthorised_profile_denies ... ok
+test ocap::ocap_rules::tests::tribal_data_routes_local_when_on_premises_and_consented ... ok
+test ocap::tribal_data::tests::extra_patterns_can_be_added ... ok
+test ocap::ocap_rules::tests::tribal_owned_flag_overrides_detection ... ok
+test ocap::tribal_data::tests::hits_are_sorted_by_span_start ... ok
+test ocap::tribal_data::tests::invalid_extra_pattern_returns_error ... ok
+test ocap::tribal_data::tests::matched_substring_is_hashed_not_stored ... ok
+test ocap::tribal_data::tests::min_confidence_drops_weaker_hits ... ok
+test phi::tests::test_dates_detected ... ok
+test policy::api::tests::apply_template_swaps_enabled_set ... ok
+test policy::api::tests::enable_is_idempotent ... ok
+test policy::api::tests::enable_module_emits_audit_event ... ok
+test policy::api::tests::list_policies_returns_default_priority_order ... ok
+test policy::api::tests::module_status_reflects_disabled_state ... ok
+test policy::api::tests::reload_increments_counter_and_clears_cache ... ok
+test policy::api::tests::replace_config_publishes_policy_change ... ok
+test ocap::tribal_data::tests::no_tribal_content_produces_empty_report ... ok
+test policy::audit_feed::tests::deny_decision_also_emits_violation ... ok
+test policy::audit_feed::tests::drop_count_increments_when_buffer_overflows ... ok
+test policy::audit_feed::tests::subscriber_count_drops_when_handle_dropped ... ok
+test policy::audit_feed::tests::multiple_subscribers_each_receive_events ... ok
+test policy::audit_feed::tests::subscribers_receive_published_decisions ... ok
+test policy::audit_feed::tests::zero_capacity_is_clamped_to_one ... ok
+test policy::bundle::tests::load_from_file_missing_path_returns_io_error ... ok
+test phi::tests::test_ip_address_detected ... ok
+test policy::bundle::tests::optional_fields_default_when_missing ... ok
+test phi::tests::test_matched_text_is_hashed_never_raw ... ok
+test policy::bundle::tests::roundtrip_serialize_deserialize ... ok
+test phi::tests::test_min_confidence_filter_drops_possible ... ok
+test policy::cache::tests::key_changes_on_classification_level ... ok
+test policy::cache::tests::invalidate_all_clears_cache ... ok
+test policy::cache::tests::key_ignores_request_id_and_timestamp ... ok
+test policy::cache::tests::key_is_pattern_order_independent ... ok
+test policy::cache::tests::key_is_stable_across_clones ... ok
+test policy::cache::tests::max_entries_caps_size ... ok
+test policy::composer::tests::any_deny_wins ... ok
+test policy::cache::tests::put_and_get_hits_within_ttl ... ok
+test policy::composer::tests::compose_all_allow_keeps_cloud_route ... ok
+test policy::composer::tests::default_priority_is_ocap_itar_hipaa ... ok
+test policy::composer::tests::destination_ordering_matches_restrictiveness ... ok
+test policy::composer::tests::disabled_module_is_dropped ... ok
+test phi::tests::test_no_phi_in_neutral_text ... ok
+test policy::composer::tests::flags_accumulate_in_priority_order ... ok
+test policy::composer::tests::no_inputs_yields_allow_with_no_route ... ok
+test policy::bundle::tests::load_from_file_invalid_json_returns_json_error ... ok
+test policy::composer::tests::most_restrictive_route_wins ... ok
+test policy::composer::tests::quarantine_beats_local_in_route_fold ... ok
+test policy::cache::tests::entries_expire_after_ttl ... ok
+test policy::composer::tests::set_config_returns_previous ... ok
+test policy::templates::tests::defense_enables_itar_only ... ok
+test policy::templates::tests::from_name_returns_none_on_unknown ... ok
+test policy::templates::tests::from_name_roundtrips_for_every_template ... ok
+test policy::templates::tests::healthcare_enables_hipaa_and_ocap ... ok
+test policy::templates::tests::priority_only_lists_enabled_modules ... ok
+test policy::templates::tests::tribal_government_enables_ocap_and_hipaa ... ok
+test policy::templates::tests::standard_enables_hipaa_only ... ok
+test reports::api::tests::delete_refuses_protected_records ... ok
+test reports::api::tests::generation_event_is_audited_as_policy_change ... ok
+test policy::templates::tests::templates_carry_a_version ... ok
+test reports::api::tests::generate_produces_complete_record_with_content_hash ... ok
+test reports::api::tests::paused_schedules_do_not_fire ... ok
+test reports::api::tests::prune_drops_old_unprotected_records ... ok
+test reports::api::tests::list_returns_newest_first ... ok
+test reports::api::tests::schedule_collision_returns_error ... ok
+test policy::bundle::tests::load_from_file_reads_valid_bundle ... ok
+test reports::api::tests::schedules_run_when_due ... ok
+test reports::api::tests::unknown_template_errors ... ok
+test reports::prune::tests::default_retention_is_seven_years ... ok
+test reports::pdf::tests::null_signer_produces_unsigned_certified_report ... ok
+test reports::prune::tests::per_type_retention_overrides_default ... ok
+test reports::prune::tests::protected_records_are_never_deleted ... ok
+test reports::prune::tests::prune_removes_expired_and_keeps_recent ... ok
+test reports::prune::tests::pruner_returns_schedule_ids_for_deleted_records ... ok
+test reports::templates::tests::builtin_registry_has_five_templates ... ok
+test reports::templates::tests::custom_template_resolves ... ok
+test subject_hash::tests::different_key_same_subject_yields_different_hash ... ok
+test subject_hash::tests::different_subject_same_key_yields_different_hash ... ok
+test subject_hash::tests::empty_subject_id_hashes_deterministically ... ok
+test subject_hash::tests::minimum_length_key_accepted ... ok
+test subject_hash::tests::output_is_lowercase_hex_after_prefix ... ok
+test subject_hash::tests::same_subject_and_key_yields_same_hash ... ok
+test subject_hash::tests::output_starts_with_hmac_prefix ... ok
+test phi::tests::test_mrn_detected_as_explicit ... ok
+test subject_hash::tests::short_key_rejected ... ok
+test phi::tests::test_phone_detected ... ok
+test phi::tests::test_report_summary_fields ... ok
+test phi::tests::test_hits_are_sorted_by_span_start ... ok
+test phi::tests::test_email_detected_as_explicit ... ok
+test phi::tests::test_dr_name_is_only_possible ... ok
+test phi::tests::test_url_detected ... ok
+test phi::tests::test_ssn_detected_as_explicit ... ok
+test phi::tests::test_vin_explicit ... ok
+test phi::tests::test_zip_code_detected_as_geographic ... ok
+test tech_data::tests::test_cad_schematic_promotes_to_probable ... ok
+test tech_data::tests::test_astm_standard_explicit ... ok
+test tech_data::tests::test_classifier_trait_object_dispatch ... ok
+test trust::tests::test_compliance_scope_strings ... ok
+test trust::tests::test_data_classification_ordering ... ok
+test trust::tests::test_local_dev_context_is_permissive ... ok
+test trust::tests::test_offline_mode_blocks_cloud_route_even_when_allowed ... ok
+test trust::tests::test_expired_connectivity_requires_local_only ... ok
+test trust::tests::test_revoked_disqualifies_cloud_route ... ok
+test trust::tests::test_scope_missing_detected ... ok
+test trust::tests::test_serde_roundtrip ... ok
+test trust::tests::test_service_identity_optional_for_humans ... ok
+test trust::tests::test_service_identity_strings ... ok
+test trust::tests::test_strict_local_only_blocks_cloud ... ok
+test trust::tests::test_tenant_id_rejects_empty ... ok
+test tech_data::tests::test_assembly_procedure_probable_methodology ... ok
+test trust::tests::test_unknown_revocation_is_distinct_from_revoked ... ok
+test tech_data::tests::test_manufacturing_process_plan_explicit_methodology ... ok
+test trust_cache::tests::evaluate_air_gapped_overrides_everything ... ok
+test trust_cache::tests::evaluate_connected_when_fresh_and_live ... ok
+test trust_cache::tests::evaluate_degraded_when_fresh_but_no_live_link ... ok
+test trust_cache::tests::evaluate_expired_past_hard_threshold ... ok
+test trust_cache::tests::evaluate_stale_in_warn_band ... ok
+test trust_cache::tests::evaluate_never_refreshed_is_expired ... ok
+test trust_cache::tests::future_refresh_rejected ... ok
+test trust_cache::tests::offline_audit_backlog_drains_in_order ... ok
+test trust_cache::tests::revocation_recorded_after_refresh ... ok
+test trust_cache::tests::signed_refresh_expired_bundle_preserves_state ... ok
+test trust_cache::tests::signed_refresh_applies_payload_on_success ... ok
+test trust_cache::tests::signed_refresh_invalid_signature_preserves_state ... ok
+test trust_cache::tests::signed_refresh_tenant_check_can_be_skipped ... ok
+test trust_cache::tests::signed_refresh_tenant_mismatch_preserves_state ... ok
+test tech_data::tests::test_drawing_number_explicit ... ok
+test trust_cache::tests::thresholds_inverted_rejected ... ok
+test trust_cache::tests::unknown_revocation_for_unseen_claim ... ok
+test tech_data::tests::test_matched_text_is_hashed ... ok
+test tech_data::tests::test_hits_sorted_by_span_start ... ok
+test tech_data::tests::test_material_alloy_designation ... ok
+test tech_data::tests::test_mil_std_explicit ... ok
+test tech_data::tests::test_neutral_text_has_no_signal ... ok
+test reports::pdf::tests::tampered_payload_fails_verification ... ok
+test tech_data::tests::test_tdp_acronym_methodology ... ok
+test tech_data::tests::test_possible_only_does_not_promote ... ok
+test tech_data::tests::test_tolerance_callout_probable ... ok
+test trust_cache::tests::signed_refresh_uses_real_ml_dsa_verifier ... ok
+test reports::pdf::tests::ml_dsa_signer_round_trip_verifies ... ok
+
+test result: ok. 331 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.49s
+
+     Running tests\compliance_demos.rs (target\debug\deps\compliance_demos-20e5cf519b822a86.exe)
+
+running 6 tests
+test test_audit_tamper ... ok
+test test_hipaa_workflow ... ok
+test test_ocap_workflow ... ok
+test test_trust_manifold_disconnected_and_expired ... ok
+test test_itar_workflow ... ok
+test test_multi_domain ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.32s
+
+     Running tests\compliance_perf.rs (target\debug\deps\compliance_perf-24cfdd29be948ae1.exe)
+
+running 3 tests
+test report_generation_under_10_seconds ... ok
+test audit_append_throughput_over_1000_per_sec ... ok
+test composer_p99_under_5ms ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.40s
+
+     Running tests\phi_perf.rs (target\debug\deps\phi_perf-a99c76353a3cf83f.exe)
+
+running 1 test
+test phi_detection_p99_under_10ms ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+     Running unittests src\lib.rs (target\debug\deps\mai_core-c3881a16f83b0058.exe)
+
+running 192 tests
+test airgap::tests::offline_mode_back_compat ... ok
+test airgap::tests::display_uses_kebab_labels ... ok
+test airgap::tests::default_is_air_gapped ... ok
+test airgap::tests::requires_local_only_for_expired_and_air_gapped ... ok
+test cache::tests::test_function_call_not_cacheable ... ok
+test cache::tests::test_excluded_model_not_cacheable ... ok
+test cache::tests::test_below_min_size_not_cached ... ok
+test airgap::tests::permits_cloud_route_only_for_connected_and_degraded ... ok
+test cache::tests::test_cache_miss_increments_counter ... ok
+test cache::tests::test_key_includes_profile_isolation ... ok
+test cache::tests::test_clear_empties_cache ... ok
+test cache::tests::test_duplicate_key_not_overwritten ... ok
+test cache::tests::test_model_invalidation ... ok
+test cache::tests::test_cache_hit_returns_stored_response ... ok
+test cache::tests::test_profile_invalidation ... ok
+test cache::tests::test_streaming_requests_not_cacheable ... ok
+test cache::tests::test_memory_budget_eviction ... ok
+test circuit_breaker::tests::test_circuit_trips_on_consecutive_failures ... ok
+test circuit_breaker::tests::test_circuit_trips_on_rate_not_consecutive ... ok
+test circuit_breaker::tests::test_circuit_trips_on_rate_threshold ... ok
+test circuit_breaker::tests::test_default_state_is_closed ... ok
+test airgap::tests::policy_observes_transitions ... ok
+test circuit_breaker::tests::test_force_open_and_reset ... ok
+test circuit_breaker::tests::test_success_resets_failure_count ... ok
+test health::tests::test_air_gap_compliant ... ok
+test health::tests::test_air_gap_violation ... ok
+test health::tests::test_evaluate_alerts_air_gap_critical ... ok
+test health::tests::test_evaluate_alerts_normal ... ok
+test health::tests::test_evaluate_alerts_thermal_warn ... ok
+test health::tests::test_heartbeat_degraded_high_errors ... ok
+test health::tests::test_heartbeat_healthy ... ok
+test health::tests::test_heartbeat_not_registered ... ok
+test health::tests::test_register_and_count ... ok
+test health::tests::test_snapshot ... ok
+test health::tests::test_subscribe ... ok
+test health::tests::test_thermal_assessment ... ok
+test health::tests::test_unhealthy_adapter_raises_alert ... ok
+test health::tests::test_unregister_adapter ... ok
+test hotswap::tests::test_hardware_event_types ... ok
+test hotswap::tests::test_concurrent_swap_rejected ... ok
+test hotswap::tests::test_new_manager ... ok
+test hotswap::tests::test_recent_swaps_limit ... ok
+test hotswap::tests::test_swap_request_adapter_defaults ... ok
+test hotswap::tests::test_swap_error_display ... ok
+test hotswap::tests::test_swap_request_hardware_defaults ... ok
+test hotswap::tests::test_swap_request_model_defaults ... ok
+test hotswap::tests::test_swap_result_is_recoverable ... ok
+test hotswap::tests::test_swap_state_needs_rollback ... ok
+test hotswap::tests::test_swap_state_needs_rollback_failed_health ... ok
+test models::install::tests::test_install_progress_states ... ok
+test models::lifecycle::tests::test_affinity_order_prefers_most_used ... ok
+test models::package::tests::test_is_package_dir ... ok
+test models::package::tests::test_open_missing_directory ... ok
+test models::remove::tests::test_remove_cold_model ... ok
+test models::remove::tests::test_remove_loaded_model_fails ... ok
+test models::remove::tests::test_remove_nonexistent_model ... ok
+test models::update::tests::test_differential_download_only_changed_shards ... ok
+test models::lifecycle::tests::test_lifecycle_load_benchmark_unload_round_trip ... ok
+test models::update::tests::test_license_validation_blocks_wrong_tier ... ok
+test models::lifecycle::tests::test_list_installed_includes_affinity ... ok
+test models::lifecycle::tests::test_export_config_contains_backend ... ok
+test models::update::tests::test_seasonal_bundle_limits_by_tier ... ok
+test models::package::tests::test_open_missing_weight_file ... ok
+test models::preload::tests::test_preload_plan_sentinel_then_preferred_then_affinity ... ok
+test models::update::tests::test_update_check_no_device_identity_in_url ... ok
+test models::usb::tests::test_is_removable_drive ... ok
+test models::verify::tests::test_check_compatibility_fail ... ok
+test models::verify::tests::test_check_compatibility_ok ... ok
+test models::verify::tests::test_hash_tree_changes_with_data ... ok
+test models::verify::tests::test_hash_tree_computation ... ok
+test models::usb::tests::test_scan_path_for_packages_nonexistent ... ok
+test models::verify::tests::test_hash_tree_deterministic ... ok
+test models::usb::tests::test_scan_path_for_packages_empty_dir ... ok
+test models::verify::tests::test_version_comparison ... ok
+test power::demotion::tests::test_group_state_query ... ok
+test models::package::tests::test_open_valid_package ... ok
+test power::demotion::tests::test_register_and_check ... ok
+test power::tests::test_boot_sequence ... ok
+test power::tests::test_estimated_power_draw ... ok
+test power::tests::test_inactivity_demotion ... ok
+test power::tests::test_initial_state_is_off ... ok
+test power::tests::test_invalid_transition_rejected ... ok
+test power::tests::test_sentinel_promotion ... ok
+test power::tests::test_shutdown_from_any_state ... ok
+test power::tests::test_thermal_recovery ... ok
+test power::tests::test_thermal_throttle ... ok
+test models::package::tests::test_read_files ... ok
+test power::tests::test_urgent_wake_to_full ... ok
+test power::tests::test_transition_log_recorded ... ok
+test power::tests::test_wake_to_sentinel ... ok
+test power::transitions::tests::test_advance_through_phases ... ok
+test power::transitions::tests::test_initial_phase_is_requested ... ok
+test power::transitions::tests::test_no_timeout_when_completed ... ok
+test power::transitions::tests::test_record ... ok
+test power::transitions::tests::test_rollback ... ok
+test registry::tests::test_list_models_with_filter ... ok
+test registry::tests::test_load_model_success ... ok
+test models::install::tests::test_install_package_success ... ok
+test power::tests::test_reset_demotion_timer ... ok
+test registry::tests::test_load_model_vault_failure_rollback ... ok
+test models::update::tests::test_resumable_download_uses_range ... ok
+test registry::tests::test_mark_active_and_find_capable ... ok
+test registry::tests::test_parse_malformed_toml ... ok
+test registry::tests::test_parse_invalid_manifest_empty_name ... ok
+test registry::tests::test_state_machine_invalid_transitions ... ok
+test registry::tests::test_state_machine_valid_transitions ... ok
+test models::install::tests::test_install_package_failed_verification ... ok
+test registry::tests::test_parse_valid_manifest ... ok
+test registry::tests::test_register_cold_model ... ok
+test scheduler::tests::test_backpressure_accept_under_threshold ... ok
+test registry::tests::test_register_duplicate_fails ... ok
+test scheduler::tests::test_circuit_trip_emits_event ... ok
+test scheduler::tests::test_complexity_evaluation ... ok
+test scheduler::tests::test_distribute_to_gpu ... ok
+test scheduler::tests::test_drain_events_clears ... ok
+test scheduler::tests::test_fallback_on_circuit_trip ... ok
+test scheduler::tests::test_health_monitor_alive_resets ... ok
+test scheduler::tests::test_health_monitor_dead_forces_open ... ok
+test scheduler::tests::test_hybrid_strategy_validation ... ok
+test registry::tests::test_unload_model ... ok
+test scheduler::tests::test_least_loaded_selection ... ok
+test power::transitions::tests::test_timeout_detection ... ok
+test scheduler::tests::test_metrics_increment ... ok
+test scheduler::tests::test_promotion_check ... ok
+test scheduler::tests::test_register_adapter ... ok
+test scheduler::tests::test_request_completed_decrements ... ok
+test scheduler::tests::test_route_request_no_adapter ... ok
+test scheduler::tests::test_route_request_to_correct_adapter ... ok
+test scheduler::tests::test_scheduler_skips_open_circuit ... ok
+test scheduler::tests::test_unhealthy_adapter_excluded ... ok
+test scheduler::tests::test_unregister_adapter ... ok
+test sentinel::estimator::tests::test_below_threshold_stays ... ok
+test sentinel::estimator::tests::test_classify_under_10ms ... ok
+test sentinel::estimator::tests::test_complex_reasoning_promotes ... ok
+test sentinel::estimator::tests::test_embedding_promotes ... ok
+test power::demotion::tests::test_multiple_groups_independent ... ok
+test power::demotion::tests::test_activity_resets_timer ... ok
+test sentinel::estimator::tests::test_large_model_heuristic ... ok
+test sentinel::estimator::tests::test_large_model_promotes ... ok
+test sentinel::estimator::tests::test_multi_step_tool_promotes ... ok
+test sentinel::estimator::tests::test_simple_question_stays_on_sentinel ... ok
+test sentinel::estimator::tests::test_smart_home_stays_on_sentinel ... ok
+test sentinel::estimator::tests::test_token_threshold_promotes ... ok
+test power::demotion::tests::test_update_state_clears_demotion ... ok
+test sentinel::estimator::tests::test_unknown_task_kind_promotes ... ok
+test sentinel::promotion::tests::test_drain_queue ... ok
+test sentinel::promotion::tests::test_full_cycle ... ok
+test sentinel::promotion::tests::test_initial_state_idle ... ok
+test sentinel::promotion::tests::test_mark_failed ... ok
+test sentinel::promotion::tests::test_mark_ready ... ok
+test sentinel::promotion::tests::test_multiple_requests_completed_individually ... ok
+test sentinel::promotion::tests::test_promotion_elapsed ... ok
+test sentinel::promotion::tests::test_queue_overflow ... ok
+test sentinel::promotion::tests::test_queue_request ... ok
+test models::usb::tests::test_scan_path_for_packages ... ok
+test sentinel::promotion::tests::test_start_promotion ... ok
+test sentinel::promotion::tests::test_start_promotion_idempotent ... ok
+test sentinel::runtime::tests::test_consecutive_errors_degrade ... ok
+test sentinel::runtime::tests::test_heartbeat_from_degraded_after_many_errors ... ok
+test sentinel::runtime::tests::test_heartbeat_recovers_from_unhealthy ... ok
+test sentinel::runtime::tests::test_heartbeat_resets_failures ... ok
+test sentinel::runtime::tests::test_initial_state ... ok
+test sentinel::runtime::tests::test_instance_id_format ... ok
+test sentinel::runtime::tests::test_mark_loaded ... ok
+test sentinel::runtime::tests::test_mark_unhealthy ... ok
+test sentinel::runtime::tests::test_mark_unloaded ... ok
+test sentinel::runtime::tests::test_no_timeout_within_threshold ... ok
+test sentinel::runtime::tests::test_record_error ... ok
+test sentinel::runtime::tests::test_record_handled ... ok
+test sentinel::runtime::tests::test_record_promoted ... ok
+test sentinel::runtime::tests::test_snapshot ... ok
+test sentinel::runtime::tests::test_timeout_check ... ok
+test sentinel::runtime::tests::test_vram_tracking ... ok
+test sentinel::warmup::tests::test_adaptive_ratio_based ... ok
+test sentinel::warmup::tests::test_adaptive_warmup_trigger ... ok
+test sentinel::warmup::tests::test_already_warm_no_second_warm ... ok
+test sentinel::warmup::tests::test_conservative_warms_after_promotion ... ok
+test sentinel::warmup::tests::test_initial_state_cold ... ok
+test sentinel::warmup::tests::test_keep_warm_expired ... ok
+test sentinel::warmup::tests::test_mark_warm_and_cold ... ok
+test sentinel::warmup::tests::test_never_warmup ... ok
+test sentinel::warmup::tests::test_no_expired_if_not_warm ... ok
+test sentinel::warmup::tests::test_reset_window ... ok
+test sentinel::warmup::tests::test_total_prewarms ... ok
+test sentinel::warmup::tests::test_check_expired ... ok
+test sentinel::promotion::tests::test_check_timeout ... ok
+test cache::tests::test_ttl_expiration ... ok
+test hotswap::tests::test_execute_swap_adapter_not_registered ... ok
+test hotswap::tests::test_execute_swap_adapter_success ... ok
+test circuit_breaker::tests::test_circuit_cooldown_to_half_open ... ok
+test circuit_breaker::tests::test_half_open_probe_failure_reopens ... ok
+test circuit_breaker::tests::test_half_open_probe_success_closes ... ok
+
+test result: ok. 192 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+
+     Running tests\integration_lifecycle.rs (target\debug\deps\integration_lifecycle-c64105d9b2e6d792.exe)
+
+running 4 tests
+test test_power_state_full_cycle ... ok
+test test_scheduler_metrics_under_load ... ok
+test test_full_request_lifecycle ... ok
+test test_hotswap_adapter_replacement ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+     Running unittests src\lib.rs (target\debug\deps\mai_hil-a022722b92f988f4.exe)
+
+running 7 tests
+test drivers::amd::tests::test_amd_driver_default ... ok
+test drivers::amd::tests::test_card_key_format ... ok
+test drivers::tetramem_stub::tests::test_tetramem_stub_returns_not_implemented ... ok
+test drivers::cpu::tests::test_cpu_driver_default ... ok
+test drivers::amd::tests::test_power_state_round_trip ... ok
+test drivers::cpu::tests::test_thermal_limit_bounds ... ok
+test drivers::cpu::tests::test_power_state_round_trip ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\integration.rs (target\debug\deps\integration-85f330d012cb8144.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src\main.rs (target\debug\deps\lamprey_mai-4ef063c3cd92435b.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src\main.rs (target\debug\deps\mai_pkg_builder-9ebe103a9a3406e1.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (target\debug\deps\mai_router-da304aa3f305e0e6.exe)
+
+running 62 tests
+test classifier::tests::test_classification_ordering ... ok
+test classifier::tests::test_empty_config_classifies_everything_public ... ok
+test cost::tests::test_failed_cloud_call_does_not_burn_budget ... ok
+test cost::tests::test_unknown_role_uses_default_budget ... ok
+test cost::tests::test_soft_cap_triggers_at_80_percent ... ok
+test cost::tests::test_hard_cap_blocks_request ... ok
+test cost::tests::test_check_with_no_usage_is_ok ... ok
+test cost::tests::test_record_accumulates_and_reset_clears ... ok
+test cost::tests::test_zero_request_errors ... ok
+test cost::tests::test_per_role_budgets_differ ... ok
+test entities::tests::test_empty_needle_skipped ... ok
+test entities::tests::test_case_insensitive_matching ... ok
+test entities::tests::test_export_controlled_term_detected ... ok
+test entities::tests::test_matched_text_is_hashed_never_raw ... ok
+test entities::tests::test_matches_sorted_by_span_start ... ok
+test classifier::tests::test_invalid_pattern_errors ... ok
+test entities::tests::test_medical_term_detected ... ok
+test entities::tests::test_no_matches_in_unrelated_text ... ok
+test entities::tests::test_tribal_term_detected ... ok
+test fallback::tests::test_cloud_and_local_failure_returns_exhausted ... ok
+test fallback::tests::test_cloud_failure_falls_back_to_local ... ok
+test fallback::tests::test_cloud_success_returns_primary_succeeded ... ok
+test fallback::tests::test_denied_decision_short_circuits_with_code ... ok
+test fallback::tests::test_local_decision_only_calls_local ... ok
+test fallback::tests::test_local_decision_failure_surfaces_as_failed ... ok
+test pipeline::tests::test_higher_priority_rule_wins ... ok
+test pipeline::tests::test_public_query_flows_to_default_cloud ... ok
+test pipeline::tests::test_disabled_module_does_not_contribute ... ok
+test classifier::tests::test_classified_marker_short_circuits_to_critical ... ok
+test router::tests::test_decision_carries_audit_reason ... ok
+test classifier::tests::test_ssn_triggers_regulated ... ok
+test rules::engine::tests::test_combinators_and_or_not ... ok
+test pipeline::tests::test_critical_classification_still_denied_even_with_allow_rule ... ok
+test rules::engine::tests::test_evaluate_tie_breaks_by_restrictiveness ... ok
+test classifier::tests::test_public_text_returns_public ... ok
+test rules::engine::tests::test_in_operator_against_list_value ... ok
+test rules::engine::tests::test_list_field_contains ... ok
+test rules::engine::tests::test_evaluate_returns_priority_sorted_hits ... ok
+test rules::engine::tests::test_match_bool_true_field ... ok
+test rules::engine::tests::test_match_int_ge ... ok
+test rules::engine::tests::test_type_mismatch_errors ... ok
+test pipeline::tests::test_stage_metrics_populated ... ok
+test rules::engine::tests::test_match_string_equals ... ok
+test rules::engine::tests::test_unknown_field_errors ... ok
+test pipeline::tests::test_rule_reroute_overrides_default ... ok
+test rules::modules::tests::test_disabled_module_contributes_no_rules ... ok
+test rules::modules::tests::test_install_and_enabled_rules ... ok
+test rules::modules::tests::test_set_enabled_toggles_visibility ... ok
+test rules::modules::tests::test_set_enabled_unknown_errors ... ok
+test classifier::tests::test_email_triggers_sensitive ... ok
+test classifier::tests::test_explain_returns_matched_pattern_strings ... ok
+test rules::modules::tests::test_parse_module_full_shape ... ok
+test rules::modules::tests::test_parse_module_rules_only_uses_provided_name ... ok
+test router::tests::test_critical_query_denied ... ok
+test router::tests::test_hard_cap_forces_local ... ok
+test router::tests::test_export_controlled_forces_local_regardless_of_classification ... ok
+test classifier::tests::test_phi_marker_triggers_regulated ... ok
+test rules::modules::tests::test_load_from_path_round_trip ... ok
+test router::tests::test_phi_query_routes_local ... ok
+test router::tests::test_public_query_routes_cloud ... ok
+test router::tests::test_zero_tokens_errors ... ok
+test router::tests::test_tribal_data_forces_local ... ok
+
+test result: ok. 62 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+     Running tests\baseline_policy_load.rs (target\debug\deps\baseline_policy_load-c8bb29ee25697d11.exe)
+
+running 4 tests
+test session37_itar_baseline_loads_critical_rule ... ok
+test session37_ocap_baseline_loads_and_contributes_rules ... ok
+test session37_hipaa_baseline_loads_and_contributes_rules ... ok
+test session37_all_three_baselines_compose ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests\latency_budget.rs (target\debug\deps\latency_budget-de42b9019551c4e1.exe)
+
+running 1 test
+test router_p99_decision_under_5ms ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running unittests src\lib.rs (target\debug\deps\mai_scheduler-23d2a6e802c827d4.exe)
+
+running 324 tests
+test aliases::tests::test_empty_resolver ... ok
+test batch::admission::tests::test_boundary_aggressive_selective ... ok
+test aliases::tests::test_resolve_unknown_passthrough ... ok
+test aliases::tests::test_resolve_known_alias ... ok
+test batch::admission::tests::test_aggressive_admit ... ok
+test aliases::tests::test_has_alias ... ok
+test batch::admission::tests::test_aggressive_no_kv_room ... ok
+test aliases::tests::test_reload ... ok
+test aliases::tests::test_list_aliases ... ok
+test batch::admission::tests::test_batch_full_always_rejects ... ok
+test balancer::tests::test_missing_target_is_silently_skipped ... ok
+test batch::admission::tests::test_boundary_selective_eviction ... ok
+test balancer::tests::test_no_migration_when_gap_below_threshold ... ok
+test balancer::tests::test_migration_emitted_when_benefit_clears_threshold ... ok
+test balancer::tests::test_decisions_are_sorted_by_benefit_desc ... ok
+test balancer::tests::test_topology_cost_dampens_benefit ... ok
+test batch::admission::tests::test_config_update ... ok
+test batch::admission::tests::test_eviction_required_even_with_kv_room ... ok
+test batch::admission::tests::test_eviction_required_region ... ok
+test batch::admission::tests::test_selective_background_rejected ... ok
+test batch::admission::tests::test_selective_high_priority_admitted ... ok
+test batch::admission::tests::test_selective_long_normal_rejected ... ok
+test batch::admission::tests::test_selective_short_sequence_admitted ... ok
+test batch::admission::tests::test_selective_system_priority_admitted ... ok
+test batch::admission::tests::test_vram_fraction_calculation ... ok
+test batch::builder::tests::test_completion_progress ... ok
+test batch::builder::tests::test_batch_size_limit ... ok
+test batch::builder::tests::test_completed_sequences_removed ... ok
+test batch::builder::tests::test_empty_build_step ... ok
+test batch::builder::tests::test_enqueue_and_admit ... ok
+test batch::builder::tests::test_eviction_required_region ... ok
+test batch::builder::tests::test_is_active ... ok
+test batch::builder::tests::test_model_mismatch_rejected ... ok
+test batch::builder::tests::test_metrics_snapshot_after_steps ... ok
+test batch::builder::tests::test_preemption_at_emergency ... ok
+test batch::builder::tests::test_queue_full_rejects_non_system ... ok
+test batch::builder::tests::test_selective_mode_admits_high_priority ... ok
+test batch::builder::tests::test_selective_mode_rejects_long_normal ... ok
+test batch::builder::tests::test_update_progress ... ok
+test batch::builder::tests::test_vram_state_fraction ... ok
+test batch::metrics::tests::test_admission_rate ... ok
+test batch::metrics::tests::test_completions_tracked ... ok
+test batch::metrics::tests::test_empty_snapshot ... ok
+test batch::metrics::tests::test_eviction_admission_rate ... ok
+test batch::metrics::tests::test_record_steps ... ok
+test batch::metrics::tests::test_rolling_window_eviction ... ok
+test batch::metrics::tests::test_wait_time_percentiles ... ok
+test batch::metrics::tests::test_wait_time_window_eviction ... ok
+test batch::metrics::tests::test_zero_max_batch_size ... ok
+test batch::preemption::tests::test_all_system_no_victims ... ok
+test batch::preemption::tests::test_config_update ... ok
+test batch::preemption::tests::test_empty_candidates ... ok
+test batch::preemption::tests::test_is_emergency_check ... ok
+test batch::preemption::tests::test_minimum_victims_selected ... ok
+test batch::preemption::tests::test_no_preemption_below_threshold ... ok
+test batch::preemption::tests::test_preemption_at_threshold ... ok
+test batch::preemption::tests::test_prefers_closer_to_completion ... ok
+test batch::preemption::tests::test_prefers_lower_priority ... ok
+test batch::preemption::tests::test_scoring_formula ... ok
+test batch::preemption::tests::test_system_priority_never_preempted ... ok
+test decision_cache::tests::test_bucket_quantization ... ok
+test decision_cache::tests::test_close_loads_share_a_bucket ... ok
+test decision_cache::tests::test_different_priority_distinguishes_keys ... ok
+test decision_cache::tests::test_hit_rate_math ... ok
+test decision_cache::tests::test_invalidate_all_clears_entries ... ok
+test decision_cache::tests::test_miss_then_hit_on_same_key ... ok
+test default::tests::test_batch_builder_created_on_register ... ok
+test default::tests::test_batch_builder_removed_on_unregister ... ok
+test default::tests::test_backpressure_allows_system ... ok
+test default::tests::test_cluster_metrics ... ok
+test default::tests::test_backpressure_rejects_non_system ... ok
+test default::tests::test_cluster_metrics_batch_fields ... ok
+test default::tests::test_cluster_metrics_no_kv ... ok
+test default::tests::test_cluster_metrics_with_kv ... ok
+test default::tests::test_continuation_affinity ... ok
+test default::tests::test_custom_scorer_bypasses_build ... ok
+test default::tests::test_kv_can_fit_with_budget ... ok
+test default::tests::test_duplicate_register_error ... ok
+test default::tests::test_kv_manager_attachment ... ok
+test default::tests::test_rebuild_scorer_called_with_topology ... ok
+test default::tests::test_schedule_multi_factor_with_topology_and_kv_handles ... ok
+test default::tests::test_release_decrements ... ok
+test default::tests::test_schedule_preferred_backend ... ok
+test default::tests::test_rebuild_scorer_called_after_kv_manager ... ok
+test default::tests::test_schedule_basic ... ok
+test default::tests::test_register_and_remove ... ok
+test default::tests::test_schedule_multi_factor_prefers_lower_topology_cost ... ok
+test default::tests::test_schedule_no_instance_error ... ok
+test default::tests::test_schedule_prefers_least_loaded ... ok
+test default::tests::test_schedule_unknown_alias_passthrough ... ok
+test decision_cache::tests::test_stale_entry_is_pruned_on_get ... ok
+test default::tests::test_release_sequence_deallocates_kv ... ok
+test default::tests::test_topology_penalty_method ... ok
+test default::tests::test_scorer_affects_placement_order ... ok
+test default::tests::test_scoring_config_none_defaults ... ok
+test default::tests::test_set_scorer_overrides_scoring_config ... ok
+test kv::eviction::tests::test_batch_member_protected ... ok
+test default::tests::test_set_scoring_config_rebuilds_scorer ... ok
+test kv::eviction::tests::test_batch_aware_scoring_with_set ... ok
+test default::tests::test_scorer_wired_with_scoring_config ... ok
+test default::tests::test_remove_makes_instance_unroutable ... ok
+test kv::eviction::tests::test_frequent_requester_protected ... ok
+test kv::eviction::tests::test_background_priority_evicted_first ... ok
+test kv::eviction::tests::test_config_update ... ok
+test default::tests::test_with_topology ... ok
+test kv::eviction::tests::test_large_sequence_scores_higher ... ok
+test kv::eviction::tests::test_priority_ordering ... ok
+test default::tests::test_concurrent_scheduling ... ok
+test kv::eviction::tests::test_reuse_score_with_zero_age ... ok
+test kv::eviction::tests::test_size_component_zero_max ... ok
+test kv::eviction::tests::test_system_priority_never_evicted ... ok
+test kv::guard::tests::test_current_rate ... ok
+test kv::guard::tests::test_eviction_history_capped ... ok
+test default::tests::test_session_19f_schedule_pipeline_eight_scenarios ... ok
+test kv::guard::tests::test_rate_limiter_allows_within_limit ... ok
+test kv::guard::tests::test_readmitted_sequence_gets_penalty ... ok
+test kv::guard::tests::test_recently_created_is_protected ... ok
+test kv::offload::tests::test_discard_releases_budget_without_restore ... ok
+test kv::offload::tests::test_invalid_state_transitions_are_rejected ... ok
+test kv::offload::tests::test_offload_budget_exceeded_rejects ... ok
+test kv::offload::tests::test_offload_restore_round_trip ... ok
+test kv::sequence::tests::test_default_memory_factors ... ok
+test kv::sequence::tests::test_eviction_markers ... ok
+test kv::sequence::tests::test_fallback_factor ... ok
+test kv::sequence::tests::test_memory_estimation_formula ... ok
+test kv::sequence::tests::test_memory_estimation_fp8 ... ok
+test kv::sequence::tests::test_memory_estimation_gqa_70b ... ok
+test kv::sequence::tests::test_sequence_meta_creation ... ok
+test kv::sequence::tests::test_update_tokens ... ok
+test kv::tests::test_allocate_and_deallocate ... ok
+test kv::tests::test_can_fit_checks_budget ... ok
+test kv::tests::test_deallocate_idempotent ... ok
+test kv::tests::test_duplicate_allocation_rejected ... ok
+test kv::tests::test_evaluate_triggers_integration ... ok
+test kv::tests::test_evict_frees_memory ... ok
+test kv::tests::test_evict_unknown_sequence_returns_zero ... ok
+test kv::tests::test_factor_for_model_lookup ... ok
+test kv::tests::test_eviction_candidates_sorted_by_score ... ok
+test kv::tests::test_perform_eviction_emergency_bypasses_residency ... ok
+test kv::tests::test_perform_eviction_respects_residency ... ok
+test kv::tests::test_sequence_meta_retrieval ... ok
+test kv::tests::test_system_priority_resists_eviction ... ok
+test kv::tests::test_total_bytes ... ok
+test kv::tiered::tests::test_active_sequence_below_threshold_stays_hot ... ok
+test kv::tiered::tests::test_active_sequence_past_demote_threshold_demotes ... ok
+test kv::tiered::tests::test_offloading_in_flight_is_left_alone ... ok
+test kv::tiered::tests::test_plan_promotion_for_offloaded ... ok
+test kv::tiered::tests::test_plan_promotion_skips_active ... ok
+test kv::tiered::tests::test_tier_of_active_is_hot ... ok
+test kv::tiered::tests::test_warm_sequence_below_evict_stays_warm ... ok
+test kv::tiered::tests::test_warm_sequence_past_evict_threshold_is_evicted ... ok
+test kv::triggers::tests::test_custom_thresholds ... ok
+test kv::triggers::tests::test_emergency_threshold ... ok
+test kv::triggers::tests::test_eviction_threshold ... ok
+test kv::triggers::tests::test_exact_threshold_boundary ... ok
+test kv::triggers::tests::test_healthy_no_action ... ok
+test kv::triggers::tests::test_on_demand_trigger ... ok
+test kv::triggers::tests::test_proactive_threshold ... ok
+test kv::triggers::tests::test_zero_total_no_action ... ok
+test metrics::anomaly::tests::test_insufficient_latency_data ... ok
+test metrics::anomaly::tests::test_latency_spike_detected ... ok
+test metrics::anomaly::tests::test_no_false_positive_latency ... ok
+test metrics::anomaly::tests::test_queue_buildup_not_enough_data ... ok
+test metrics::anomaly::tests::test_queue_not_buildup ... ok
+test metrics::feedback::tests::test_anomalies_recorded ... ok
+test metrics::feedback::tests::test_drain_anomalies ... ok
+test metrics::feedback::tests::test_health_score_available ... ok
+test metrics::feedback::tests::test_process_completion_updates_lifecycle ... ok
+test metrics::feedback::tests::test_updated_metrics_queue_decrement ... ok
+test metrics::health::tests::test_empty_tracker_is_healthy ... ok
+test metrics::health::tests::test_health_threshold ... ok
+test metrics::health::tests::test_healthy_instance_scores_high ... ok
+test metrics::health::tests::test_high_error_rate_reduces_score ... ok
+test metrics::health::tests::test_latency_spikes_reduce_consistency ... ok
+test metrics::health::tests::test_memory_leak_detection ... ok
+test metrics::health::tests::test_throughput_drop_detected ... ok
+test metrics::lifecycle::tests::test_prediction_error_formula ... ok
+test metrics::lifecycle::tests::test_prediction_error_no_actual ... ok
+test metrics::lifecycle::tests::test_prediction_error_zero_actual ... ok
+test metrics::lifecycle::tests::test_recent_lifecycles ... ok
+test metrics::lifecycle::tests::test_rolling_empty ... ok
+test metrics::lifecycle::tests::test_rolling_prediction_error ... ok
+test metrics::lifecycle::tests::test_window_eviction ... ok
+test metrics::store::tests::test_capacity_zero ... ok
+test metrics::store::tests::test_clear ... ok
+test metrics::store::tests::test_eviction_when_full ... ok
+test metrics::store::tests::test_iter_empty ... ok
+test metrics::store::tests::test_push_and_latest ... ok
+test metrics::tests::test_all_health_scores_empty_registry ... ok
+test metrics::tests::test_all_health_scores_with_data ... ok
+test metrics::tests::test_collector_record_completion ... ok
+test metrics::tests::test_anomalies_query ... ok
+test metrics::tests::test_health_score_query ... ok
+test metrics::tests::test_prediction_error ... ok
+test placement::tests::test_all_overloaded_degrades_gracefully ... ok
+test placement::tests::test_continuation_affinity ... ok
+test placement::tests::test_continuation_no_match_falls_through ... ok
+test placement::tests::test_empty_candidates_error ... ok
+test placement::tests::test_custom_scorer ... ok
+test placement::tests::test_latency_estimate ... ok
+test placement::tests::test_least_loaded_wins ... ok
+test placement::tests::test_overloaded_filtered ... ok
+test kv::sequence::tests::test_idle_time_increases ... ok
+test placement::tests::test_single_candidate_selected ... ok
+test placement::tests::test_topology_penalty_no_topology ... ok
+test placement::tests::test_topology_penalty_with_topology ... ok
+test placement::tests::test_vram_tiebreaker ... ok
+test kv::sequence::tests::test_touch_updates_last_access ... ok
+test power::tests::test_check_auto_demotions ... ok
+test power::tests::test_boot_transition ... ok
+test power::tests::test_demotion_blocks_busy_instance ... ok
+test power::tests::test_gpu_group_tracking ... ok
+test power::tests::test_initial_state_off ... ok
+test power::tests::test_demotion_succeeds_when_idle ... ok
+test power::tests::test_power_draw_estimate ... ok
+test power::tests::test_promotion_notifies_scheduler ... ok
+test power::tests::test_thermal_throttle ... ok
+test power::tests::test_transition_log_accessible ... ok
+test power::tests::test_wake_to_sentinel ... ok
+test preemption::tests::test_boost_priority_table ... ok
+test preemption::tests::test_can_preempt_hierarchy ... ok
+test preemption::tests::test_high_preempts_background_and_resume_boosts ... ok
+test preemption::tests::test_normal_cannot_preempt_normal ... ok
+test preemption::tests::test_resume_unknown_sequence_errors ... ok
+test preemption::tests::test_starvation_prevention_two_cycles ... ok
+test kv::tests::test_touch_updates_sequence ... ok
+test preemption::tests::test_system_can_preempt_anything ... ok
+test registry::tests::test_duplicate_registration_rejected ... ok
+test registry::tests::test_find_by_gpu ... ok
+test registry::tests::test_find_by_model ... ok
+test registry::tests::test_is_overloaded ... ok
+test registry::tests::test_list_all ... ok
+test registry::tests::test_register_and_count ... ok
+test registry::tests::test_remove_and_count ... ok
+test registry::tests::test_remove_unknown_is_noop ... ok
+test registry::tests::test_request_start_and_complete ... ok
+test registry::tests::test_total_metrics ... ok
+test scoring::batching::tests::test_full_batch_zero_benefit ... ok
+test scoring::batching::tests::test_full_queue_zero_benefit ... ok
+test scoring::batching::tests::test_high_vram_zero_benefit ... ok
+test scoring::batching::tests::test_ideal_conditions_max_benefit ... ok
+test scoring::batching::tests::test_partial_batch_partial_benefit ... ok
+test scoring::batching::tests::test_queue_reduces_benefit ... ok
+test scoring::batching::tests::test_selective_region_half_factor ... ok
+test scoring::eviction_cost::tests::test_no_kv_manager_zero_penalty ... ok
+test scoring::eviction_cost::tests::test_plenty_of_room_zero_penalty ... ok
+test scoring::eviction_cost::tests::test_zero_max_cost_returns_zero ... ok
+test scoring::latency::tests::test_batch_waiting_adds_to_penalty ... ok
+test scoring::latency::tests::test_clamped_at_one ... ok
+test scoring::latency::tests::test_decode_slots_contribute ... ok
+test scoring::latency::tests::test_empty_instance_zero_penalty ... ok
+test scoring::latency::tests::test_queue_depth_increases_penalty ... ok
+test scoring::latency::tests::test_specific_calculation ... ok
+test scoring::latency::tests::test_zero_target_returns_zero ... ok
+test scoring::memory::tests::test_cubic_curve_steeper ... ok
+test scoring::memory::tests::test_empty_vram_zero_penalty ... ok
+test scoring::memory::tests::test_full_vram_max_penalty ... ok
+test scoring::memory::tests::test_higher_usage_higher_penalty ... ok
+test scoring::memory::tests::test_linear_curve ... ok
+test scoring::memory::tests::test_quadratic_curve ... ok
+test scoring::memory::tests::test_zero_allocated_returns_max ... ok
+test scoring::scorer::tests::test_all_zero_weights_equal_scores ... ok
+test scoring::scorer::tests::test_build_multi_factor_scorer_function ... ok
+test scoring::scorer::tests::test_continuation_bonus_applied ... ok
+test scoring::scorer::tests::test_continuation_no_match_no_bonus ... ok
+test scoring::scorer::tests::test_empty_instance_low_score ... ok
+test scoring::scorer::tests::test_into_scoring_fn ... ok
+test scoring::scorer::tests::test_loaded_instance_higher_score ... ok
+test scoring::scorer::tests::test_score_breakdown_populated ... ok
+test scoring::scorer::tests::test_weight_changes_affect_outcome ... ok
+test scoring::topology_score::tests::test_empty_gpu_ids_zero_penalty ... ok
+test scoring::topology_score::tests::test_no_topology_zero_penalty ... ok
+test scoring::topology_score::tests::test_normalization_caps_at_one ... ok
+test scoring::topology_score::tests::test_single_gpu_zero_penalty ... ok
+test scoring::topology_score::tests::test_zero_max_penalty_returns_zero ... ok
+test scoring::topology_score::tests::test_with_real_topology ... ok
+test topology::analysis::tests::test_best_pairs_nvlink_first ... ok
+test topology::analysis::tests::test_best_quads_insufficient_gpus ... ok
+test topology::analysis::tests::test_best_quads_with_four_gpus ... ok
+test topology::analysis::tests::test_cpu_affinity_groups ... ok
+test topology::analysis::tests::test_floyd_warshall_four_gpu_shortest_path ... ok
+test topology::analysis::tests::test_floyd_warshall_two_gpu ... ok
+test topology::analysis::tests::test_nvlink_cliques_four_gpu_mixed ... ok
+test topology::analysis::tests::test_nvlink_cliques_two_gpu ... ok
+test topology::analysis::tests::test_path_cost_self_zero ... ok
+test kv::sequence::tests::test_record_request_updates_gap ... ok
+test topology::analysis::tests::test_topology_penalty_nvlink_vs_pcie ... ok
+test topology::collector::tests::test_cpu_affinity_parse ... ok
+test topology::analysis::tests::test_worst_pair_cost ... ok
+test topology::collector::tests::test_latency_ordering ... ok
+test topology::collector::tests::test_link_type_nvlink ... ok
+test topology::collector::tests::test_link_type_parse ... ok
+test topology::collector::tests::test_parse_empty_input ... ok
+test topology::collector::tests::test_parse_eight_gpu_dgx ... ok
+test topology::collector::tests::test_parse_four_gpu_mixed ... ok
+test topology::collector::tests::test_parse_gpu_label ... ok
+test topology::collector::tests::test_parse_single_gpu ... ok
+test topology::collector::tests::test_parse_two_gpu_nvlink ... ok
+test topology::graph::tests::test_edge_cost_formula ... ok
+test topology::graph::tests::test_gpu_ids_sorted ... ok
+test topology::graph::tests::test_no_direct_link_returns_infinity ... ok
+test topology::graph::tests::test_node_mut_metrics_update ... ok
+test topology::graph::tests::test_numa_affinity_preserved ... ok
+test topology::graph::tests::test_nvlink_cost_lower_than_pcie ... ok
+test topology::graph::tests::test_single_gpu_graph ... ok
+test topology::graph::tests::test_two_gpu_nvlink_graph ... ok
+test topology::refresh::tests::test_below_threshold_no_anomaly ... ok
+test topology::refresh::tests::test_clear_anomalies ... ok
+test topology::refresh::tests::test_multiple_anomalies_same_gpu ... ok
+test topology::refresh::tests::test_no_anomalies_normal_metrics ... ok
+test topology::refresh::tests::test_refresher_interval ... ok
+test topology::refresh::tests::test_thermal_throttle_anomaly ... ok
+test topology::refresh::tests::test_vram_exhaustion_anomaly ... ok
+test topology::tests::test_default_config ... ok
+test topology::tests::test_flat_topology ... ok
+test topology::tests::test_single_gpu_penalty_zero ... ok
+test traces::capture::tests::test_capture_context_marks_continuation ... ok
+test traces::capture::tests::test_session_id_hashing_is_stable_with_salt ... ok
+test traces::capture::tests::test_disabled_capture_produces_event_but_no_file ... ok
+test kv::guard::tests::test_old_readmission_no_penalty ... ok
+test kv::guard::tests::test_old_sequence_not_protected ... ok
+test traces::capture::tests::test_enabled_capture_writes_ndjson ... ok
+test kv::eviction::tests::test_idle_sequence_scores_higher ... ok
+test kv::guard::tests::test_rate_limiter_resets_after_window ... ok
+
+test result: ok. 324 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.06s
+
+     Running tests\gate_c_session33.rs (target\debug\deps\gate_c_session33-5a79e58038df64b7.exe)
+
+running 8 tests
+test gate_c_session33_load_balancer_emits_migration_under_sustained_imbalance ... ok
+test gate_c_session33_decision_cache_hits_under_steady_load ... ok
+test gate_c_session33_soft_eviction_round_trip_with_preemption_resume_boost ... ok
+test gate_c_session33_unknown_alias_returns_no_instance ... ok
+test gate_c_session33_decision_carries_placement_reason ... ok
+test gate_c_session33_multiple_eligible_instances_resolved ... ok
+test gate_c_session33_continuation_prefers_warm_instance ... ok
+test gate_c_session33_overload_rejects_non_system_priority ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\topology_integration.rs (target\debug\deps\topology_integration-77640ad964e23237.exe)
+
+running 16 tests
+test test_single_gpu_fixture_parses ... ok
+test test_4gpu_mixed_cpu_affinity ... ok
+test test_4gpu_mixed_fixture_parses ... ok
+test test_8gpu_dgx_fixture_parses ... ok
+test test_2gpu_nvlink_graph_structure ... ok
+test test_single_gpu_topology_penalty_zero ... ok
+test test_placement_engine_topology_integration ... ok
+test test_4gpu_mixed_cost_ordering ... ok
+test test_2gpu_nvlink_fixture_parses ... ok
+test test_4gpu_mixed_topology_penalty_ordering ... ok
+test test_2gpu_nvlink_topology_analysis ... ok
+test test_config_weights_affect_edge_cost ... ok
+test test_8gpu_dgx_nvlink_dense ... ok
+test test_4gpu_mixed_nvlink_cliques ... ok
+test test_8gpu_dgx_topology_structure ... ok
+test test_8gpu_dgx_cpu_affinity_groups ... ok
+
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running unittests src\lib.rs (target\debug\deps\mai_sdk_rs-ed0f6d38dc8e9778.exe)
+
+running 10 tests
+test tests::auth_headers_include_both_when_set ... ok
+test tests::default_config_is_port_8420 ... ok
+test tests::error_codes_match_spec_taxonomy ... ok
+test tests::auth_headers_prefer_api_key_and_drop_empty_profile ... ok
+test tests::content_filter_level_matches_openapi ... ok
+test tests::retryable_errors_identified ... ok
+test tests::finish_reason_has_no_content_filter ... ok
+test tests::chat_stream_parses_sse_chunks_and_resume_id ... ok
+test tests::client_requires_either_api_key_or_profile_id ... ok
+test tests::health_uses_real_http_get_with_auth_headers ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests\config.rs (target\debug\deps\config-f76dce486f8d78f8.exe)
+
+running 14 tests
+test auth_headers_empty_when_no_auth_fields_set ... ok
+test auth_headers_are_owned_strings ... ok
+test auth_headers_includes_api_key_when_set ... ok
+test auth_headers_stable_order_api_key_then_profile ... ok
+test client_requires_api_key_or_profile_id ... ok
+test config_clone_preserves_auth_fields ... ok
+test default_base_url_is_localhost_8420 ... ok
+test config_debug_includes_base_url ... ok
+test default_priority_is_normal ... ok
+test default_timeout_is_reasonable ... ok
+test auth_headers_includes_profile_when_set ... ok
+test priority_variants_are_distinct ... ok
+test extra_headers_can_be_set ... ok
+test client_constructs_with_profile_only ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\endpoints.rs (target\debug\deps\endpoints-17d09cf2b84640db.exe)
+
+running 14 tests
+test health_endpoint_decodes ... ok
+test model_list_empty_is_ok ... ok
+test adapter_health_endpoint_decodes_map ... ok
+test adapter_health_empty_map_is_ok ... ok
+test list_models_decodes_envelope ... ok
+test audit_log_builds_query_params ... ok
+test get_profile_uses_profile_id_when_set ... ok
+test get_model_fetches_by_id ... ok
+test audit_log_without_query_params_works ... ok
+test power_state_endpoint_decodes ... ok
+test transition_power_posts_body ... ok
+test power_state_auto_demotion_enabled_decodes ... ok
+test hardware_health_endpoint_decodes ... ok
+test get_profile_defaults_to_me_when_profile_id_empty ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests\http_client.rs (target\debug\deps\http_client-2f7ca6c543518d2f.exe)
+
+running 18 tests
+test audit_log_attaches_query_params ... ok
+test malformed_json_response_maps_to_deserialization ... ok
+test complete_round_trip ... ok
+test chat_decodes_response_and_sends_auth_header ... ok
+test embed_round_trip ... ok
+test function_call_round_trip ... ok
+test power_state_round_trip ... ok
+test list_models_unwraps_data_envelope ... ok
+test health_round_trip ... ok
+test adapter_health_round_trip ... ok
+test get_model_round_trip ... ok
+test server_500_with_unparseable_body_synthesises_internal_error ... ok
+test get_profile_round_trip ... ok
+test hardware_health_round_trip ... ok
+test server_401_maps_to_authentication_failed ... ok
+test structured_round_trip ... ok
+test transition_power_round_trip ... ok
+test slow_response_past_timeout_yields_sdk_timeout ... ok
+
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.02s
+
+     Running tests\streaming.rs (target\debug\deps\streaming-1bbbf55c3498966d.exe)
+
+running 7 tests
+test chat_stream_non_2xx_maps_to_api_error ... ok
+test chat_stream_resume_propagates_non_2xx_errors ... ok
+test chat_stream_yields_events_in_order ... ok
+test chat_stream_malformed_sse_chunk_returns_deserialization_error ... ok
+test chat_stream_handles_done_only_body ... ok
+test chat_stream_resume_sends_last_event_id_header ... ok
+test chat_stream_captures_last_event_id ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests\url_and_headers.rs (target\debug\deps\url_and_headers-addc000ad6af9633.exe)
+
+running 5 tests
+test extra_headers_are_forwarded ... ok
+test request_includes_priority_header ... ok
+test profile_header_is_allowed_when_api_key_absent ... ok
+test base_url_trailing_slash_is_normalized ... ok
+test api_key_and_profile_header_can_coexist ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running unittests src\lib.rs (target\debug\deps\mai_vault-1de0f0e2dd30a543.exe)
+
+running 63 tests
+test file_dev::tests::test_initialize_creates_vault ... ok
+test audit::tests::test_broken_chain_detected ... ok
+test audit::tests::test_append_and_read ... ok
+test audit::tests::test_entry_count_and_last_hash ... ok
+test audit::tests::test_compliance_export ... ok
+test file_dev::tests::test_load_missing_fails ... ok
+test file_dev::tests::test_snapshot_lifecycle ... ok
+test audit::tests::test_chain_integrity ... ok
+test audit::tests::test_read_by_time_range ... ok
+test file_dev::tests::test_integrity_check ... ok
+test pqc::tests::test_invalid_key_sizes_rejected ... ok
+test file_dev::tests::test_remove_model ... ok
+test audit::tests::test_read_by_profile ... ok
+test file_dev::tests::test_store_and_load_model ... ok
+test file_dev::tests::test_storage_info ... ok
+test pqc::tests::test_signing_key_required_for_package_ops ... ok
+test pqc::tests::test_kem_keypair_sizes ... ok
+test pqc::tests::test_encrypt_decrypt_roundtrip ... ok
+test pqc::tests::test_aead_tamper_detection ... ok
+test file_dev::tests::test_store_duplicate_fails ... ok
+test profiles::tests::test_create_and_get_profile ... ok
+test profiles::tests::test_delete_profile ... ok
+test pqc::tests::test_kem_roundtrip ... ok
+test profiles::tests::test_duplicate_create_fails ... ok
+test profiles::tests::test_permissions_by_role ... ok
+test profiles::tests::test_list_with_role_filter ... ok
+test profiles::tests::test_update_profile ... ok
+test profiles::tests::test_profile_count ... ok
+test pqc::tests::test_dsa_keypair_sizes ... ok
+test tpm::tests::test_attestation_quote ... ok
+test tpm::tests::test_seal_unseal_roundtrip ... ok
+test tpm::tests::test_pcr_recovery_after_reset ... ok
+test tpm::tests::test_pcr_mismatch_blocks_unseal ... ok
+test tpm::tests::test_tpm_available ... ok
+test tpm::tests::test_list_and_remove_keys ... ok
+test vectors::tests::test_backup_and_restore ... ok
+test vectors::tests::test_create_and_list_collections ... ok
+test vectors::tests::test_delete_collection ... ok
+test vectors::tests::test_dimension_mismatch_rejected ... ok
+test vectors::tests::test_duplicate_collection_fails ... ok
+test vectors::tests::test_delete_points ... ok
+test vectors::tests::test_score_threshold ... ok
+test vectors::tests::test_store_and_search ... ok
+test pqc::tests::test_kem_decap_wrong_key_diverges ... ok
+test vectors::tests::test_upsert_existing_points ... ok
+test zfs::tests::test_load_missing_model_fails ... ok
+test zfs::tests::test_initialize_creates_vault ... ok
+test zfs::tests::test_snapshot_lifecycle ... ok
+test profiles::tests::test_persistence_across_loads ... ok
+test zfs::tests::test_verify_signature_requires_wired_pqc_engine ... ok
+test pqc::tests::test_per_model_key_isolation ... ok
+test zfs::tests::test_storage_info ... ok
+test zfs::tests::test_store_duplicate_fails ... ok
+test zfs::tests::test_integrity_check ... ok
+test zfs::tests::test_remove_model ... ok
+test zfs::tests::test_store_and_load_model ... ok
+test pqc::tests::test_dsa_sign_verify_roundtrip ... ok
+test pqc::tests::test_package_sign_verify ... ok
+test audit::tests::test_tampered_checkpoint_signature_detected ... ok
+test init::tests::first_boot_completes_under_30s ... ok
+test audit::tests::test_checkpoint_signature_written_and_verified ... ok
+test zfs::tests::test_verify_signature_delegates_to_pqc_engine ... ok
+test pqc::tests::test_dsa_tamper_detection ... ok
+
+test result: ok. 63 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.27s
+
+     Running unittests src\main.rs (target\debug\deps\rule_tester-536cf103d92b1e69.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (target\debug\deps\wsf_api-083dfe682d20d6c1.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src\main.rs (target\debug\deps\wsf_api-b98b507626d2b6ce.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src\bin\wsf-seed.rs (target\debug\deps\wsf_seed-bfb44e92c8911f5e.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\live_api.rs (target\debug\deps\live_api-57859d2078eaeacf.exe)
+
+running 1 test
+test sdk_round_trips_every_endpoint ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (target\debug\deps\wsf_bridge-6830627893174b7e.exe)
+
+running 6 tests
+test tests::compose_maps_tenant_envelope ... ok
+test tests::compose_rejects_unknown_scope ... ok
+test tests::audit_correlation_is_metadata_only ... ok
+test tests::compose_issue_verify_roundtrip_offline ... ok
+test tests::sign_and_verify_bundle_offline ... ok
+test tests::sign_revocation_verifies_offline ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+     Running tests\live_openbao.rs (target\debug\deps\live_openbao-4059d5108c18f908.exe)
+
+running 1 test
+test issue_and_verify_token_end_to_end ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (target\debug\deps\wsf_broker-5081d975c0ec24bd.exe)
+
+running 16 tests
+test sts::tests::enc_encodes_reserved_but_not_unreserved ... ok
+test azure::tests::form_body_encodes_fields ... ok
+test sts::tests::extract_tag_reads_first_occurrence ... ok
+test sigv4::tests::end_to_end_matches_aws_sigv4_test_suite_get_vanilla ... ok
+test sts::tests::host_of_strips_scheme_and_trailing_slash ... ok
+test sigv4::tests::session_token_extends_signed_headers ... ok
+test tests::duration_tracks_ttl_and_clamps ... ok
+test tests::non_resource_caveats_do_not_widen_scope ... ok
+test gcp::tests::body_carries_scopes_and_lifetime_string ... ok
+test gcp::tests::empty_scopes_still_valid_shape ... ok
+test sigv4::tests::authorization_header_is_well_formed ... ok
+test tests::session_policy_scopes_to_resource_caveats ... ok
+test tests::session_policy_denies_all_without_scope ... ok
+test tests::session_name_sanitizes_and_caps ... ok
+test tests::rejects_expired_token ... ok
+test tests::rejects_token_that_fails_verification ... ok
+
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+     Running tests\live_azure.rs (target\debug\deps\live_azure-5322484e15efb3de.exe)
+
+running 1 test
+test azure_broker_caps_ttl_to_token ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\live_gcp.rs (target\debug\deps\live_gcp-525beb67e6f8faf4.exe)
+
+running 1 test
+test gcp_broker_mints_scoped_token ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\live_localstack.rs (target\debug\deps\live_localstack-9a54e5a3fd4bbe75.exe)
+
+running 1 test
+test broker_scopes_credentials_against_localstack ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (target\debug\deps\wsf_cache-73c7b2d2f74ea6ad.exe)
+
+running 6 tests
+test tests::bad_signature_token_denied ... ok
+test tests::refresh_rejects_forged_snapshot ... ok
+test tests::fresh_and_reachable_allows_cloud ... ok
+test tests::revoked_token_denied_offline ... ok
+test tests::bridge_unreachable_past_hard_ttl_narrows_cloud_to_local ... ok
+test tests::air_gap_denies_cloud_routes ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+
+     Running tests\live_cache.rs (target\debug\deps\live_cache-a88980f40ce5f8c9.exe)
+
+running 1 test
+test ring3_cache_syncs_real_bridge_material ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (target\debug\deps\wsf_hardening-89a25cdf57b46011.exe)
+
+running 5 tests
+test tests::guard_is_noop_in_dev_mode ... ok
+test tests::production_guard_rejects_dev_fixtures ... ok
+test tests::short_key_flagged ... ok
+test tests::production_guard_passes_a_hardened_config ... ok
+test tests::key_rotation_is_zero_downtime ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.23s
+
+     Running unittests src\lib.rs (target\debug\deps\wsf_ledger-5b4ed13c20064b66.exe)
+
+running 4 tests
+test tests::multi_source_receipts_chain_correctly ... ok
+test tests::tampered_chain_fails_verify ... ok
+test tests::tampered_pack_fails_verification ... ok
+test tests::exported_pack_verifies_off_host ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+
+     Running tests\live_ledger.rs (target\debug\deps\live_ledger-25e5c1e3e4e8a76a.exe)
+
+running 1 test
+test multi_service_ledger_pack_against_live_openbao ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (target\debug\deps\wsf_seal-ecc58bd9885b0685.exe)
+
+running 3 tests
+test tests::label_spec_maps_to_contract_label ... ok
+test tests::tampered_receipt_chain_fails ... ok
+test tests::receipt_chain_appends_and_verifies ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\live_seal.rs (target\debug\deps\live_seal-b2336d8793701e1f.exe)
+
+running 1 test
+test seal_unseal_over_http_against_live_openbao ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (target\debug\deps\wsf_tenants-aaffc738535a7c61.exe)
+
+running 3 tests
+test tests::random_key_is_32_bytes_hex ... ok
+test tests::record_round_trips_through_attributes_string ... ok
+test tests::needs_rotation_past_ninety_days ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests\live_tenants.rs (target\debug\deps\live_tenants-19f7f0546ffacd92.exe)
+
+running 1 test
+test provision_issue_deprovision_revokes_everywhere ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests aog_approvals
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests aog_gateway
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests aog_toolproxy
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests fabric_cache
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests fabric_contracts
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests fabric_crypto
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests fabric_envelope
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests fabric_identity
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests fabric_proof
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests fabric_revocation
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests fabric_token
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests hipaa_pack
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests mai_adapters
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests mai_admin
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests mai_agent
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests mai_api
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests mai_compliance
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests mai_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests mai_hil
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests mai_router
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests mai_scheduler
+
+running 2 tests
+test mai-scheduler\src\batch\mod.rs - batch (line 24) ... ignored
+test mai-scheduler\src\topology\mod.rs - topology (line 20) ... ignored
+
+test result: ok. 0 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+all doctests ran in 0.53s; merged doctests compilation took 0.44s
+   Doc-tests mai_sdk_rs
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests mai_vault
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests wsf_api
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests wsf_bridge
+
+running 1 test
+test crates\wsf-bridge\src\lib.rs - (line 21) - compile ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+all doctests ran in 1.28s; merged doctests compilation took 1.18s
+   Doc-tests wsf_broker
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests wsf_cache
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests wsf_hardening
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests wsf_ledger
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests wsf_seal
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests wsf_tenants
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+cargo test exit: 0

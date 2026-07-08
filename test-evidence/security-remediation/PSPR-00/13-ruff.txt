@@ -1,0 +1,32 @@
+ANN202 Missing return type annotation for private function `_send`
+  --> deployment\appliance\mock-llm\app.py:19:9
+   |
+18 | class Handler(BaseHTTPRequestHandler):
+19 |     def _send(self, code, obj):
+   |         ^^^^^
+20 |         body = json.dumps(obj).encode()
+21 |         self.send_response(code)
+   |
+help: Add return type annotation: `None`
+
+ANN002 Missing type annotation for `*_args`
+  --> deployment\appliance\mock-llm\app.py:65:27
+   |
+63 |             self._send(404, {"error": "not found"})
+64 |
+65 |     def log_message(self, *_args):
+   |                           ^^^^^^
+66 |         pass
+   |
+
+S104 Possible binding to all interfaces
+  --> deployment\appliance\mock-llm\app.py:70:17
+   |
+69 | if __name__ == "__main__":
+70 |     HTTPServer(("0.0.0.0", 8000), Handler).serve_forever()
+   |                 ^^^^^^^^^
+   |
+
+Found 3 errors.
+No fixes available (1 hidden fix can be enabled with the `--unsafe-fixes` option).
+ruff check . exit: 1

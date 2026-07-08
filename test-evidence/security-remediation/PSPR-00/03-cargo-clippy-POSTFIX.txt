@@ -1,0 +1,77 @@
+    Checking mai-core v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\mai-core)
+    Checking mai-compliance v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\mai-compliance)
+    Checking mai-adapters v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\mai-adapters)
+    Checking mai-scheduler v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\mai-scheduler)
+    Checking mai-vault v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\mai-vault)
+    Checking mai-agent v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\mai-agent)
+    Checking mai-pkg-builder v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\tools\pkg-builder)
+error: doc list item without indentation
+  --> mai-scheduler\src\scoring\mod.rs:11:5
+   |
+11 | //! `latency`: queue-based latency estimation
+   |     ^
+   |
+   = help: if this is supposed to be its own paragraph, add a blank line
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#doc_lazy_continuation
+   = note: `-D clippy::doc-lazy-continuation` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[allow(clippy::doc_lazy_continuation)]`
+help: indent this line
+   |
+11 | //!   `latency`: queue-based latency estimation
+   |     ++
+
+error: doc list item without indentation
+  --> mai-scheduler\src\scoring\mod.rs:12:5
+   |
+12 | //! `memory`: VRAM pressure penalty with configurable exponent
+   |     ^
+   |
+   = help: if this is supposed to be its own paragraph, add a blank line
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#doc_lazy_continuation
+help: indent this line
+   |
+12 | //!   `memory`: VRAM pressure penalty with configurable exponent
+   |     ++
+
+error: doc list item without indentation
+  --> mai-scheduler\src\scoring\mod.rs:13:5
+   |
+13 | //! `topology`: GPU interconnect cost for tensor-parallel
+   |     ^
+   |
+   = help: if this is supposed to be its own paragraph, add a blank line
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#doc_lazy_continuation
+help: indent this line
+   |
+13 | //!   `topology`: GPU interconnect cost for tensor-parallel
+   |     ++
+
+error: doc list item without indentation
+  --> mai-scheduler\src\scoring\mod.rs:14:5
+   |
+14 | //! `eviction`: eviction cost penalty
+   |     ^
+   |
+   = help: if this is supposed to be its own paragraph, add a blank line
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#doc_lazy_continuation
+help: indent this line
+   |
+14 | //!   `eviction`: eviction cost penalty
+   |     ++
+
+error: doc list item without indentation
+  --> mai-scheduler\src\scoring\mod.rs:15:5
+   |
+15 | //! `batching`: batch fit benefit
+   |     ^
+   |
+   = help: if this is supposed to be its own paragraph, add a blank line
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#doc_lazy_continuation
+help: indent this line
+   |
+15 | //!   `batching`: batch fit benefit
+   |     ++
+
+error: could not compile `mai-scheduler` (lib) due to 5 previous errors
+warning: build failed, waiting for other jobs to finish...
+clippy exit code: 101

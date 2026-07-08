@@ -1,0 +1,2709 @@
+    Checking tokio v1.52.3
+    Checking fabric-crypto v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\fabric-crypto)
+    Checking fabric-contracts v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\fabric-contracts)
+    Checking predicates-core v1.0.10
+    Checking termtree v0.5.1
+    Checking fragile v2.1.0
+   Compiling mockall_derive v0.13.1
+    Checking downcast v0.11.0
+    Checking fastrand v2.4.1
+   Compiling mai-api v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\mai-api)
+    Checking mai-router v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\mai-router)
+    Checking num_cpus v1.17.0
+    Checking deadpool-runtime v0.1.4
+    Checking assert-json-diff v2.0.2
+   Compiling mai-launcher v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\tools\mai-launcher)
+    Checking predicates-tree v1.0.13
+    Checking predicates v3.1.4
+    Checking tempfile v3.27.0
+warning: this could be rewritten as `let...else`
+   --> crates\fabric-crypto\src\providers\rustcrypto.rs:129:9
+    |
+129 | /         let sig = match Signature::<MlDsa87>::decode(&EncodedSignature::<MlDsa87>::from(*sig_arr)) {
+130 | |             Some(s) => s,
+131 | |             None => return Ok(false),
+132 | |         };
+    | |__________^ help: consider writing: `let Some(sig) = Signature::<MlDsa87>::decode(&EncodedSignature::<MlDsa87>::from(*sig_arr)) else { return Ok(false) };`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#manual_let_else
+    = note: `-W clippy::manual-let-else` implied by `-W clippy::pedantic`
+    = help: to override `-W clippy::pedantic` add `#[allow(clippy::manual_let_else)]`
+
+warning: `fabric-crypto` (lib) generated 1 warning
+    Checking fabric-proof v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\fabric-proof)
+    Checking fabric-cache v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\fabric-cache)
+warning: adding items after statements is confusing, since items exist from the start of the scope
+   --> mai-router\src\rules\modules.rs:151:5
+    |
+151 | /     struct RulesOnly {
+152 | |         rules: Vec<Rule>,
+153 | |     }
+    | |_____^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#items_after_statements
+    = note: `-W clippy::items-after-statements` implied by `-W clippy::pedantic`
+    = help: to override `-W clippy::pedantic` add `#[allow(clippy::items_after_statements)]`
+
+warning: `mai-router` (lib) generated 1 warning
+    Checking rule-tester v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\tools\rule-tester)
+    Checking mockall v0.13.1
+warning: wildcard matches only a single variant and will also match any future added variants
+   --> mai-router\src\router.rs:364:13
+    |
+364 |             other => panic!("unexpected decision {other:?}"),
+    |             ^^^^^ help: try: `other @ RoutingDecision::Cloud { .. }`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#match_wildcard_for_single_variants
+    = note: `-W clippy::match-wildcard-for-single-variants` implied by `-W clippy::pedantic`
+    = help: to override `-W clippy::pedantic` add `#[allow(clippy::match_wildcard_for_single_variants)]`
+
+warning: `mai-router` (lib test) generated 2 warnings (1 duplicate)
+warning: `fabric-crypto` (lib test) generated 1 warning (1 duplicate)
+    Checking fabric-token v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\fabric-token)
+    Checking fabric-revocation v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\fabric-revocation)
+    Checking fabric-envelope v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\fabric-envelope)
+    Checking wsf-ledger v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\wsf-ledger)
+    Checking fabric-identity v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\fabric-identity)
+    Checking tokio-util v0.7.18
+    Checking mai-hil v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\mai-hil)
+    Checking tower v0.5.3
+warning: long literal lacking separators
+  --> crates\fabric-contracts\tests\contracts.rs:18:33
+   |
+18 |         "budget": {"token_cap": 200000, "tokens_spent": 0, "usd_cap_cents": 500,
+   |                                 ^^^^^^ help: consider: `200_000`
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#unreadable_literal
+   = note: `-W clippy::unreadable-literal` implied by `-W clippy::pedantic`
+   = help: to override `-W clippy::pedantic` add `#[allow(clippy::unreadable_literal)]`
+
+warning: `fabric-contracts` (test "contracts") generated 1 warning
+    Checking tokio-rustls v0.26.4
+    Checking tokio-native-tls v0.3.1
+    Checking tokio-tungstenite v0.29.0
+    Checking tokio-stream v0.1.18
+    Checking h2 v0.4.14
+       Fixed tools\rule-tester\src\main.rs (4 fixes)
+warning: possible intra-doc link using quotes instead of backticks
+  --> tools\rule-tester\src\main.rs:17:21
+   |
+17 | //!     entities = ["medical"]         # any of: medical | tribal | export_controlled
+   |                     ^^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#doc_link_with_quotes
+   = note: `-W clippy::doc-link-with-quotes` implied by `-W clippy::pedantic`
+   = help: to override `-W clippy::pedantic` add `#[allow(clippy::doc_link_with_quotes)]`
+
+warning: this argument is passed by value, but not consumed in the function body
+   --> tools\rule-tester\src\main.rs:108:20
+    |
+108 | fn run(rules_path: PathBuf, scenarios_path: PathBuf) -> Result<u32, String> {
+    |                    ^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#needless_pass_by_value
+    = note: `-W clippy::needless-pass-by-value` implied by `-W clippy::pedantic`
+    = help: to override `-W clippy::pedantic` add `#[allow(clippy::needless_pass_by_value)]`
+help: consider taking a reference instead
+    |
+108 | fn run(rules_path: &PathBuf, scenarios_path: PathBuf) -> Result<u32, String> {
+    |                    +
+
+warning: this argument is passed by value, but not consumed in the function body
+   --> tools\rule-tester\src\main.rs:108:45
+    |
+108 | fn run(rules_path: PathBuf, scenarios_path: PathBuf) -> Result<u32, String> {
+    |                                             ^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#needless_pass_by_value
+help: consider taking a reference instead
+    |
+108 | fn run(rules_path: PathBuf, scenarios_path: &PathBuf) -> Result<u32, String> {
+    |                                             +
+
+warning: `rule-tester` (bin "rule-tester" test) generated 3 warnings
+    Checking tower v0.4.13
+    Checking deadpool v0.12.3
+warning: `rule-tester` (bin "rule-tester") generated 3 warnings (3 duplicates)
+    Checking tower-http v0.6.11
+       Fixed mai-router\tests\latency_budget.rs (1 fix)
+warning: casting `f64` to `usize` may truncate the value
+  --> mai-router\tests\latency_budget.rs:51:21
+   |
+51 |     let p99_index = ((samples as f64) * 0.99) as usize;
+   |                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: if this is intentional allow the lint with `#[allow(clippy::cast_possible_truncation)]` ...
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#cast_possible_truncation
+   = note: `-W clippy::cast-possible-truncation` implied by `-W clippy::pedantic`
+   = help: to override `-W clippy::pedantic` add `#[allow(clippy::cast_possible_truncation)]`
+
+warning: casting `f64` to `usize` may lose the sign of the value
+  --> mai-router\tests\latency_budget.rs:51:21
+   |
+51 |     let p99_index = ((samples as f64) * 0.99) as usize;
+   |                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#cast_sign_loss
+   = note: `-W clippy::cast-sign-loss` implied by `-W clippy::pedantic`
+   = help: to override `-W clippy::pedantic` add `#[allow(clippy::cast_sign_loss)]`
+
+warning: casting `usize` to `f64` may cause a loss of precision (`usize` can be up to 64 bits wide depending on the target architecture, but `f64`'s mantissa is only 52 bits wide)
+  --> mai-router\tests\latency_budget.rs:51:22
+   |
+51 |     let p99_index = ((samples as f64) * 0.99) as usize;
+   |                      ^^^^^^^^^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#cast_precision_loss
+   = note: `-W clippy::cast-precision-loss` implied by `-W clippy::pedantic`
+   = help: to override `-W clippy::pedantic` add `#[allow(clippy::cast_precision_loss)]`
+
+warning: `mai-router` (test "latency_budget") generated 3 warnings
+    Checking axum v0.7.9
+    Checking tokio-test v0.4.5
+       Fixed tools\mai-launcher\src\splash.rs (9 fixes)
+warning: casting `u32` to `i32` may wrap around the value
+  --> tools\mai-launcher\src\splash.rs:42:45
+   |
+42 |     let (target_w, target_h) = fit_into_box(bmp_w as i32, bmp_h as i32, SPLASH_MAX_DIM);
+   |                                             ^^^^^^^^^^^^ help: if this is intentional, use `cast_signed()` instead: `bmp_w.cast_signed()`
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#cast_possible_wrap
+   = note: `-W clippy::cast-possible-wrap` implied by `-W clippy::pedantic`
+   = help: to override `-W clippy::pedantic` add `#[allow(clippy::cast_possible_wrap)]`
+
+warning: casting `u32` to `i32` may wrap around the value
+  --> tools\mai-launcher\src\splash.rs:42:59
+   |
+42 |     let (target_w, target_h) = fit_into_box(bmp_w as i32, bmp_h as i32, SPLASH_MAX_DIM);
+   |                                                           ^^^^^^^^^^^^ help: if this is intentional, use `cast_signed()` instead: `bmp_h.cast_signed()`
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#cast_possible_wrap
+
+warning: casting `f64` to `i32` may truncate the value
+  --> tools\mai-launcher\src\splash.rs:98:13
+   |
+98 |     let w = (f64::from(src_w) * scale).round() as i32;
+   |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: if this is intentional allow the lint with `#[allow(clippy::cast_possible_truncation)]` ...
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#cast_possible_truncation
+   = note: `-W clippy::cast-possible-truncation` implied by `-W clippy::pedantic`
+   = help: to override `-W clippy::pedantic` add `#[allow(clippy::cast_possible_truncation)]`
+
+warning: casting `f64` to `i32` may truncate the value
+  --> tools\mai-launcher\src\splash.rs:99:13
+   |
+99 |     let h = (f64::from(src_h) * scale).round() as i32;
+   |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: if this is intentional allow the lint with `#[allow(clippy::cast_possible_truncation)]` ...
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#cast_possible_truncation
+
+warning: `mai-launcher` (bin "lamprey-mai") generated 4 warnings
+warning: `mai-launcher` (bin "lamprey-mai" test) generated 4 warnings (4 duplicates)
+    Checking wsf-hardening v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\wsf-hardening)
+    Checking wsf-cache v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\wsf-cache)
+    Checking mai-core v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\mai-core)
+    Checking hyper v1.9.0
+    Checking hyper-util v0.1.20
+warning: binding's name is too similar to existing binding
+  --> crates\fabric-token\tests\token.rs:55:9
+   |
+55 |     let signed = issue(base_token("2099-01-01T00:00:00Z"), &signer).unwrap();
+   |         ^^^^^^
+   |
+note: existing binding defined here
+  --> crates\fabric-token\tests\token.rs:54:9
+   |
+54 |     let signer = RustCryptoMlDsa87::generate("bridge-q3").unwrap();
+   |         ^^^^^^
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#similar_names
+   = note: `-W clippy::similar-names` implied by `-W clippy::pedantic`
+   = help: to override `-W clippy::pedantic` add `#[allow(clippy::similar_names)]`
+
+warning: binding's name is too similar to existing binding
+  --> crates\fabric-token\tests\token.rs:64:13
+   |
+64 |     let mut signed = issue(base_token("2099-01-01T00:00:00Z"), &signer).unwrap();
+   |             ^^^^^^
+   |
+note: existing binding defined here
+  --> crates\fabric-token\tests\token.rs:63:9
+   |
+63 |     let signer = RustCryptoMlDsa87::generate("k").unwrap();
+   |         ^^^^^^
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#similar_names
+
+warning: binding's name is too similar to existing binding
+  --> crates\fabric-token\tests\token.rs:77:9
+   |
+77 |     let signed = issue(t, &signer).unwrap();
+   |         ^^^^^^
+   |
+note: existing binding defined here
+  --> crates\fabric-token\tests\token.rs:74:9
+   |
+74 |     let signer = RustCryptoMlDsa87::generate("k").unwrap();
+   |         ^^^^^^
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#similar_names
+
+warning: `fabric-token` (test "token") generated 3 warnings
+warning: binding's name is too similar to existing binding
+  --> crates\fabric-revocation\tests\revocation.rs:16:9
+   |
+16 |     let signed = sign(snap, &signer).unwrap();
+   |         ^^^^^^
+   |
+note: existing binding defined here
+  --> crates\fabric-revocation\tests\revocation.rs:10:9
+   |
+10 |     let signer = RustCryptoMlDsa87::generate("rev-q3").unwrap();
+   |         ^^^^^^
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#similar_names
+   = note: `-W clippy::similar-names` implied by `-W clippy::pedantic`
+   = help: to override `-W clippy::pedantic` add `#[allow(clippy::similar_names)]`
+
+warning: binding's name is too similar to existing binding
+  --> crates\fabric-revocation\tests\revocation.rs:28:9
+   |
+28 |     let signed = sign(RevocationSnapshot::new("rev_1", "a", "b"), &signer).unwrap();
+   |         ^^^^^^
+   |
+note: existing binding defined here
+  --> crates\fabric-revocation\tests\revocation.rs:27:9
+   |
+27 |     let signer = RustCryptoMlDsa87::generate("k").unwrap();
+   |         ^^^^^^
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#similar_names
+
+warning: binding's name is too similar to existing binding
+  --> crates\fabric-revocation\tests\revocation.rs:40:9
+   |
+40 |     let signed = sign(
+   |         ^^^^^^
+   |
+note: existing binding defined here
+  --> crates\fabric-revocation\tests\revocation.rs:39:9
+   |
+39 |     let signer = RustCryptoMlDsa87::generate("k").unwrap();
+   |         ^^^^^^
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#similar_names
+
+warning: binding's name is too similar to existing binding
+  --> crates\fabric-revocation\tests\revocation.rs:53:9
+   |
+53 |     let signed = sign(RevocationSnapshot::new("r", "a", "b"), &signer).unwrap();
+   |         ^^^^^^
+   |
+note: existing binding defined here
+  --> crates\fabric-revocation\tests\revocation.rs:51:9
+   |
+51 |     let signer = RustCryptoMlDsa87::generate("k").unwrap();
+   |         ^^^^^^
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#similar_names
+
+warning: `fabric-revocation` (test "revocation") generated 4 warnings
+warning: binding's name is too similar to existing binding
+  --> crates\fabric-identity\tests\identity.rs:33:9
+   |
+33 |     let signed = mint(base_identity(), &signer).unwrap();
+   |         ^^^^^^
+   |
+note: existing binding defined here
+  --> crates\fabric-identity\tests\identity.rs:32:9
+   |
+32 |     let signer = RustCryptoMlDsa87::generate("bridge-q3").unwrap();
+   |         ^^^^^^
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#similar_names
+   = note: `-W clippy::similar-names` implied by `-W clippy::pedantic`
+   = help: to override `-W clippy::pedantic` add `#[allow(clippy::similar_names)]`
+
+warning: binding's name is too similar to existing binding
+  --> crates\fabric-identity\tests\identity.rs:41:13
+   |
+41 |     let mut signed = mint(base_identity(), &signer).unwrap();
+   |             ^^^^^^
+   |
+note: existing binding defined here
+  --> crates\fabric-identity\tests\identity.rs:40:9
+   |
+40 |     let signer = RustCryptoMlDsa87::generate("k").unwrap();
+   |         ^^^^^^
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#similar_names
+
+warning: `fabric-identity` (test "identity") generated 2 warnings
+    Checking hyper-rustls v0.27.9
+    Checking hyper-tls v0.6.0
+    Checking axum v0.8.9
+    Checking hyper-timeout v0.5.2
+    Checking wiremock v0.6.5
+    Checking tonic v0.12.3
+    Checking reqwest v0.12.28
+    Checking wsf-bridge v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\wsf-bridge)
+    Checking mai-sdk-rs v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\mai-sdk-rs)
+    Checking tonic-reflection v0.12.3
+    Checking axum-extra v0.10.3
+       Fixed mai-core\src\models\lifecycle.rs (1 fix)
+       Fixed mai-core\src\models\package.rs (3 fixes)
+       Fixed mai-core\src\sentinel\warmup.rs (2 fixes)
+       Fixed mai-core\src\models\install.rs (1 fix)
+warning: casting `u64` to `f64` may cause a loss of precision (`u64` is 64 bits wide, but `f64`'s mantissa is only 52 bits wide)
+   --> mai-core\src\models\lifecycle.rs:170:24
+    |
+170 |         let size_gb = (manifest.model.size_bytes as f64 / 1_000_000_000.0).max(1.0);
+    |                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#cast_precision_loss
+    = note: `-W clippy::cast-precision-loss` implied by `-W clippy::pedantic`
+    = help: to override `-W clippy::pedantic` add `#[allow(clippy::cast_precision_loss)]`
+
+warning: casting `f64` to `u64` may truncate the value
+   --> mai-core\src\models\lifecycle.rs:175:22
+    |
+175 |             ttft_ms: (80.0 * context_factor).round() as u64,
+    |                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: if this is intentional allow the lint with `#[allow(clippy::cast_possible_truncation)]` ...
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#cast_possible_truncation
+    = note: `-W clippy::cast-possible-truncation` implied by `-W clippy::pedantic`
+    = help: to override `-W clippy::pedantic` add `#[allow(clippy::cast_possible_truncation)]`
+
+warning: casting `f64` to `u64` may lose the sign of the value
+   --> mai-core\src\models\lifecycle.rs:175:22
+    |
+175 |             ttft_ms: (80.0 * context_factor).round() as u64,
+    |                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#cast_sign_loss
+    = note: `-W clippy::cast-sign-loss` implied by `-W clippy::pedantic`
+    = help: to override `-W clippy::pedantic` add `#[allow(clippy::cast_sign_loss)]`
+
+warning: parameter of type `HashMap` should be generalized over different hashers
+   --> mai-core\src\models\update.rs:346:20
+    |
+346 |     local_hashes: &HashMap<String, String>,
+    |                    ^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#implicit_hasher
+    = note: `-W clippy::implicit-hasher` implied by `-W clippy::pedantic`
+    = help: to override `-W clippy::pedantic` add `#[allow(clippy::implicit_hasher)]`
+help: add a type parameter for `BuildHasher`
+    |
+344 ~ pub fn plan_differential_download<S: ::std::hash::BuildHasher>(
+345 |     model: &UpdateModel,
+346 ~     local_hashes: &HashMap<String, String, S>,
+    |
+
+warning: parameter of type `HashSet` should be generalized over different hashers
+   --> mai-core\src\models\update.rs:398:65
+    |
+398 | pub fn package_complete(shards: &[WeightShard], present_names: &HashSet<String>) -> bool {
+    |                                                                 ^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#implicit_hasher
+help: add a type parameter for `BuildHasher`
+    |
+398 | pub fn package_complete<S: ::std::hash::BuildHasher>(shards: &[WeightShard], present_names: &HashSet<String, S>) -> bool {
+    |                        +++++++++++++++++++++++++++++                                                       +++
+
+warning: these match arms have identical bodies
+   --> mai-core\src\power\mod.rs:340:13
+    |
+340 |             TransitionTrigger::WakeTrigger(_) => Ok(PowerState::Sentinel),
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+365 |             TransitionTrigger::ManualOverride => Ok(PowerState::Sentinel),
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: if this is unintentional make the arms return different values
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#match_same_arms
+    = note: `-W clippy::match-same-arms` implied by `-W clippy::pedantic`
+    = help: to override `-W clippy::pedantic` add `#[allow(clippy::match_same_arms)]`
+help: otherwise merge the patterns into a single arm
+    |
+340 ~             TransitionTrigger::WakeTrigger(_) | TransitionTrigger::ManualOverride => Ok(PowerState::Sentinel),
+341 |             TransitionTrigger::UrgentWake(_)
+...
+364 |             TransitionTrigger::ThermalLimitExceeded { .. } => Ok(PowerState::ThermalThrottle),
+365 ~             TransitionTrigger::SystemShutdown => Ok(PowerState::Off),
+    |
+
+warning: unused `self` argument
+   --> mai-core\src\power\mod.rs:370:28
+    |
+370 |     fn is_valid_transition(&self, from: PowerState, to: PowerState) -> bool {
+    |                            ^^^^^
+    |
+    = help: consider refactoring to an associated function
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#unused_self
+    = note: `-W clippy::unused-self` implied by `-W clippy::pedantic`
+    = help: to override `-W clippy::pedantic` add `#[allow(clippy::unused_self)]`
+
+warning: these match arms have identical bodies
+   --> mai-core\src\registry.rs:567:13
+    |
+567 | /             super::models::remove::RemoveError::VaultError(msg) => {
+568 | |                 RegistryError::RemovalFailed(msg)
+569 | |             }
+    | |_____________^
+570 | /             super::models::remove::RemoveError::RegistryError(msg) => {
+571 | |                 RegistryError::RemovalFailed(msg)
+572 | |             }
+    | |_____________^
+    |
+    = help: if this is unintentional make the arms return different values
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#match_same_arms
+help: otherwise merge the patterns into a single arm
+    |
+567 ~             super::models::remove::RemoveError::VaultError(msg) | super::models::remove::RemoveError::RegistryError(msg) => {
+568 |                 RegistryError::RemovalFailed(msg)
+569 |             }
+570 ~             })
+    |
+
+warning: unused `self` argument
+   --> mai-core\src\sentinel\estimator.rs:141:23
+    |
+141 |     fn is_large_model(&self, model: &str) -> bool {
+    |                       ^^^^^
+    |
+    = help: consider refactoring to an associated function
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#unused_self
+
+warning: this argument is passed by value, but not consumed in the function body
+   --> mai-core\src\sentinel\promotion.rs:225:39
+    |
+225 |     pub fn mark_failed(&self, reason: String) -> Vec<PromotionEvent> {
+    |                                       ^^^^^^ help: consider changing the type to: `&str`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#needless_pass_by_value
+    = note: `-W clippy::needless-pass-by-value` implied by `-W clippy::pedantic`
+    = help: to override `-W clippy::pedantic` add `#[allow(clippy::needless_pass_by_value)]`
+
+warning: this argument is passed by value, but not consumed in the function body
+   --> mai-core\src\sentinel\runtime.rs:139:39
+    |
+139 |     pub fn record_error(&self, error: String) {
+    |                                       ^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#needless_pass_by_value
+help: consider changing the type to
+    |
+139 -     pub fn record_error(&self, error: String) {
+139 +     pub fn record_error(&self, error: &str) {
+    |
+help: change `error.clone()` to
+    |
+140 -         *self.last_error.write().unwrap() = Some(error.clone());
+140 +         *self.last_error.write().unwrap() = Some(error.to_string());
+    |
+
+warning: `mai-core` (lib) generated 11 warnings
+    Checking mai-compliance v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\mai-compliance)
+    Checking mai-adapters v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\mai-adapters)
+    Checking mai-scheduler v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\mai-scheduler)
+    Checking mai-vault v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\mai-vault)
+    Checking mai-agent v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\mai-agent)
+    Checking mai-pkg-builder v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\tools\pkg-builder)
+       Fixed mai-core\src\scheduler.rs (1 fix)
+       Fixed mai-core\src\hotswap.rs (1 fix)
+       Fixed mai-core\src\models\remove.rs (2 fixes)
+       Fixed mai-core\src\cache.rs (1 fix)
+       Fixed mai-core\src\models\install.rs (2 fixes)
+warning: adding items after statements is confusing, since items exist from the start of the scope
+   --> mai-core\src\models\install.rs:338:9
+    |
+338 |         struct BadVault;
+    |         ^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#items_after_statements
+    = note: `-W clippy::items-after-statements` implied by `-W clippy::pedantic`
+    = help: to override `-W clippy::pedantic` add `#[allow(clippy::items_after_statements)]`
+
+warning: adding items after statements is confusing, since items exist from the start of the scope
+   --> mai-core\src\models\install.rs:340:9
+    |
+340 | /         impl VaultInterface for BadVault {
+341 | |             async fn load_model_weights(&self, _id: &str) -> Result<Vec<u8>, VaultError> {
+342 | |                 Ok(vec![])
+...   |
+357 | |         }
+    | |_________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#items_after_statements
+
+warning: adding items after statements is confusing, since items exist from the start of the scope
+   --> mai-core\src\models\install.rs:359:9
+    |
+359 | /         impl ModelStorage for BadVault {
+360 | |             async fn verify_model_integrity(
+361 | |                 &self,
+362 | |                 _id: &str,
+...   |
+406 | |         }
+    | |_________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#items_after_statements
+
+warning: `mai-core` (lib test) generated 14 warnings (11 duplicates)
+warning: this argument is passed by value, but not consumed in the function body
+   --> mai-sdk-rs\src\lib.rs:852:31
+    |
+852 |     fn transport_error(error: reqwest::Error) -> SdkError {
+    |                               ^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#needless_pass_by_value
+    = note: `-W clippy::needless-pass-by-value` implied by `-W clippy::pedantic`
+    = help: to override `-W clippy::pedantic` add `#[allow(clippy::needless_pass_by_value)]`
+help: consider taking a reference instead
+    |
+852 |     fn transport_error(error: &reqwest::Error) -> SdkError {
+    |                               +
+
+warning: `mai-sdk-rs` (lib) generated 1 warning
+warning: binding's name is too similar to existing binding
+   --> crates\wsf-bridge\src\lib.rs:444:13
+    |
+444 |         let signed = fabric_token::issue(unsigned, &signer).unwrap();
+    |             ^^^^^^
+    |
+note: existing binding defined here
+   --> crates\wsf-bridge\src\lib.rs:427:13
+    |
+427 |         let signer = RustCryptoMlDsa87::generate("bridge-key").unwrap();
+    |             ^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#similar_names
+    = note: `-W clippy::similar-names` implied by `-W clippy::pedantic`
+    = help: to override `-W clippy::pedantic` add `#[allow(clippy::similar_names)]`
+
+warning: binding's name is too similar to existing binding
+   --> crates\wsf-bridge\src\lib.rs:482:13
+    |
+482 |         let signed = bridge.sign_revocation(snap).unwrap();
+    |             ^^^^^^
+    |
+note: existing binding defined here
+   --> crates\wsf-bridge\src\lib.rs:476:13
+    |
+476 |         let signer = Arc::new(RustCryptoMlDsa87::generate("rev-key").unwrap());
+    |             ^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#similar_names
+
+warning: `wsf-bridge` (lib test) generated 2 warnings
+    Checking wsf-seal v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\wsf-seal)
+warning: `mai-sdk-rs` (lib test) generated 1 warning (1 duplicate)
+    Checking wsf-broker v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\wsf-broker)
+    Checking wsf-tenants v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\wsf-tenants)
+       Fixed mai-scheduler\src\power.rs (2 fixes)
+       Fixed mai-scheduler\src\metrics\anomaly.rs (2 fixes)
+       Fixed mai-scheduler\src\metrics\lifecycle.rs (1 fix)
+warning: casting `i64` to `f64` may cause a loss of precision (`i64` is 64 bits wide, but `f64`'s mantissa is only 52 bits wide)
+   --> mai-scheduler\src\balancer.rs:134:53
+    |
+134 |             let benefit = self.config.load_weight * load_diff as f64;
+    |                                                     ^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#cast_precision_loss
+    = note: `-W clippy::cast-precision-loss` implied by `-W clippy::pedantic`
+    = help: to override `-W clippy::pedantic` add `#[allow(clippy::cast_precision_loss)]`
+
+warning: casting `usize` to `f64` may cause a loss of precision (`usize` can be up to 64 bits wide depending on the target architecture, but `f64`'s mantissa is only 52 bits wide)
+   --> mai-scheduler\src\balancer.rs:183:17
+    |
+183 |         total / count as f64
+    |                 ^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#cast_precision_loss
+
+warning: casting `u64` to `f64` may cause a loss of precision (`u64` is 64 bits wide, but `f64`'s mantissa is only 52 bits wide)
+   --> mai-scheduler\src\decision_cache.rs:172:13
+    |
+172 |             h as f64 / total as f64
+    |             ^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#cast_precision_loss
+
+warning: casting `u64` to `f64` may cause a loss of precision (`u64` is 64 bits wide, but `f64`'s mantissa is only 52 bits wide)
+   --> mai-scheduler\src\decision_cache.rs:172:24
+    |
+172 |             h as f64 / total as f64
+    |                        ^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#cast_precision_loss
+
+warning: these match arms have identical bodies
+   --> mai-scheduler\src\kv\tiered.rs:116:13
+    |
+116 |             SoftEvictionState::Active => Tier::Hot,
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+120 |             SoftEvictionState::Restoring => Tier::Hot,
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: if this is unintentional make the arms return different values
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#match_same_arms
+    = note: `-W clippy::match-same-arms` implied by `-W clippy::pedantic`
+    = help: to override `-W clippy::pedantic` add `#[allow(clippy::match_same_arms)]`
+help: otherwise merge the patterns into a single arm
+    |
+116 ~             // In-flight transitions count as their destination tier so the
+117 |             // controller does not propose a second action against them.
+118 |             SoftEvictionState::Offloading | SoftEvictionState::Offloaded => Tier::Warm,
+119 ~             SoftEvictionState::Active | SoftEvictionState::Restoring => Tier::Hot,
+    |
+
+warning: casting `u64` to `f64` may cause a loss of precision (`u64` is 64 bits wide, but `f64`'s mantissa is only 52 bits wide)
+  --> mai-scheduler\src\metrics\anomaly.rs:93:20
+   |
+93 |         let mean = rest.iter().sum::<u64>() as f64 / rest.len() as f64;
+   |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#cast_precision_loss
+
+warning: casting `usize` to `f64` may cause a loss of precision (`usize` can be up to 64 bits wide depending on the target architecture, but `f64`'s mantissa is only 52 bits wide)
+  --> mai-scheduler\src\metrics\anomaly.rs:93:54
+   |
+93 |         let mean = rest.iter().sum::<u64>() as f64 / rest.len() as f64;
+   |                                                      ^^^^^^^^^^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#cast_precision_loss
+
+warning: casting `u64` to `f64` may cause a loss of precision (`u64` is 64 bits wide, but `f64`'s mantissa is only 52 bits wide)
+  --> mai-scheduler\src\metrics\anomaly.rs:97:21
+   |
+97 |         let ratio = *last as f64 / mean;
+   |                     ^^^^^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#cast_precision_loss
+
+warning: casting `usize` to `f64` may cause a loss of precision (`usize` can be up to 64 bits wide depending on the target architecture, but `f64`'s mantissa is only 52 bits wide)
+   --> mai-scheduler\src\metrics\anomaly.rs:111:52
+    |
+111 |         let indices: Vec<f64> = (0..count).map(|i| i as f64).collect();
+    |                                                    ^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#cast_precision_loss
+
+warning: casting `usize` to `f64` may cause a loss of precision (`usize` can be up to 64 bits wide depending on the target architecture, but `f64`'s mantissa is only 52 bits wide)
+   --> mai-scheduler\src\metrics\anomaly.rs:112:52
+    |
+112 |         let mean_x = indices.iter().sum::<f64>() / count as f64;
+    |                                                    ^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#cast_precision_loss
+
+warning: casting `u64` to `f64` may cause a loss of precision (`u64` is 64 bits wide, but `f64`'s mantissa is only 52 bits wide)
+   --> mai-scheduler\src\metrics\anomaly.rs:113:22
+    |
+113 |         let mean_y = samples.iter().sum::<u64>() as f64 / count as f64;
+    |                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#cast_precision_loss
+
+warning: casting `usize` to `f64` may cause a loss of precision (`usize` can be up to 64 bits wide depending on the target architecture, but `f64`'s mantissa is only 52 bits wide)
+   --> mai-scheduler\src\metrics\anomaly.rs:113:59
+    |
+113 |         let mean_y = samples.iter().sum::<u64>() as f64 / count as f64;
+    |                                                           ^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#cast_precision_loss
+
+warning: casting `u64` to `f64` may cause a loss of precision (`u64` is 64 bits wide, but `f64`'s mantissa is only 52 bits wide)
+   --> mai-scheduler\src\metrics\anomaly.rs:117:45
+    |
+117 |             .map(|(&x, &y)| (x - mean_x) * (y as f64 - mean_y))
+    |                                             ^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#cast_precision_loss
+
+warning: casting `u64` to `f64` may cause a loss of precision (`u64` is 64 bits wide, but `f64`'s mantissa is only 52 bits wide)
+   --> mai-scheduler\src\metrics\anomaly.rs:124:24
+    |
+124 |         let max_vram = samples.iter().max().copied().unwrap_or(1).max(1) as f64;
+    |                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#cast_precision_loss
+
+warning: casting `usize` to `f64` may cause a loss of precision (`usize` can be up to 64 bits wide depending on the target architecture, but `f64`'s mantissa is only 52 bits wide)
+   --> mai-scheduler\src\metrics\anomaly.rs:125:47
+    |
+125 |         let normalized = (slope / max_vram) * count as f64;
+    |                                               ^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#cast_precision_loss
+
+warning: casting `usize` to `f64` may cause a loss of precision (`usize` can be up to 64 bits wide depending on the target architecture, but `f64`'s mantissa is only 52 bits wide)
+   --> mai-scheduler\src\metrics\anomaly.rs:140:55
+    |
+140 |         let recent_avg = recent.iter().sum::<f64>() / recent.len() as f64;
+    |                                                       ^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#cast_precision_loss
+
+warning: casting `usize` to `f64` may cause a loss of precision (`usize` can be up to 64 bits wide depending on the target architecture, but `f64`'s mantissa is only 52 bits wide)
+   --> mai-scheduler\src\metrics\anomaly.rs:141:53
+    |
+141 |         let older_avg = older.iter().sum::<f64>() / older.len() as f64;
+    |                                                     ^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#cast_precision_loss
+
+warning: this argument is passed by value, but not consumed in the function body
+  --> mai-scheduler\src\metrics\feedback.rs:61:17
+   |
+61 |         report: CompletionReport,
+   |                 ^^^^^^^^^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#needless_pass_by_value
+   = note: `-W clippy::needless-pass-by-value` implied by `-W clippy::pedantic`
+   = help: to override `-W clippy::pedantic` add `#[allow(clippy::needless_pass_by_value)]`
+help: consider taking a reference instead
+   |
+61 |         report: &CompletionReport,
+   |                 +
+
+warning: casting `u64` to `f64` may cause a loss of precision (`u64` is 64 bits wide, but `f64`'s mantissa is only 52 bits wide)
+   --> mai-scheduler\src\metrics\health.rs:122:20
+    |
+122 |         let mean = samples.iter().sum::<u64>() as f64 / count as f64;
+    |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#cast_precision_loss
+
+warning: casting `usize` to `f64` may cause a loss of precision (`usize` can be up to 64 bits wide depending on the target architecture, but `f64`'s mantissa is only 52 bits wide)
+   --> mai-scheduler\src\metrics\health.rs:122:57
+    |
+122 |         let mean = samples.iter().sum::<u64>() as f64 / count as f64;
+    |                                                         ^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#cast_precision_loss
+
+warning: casting `u64` to `f64` may cause a loss of precision (`u64` is 64 bits wide, but `f64`'s mantissa is only 52 bits wide)
+   --> mai-scheduler\src\metrics\health.rs:129:28
+    |
+129 |                 let diff = v as f64 - mean;
+    |                            ^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#cast_precision_loss
+
+warning: casting `usize` to `f64` may cause a loss of precision (`usize` can be up to 64 bits wide depending on the target architecture, but `f64`'s mantissa is only 52 bits wide)
+   --> mai-scheduler\src\metrics\health.rs:133:15
+    |
+133 |             / count as f64;
+    |               ^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#cast_precision_loss
+
+warning: casting `u64` to `f64` may cause a loss of precision (`u64` is 64 bits wide, but `f64`'s mantissa is only 52 bits wide)
+   --> mai-scheduler\src\metrics\health.rs:143:20
+    |
+143 |         let rate = self.error_count as f64 / self.total_count as f64;
+    |                    ^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#cast_precision_loss
+
+warning: casting `u64` to `f64` may cause a loss of precision (`u64` is 64 bits wide, but `f64`'s mantissa is only 52 bits wide)
+   --> mai-scheduler\src\metrics\health.rs:143:46
+    |
+143 |         let rate = self.error_count as f64 / self.total_count as f64;
+    |                                              ^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#cast_precision_loss
+
+warning: casting `usize` to `f64` may cause a loss of precision (`usize` can be up to 64 bits wide depending on the target architecture, but `f64`'s mantissa is only 52 bits wide)
+   --> mai-scheduler\src\metrics\health.rs:154:52
+    |
+154 |         let indices: Vec<f64> = (0..count).map(|i| i as f64).collect();
+    |                                                    ^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#cast_precision_loss
+
+warning: casting `usize` to `f64` may cause a loss of precision (`usize` can be up to 64 bits wide depending on the target architecture, but `f64`'s mantissa is only 52 bits wide)
+   --> mai-scheduler\src\metrics\health.rs:155:52
+    |
+155 |         let mean_x = indices.iter().sum::<f64>() / count as f64;
+    |                                                    ^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#cast_precision_loss
+
+warning: casting `u64` to `f64` may cause a loss of precision (`u64` is 64 bits wide, but `f64`'s mantissa is only 52 bits wide)
+   --> mai-scheduler\src\metrics\health.rs:156:22
+    |
+156 |         let mean_y = samples.iter().sum::<u64>() as f64 / count as f64;
+    |                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#cast_precision_loss
+
+warning: casting `usize` to `f64` may cause a loss of precision (`usize` can be up to 64 bits wide depending on the target architecture, but `f64`'s mantissa is only 52 bits wide)
+   --> mai-scheduler\src\metrics\health.rs:156:59
+    |
+156 |         let mean_y = samples.iter().sum::<u64>() as f64 / count as f64;
+    |                                                           ^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#cast_precision_loss
+
+warning: casting `u64` to `f64` may cause a loss of precision (`u64` is 64 bits wide, but `f64`'s mantissa is only 52 bits wide)
+   --> mai-scheduler\src\metrics\health.rs:160:45
+    |
+160 |             .map(|(&x, &y)| (x - mean_x) * (y as f64 - mean_y))
+    |                                             ^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#cast_precision_loss
+
+warning: casting `u64` to `f64` may cause a loss of precision (`u64` is 64 bits wide, but `f64`'s mantissa is only 52 bits wide)
+   --> mai-scheduler\src\metrics\health.rs:169:24
+    |
+169 |         let max_vram = samples.iter().max().copied().unwrap_or(1).max(1) as f64;
+    |                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#cast_precision_loss
+
+warning: casting `usize` to `f64` may cause a loss of precision (`usize` can be up to 64 bits wide depending on the target architecture, but `f64`'s mantissa is only 52 bits wide)
+   --> mai-scheduler\src\metrics\health.rs:181:64
+    |
+181 |         let recent_avg = recent.iter().copied().sum::<f64>() / recent.len() as f64;
+    |                                                                ^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#cast_precision_loss
+
+warning: casting `usize` to `f64` may cause a loss of precision (`usize` can be up to 64 bits wide depending on the target architecture, but `f64`'s mantissa is only 52 bits wide)
+   --> mai-scheduler\src\metrics\health.rs:182:53
+    |
+182 |         let all_avg = samples.iter().sum::<f64>() / count as f64;
+    |                                                     ^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#cast_precision_loss
+
+warning: casting `u64` to `f64` may cause a loss of precision (`u64` is 64 bits wide, but `f64`'s mantissa is only 52 bits wide)
+  --> mai-scheduler\src\metrics\lifecycle.rs:57:14
+   |
+57 |         Some(diff as f64 / actual as f64)
+   |              ^^^^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#cast_precision_loss
+
+warning: casting `u64` to `f64` may cause a loss of precision (`u64` is 64 bits wide, but `f64`'s mantissa is only 52 bits wide)
+  --> mai-scheduler\src\metrics\lifecycle.rs:57:28
+   |
+57 |         Some(diff as f64 / actual as f64)
+   |                            ^^^^^^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#cast_precision_loss
+
+warning: casting `usize` to `f64` may cause a loss of precision (`usize` can be up to 64 bits wide depending on the target architecture, but `f64`'s mantissa is only 52 bits wide)
+  --> mai-scheduler\src\metrics\lifecycle.rs:92:43
+   |
+92 |         Some(errors.iter().sum::<f64>() / count as f64)
+   |                                           ^^^^^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#cast_precision_loss
+
+warning: these match arms have identical bodies
+   --> mai-scheduler\src\preemption.rs:123:9
+    |
+123 |         Priority::High => Priority::High,
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+124 |         Priority::Normal => Priority::High,
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: if this is unintentional make the arms return different values
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#match_same_arms
+help: otherwise merge the patterns into a single arm
+    |
+123 ~         Priority::High | Priority::Normal => Priority::High,
+124 ~         Priority::Background => Priority::Normal,
+    |
+
+warning: doc list item without indentation
+  --> mai-scheduler\src\scoring\mod.rs:11:5
+   |
+11 | //! `latency`: queue-based latency estimation
+   |     ^
+   |
+   = help: if this is supposed to be its own paragraph, add a blank line
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#doc_lazy_continuation
+   = note: requested on the command line with `-W clippy::doc-lazy-continuation`
+help: indent this line
+   |
+11 | //!   `latency`: queue-based latency estimation
+   |     ++
+
+warning: doc list item without indentation
+  --> mai-scheduler\src\scoring\mod.rs:12:5
+   |
+12 | //! `memory`: VRAM pressure penalty with configurable exponent
+   |     ^
+   |
+   = help: if this is supposed to be its own paragraph, add a blank line
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#doc_lazy_continuation
+help: indent this line
+   |
+12 | //!   `memory`: VRAM pressure penalty with configurable exponent
+   |     ++
+
+warning: doc list item without indentation
+  --> mai-scheduler\src\scoring\mod.rs:13:5
+   |
+13 | //! `topology`: GPU interconnect cost for tensor-parallel
+   |     ^
+   |
+   = help: if this is supposed to be its own paragraph, add a blank line
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#doc_lazy_continuation
+help: indent this line
+   |
+13 | //!   `topology`: GPU interconnect cost for tensor-parallel
+   |     ++
+
+warning: doc list item without indentation
+  --> mai-scheduler\src\scoring\mod.rs:14:5
+   |
+14 | //! `eviction`: eviction cost penalty
+   |     ^
+   |
+   = help: if this is supposed to be its own paragraph, add a blank line
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#doc_lazy_continuation
+help: indent this line
+   |
+14 | //!   `eviction`: eviction cost penalty
+   |     ++
+
+warning: doc list item without indentation
+  --> mai-scheduler\src\scoring\mod.rs:15:5
+   |
+15 | //! `batching`: batch fit benefit
+   |     ^
+   |
+   = help: if this is supposed to be its own paragraph, add a blank line
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#doc_lazy_continuation
+help: indent this line
+   |
+15 | //!   `batching`: batch fit benefit
+   |     ++
+
+warning: this could be rewritten as `let...else`
+   --> mai-scheduler\src\scoring\scorer.rs:262:9
+    |
+262 | /         let continuation_seq = match &request.continuation_of {
+263 | |             Some(seq) => seq,
+264 | |             None => return false,
+265 | |         };
+    | |__________^ help: consider writing: `let Some(continuation_seq) = &request.continuation_of else { return false };`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#manual_let_else
+    = note: `-W clippy::manual-let-else` implied by `-W clippy::pedantic`
+    = help: to override `-W clippy::pedantic` add `#[allow(clippy::manual_let_else)]`
+
+warning: this could be rewritten as `let...else`
+  --> mai-scheduler\src\scoring\eviction_cost.rs:83:5
+   |
+83 | /     let kv = match kv_manager {
+84 | |         Some(k) => k,
+85 | |         None => return 0.0,
+86 | |     };
+   | |______^ help: consider writing: `let Some(kv) = kv_manager else { return 0.0 };`
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#manual_let_else
+
+warning: casting `f64` to `u64` may truncate the value
+  --> mai-scheduler\src\scoring\eviction_cost.rs:94:27
+   |
+94 |     let estimated_bytes = (estimated_tokens as f64 * config.default_bytes_per_token) as u64;
+   |                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: if this is intentional allow the lint with `#[allow(clippy::cast_possible_truncation)]` ...
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#cast_possible_truncation
+   = note: `-W clippy::cast-possible-truncation` implied by `-W clippy::pedantic`
+   = help: to override `-W clippy::pedantic` add `#[allow(clippy::cast_possible_truncation)]`
+
+warning: casting `f64` to `u64` may lose the sign of the value
+  --> mai-scheduler\src\scoring\eviction_cost.rs:94:27
+   |
+94 |     let estimated_bytes = (estimated_tokens as f64 * config.default_bytes_per_token) as u64;
+   |                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#cast_sign_loss
+   = note: `-W clippy::cast-sign-loss` implied by `-W clippy::pedantic`
+   = help: to override `-W clippy::pedantic` add `#[allow(clippy::cast_sign_loss)]`
+
+warning: this could be rewritten as `let...else`
+  --> mai-scheduler\src\scoring\topology_score.rs:78:5
+   |
+78 | /     let topo = match topology {
+79 | |         Some(t) => t,
+80 | |         None => return 0.0,
+81 | |     };
+   | |______^ help: consider writing: `let Some(topo) = topology else { return 0.0 };`
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#manual_let_else
+
+warning: `mai-scheduler` (lib) generated 46 warnings
+       Fixed mai-vault\src\pqc.rs (2 fixes)
+warning: casting `usize` to `u32` may truncate the value on targets with 64-bit wide pointers
+   --> mai-vault\src\file_dev.rs:330:26
+    |
+330 |             model_count: index.len() as u32,
+    |                          ^^^^^^^^^^^^^^^^^^
+    |
+    = help: if this is intentional allow the lint with `#[allow(clippy::cast_possible_truncation)]` ...
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#cast_possible_truncation
+    = note: `-W clippy::cast-possible-truncation` implied by `-W clippy::pedantic`
+    = help: to override `-W clippy::pedantic` add `#[allow(clippy::cast_possible_truncation)]`
+help: ... or use `try_from` and handle the error accordingly
+    |
+330 -             model_count: index.len() as u32,
+330 +             model_count: u32::try_from(index.len()),
+    |
+
+warning: casting `i64` to `u64` may lose the sign of the value
+   --> mai-vault\src\file_dev.rs:356:19
+    |
+356 |         let now = chrono::Utc::now().timestamp() as u64;
+    |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: if this is intentional, use `cast_unsigned()` instead: `chrono::Utc::now().timestamp().cast_unsigned()`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#cast_sign_loss
+    = note: `-W clippy::cast-sign-loss` implied by `-W clippy::pedantic`
+    = help: to override `-W clippy::pedantic` add `#[allow(clippy::cast_sign_loss)]`
+
+warning: this function's return value is unnecessarily wrapped by `Result`
+   --> mai-vault\src\pqc.rs:94:5
+    |
+ 94 |     pub fn keypair() -> Result<(Vec<u8>, Vec<u8>), VaultError> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#unnecessary_wraps
+    = note: `-W clippy::unnecessary-wraps` implied by `-W clippy::pedantic`
+    = help: to override `-W clippy::pedantic` add `#[allow(clippy::unnecessary_wraps)]`
+help: remove `Result` from the return type...
+    |
+ 94 -     pub fn keypair() -> Result<(Vec<u8>, Vec<u8>), VaultError> {
+ 94 +     pub fn keypair() -> (std::vec::Vec<u8>, std::vec::Vec<u8>) {
+    |
+help: ...and then remove the surrounding `Ok()` from returning expressions
+    |
+101 -         Ok((pk, sk))
+101 +         (pk, sk)
+    |
+
+warning: this function's return value is unnecessarily wrapped by `Result`
+   --> mai-vault\src\pqc.rs:138:5
+    |
+138 |     pub fn keypair() -> Result<(Vec<u8>, Vec<u8>), VaultError> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#unnecessary_wraps
+help: remove `Result` from the return type...
+    |
+138 -     pub fn keypair() -> Result<(Vec<u8>, Vec<u8>), VaultError> {
+138 +     pub fn keypair() -> (std::vec::Vec<u8>, std::vec::Vec<u8>) {
+    |
+help: ...and then remove the surrounding `Ok()` from returning expressions
+    |
+147 -         Ok((pk, sk))
+147 +         (pk, sk)
+    |
+
+warning: this could be rewritten as `let...else`
+   --> mai-vault\src\pqc.rs:175:9
+    |
+175 | /         let sig = match Signature::<MlDsa87>::decode(&sig_encoded) {
+176 | |             Some(s) => s,
+177 | |             None => return Ok(false),
+178 | |         };
+    | |__________^ help: consider writing: `let Some(sig) = Signature::<MlDsa87>::decode(&sig_encoded) else { return Ok(false) };`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#manual_let_else
+    = note: `-W clippy::manual-let-else` implied by `-W clippy::pedantic`
+    = help: to override `-W clippy::pedantic` add `#[allow(clippy::manual_let_else)]`
+
+warning: `mai-vault` (lib) generated 5 warnings
+       Fixed mai-compliance\src\itar.rs (3 fixes)
+       Fixed mai-compliance\src\ocap\cultural.rs (4 fixes)
+       Fixed mai-compliance\src\jurisdiction.rs (2 fixes)
+       Fixed mai-compliance\src\ocap\treaty.rs (5 fixes)
+       Fixed mai-compliance\src\ocap\tribal_data.rs (3 fixes)
+       Fixed mai-compliance\src\phi.rs (2 fixes)
+       Fixed mai-compliance\src\tech_data.rs (2 fixes)
+       Fixed mai-compliance\src\ear.rs (1 fix)
+warning: unused `self` argument
+   --> mai-compliance\src\baa.rs:143:22
+    |
+143 |     fn eval_standard(&self, report: &PhiReport) -> BaaDecision {
+    |                      ^^^^^
+    |
+    = help: consider refactoring to an associated function
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#unused_self
+    = note: `-W clippy::unused-self` implied by `-W clippy::pedantic`
+    = help: to override `-W clippy::pedantic` add `#[allow(clippy::unused_self)]`
+
+warning: unused `self` argument
+   --> mai-compliance\src\baa.rs:172:20
+    |
+172 |     fn eval_strict(&self, report: &PhiReport) -> BaaDecision {
+    |                    ^^^^^
+    |
+    = help: consider refactoring to an associated function
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#unused_self
+
+warning: unused `self` argument
+   --> mai-compliance\src\baa.rs:201:20
+    |
+201 |     fn eval_custom(&self, report: &PhiReport, custom: &CustomBaa) -> BaaDecision {
+    |                    ^^^^^
+    |
+    = help: consider refactoring to an associated function
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#unused_self
+
+warning: unused `self` argument
+   --> mai-compliance\src\jurisdiction.rs:357:9
+    |
+357 |         &self,
+    |         ^^^^^
+    |
+    = help: consider refactoring to an associated function
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#unused_self
+
+warning: unused `self` argument
+   --> mai-compliance\src\ocap\ocap_rules.rs:586:9
+    |
+586 |         &self,
+    |         ^^^^^
+    |
+    = help: consider refactoring to an associated function
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#unused_self
+
+warning: this argument is passed by value, but not consumed in the function body
+   --> mai-compliance\src\reports\api.rs:241:18
+    |
+241 |         request: ReportRequest,
+    |                  ^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#needless_pass_by_value
+    = note: `-W clippy::needless-pass-by-value` implied by `-W clippy::pedantic`
+    = help: to override `-W clippy::pedantic` add `#[allow(clippy::needless_pass_by_value)]`
+help: consider taking a reference instead
+    |
+241 |         request: &ReportRequest,
+    |                  +
+
+warning: this argument is passed by value, but not consumed in the function body
+   --> mai-compliance\src\reports\api.rs:300:18
+    |
+300 |         request: ReportRequest,
+    |                  ^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#needless_pass_by_value
+help: consider taking a reference instead
+    |
+300 |         request: &ReportRequest,
+    |                  +
+
+warning: `mai-compliance` (lib) generated 7 warnings
+       Fixed mai-core\tests\integration_lifecycle.rs (4 fixes)
+    Checking aog-gateway v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\aog-gateway)
+    Checking mai-admin v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\tools\mai-admin)
+       Fixed mai-compliance\src\ocap\treaty.rs (1 fix)
+warning: binding's name is too similar to existing binding
+   --> mai-compliance\src\audit\sealer.rs:126:13
+    |
+126 |         let sealed = sealer.seal(plaintext);
+    |             ^^^^^^
+    |
+note: existing binding defined here
+   --> mai-compliance\src\audit\sealer.rs:124:13
+    |
+124 |         let sealer = AeadSealer::new(&key);
+    |             ^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#similar_names
+    = note: `-W clippy::similar-names` implied by `-W clippy::pedantic`
+    = help: to override `-W clippy::pedantic` add `#[allow(clippy::similar_names)]`
+
+warning: binding's name is too similar to existing binding
+   --> mai-compliance\src\reports\pdf.rs:308:13
+    |
+308 |         let certified = certifier.certify(doc, 100).expect("certify");
+    |             ^^^^^^^^^
+    |
+note: existing binding defined here
+   --> mai-compliance\src\reports\pdf.rs:307:13
+    |
+307 |         let certifier = ReportCertifier::new(Box::new(NullReportSigner));
+    |             ^^^^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#similar_names
+
+warning: binding's name is too similar to existing binding
+   --> mai-compliance\src\reports\pdf.rs:324:13
+    |
+324 |         let certified = certifier.certify(doc, 100).expect("certify");
+    |             ^^^^^^^^^
+    |
+note: existing binding defined here
+   --> mai-compliance\src\reports\pdf.rs:323:13
+    |
+323 |         let certifier = ReportCertifier::new(Box::new(signer));
+    |             ^^^^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#similar_names
+
+warning: binding's name is too similar to existing binding
+   --> mai-compliance\src\reports\pdf.rs:337:17
+    |
+337 |         let mut certified = certifier.certify(doc, 100).expect("certify");
+    |                 ^^^^^^^^^
+    |
+note: existing binding defined here
+   --> mai-compliance\src\reports\pdf.rs:336:13
+    |
+336 |         let certifier = ReportCertifier::new(Box::new(signer));
+    |             ^^^^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#similar_names
+
+warning: `mai-compliance` (lib test) generated 11 warnings (7 duplicates)
+    Checking aog-toolproxy v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\aog-toolproxy)
+warning: binding's name is too similar to existing binding
+   --> mai-vault\src\pqc.rs:561:13
+    |
+561 |         let ss_b = engine.kem_decapsulate(&ct, &sk_b).await.unwrap();
+    |             ^^^^
+    |
+note: existing binding defined here
+   --> mai-vault\src\pqc.rs:556:21
+    |
+556 |         let (_pk_b, sk_b) = engine.kem_generate_keypair().await.unwrap();
+    |                     ^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#similar_names
+    = note: `-W clippy::similar-names` implied by `-W clippy::pedantic`
+    = help: to override `-W clippy::pedantic` add `#[allow(clippy::similar_names)]`
+
+warning: `mai-vault` (lib test) generated 6 warnings (5 duplicates)
+    Checking gen-trust-staging v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\tools\gen-trust-staging)
+       Fixed mai-adapters\src\health.rs (2 fixes)
+warning: strict comparison of `f32` or `f64`
+   --> mai-agent\src\rag.rs:552:9
+    |
+552 |         assert_eq!(cosine_similarity(&a, &b), 0.0);
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#float_cmp
+    = note: `-W clippy::float-cmp` implied by `-W clippy::pedantic`
+    = help: to override `-W clippy::pedantic` add `#[allow(clippy::float_cmp)]`
+
+warning: `mai-agent` (lib test) generated 1 warning
+       Fixed mai-scheduler\src\traces\capture.rs (1 fix)
+warning: binding's name is too similar to existing binding
+   --> mai-scheduler\src\aliases.rs:151:13
+    |
+151 |         let resolved = resolver.resolve("lamprey/fast");
+    |             ^^^^^^^^
+    |
+note: existing binding defined here
+   --> mai-scheduler\src\aliases.rs:150:13
+    |
+150 |         let resolver = AliasResolver::from_config(test_aliases());
+    |             ^^^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#similar_names
+    = note: `-W clippy::similar-names` implied by `-W clippy::pedantic`
+    = help: to override `-W clippy::pedantic` add `#[allow(clippy::similar_names)]`
+
+warning: binding's name is too similar to existing binding
+   --> mai-scheduler\src\aliases.rs:159:13
+    |
+159 |         let resolved = resolver.resolve("some-raw-model-name");
+    |             ^^^^^^^^
+    |
+note: existing binding defined here
+   --> mai-scheduler\src\aliases.rs:158:13
+    |
+158 |         let resolver = AliasResolver::from_config(test_aliases());
+    |             ^^^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#similar_names
+
+warning: binding's name is too similar to existing binding
+   --> mai-scheduler\src\aliases.rs:206:13
+    |
+206 |         let resolved = resolver.resolve("anything");
+    |             ^^^^^^^^
+    |
+note: existing binding defined here
+   --> mai-scheduler\src\aliases.rs:204:13
+    |
+204 |         let resolver = AliasResolver::new();
+    |             ^^^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#similar_names
+
+warning: binding's name is too similar to existing binding
+   --> mai-scheduler\src\scoring\scorer.rs:485:14
+    |
+485 |         let (score_b_default, _) = scorer.score(&state_b, &make_request());
+    |              ^^^^^^^^^^^^^^^
+    |
+note: existing binding defined here
+   --> mai-scheduler\src\scoring\scorer.rs:484:14
+    |
+484 |         let (score_a_default, _) = scorer.score(&state_a, &make_request());
+    |              ^^^^^^^^^^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#similar_names
+
+warning: binding's name is too similar to existing binding
+   --> mai-scheduler\src\scoring\scorer.rs:495:14
+    |
+495 |         let (score_b_flipped, _) = scorer_flipped.score(&state_b, &make_request());
+    |              ^^^^^^^^^^^^^^^
+    |
+note: existing binding defined here
+   --> mai-scheduler\src\scoring\scorer.rs:494:14
+    |
+494 |         let (score_a_flipped, _) = scorer_flipped.score(&state_a, &make_request());
+    |              ^^^^^^^^^^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#similar_names
+
+warning: strict comparison of `f32` or `f64`
+   --> mai-scheduler\src\batch\metrics.rs:301:9
+    |
+301 |         assert_eq!(snap.avg_batch_size, 0.0);
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#float_cmp
+    = note: `-W clippy::float-cmp` implied by `-W clippy::pedantic`
+    = help: to override `-W clippy::pedantic` add `#[allow(clippy::float_cmp)]`
+
+warning: strict comparison of `f32` or `f64`
+   --> mai-scheduler\src\batch\metrics.rs:302:9
+    |
+302 |         assert_eq!(snap.batch_utilization, 0.0);
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#float_cmp
+
+warning: strict comparison of `f32` or `f64`
+   --> mai-scheduler\src\batch\metrics.rs:303:9
+    |
+303 |         assert_eq!(snap.admission_rate, 1.0); // no attempts = no rejections
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#float_cmp
+
+warning: strict comparison of `f32` or `f64`
+   --> mai-scheduler\src\batch\metrics.rs:390:9
+    |
+390 |         assert_eq!(snap.batch_utilization, 0.0);
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#float_cmp
+
+warning: adding items after statements is confusing, since items exist from the start of the scope
+   --> mai-scheduler\src\default.rs:922:9
+    |
+922 |         use crate::kv::sequence::{ModelMemoryFactor, SequenceMeta};
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#items_after_statements
+    = note: `-W clippy::items-after-statements` implied by `-W clippy::pedantic`
+    = help: to override `-W clippy::pedantic` add `#[allow(clippy::items_after_statements)]`
+
+warning: adding items after statements is confusing, since items exist from the start of the scope
+   --> mai-scheduler\src\default.rs:922:35
+    |
+922 |         use crate::kv::sequence::{ModelMemoryFactor, SequenceMeta};
+    |                                   ^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#items_after_statements
+
+warning: adding items after statements is confusing, since items exist from the start of the scope
+   --> mai-scheduler\src\default.rs:922:54
+    |
+922 |         use crate::kv::sequence::{ModelMemoryFactor, SequenceMeta};
+    |                                                      ^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#items_after_statements
+
+warning: adding items after statements is confusing, since items exist from the start of the scope
+   --> mai-scheduler\src\default.rs:970:9
+    |
+970 |         use crate::kv::sequence::{ModelMemoryFactor, SequenceMeta};
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#items_after_statements
+
+warning: adding items after statements is confusing, since items exist from the start of the scope
+   --> mai-scheduler\src\default.rs:970:35
+    |
+970 |         use crate::kv::sequence::{ModelMemoryFactor, SequenceMeta};
+    |                                   ^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#items_after_statements
+
+warning: adding items after statements is confusing, since items exist from the start of the scope
+   --> mai-scheduler\src\default.rs:970:54
+    |
+970 |         use crate::kv::sequence::{ModelMemoryFactor, SequenceMeta};
+    |                                                      ^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#items_after_statements
+
+warning: strict comparison of `f32` or `f64`
+    --> mai-scheduler\src\default.rs:1047:9
+     |
+1047 |         assert_eq!(metrics.avg_batch_size, 0.0);
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#float_cmp
+
+warning: casting `u64` to `f64` may cause a loss of precision (`u64` is 64 bits wide, but `f64`'s mantissa is only 52 bits wide)
+   --> mai-scheduler\src\kv\mod.rs:474:31
+    |
+474 |         let bytes_per_token = factor.bytes_per_token() as f64;
+    |                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#cast_precision_loss
+
+warning: casting `i32` to `u64` may lose the sign of the value
+   --> mai-scheduler\src\metrics\health.rs:269:33
+    |
+269 |                 1_000_000_000 + i as u64 * 10_000_000_000,
+    |                                 ^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#cast_sign_loss
+    = note: `-W clippy::cast-sign-loss` implied by `-W clippy::pedantic`
+    = help: to override `-W clippy::pedantic` add `#[allow(clippy::cast_sign_loss)]`
+
+warning: casting `u64` to `f64` may cause a loss of precision (`u64` is 64 bits wide, but `f64`'s mantissa is only 52 bits wide)
+   --> mai-scheduler\src\metrics\lifecycle.rs:177:24
+    |
+177 |         let expected = (100_u64.saturating_sub(90) as f64) / 90.0;
+    |                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#cast_precision_loss
+
+warning: strict comparison of `f32` or `f64`
+   --> mai-scheduler\src\placement.rs:394:9
+    |
+394 | /         assert_eq!(
+395 | |             engine.topology_penalty(&[GpuId::new(0), GpuId::new(1)]),
+396 | |             0.0
+397 | |         );
+    | |_________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#float_cmp
+
+warning: strict comparison of `f32` or `f64`
+   --> mai-scheduler\src\placement.rs:476:9
+    |
+476 |         assert_eq!(engine.topology_penalty(&[GpuId(0)]), 0.0);
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#float_cmp
+
+warning: casting `f64` to `u64` may lose the sign of the value
+  --> mai-scheduler\src\scoring\eviction_cost.rs:94:27
+   |
+94 |     let estimated_bytes = (estimated_tokens as f64 * config.default_bytes_per_token) as u64;
+   |                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#cast_sign_loss
+
+warning: strict comparison of `f32` or `f64`
+   --> mai-scheduler\src\topology\analysis.rs:581:9
+    |
+581 |         assert_eq!(analysis.worst_pair_cost(&[GpuId(0)]), 0.0);
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#float_cmp
+
+warning: strict comparison of `f32` or `f64`
+   --> mai-scheduler\src\topology\analysis.rs:598:9
+    |
+598 |         assert_eq!(analysis.path_cost(GpuId(0), GpuId(0)), 0.0);
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#float_cmp
+
+warning: strict comparison of `f32` or `f64`
+   --> mai-scheduler\src\topology\graph.rs:445:9
+    |
+445 |         assert_eq!(graph.link_cost(GpuId(0), GpuId(1)), f64::INFINITY);
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#float_cmp
+
+warning: strict comparison of `f32` or `f64`
+   --> mai-scheduler\src\topology\mod.rs:314:9
+    |
+314 |         assert_eq!(topo.topology_penalty(&[GpuId(0)]), 0.0);
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#float_cmp
+
+warning: strict comparison of `f32` or `f64`
+   --> mai-scheduler\src\topology\mod.rs:321:9
+    |
+321 |         assert_eq!(topo.topology_penalty(&[]), 0.0);
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#float_cmp
+
+warning: strict comparison of `f32` or `f64`
+   --> mai-scheduler\src\topology\mod.rs:322:9
+    |
+322 |         assert_eq!(topo.topology_penalty(&[GpuId(0)]), 0.0);
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#float_cmp
+
+warning: `mai-scheduler` (lib test) generated 73 warnings (45 duplicates)
+    Checking hipaa-pack v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\hipaa-pack)
+warning: `format!(..)` appended to existing `String`
+  --> crates\wsf-broker\src\sigv4.rs:90:13
+   |
+90 |             canonical_headers.push_str(&format!("x-amz-security-token:{tok}\n"));
+   |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: you may need to import the `std::fmt::Write` trait
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#format_push_string
+   = note: `-W clippy::format-push-string` implied by `-W clippy::pedantic`
+   = help: to override `-W clippy::pedantic` add `#[allow(clippy::format_push_string)]`
+help: consider using `write!` to avoid the extra allocation
+   |
+90 -             canonical_headers.push_str(&format!("x-amz-security-token:{tok}\n"));
+90 +             let _ = write!(canonical_headers, "x-amz-security-token:{tok}\n");
+   |
+
+warning: `wsf-broker` (lib) generated 1 warning
+    Checking wsf-api v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\wsf-api)
+       Fixed mai-scheduler\tests\topology_integration.rs (2 fixes)
+warning: strict comparison of `f32` or `f64`
+  --> mai-scheduler\tests\topology_integration.rs:60:5
+   |
+60 |     assert_eq!(topo.topology_penalty(&[GpuId(0)]), 0.0);
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#float_cmp
+   = note: `-W clippy::float-cmp` implied by `-W clippy::pedantic`
+   = help: to override `-W clippy::pedantic` add `#[allow(clippy::float_cmp)]`
+
+warning: strict comparison of `f32` or `f64`
+  --> mai-scheduler\tests\topology_integration.rs:61:5
+   |
+61 |     assert_eq!(topo.topology_penalty(&[]), 0.0);
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#float_cmp
+
+warning: `mai-scheduler` (test "topology_integration") generated 2 warnings
+       Fixed mai-scheduler\tests\gate_c_session33.rs (1 fix)
+       Fixed mai-api\src\audit_wal.rs (2 fixes)
+       Fixed mai-api\src\production_guard.rs (1 fix)
+       Fixed mai-api\src\server.rs (6 fixes)
+       Fixed mai-api\src\openbao_client.rs (1 fix)
+warning: assigning the result of `Clone::clone()` may be inefficient
+   --> mai-api\src\production_guard.rs:179:17
+    |
+179 |                 check.message = outcome.detail.clone();
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: use `clone_from()`: `check.message.clone_from(&outcome.detail)`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#assigning_clones
+    = note: `-W clippy::assigning-clones` implied by `-W clippy::pedantic`
+    = help: to override `-W clippy::pedantic` add `#[allow(clippy::assigning_clones)]`
+
+warning: `format!(..)` appended to existing `String`
+   --> mai-api\src\production_guard.rs:207:9
+    |
+207 | /         out.push_str(&format!(
+208 | |             "Profile: {} (mode={:?})\n",
+209 | |             self.profile, self.mode
+210 | |         ));
+    | |__________^
+    |
+    = note: you may need to import the `std::fmt::Write` trait
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#format_push_string
+    = note: `-W clippy::format-push-string` implied by `-W clippy::pedantic`
+    = help: to override `-W clippy::pedantic` add `#[allow(clippy::format_push_string)]`
+help: consider using `write!` to avoid the extra allocation
+    |
+207 ~         let _ = write!(out, "Profile: {} (mode={:?})\n",
+208 ~             self.profile, self.mode);
+    |
+
+warning: `format!(..)` appended to existing `String`
+   --> mai-api\src\production_guard.rs:211:9
+    |
+211 | /         out.push_str(&format!(
+212 | |             "Checks: {} pass / {} fail / {} deferred / {} skipped\n\n",
+213 | |             counts.pass, counts.fail, counts.deferred, counts.skipped
+214 | |         ));
+    | |__________^
+    |
+    = note: you may need to import the `std::fmt::Write` trait
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#format_push_string
+help: consider using `write!` to avoid the extra allocation
+    |
+211 ~         let _ = write!(out, "Checks: {} pass / {} fail / {} deferred / {} skipped\n\n",
+212 ~             counts.pass, counts.fail, counts.deferred, counts.skipped);
+    |
+
+warning: `format!(..)` appended to existing `String`
+   --> mai-api\src\production_guard.rs:222:13
+    |
+222 |             out.push_str(&format!("{tag} {}: {}\n", c.id, c.message));
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: you may need to import the `std::fmt::Write` trait
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#format_push_string
+help: consider using `write!` to avoid the extra allocation
+    |
+222 -             out.push_str(&format!("{tag} {}: {}\n", c.id, c.message));
+222 +             let _ = write!(out, "{tag} {}: {}\n", c.id, c.message);
+    |
+
+warning: `format!(..)` appended to existing `String`
+   --> mai-api\src\production_guard.rs:224:17
+    |
+224 |                 out.push_str(&format!("           Remediation: {}\n", c.remediation));
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: you may need to import the `std::fmt::Write` trait
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#format_push_string
+help: consider using `write!` to avoid the extra allocation
+    |
+224 -                 out.push_str(&format!("           Remediation: {}\n", c.remediation));
+224 +                 let _ = write!(out, "           Remediation: {}\n", c.remediation);
+    |
+
+warning: assigning the result of `Clone::clone()` may be inefficient
+   --> mai-api\src\audit_wal.rs:304:9
+    |
+304 |         state.last_hash = entry.entry_hash.clone();
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: use `clone_from()`: `state.last_hash.clone_from(&entry.entry_hash)`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#assigning_clones
+
+warning: it is more idiomatic to use `Option<&T>` instead of `&Option<T>`
+   --> mai-api\src\handlers\inference.rs:564:1
+    |
+564 | / fn explicit_stop_sequences_or_empty(stop: &Option<Vec<String>>) -> Vec<String> {
+565 | |     match stop.clone() {
+566 | |         Some(stop) => stop,
+567 | |         None => Vec::new(),
+568 | |     }
+569 | | }
+    | |_^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#ref_option
+    = note: `-W clippy::ref-option` implied by `-W clippy::pedantic`
+    = help: to override `-W clippy::pedantic` add `#[allow(clippy::ref_option)]`
+help: change this to
+    |
+564 - fn explicit_stop_sequences_or_empty(stop: &Option<Vec<String>>) -> Vec<String> {
+564 + fn explicit_stop_sequences_or_empty(stop: Option<&Vec<String>>) -> Vec<String> {
+    |
+
+warning: adding items after statements is confusing, since items exist from the start of the scope
+  --> mai-api\src\handlers\telemetry.rs:47:5
+   |
+47 | /     struct InstanceMetricsResponse {
+48 | |         recent_requests: usize,
+49 | |         prediction_error: Option<f64>,
+50 | |         lifecycles: Vec<serde_json::Value>,
+51 | |     }
+   | |_____^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#items_after_statements
+   = note: `-W clippy::items-after-statements` implied by `-W clippy::pedantic`
+   = help: to override `-W clippy::pedantic` add `#[allow(clippy::items_after_statements)]`
+
+warning: this could be rewritten as `let...else`
+   --> mai-api\src\handlers\trust.rs:254:5
+    |
+254 | /     let bridge = match guard.as_ref() {
+255 | |         Some(b) => b,
+256 | |         None => {
+257 | |             return Ok(Json(serde_json::json!({
+...   |
+270 | |     };
+    | |______^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#manual_let_else
+    = note: `-W clippy::manual-let-else` implied by `-W clippy::pedantic`
+    = help: to override `-W clippy::pedantic` add `#[allow(clippy::manual_let_else)]`
+help: consider writing
+    |
+254 ~     let Some(bridge) = guard.as_ref() else {
+255 +             return Ok(Json(serde_json::json!({
+256 +                 "reachable": false,
+257 +                 "sealed": true,
+258 +                 "kv_mounted": false,
+259 +                 "transit_mounted": false,
+260 +                 "pki_mounted": false,
+261 +                 "approle_enabled": false,
+262 +                 "demo_tenant_exists": false,
+263 +                 "claim_signer_key_exists": false,
+264 +                 "latency_ms": 0,
+265 +                 "error": "no bridge client wired",
+266 +             })));
+267 +         };
+    |
+
+warning: this argument is passed by value, but not consumed in the function body
+   --> mai-api\src\handlers\trust.rs:447:14
+    |
+447 |     profile: ProfileInfo,
+    |              ^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#needless_pass_by_value
+    = note: `-W clippy::needless-pass-by-value` implied by `-W clippy::pedantic`
+    = help: to override `-W clippy::pedantic` add `#[allow(clippy::needless_pass_by_value)]`
+help: consider taking a reference instead
+    |
+447 |     profile: &ProfileInfo,
+    |              +
+
+warning: this function's return value is unnecessarily wrapped by `Result`
+   --> mai-api\src\handlers\trust.rs:446:1
+    |
+446 | / fn mint_local_dev_synthetic(
+447 | |     profile: ProfileInfo,
+448 | |     req: ExchangeTokenRequest,
+449 | | ) -> Result<Json<ExchangeTokenResponse>, ApiError> {
+    | |__________________________________________________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#unnecessary_wraps
+    = note: `-W clippy::unnecessary-wraps` implied by `-W clippy::pedantic`
+    = help: to override `-W clippy::pedantic` add `#[allow(clippy::unnecessary_wraps)]`
+help: remove `Result` from the return type...
+    |
+449 - ) -> Result<Json<ExchangeTokenResponse>, ApiError> {
+449 + ) -> axum::Json<handlers::trust::ExchangeTokenResponse> {
+    |
+help: ...and then remove the surrounding `Ok()` from returning expressions
+    |
+471 ~     Json(ExchangeTokenResponse {
+472 +         token,
+473 +         token_type: "Bearer".to_string(),
+474 +         subject_id: req.subject_id,
+475 +         tenant_id: tenant,
+476 +         scopes,
+477 +         issued_at_secs: now,
+478 +         expires_at_secs: expires_at,
+479 +         mode: "local-dev".to_string(),
+480 +     })
+    |
+
+warning: doc list item without indentation
+  --> mai-api\src\routes.rs:17:5
+   |
+17 | //! `/v1/trust/*` - Local trust cache surface
+   |     ^
+   |
+   = help: if this is supposed to be its own paragraph, add a blank line
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#doc_lazy_continuation
+   = note: requested on the command line with `-W clippy::doc-lazy-continuation`
+help: indent this line
+   |
+17 | //!   `/v1/trust/*` - Local trust cache surface
+   |     ++
+
+warning: doc list item without indentation
+  --> mai-api\src\routes.rs:18:5
+   |
+18 | //! `/v1/auth/exchange_token` - Local-dev token exchange stub
+   |     ^
+   |
+   = help: if this is supposed to be its own paragraph, add a blank line
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#doc_lazy_continuation
+help: indent this line
+   |
+18 | //!   `/v1/auth/exchange_token` - Local-dev token exchange stub
+   |     ++
+
+warning: adding items after statements is confusing, since items exist from the start of the scope
+   --> mai-api\src\metrics.rs:172:5
+    |
+172 | /     const SUSPICIOUS_PREFIXES: &[&str] = &[
+173 | |         "sk-",     // OpenAI-style API key
+174 | |         "bearer_", // sanitized bearer-token prefix
+175 | |         "hvs.",    // HashiCorp Vault token (HCP)
+...   |
+179 | |         "ya29.",   // Google OAuth
+180 | |     ];
+    | |______^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#items_after_statements
+
+warning: casting `f64` to `u64` may truncate the value
+   --> mai-api\src\metrics.rs:236:21
+    |
+236 |         let micro = (value_ms * 1_000.0) as u64;
+    |                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: if this is intentional allow the lint with `#[allow(clippy::cast_possible_truncation)]` ...
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#cast_possible_truncation
+    = note: `-W clippy::cast-possible-truncation` implied by `-W clippy::pedantic`
+    = help: to override `-W clippy::pedantic` add `#[allow(clippy::cast_possible_truncation)]`
+
+warning: casting `f64` to `u64` may lose the sign of the value
+   --> mai-api\src\metrics.rs:236:21
+    |
+236 |         let micro = (value_ms * 1_000.0) as u64;
+    |                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#cast_sign_loss
+    = note: `-W clippy::cast-sign-loss` implied by `-W clippy::pedantic`
+    = help: to override `-W clippy::pedantic` add `#[allow(clippy::cast_sign_loss)]`
+
+warning: casting `u64` to `f64` may cause a loss of precision (`u64` is 64 bits wide, but `f64`'s mantissa is only 52 bits wide)
+   --> mai-api\src\metrics.rs:512:38
+    |
+512 |                         let sum_ms = sum_micro as f64 / 1_000.0;
+    |                                      ^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#cast_precision_loss
+    = note: `-W clippy::cast-precision-loss` implied by `-W clippy::pedantic`
+    = help: to override `-W clippy::pedantic` add `#[allow(clippy::cast_precision_loss)]`
+
+warning: casting `f64` to `i64` may truncate the value
+   --> mai-api\src\metrics.rs:573:23
+    |
+573 |         format!("{}", v as i64)
+    |                       ^^^^^^^^
+    |
+    = help: if this is intentional allow the lint with `#[allow(clippy::cast_possible_truncation)]` ...
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#cast_possible_truncation
+
+warning: casting `f64` to `u64` may truncate the value
+   --> mai-api\src\middleware.rs:236:24
+    |
+236 |             let secs = retry_after.as_secs_f64().ceil() as u64;
+    |                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: if this is intentional allow the lint with `#[allow(clippy::cast_possible_truncation)]` ...
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#cast_possible_truncation
+
+warning: casting `f64` to `u64` may lose the sign of the value
+   --> mai-api\src\middleware.rs:236:24
+    |
+236 |             let secs = retry_after.as_secs_f64().ceil() as u64;
+    |                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#cast_sign_loss
+
+warning: it is more idiomatic to use `Option<&T>` instead of `&Option<T>`
+   --> mai-api\src\streaming\sse.rs:566:1
+    |
+566 | / fn explicit_stop_sequences_or_empty(stop: &Option<Vec<String>>) -> Vec<String> {
+567 | |     match stop.clone() {
+568 | |         Some(stop) => stop,
+569 | |         None => Vec::new(),
+570 | |     }
+571 | | }
+    | |_^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#ref_option
+help: change this to
+    |
+566 - fn explicit_stop_sequences_or_empty(stop: &Option<Vec<String>>) -> Vec<String> {
+566 + fn explicit_stop_sequences_or_empty(stop: Option<&Vec<String>>) -> Vec<String> {
+    |
+
+warning: doc list item without indentation
+ --> mai-api\src\server.rs:8:5
+  |
+8 | //! 3b. Loads API keys from config/auth_keys.toml
+  |     ^
+  |
+  = help: if this is supposed to be its own paragraph, add a blank line
+  = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#doc_lazy_continuation
+help: indent this line
+  |
+8 | //!    3b. Loads API keys from config/auth_keys.toml
+  |     +++
+
+warning: doc list item without indentation
+   --> mai-api\src\server.rs:184:9
+    |
+184 |     /// 3b. Load API key authentication
+    |         ^
+    |
+    = help: if this is supposed to be its own paragraph, add a blank line
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#doc_lazy_continuation
+help: indent this line
+    |
+184 |     ///    3b. Load API key authentication
+    |         +++
+
+warning: this could be rewritten as `let...else`
+   --> mai-api\src\openbao_client.rs:768:9
+    |
+768 | /         let bundle = match self.fetch_signed_bundle(tenant_id).await? {
+769 | |             Some(b) => b,
+770 | |             None => return Ok(None),
+771 | |         };
+    | |__________^ help: consider writing: `let Some(bundle) = self.fetch_signed_bundle(tenant_id).await? else { return Ok(None) };`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#manual_let_else
+
+warning: casting `u128` to `u64` may truncate the value
+   --> mai-api\src\openbao_client.rs:836:31
+    |
+836 |                 let latency = start.elapsed().as_millis() as u64;
+    |                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: if this is intentional allow the lint with `#[allow(clippy::cast_possible_truncation)]` ...
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#cast_possible_truncation
+help: ... or use `try_from` and handle the error accordingly
+    |
+836 -                 let latency = start.elapsed().as_millis() as u64;
+836 +                 let latency = u64::try_from(start.elapsed().as_millis());
+    |
+
+warning: casting `u128` to `u64` may truncate the value
+   --> mai-api\src\openbao_client.rs:869:23
+    |
+869 |         let latency = start.elapsed().as_millis() as u64;
+    |                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: if this is intentional allow the lint with `#[allow(clippy::cast_possible_truncation)]` ...
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#cast_possible_truncation
+help: ... or use `try_from` and handle the error accordingly
+    |
+869 -         let latency = start.elapsed().as_millis() as u64;
+869 +         let latency = u64::try_from(start.elapsed().as_millis());
+    |
+
+warning: `mai-api` (lib) generated 26 warnings
+       Fixed crates\aog-gateway\src\provider\anthropic.rs (1 fix)
+warning: this argument is passed by value, but not consumed in the function body
+  --> crates\aog-gateway\src\http.rs:72:28
+   |
+72 | pub(crate) fn to_http(err: GatewayError) -> (StatusCode, String) {
+   |                            ^^^^^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#needless_pass_by_value
+   = note: `-W clippy::needless-pass-by-value` implied by `-W clippy::pedantic`
+   = help: to override `-W clippy::pedantic` add `#[allow(clippy::needless_pass_by_value)]`
+help: consider taking a reference instead
+   |
+72 | pub(crate) fn to_http(err: &GatewayError) -> (StatusCode, String) {
+   |                            +
+
+warning: this argument (2 byte) is passed by reference, but would be more efficient if passed by value (limit: 8 byte)
+   --> crates\aog-gateway\src\policy.rs:201:14
+    |
+201 |     outcome: &ModeOutcome,
+    |              ^^^^^^^^^^^^ help: consider passing by value instead: `ModeOutcome`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#trivially_copy_pass_by_ref
+    = note: `-W clippy::trivially-copy-pass-by-ref` implied by `-W clippy::pedantic`
+    = help: to override `-W clippy::pedantic` add `#[allow(clippy::trivially_copy_pass_by_ref)]`
+
+warning: this argument (2 byte) is passed by reference, but would be more efficient if passed by value (limit: 8 byte)
+   --> crates\aog-gateway\src\policy.rs:228:14
+    |
+228 |     outcome: &ModeOutcome,
+    |              ^^^^^^^^^^^^ help: consider passing by value instead: `ModeOutcome`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#trivially_copy_pass_by_ref
+
+warning: unused `self` argument
+  --> crates\aog-gateway\src\provider\anthropic.rs:45:13
+   |
+45 |     fn body(&self, req: &CompletionRequest, stream: bool) -> Value {
+   |             ^^^^^
+   |
+   = help: consider refactoring to an associated function
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#unused_self
+   = note: `-W clippy::unused-self` implied by `-W clippy::pedantic`
+   = help: to override `-W clippy::pedantic` add `#[allow(clippy::unused_self)]`
+
+warning: unused `self` argument
+  --> crates\aog-gateway\src\provider\openai.rs:56:13
+   |
+56 |     fn body(&self, req: &CompletionRequest, stream: bool) -> Value {
+   |             ^^^^^
+   |
+   = help: consider refactoring to an associated function
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#unused_self
+
+warning: this function's return value is unnecessarily wrapped by `Result`
+   --> crates\aog-gateway\src\surface_anthropic.rs:204:1
+    |
+204 | fn ev(name: &str, v: &Value) -> Result<Event, std::convert::Infallible> {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#unnecessary_wraps
+    = note: `-W clippy::unnecessary-wraps` implied by `-W clippy::pedantic`
+    = help: to override `-W clippy::pedantic` add `#[allow(clippy::unnecessary_wraps)]`
+help: remove `Result` from the return type...
+    |
+204 - fn ev(name: &str, v: &Value) -> Result<Event, std::convert::Infallible> {
+204 + fn ev(name: &str, v: &Value) -> axum::response::sse::Event {
+    |
+help: ...and then remove the surrounding `Ok()` from returning expressions
+    |
+205 -     Ok(Event::default().event(name).data(v.to_string()))
+205 +     Event::default().event(name).data(v.to_string())
+    |
+
+warning: this argument is passed by value, but not consumed in the function body
+   --> crates\aog-gateway\src\surface_openai.rs:300:16
+    |
+300 |     providers: Vec<String>,
+    |                ^^^^^^^^^^^ help: consider changing the type to: `&[String]`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#needless_pass_by_value
+
+warning: this argument is passed by value, but not consumed in the function body
+   --> crates\aog-gateway\src\surface_openai.rs:301:13
+    |
+301 |     models: Vec<String>,
+    |             ^^^^^^^^^^^ help: consider changing the type to: `&[String]`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#needless_pass_by_value
+
+warning: this argument is passed by value, but not consumed in the function body
+   --> crates\aog-gateway\src\surface_openai.rs:303:17
+    |
+303 |     chain_head: String,
+    |                 ^^^^^^ help: consider changing the type to: `&str`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#needless_pass_by_value
+
+warning: this argument is passed by value, but not consumed in the function body
+   --> crates\aog-gateway\src\surface_openai.rs:336:54
+    |
+336 | fn chunk_json(id: &str, ts: i64, model: &str, delta: Value, finish: Option<&str>) -> String {
+    |                                                      ^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#needless_pass_by_value
+help: consider taking a reference instead
+    |
+336 | fn chunk_json(id: &str, ts: i64, model: &str, delta: &Value, finish: Option<&str>) -> String {
+    |                                                      +
+
+warning: `aog-gateway` (lib) generated 10 warnings
+       Fixed tools\mai-admin\src\restore.rs (1 fix)
+warning: it is more idiomatic to use `Option<&T>` instead of `&Option<T>`
+   --> tools\mai-admin\src\restore.rs:521:1
+    |
+521 | / fn replay_chain(
+522 | |     dir: &Path,
+523 | |     component_name: &str,
+524 | |     stored: &Option<String>,
+...   |
+572 | |     Ok(observed)
+573 | | }
+    | |_^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#ref_option
+    = note: `-W clippy::ref-option` implied by `-W clippy::pedantic`
+    = help: to override `-W clippy::pedantic` add `#[allow(clippy::ref_option)]`
+help: change this to
+    |
+524 -     stored: &Option<String>,
+524 +     stored: Option<&String>,
+    |
+
+warning: `mai-admin` (lib) generated 1 warning
+warning: this argument (1 byte) is passed by reference, but would be more efficient if passed by value (limit: 8 byte)
+  --> crates\aog-toolproxy\src\receipt.rs:67:16
+   |
+67 | fn is_false(b: &bool) -> bool {
+   |                ^^^^^ help: consider passing by value instead: `bool`
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#trivially_copy_pass_by_ref
+   = note: `-W clippy::trivially-copy-pass-by-ref` implied by `-W clippy::pedantic`
+   = help: to override `-W clippy::pedantic` add `#[allow(clippy::trivially_copy_pass_by_ref)]`
+
+warning: this argument (4 byte) is passed by reference, but would be more efficient if passed by value (limit: 8 byte)
+  --> crates\aog-toolproxy\src\receipt.rs:73:15
+   |
+73 | fn is_zero(n: &u32) -> bool {
+   |               ^^^^ help: consider passing by value instead: `u32`
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#trivially_copy_pass_by_ref
+
+warning: `aog-toolproxy` (lib) generated 2 warnings
+    Checking aog-approvals v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\aog-approvals)
+       Fixed mai-compliance\tests\compliance_demos.rs (4 fixes)
+       Fixed crates\aog-gateway\src\provider.rs (1 fix)
+warning: strict comparison of `f32` or `f64`
+   --> crates\aog-gateway\src\recommend.rs:213:9
+    |
+213 |         assert_eq!(r.local_share, 0.0);
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#float_cmp
+    = note: `-W clippy::float-cmp` implied by `-W clippy::pedantic`
+    = help: to override `-W clippy::pedantic` add `#[allow(clippy::float_cmp)]`
+
+warning: `aog-gateway` (lib test) generated 11 warnings (10 duplicates)
+       Fixed mai-compliance\tests\compliance_perf.rs (7 fixes)
+warning: casting `f64` to `usize` may truncate the value
+  --> mai-compliance\tests\compliance_perf.rs:40:15
+   |
+40 |     let idx = ((pct / 100.0) * (sorted.len() as f64 - 1.0)).round() as usize;
+   |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: if this is intentional allow the lint with `#[allow(clippy::cast_possible_truncation)]` ...
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#cast_possible_truncation
+   = note: `-W clippy::cast-possible-truncation` implied by `-W clippy::pedantic`
+   = help: to override `-W clippy::pedantic` add `#[allow(clippy::cast_possible_truncation)]`
+
+warning: casting `f64` to `usize` may lose the sign of the value
+  --> mai-compliance\tests\compliance_perf.rs:40:15
+   |
+40 |     let idx = ((pct / 100.0) * (sorted.len() as f64 - 1.0)).round() as usize;
+   |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#cast_sign_loss
+   = note: `-W clippy::cast-sign-loss` implied by `-W clippy::pedantic`
+   = help: to override `-W clippy::pedantic` add `#[allow(clippy::cast_sign_loss)]`
+
+warning: casting `usize` to `f64` may cause a loss of precision (`usize` can be up to 64 bits wide depending on the target architecture, but `f64`'s mantissa is only 52 bits wide)
+  --> mai-compliance\tests\compliance_perf.rs:40:33
+   |
+40 |     let idx = ((pct / 100.0) * (sorted.len() as f64 - 1.0)).round() as usize;
+   |                                 ^^^^^^^^^^^^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#cast_precision_loss
+   = note: `-W clippy::cast-precision-loss` implied by `-W clippy::pedantic`
+   = help: to override `-W clippy::pedantic` add `#[allow(clippy::cast_precision_loss)]`
+
+warning: casting `i32` to `u64` may lose the sign of the value
+   --> mai-compliance\tests\compliance_perf.rs:182:33
+    |
+182 |     let stride = window_nanos / seed_count as u64;
+    |                                 ^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#cast_sign_loss
+
+warning: casting `i32` to `u64` may lose the sign of the value
+   --> mai-compliance\tests\compliance_perf.rs:185:25
+    |
+185 |         let ts = base + i as u64 * stride;
+    |                         ^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#cast_sign_loss
+
+warning: `mai-compliance` (test "compliance_perf") generated 5 warnings
+warning: `format!(..)` appended to existing `String`
+   --> crates\wsf-api\src\client.rs:151:13
+    |
+151 |             url.push_str(&format!("?field={f}&value={v}"));
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: you may need to import the `std::fmt::Write` trait
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#format_push_string
+    = note: `-W clippy::format-push-string` implied by `-W clippy::pedantic`
+    = help: to override `-W clippy::pedantic` add `#[allow(clippy::format_push_string)]`
+help: consider using `write!` to avoid the extra allocation
+    |
+151 -             url.push_str(&format!("?field={f}&value={v}"));
+151 +             let _ = write!(url, "?field={f}&value={v}");
+    |
+
+warning: this argument is passed by value, but not consumed in the function body
+   --> crates\wsf-api\src\lib.rs:374:22
+    |
+374 | fn map_seal_error(e: wsf_seal::SealError) -> ApiError {
+    |                      ^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#needless_pass_by_value
+    = note: `-W clippy::needless-pass-by-value` implied by `-W clippy::pedantic`
+    = help: to override `-W clippy::pedantic` add `#[allow(clippy::needless_pass_by_value)]`
+help: consider taking a reference instead
+    |
+374 | fn map_seal_error(e: &wsf_seal::SealError) -> ApiError {
+    |                      +
+
+warning: `wsf-api` (lib) generated 2 warnings
+warning: `wsf-api` (lib test) generated 2 warnings (2 duplicates)
+       Fixed tools\mai-admin\src\banner.rs (2 fixes)
+warning: field name ends with the struct's name
+  --> tools\mai-admin\src\demo.rs:85:5
+   |
+85 |     in_phase: bool,
+   |     ^^^^^^^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#struct_field_names
+   = note: `-W clippy::struct-field-names` implied by `-W clippy::pedantic`
+   = help: to override `-W clippy::pedantic` add `#[allow(clippy::struct_field_names)]`
+
+warning: unused `self` argument
+   --> tools\mai-admin\src\demo.rs:161:14
+    |
+161 |     fn pause(&self) {
+    |              ^^^^^
+    |
+    = help: consider refactoring to an associated function
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#unused_self
+    = note: `-W clippy::unused-self` implied by `-W clippy::pedantic`
+    = help: to override `-W clippy::pedantic` add `#[allow(clippy::unused_self)]`
+
+warning: `mai-admin` (bin "lamprey-mai-admin") generated 2 warnings
+warning: `mai-admin` (bin "lamprey-mai-admin" test) generated 2 warnings (2 duplicates)
+       Fixed tools\mai-admin\tests\restore_e2e.rs (1 fix)
+warning: binding's name is too similar to existing binding
+  --> crates\wsf-api\src\main.rs:70:9
+   |
+70 |     let bridge_sk = b64("WSF_BRIDGE_SK")?;
+   |         ^^^^^^^^^
+   |
+note: existing binding defined here
+  --> crates\wsf-api\src\main.rs:69:9
+   |
+69 |     let bridge_pk = b64("WSF_BRIDGE_PK")?;
+   |         ^^^^^^^^^
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#similar_names
+   = note: `-W clippy::similar-names` implied by `-W clippy::pedantic`
+   = help: to override `-W clippy::pedantic` add `#[allow(clippy::similar_names)]`
+
+warning: binding's name is too similar to existing binding
+  --> crates\wsf-api\src\main.rs:72:9
+   |
+72 |     let seal_sk = b64("WSF_SEAL_SK")?;
+   |         ^^^^^^^
+   |
+note: existing binding defined here
+  --> crates\wsf-api\src\main.rs:71:9
+   |
+71 |     let seal_pk = b64("WSF_SEAL_PK")?;
+   |         ^^^^^^^
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#similar_names
+
+warning: binding's name is too similar to existing binding
+  --> crates\wsf-api\src\main.rs:74:9
+   |
+74 |     let ledger_sk = b64("WSF_LEDGER_SK")?;
+   |         ^^^^^^^^^
+   |
+note: existing binding defined here
+  --> crates\wsf-api\src\main.rs:73:9
+   |
+73 |     let ledger_pk = b64("WSF_LEDGER_PK")?;
+   |         ^^^^^^^^^
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#similar_names
+
+warning: `wsf-api` (bin "wsf-api" test) generated 3 warnings
+warning: `wsf-api` (bin "wsf-api") generated 3 warnings (3 duplicates)
+warning: binding's name is too similar to existing binding
+   --> crates\wsf-api\src\bin\wsf-seed.rs:218:21
+    |
+218 |     let (bridge_pk, bridge_sk) = RustCryptoMlDsa87::keypair().map_err(|e| e.to_string())?;
+    |                     ^^^^^^^^^
+    |
+note: existing binding defined here
+   --> crates\wsf-api\src\bin\wsf-seed.rs:218:10
+    |
+218 |     let (bridge_pk, bridge_sk) = RustCryptoMlDsa87::keypair().map_err(|e| e.to_string())?;
+    |          ^^^^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#similar_names
+    = note: `-W clippy::similar-names` implied by `-W clippy::pedantic`
+    = help: to override `-W clippy::pedantic` add `#[allow(clippy::similar_names)]`
+
+warning: binding's name is too similar to existing binding
+   --> crates\wsf-api\src\bin\wsf-seed.rs:219:19
+    |
+219 |     let (seal_pk, seal_sk) = RustCryptoMlDsa87::keypair().map_err(|e| e.to_string())?;
+    |                   ^^^^^^^
+    |
+note: existing binding defined here
+   --> crates\wsf-api\src\bin\wsf-seed.rs:219:10
+    |
+219 |     let (seal_pk, seal_sk) = RustCryptoMlDsa87::keypair().map_err(|e| e.to_string())?;
+    |          ^^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#similar_names
+
+warning: binding's name is too similar to existing binding
+   --> crates\wsf-api\src\bin\wsf-seed.rs:220:21
+    |
+220 |     let (ledger_pk, ledger_sk) = RustCryptoMlDsa87::keypair().map_err(|e| e.to_string())?;
+    |                     ^^^^^^^^^
+    |
+note: existing binding defined here
+   --> crates\wsf-api\src\bin\wsf-seed.rs:220:10
+    |
+220 |     let (ledger_pk, ledger_sk) = RustCryptoMlDsa87::keypair().map_err(|e| e.to_string())?;
+    |          ^^^^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#similar_names
+
+warning: `wsf-api` (bin "wsf-seed" test) generated 3 warnings
+warning: `wsf-api` (bin "wsf-seed") generated 3 warnings (3 duplicates)
+warning: this argument is passed by value, but not consumed in the function body
+  --> mai-api\tests\ship_convergence.rs:37:33
+   |
+37 | fn local_dev_profile(state_dir: PathBuf) -> ShipProfile {
+   |                                 ^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#needless_pass_by_value
+   = note: `-W clippy::needless-pass-by-value` implied by `-W clippy::pedantic`
+   = help: to override `-W clippy::pedantic` add `#[allow(clippy::needless_pass_by_value)]`
+help: consider taking a reference instead
+   |
+37 | fn local_dev_profile(state_dir: &PathBuf) -> ShipProfile {
+   |                                 +
+
+warning: `mai-api` (test "ship_convergence") generated 1 warning
+       Fixed mai-api\tests\tlm42_e2e.rs (2 fixes)
+warning: use of `eprintln!`
+  --> mai-api\tests\tlm42_e2e.rs:19:9
+   |
+19 |         eprintln!("[TLM-4.2] SKIP: MAI_OPENBAO_SECRET_ID not set");
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#print_stderr
+   = note: requested on the command line with `-D clippy::print-stderr`
+
+warning: use of `eprintln!`
+  --> mai-api\tests\tlm42_e2e.rs:37:5
+   |
+37 | /     eprintln!(
+38 | |         "[TLM-4.2] pre-rotation claim: {} (status: {})",
+39 | |         claim.claim_id, claim.revocation_status
+40 | |     );
+   | |_____^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#print_stderr
+
+warning: use of `eprintln!`
+  --> mai-api\tests\tlm42_e2e.rs:47:5
+   |
+47 |     eprintln!("[TLM-4.2] credential rotated in-place");
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#print_stderr
+
+warning: use of `eprintln!`
+  --> mai-api\tests\tlm42_e2e.rs:63:5
+   |
+63 | /     eprintln!(
+64 | |         "[TLM-4.2] post-rotation claim: {} (status: {})",
+65 | |         claim2.claim_id, claim2.revocation_status
+66 | |     );
+   | |_____^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#print_stderr
+
+warning: use of `eprintln!`
+  --> mai-api\tests\tlm42_e2e.rs:69:5
+   |
+69 |     eprintln!("[TLM-4.2] PASS: rotation mechanism works");
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#print_stderr
+
+warning: use of `eprintln!`
+  --> mai-api\tests\tlm42_e2e.rs:75:9
+   |
+75 |         eprintln!("[TLM-4.2] SKIP: MAI_OPENBAO_SECRET_ID not set");
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#print_stderr
+
+warning: use of `eprintln!`
+  --> mai-api\tests\tlm42_e2e.rs:85:5
+   |
+85 | /     eprintln!(
+86 | |         "[TLM-4.2] pre-rotation health: reachable={}",
+87 | |         health.reachable
+88 | |     );
+   | |_____^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#print_stderr
+
+warning: use of `eprintln!`
+   --> mai-api\tests\tlm42_e2e.rs:100:5
+    |
+100 | /     eprintln!(
+101 | |         "[TLM-4.2] post-rotation health: reachable={} latency_ms={}",
+102 | |         health2.reachable, health2.latency_ms
+103 | |     );
+    | |_____^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#print_stderr
+
+warning: use of `eprintln!`
+   --> mai-api\tests\tlm42_e2e.rs:105:5
+    |
+105 |     eprintln!("[TLM-4.2] PASS: health preserved across rotation");
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#print_stderr
+
+warning: use of `eprintln!`
+   --> mai-api\tests\tlm42_e2e.rs:120:5
+    |
+120 |     eprintln!("[TLM-4.2] PASS: rotation can initialize an empty lock");
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#print_stderr
+
+warning: `mai-api` (test "tlm42_e2e") generated 10 warnings
+       Fixed mai-api\src\main.rs (1 fix)
+       Fixed mai-api\tests\streaming_integration.rs (3 fixes)
+       Fixed mai-api\src\bin\mai_ship_validate.rs (1 fix)
+       Fixed mai-compliance\tests\phi_perf.rs (1 fix)
+       Fixed mai-api\src\server.rs (3 fixes)
+       Fixed mai-api\src\ship_profile.rs (9 fixes)
+       Fixed mai-api\src\streaming\ws.rs (1 fix)
+warning: long literal lacking separators
+    --> mai-api\src\server.rs:1387:43
+     |
+1387 |         assert_eq!(kv.total_budget_bytes, 123456);
+     |                                           ^^^^^^ help: consider: `123_456`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#unreadable_literal
+     = note: `-W clippy::unreadable-literal` implied by `-W clippy::pedantic`
+     = help: to override `-W clippy::pedantic` add `#[allow(clippy::unreadable_literal)]`
+
+warning: used underscore-prefixed item
+   --> mai-api\src\state.rs:308:9
+    |
+308 |         _assert_clone_send_sync::<AppState>();
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+note: item is defined here
+   --> mai-api\src\state.rs:304:5
+    |
+304 |     fn _assert_clone_send_sync<T: Clone + Send + Sync>() {}
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#used_underscore_items
+    = note: `-W clippy::used-underscore-items` implied by `-W clippy::pedantic`
+    = help: to override `-W clippy::pedantic` add `#[allow(clippy::used_underscore_items)]`
+
+warning: used underscore-prefixed item
+   --> mai-api\src\grpc\audit.rs:133:9
+    |
+133 |         _assert_send_sync::<MaiAuditService>();
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+note: item is defined here
+   --> mai-api\src\grpc\audit.rs:132:9
+    |
+132 |         fn _assert_send_sync<T: Send + Sync>() {}
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#used_underscore_items
+
+warning: used underscore-prefixed item
+   --> mai-api\src\grpc\health.rs:452:9
+    |
+452 |         _assert_send_sync::<MaiHealthService>();
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+note: item is defined here
+   --> mai-api\src\grpc\health.rs:451:9
+    |
+451 |         fn _assert_send_sync<T: Send + Sync>() {}
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#used_underscore_items
+
+warning: used underscore-prefixed item
+   --> mai-api\src\grpc\health.rs:453:9
+    |
+453 |         _assert_send_sync::<GrpcHealthService>();
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+note: item is defined here
+   --> mai-api\src\grpc\health.rs:451:9
+    |
+451 |         fn _assert_send_sync<T: Send + Sync>() {}
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#used_underscore_items
+
+warning: strict comparison of `f32` or `f64`
+   --> mai-api\src\grpc\health.rs:458:9
+    |
+458 |         assert_eq!(vram_utilization(100, 0), 0.0);
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#float_cmp
+    = note: `-W clippy::float-cmp` implied by `-W clippy::pedantic`
+    = help: to override `-W clippy::pedantic` add `#[allow(clippy::float_cmp)]`
+
+warning: used underscore-prefixed item
+   --> mai-api\src\grpc\inference.rs:386:9
+    |
+386 |         _assert_send_sync::<MaiInferenceService>();
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+note: item is defined here
+   --> mai-api\src\grpc\inference.rs:385:9
+    |
+385 |         fn _assert_send_sync<T: Send + Sync>() {}
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#used_underscore_items
+
+warning: used underscore-prefixed item
+   --> mai-api\src\grpc\models.rs:164:9
+    |
+164 |         _assert_send_sync::<MaiModelsService>();
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+note: item is defined here
+   --> mai-api\src\grpc\models.rs:163:9
+    |
+163 |         fn _assert_send_sync<T: Send + Sync>() {}
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#used_underscore_items
+
+warning: used underscore-prefixed item
+   --> mai-api\src\grpc\power.rs:159:9
+    |
+159 |         _assert_send_sync::<MaiPowerService>();
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+note: item is defined here
+   --> mai-api\src\grpc\power.rs:158:9
+    |
+158 |         fn _assert_send_sync<T: Send + Sync>() {}
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#used_underscore_items
+
+warning: used underscore-prefixed item
+   --> mai-api\src\grpc\registry.rs:139:9
+    |
+139 |         _assert_send_sync::<MaiRegistryService>();
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+note: item is defined here
+   --> mai-api\src\grpc\registry.rs:138:9
+    |
+138 |         fn _assert_send_sync<T: Send + Sync>() {}
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#used_underscore_items
+
+warning: `mai-api` (lib test) generated 36 warnings (26 duplicates)
+warning: `mai-admin` (lib test) generated 1 warning (1 duplicate)
+warning: `aog-toolproxy` (lib test) generated 2 warnings (2 duplicates)
+       Fixed mai-agent\tests\tool_calling_test.rs (3 fixes)
+       Fixed mai-adapters\tests\e2e_integration.rs (5 fixes)
+warning: used underscore-prefixed binding
+   --> mai-adapters\tests\e2e_integration.rs:472:48
+    |
+472 |     let _filler_sel = scheduler.route_request(&_filler).unwrap();
+    |                                                ^^^^^^^
+    |
+note: binding is defined here
+   --> mai-adapters\tests\e2e_integration.rs:471:9
+    |
+471 |     let _filler = make_request(Some("llama3-8b"), RequestPriority::Normal);
+    |         ^^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#used_underscore_binding
+    = note: `-W clippy::used-underscore-binding` implied by `-W clippy::pedantic`
+    = help: to override `-W clippy::pedantic` add `#[allow(clippy::used_underscore_binding)]`
+
+warning: used underscore-prefixed binding
+   --> mai-adapters\tests\e2e_integration.rs:480:32
+    |
+480 |         selection3.adapter_id, _filler_sel.adapter_id,
+    |                                ^^^^^^^^^^^
+    |
+note: binding is defined here
+   --> mai-adapters\tests\e2e_integration.rs:472:9
+    |
+472 |     let _filler_sel = scheduler.route_request(&_filler).unwrap();
+    |         ^^^^^^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#used_underscore_binding
+
+warning: `mai-adapters` (test "e2e_integration") generated 2 warnings
+warning: `wsf-broker` (lib test) generated 1 warning (1 duplicate)
+warning: long literal lacking separators
+  --> mai-sdk-rs\tests\http_client.rs:73:24
+   |
+73 |             "created": 1700000000_u64,
+   |                        ^^^^^^^^^^^^^^ help: consider: `1_700_000_000_u64`
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#unreadable_literal
+   = note: `-W clippy::unreadable-literal` implied by `-W clippy::pedantic`
+   = help: to override `-W clippy::pedantic` add `#[allow(clippy::unreadable_literal)]`
+
+warning: long literal lacking separators
+   --> mai-sdk-rs\tests\http_client.rs:101:24
+    |
+101 |             "created": 1700000001_u64,
+    |                        ^^^^^^^^^^^^^^ help: consider: `1_700_000_001_u64`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#unreadable_literal
+
+warning: long literal lacking separators
+   --> mai-sdk-rs\tests\http_client.rs:224:28
+    |
+224 |                 "created": 1700000000_u64,
+    |                            ^^^^^^^^^^^^^^ help: consider: `1_700_000_000_u64`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#unreadable_literal
+
+warning: `mai-sdk-rs` (test "http_client") generated 3 warnings
+warning: `format!(..)` appended to existing `String`
+  --> mai-sdk-rs\tests\streaming.rs:62:9
+   |
+62 |         out.push_str(&format!("id: {id}\n"));
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: you may need to import the `std::fmt::Write` trait
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#format_push_string
+   = note: `-W clippy::format-push-string` implied by `-W clippy::pedantic`
+   = help: to override `-W clippy::pedantic` add `#[allow(clippy::format_push_string)]`
+help: consider using `write!` to avoid the extra allocation
+   |
+62 -         out.push_str(&format!("id: {id}\n"));
+62 +         let _ = write!(out, "id: {id}\n");
+   |
+
+warning: `format!(..)` appended to existing `String`
+  --> mai-sdk-rs\tests\streaming.rs:63:9
+   |
+63 |         out.push_str(&format!("data: {}\n", chunk_json(id, content)));
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: you may need to import the `std::fmt::Write` trait
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#format_push_string
+help: consider using `write!` to avoid the extra allocation
+   |
+63 -         out.push_str(&format!("data: {}\n", chunk_json(id, content)));
+63 +         let _ = write!(out, "data: {}\n", chunk_json(id, content));
+   |
+
+warning: this could be rewritten as `let...else`
+   --> mai-sdk-rs\tests\streaming.rs:184:5
+    |
+184 | /     let err = match client_for(&server).chat_stream(chat_request()).await {
+185 | |         Ok(_) => panic!("503 must surface as Err, got Ok"),
+186 | |         Err(e) => e,
+187 | |     };
+    | |______^ help: consider writing: `let Err(err) = client_for(&server).chat_stream(chat_request()).await else { panic!("503 must surface as Err, got Ok") };`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#manual_let_else
+    = note: `-W clippy::manual-let-else` implied by `-W clippy::pedantic`
+    = help: to override `-W clippy::pedantic` add `#[allow(clippy::manual_let_else)]`
+
+warning: this could be rewritten as `let...else`
+   --> mai-sdk-rs\tests\streaming.rs:216:5
+    |
+216 | /     let err = match client_for(&server).chat_stream(chat_request()).await {
+217 | |         Ok(_) => panic!("malformed SSE payload must surface as Err, got Ok"),
+218 | |         Err(e) => e,
+219 | |     };
+    | |______^ help: consider writing: `let Err(err) = client_for(&server).chat_stream(chat_request()).await else { panic!("malformed SSE payload must surface as Err, got Ok") };`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#manual_let_else
+
+warning: this could be rewritten as `let...else`
+   --> mai-sdk-rs\tests\streaming.rs:287:5
+    |
+287 | /     let err = match client_for(&server)
+288 | |         .chat_stream_resume(chat_request(), "evt-stale")
+289 | |         .await
+...   |
+292 | |         Err(e) => e,
+293 | |     };
+    | |______^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#manual_let_else
+help: consider writing
+    |
+287 ~     let Err(err) = client_for(&server)
+288 +         .chat_stream_resume(chat_request(), "evt-stale")
+289 +         .await else { panic!("410 on resume must surface as Err, got Ok") };
+    |
+
+warning: `mai-sdk-rs` (test "streaming") generated 5 warnings
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2m 34s
+clippy --fix exit code: 0

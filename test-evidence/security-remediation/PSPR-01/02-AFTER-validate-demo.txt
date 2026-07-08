@@ -1,0 +1,1 @@
+OK (demo): docker-compose.yml passes trust-plane checks

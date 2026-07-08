@@ -1,0 +1,44 @@
+    Checking windows-sys v0.61.2
+    Checking log v0.4.30
+    Checking slab v0.4.12
+    Checking tracing-core v0.1.36
+    Checking futures-util v0.3.32
+    Checking rand v0.8.6
+    Checking tracing v0.1.44
+    Checking cipher v0.4.4
+    Checking idna v1.1.0
+    Checking regex-automata v0.4.14
+    Checking tungstenite v0.29.0
+    Checking axum-core v0.5.6
+    Checking aes v0.8.4
+    Checking ctr v0.9.2
+    Checking url v2.5.8
+    Checking fabric-crypto v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\fabric-crypto)
+    Checking aes-gcm v0.10.3
+    Checking fabric-proof v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\fabric-proof)
+    Checking fabric-revocation v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\fabric-revocation)
+    Checking fabric-token v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\fabric-token)
+    Checking fabric-envelope v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\fabric-envelope)
+    Checking socket2 v0.6.3
+    Checking mio v1.2.0
+    Checking tokio v1.52.3
+    Checking regex v1.12.3
+    Checking mai-router v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\mai-router)
+    Checking futures-executor v0.3.32
+    Checking futures v0.3.32
+    Checking hyper v1.9.0
+    Checking tower v0.5.3
+    Checking tokio-rustls v0.26.4
+    Checking tokio-util v0.7.18
+    Checking mai-hil v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\mai-hil)
+    Checking tokio-tungstenite v0.29.0
+    Checking tower-http v0.6.11
+    Checking hyper-util v0.1.20
+    Checking mai-core v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\mai-core)
+    Checking hyper-rustls v0.27.9
+    Checking axum v0.8.9
+    Checking reqwest v0.12.28
+    Checking wsf-bridge v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\wsf-bridge)
+    Checking mai-compliance v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\mai-compliance)
+    Checking aog-gateway v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\aog-gateway)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 22.34s

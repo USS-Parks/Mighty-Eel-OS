@@ -106,7 +106,7 @@ impl ResponseCache {
     ///
     /// Requests are NOT cacheable if:
     /// - Cache is disabled in config
-    /// Request is streaming
+    /// - Request is streaming
     /// - Model is in the exclude list
     /// - Request type is FunctionCall (side effects, non-deterministic)
     pub fn is_cacheable(&self, request: &InferenceRequest) -> bool {

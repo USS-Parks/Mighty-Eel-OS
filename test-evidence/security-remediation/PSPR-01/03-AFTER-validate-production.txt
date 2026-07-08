@@ -1,0 +1,3 @@
+REJECTED (production): 2 violation(s) in docker-compose.yml
+  [dev-mode] service 'openbao': trust core runs dev mode: ['-dev', '-dev-root-token-id=${OPENBAO_DEV_ROOT_TOKEN:?set', '-dev-listen-address=0.0.0.0:8200']
+  [host-published-trust] service 'openbao': trust port 8200 host-published '127.0.0.1:8200:8200'; production trust core must not be host-exposed

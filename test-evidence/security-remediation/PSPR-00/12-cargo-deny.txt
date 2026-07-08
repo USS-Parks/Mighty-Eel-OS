@@ -1,0 +1,3216 @@
+warning[license-not-encountered]: license was not encountered
+    ┌─ C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\deny.toml:118:6
+    │
+118 │     "MPL-2.0",
+    │      ━━━━━━━ unmatched license allowance
+
+warning[license-not-encountered]: license was not encountered
+    ┌─ C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\deny.toml:120:6
+    │
+120 │     "Unicode-DFS-2016",
+    │      ━━━━━━━━━━━━━━━━ unmatched license allowance
+
+warning[duplicate]: found 2 duplicate entries for crate 'axum'
+   ┌─ C:\Users\17076\Documents\Claude\Mighty Eel OS\mai/Cargo.lock:24:1
+   │  
+24 │ ╭ axum 0.7.9 registry+https://github.com/rust-lang/crates.io-index
+25 │ │ axum 0.8.9 registry+https://github.com/rust-lang/crates.io-index
+   │ ╰────────────────────────────────────────────────────────────────┘ lock entries
+   │  
+   ├ axum v0.7.9
+     └── tonic v0.12.3
+         ├── mai-api v0.1.0
+         └── tonic-reflection v0.12.3
+             └── mai-api v0.1.0 (*)
+   ├ axum v0.8.9
+     ├── aog-gateway v0.1.0
+     ├── axum-extra v0.10.3
+     │   └── mai-api v0.1.0
+     ├── mai-api v0.1.0 (*)
+     ├── wsf-api v0.1.0
+     ├── (dev) wsf-broker v0.1.0
+     │   └── wsf-api v0.1.0 (*)
+     └── wsf-seal v0.1.0
+         ├── wsf-api v0.1.0 (*)
+         └── (dev) wsf-ledger v0.1.0
+             ├── hipaa-pack v0.1.0
+             └── wsf-api v0.1.0 (*)
+
+warning[duplicate]: found 2 duplicate entries for crate 'axum-core'
+   ┌─ C:\Users\17076\Documents\Claude\Mighty Eel OS\mai/Cargo.lock:26:1
+   │  
+26 │ ╭ axum-core 0.4.5 registry+https://github.com/rust-lang/crates.io-index
+27 │ │ axum-core 0.5.6 registry+https://github.com/rust-lang/crates.io-index
+   │ ╰─────────────────────────────────────────────────────────────────────┘ lock entries
+   │  
+   ├ axum-core v0.4.5
+     └── axum v0.7.9
+         └── tonic v0.12.3
+             ├── mai-api v0.1.0
+             └── tonic-reflection v0.12.3
+                 └── mai-api v0.1.0 (*)
+   ├ axum-core v0.5.6
+     ├── axum v0.8.9
+     │   ├── aog-gateway v0.1.0
+     │   ├── axum-extra v0.10.3
+     │   │   └── mai-api v0.1.0
+     │   ├── mai-api v0.1.0 (*)
+     │   ├── wsf-api v0.1.0
+     │   ├── (dev) wsf-broker v0.1.0
+     │   │   └── wsf-api v0.1.0 (*)
+     │   └── wsf-seal v0.1.0
+     │       ├── wsf-api v0.1.0 (*)
+     │       └── (dev) wsf-ledger v0.1.0
+     │           ├── hipaa-pack v0.1.0
+     │           └── wsf-api v0.1.0 (*)
+     └── axum-extra v0.10.3 (*)
+
+warning[duplicate]: found 2 duplicate entries for crate 'bitflags'
+   ┌─ C:\Users\17076\Documents\Claude\Mighty Eel OS\mai/Cargo.lock:30:1
+   │  
+30 │ ╭ bitflags 1.3.2 registry+https://github.com/rust-lang/crates.io-index
+31 │ │ bitflags 2.11.1 registry+https://github.com/rust-lang/crates.io-index
+   │ ╰─────────────────────────────────────────────────────────────────────┘ lock entries
+   │  
+   ├ bitflags v1.3.2
+     └── inotify v0.10.2
+         └── notify v7.0.0
+             └── mai-api v0.1.0
+   ├ bitflags v2.11.1
+     ├── kqueue-sys v1.1.2
+     │   └── kqueue v1.1.1
+     │       └── notify v7.0.0
+     │           └── mai-api v0.1.0
+     ├── notify v7.0.0 (*)
+     ├── openssl v0.10.80
+     │   └── native-tls v0.2.18
+     │       ├── hyper-tls v0.6.0
+     │       │   └── reqwest v0.12.28
+     │       │       ├── aog-gateway v0.1.0
+     │       │       ├── mai-api v0.1.0 (*)
+     │       │       ├── mai-sdk-rs v0.1.0
+     │       │       ├── wsf-api v0.1.0
+     │       │       ├── wsf-bridge v0.1.0
+     │       │       │   ├── aog-gateway v0.1.0 (*)
+     │       │       │   ├── wsf-api v0.1.0 (*)
+     │       │       │   ├── wsf-broker v0.1.0
+     │       │       │   │   └── wsf-api v0.1.0 (*)
+     │       │       │   ├── (dev) wsf-cache v0.1.0
+     │       │       │   │   └── (dev) wsf-tenants v0.1.0
+     │       │       │   ├── (dev) wsf-ledger v0.1.0
+     │       │       │   │   ├── hipaa-pack v0.1.0
+     │       │       │   │   └── wsf-api v0.1.0 (*)
+     │       │       │   ├── wsf-seal v0.1.0
+     │       │       │   │   ├── wsf-api v0.1.0 (*)
+     │       │       │   │   └── (dev) wsf-ledger v0.1.0 (*)
+     │       │       │   └── wsf-tenants v0.1.0 (*)
+     │       │       ├── wsf-broker v0.1.0 (*)
+     │       │       ├── (dev) wsf-cache v0.1.0 (*)
+     │       │       ├── (dev) wsf-ledger v0.1.0 (*)
+     │       │       ├── (dev) wsf-seal v0.1.0 (*)
+     │       │       └── (dev) wsf-tenants v0.1.0 (*)
+     │       ├── reqwest v0.12.28 (*)
+     │       └── tokio-native-tls v0.3.1
+     │           ├── hyper-tls v0.6.0 (*)
+     │           └── reqwest v0.12.28 (*)
+     ├── png v0.18.1
+     │   └── image v0.25.10
+     │       └── mai-launcher v0.1.0
+     ├── redox_syscall v0.5.18
+     │   └── parking_lot_core v0.9.12
+     │       ├── dashmap v6.2.1
+     │       │   └── mai-scheduler v0.1.0
+     │       │       └── mai-api v0.1.0 (*)
+     │       └── parking_lot v0.12.5
+     │           └── tokio v1.52.3
+     │               ├── (dev) aog-approvals v0.1.0
+     │               ├── aog-gateway v0.1.0 (*)
+     │               ├── (dev) aog-toolproxy v0.1.0
+     │               │   └── aog-approvals v0.1.0 (*)
+     │               ├── axum v0.8.9
+     │               │   ├── aog-gateway v0.1.0 (*)
+     │               │   ├── axum-extra v0.10.3
+     │               │   │   └── mai-api v0.1.0 (*)
+     │               │   ├── mai-api v0.1.0 (*)
+     │               │   ├── wsf-api v0.1.0 (*)
+     │               │   ├── (dev) wsf-broker v0.1.0 (*)
+     │               │   └── wsf-seal v0.1.0 (*)
+     │               ├── deadpool v0.12.3
+     │               │   └── wiremock v0.6.5
+     │               │       └── (dev) mai-sdk-rs v0.1.0 (*)
+     │               ├── h2 v0.4.14
+     │               │   ├── hyper v1.9.0
+     │               │   │   ├── axum v0.8.9 (*)
+     │               │   │   ├── hyper-rustls v0.27.9
+     │               │   │   │   └── reqwest v0.12.28 (*)
+     │               │   │   ├── hyper-timeout v0.5.2
+     │               │   │   │   └── tonic v0.12.3
+     │               │   │   │       ├── mai-api v0.1.0 (*)
+     │               │   │   │       └── tonic-reflection v0.12.3
+     │               │   │   │           └── mai-api v0.1.0 (*)
+     │               │   │   ├── hyper-tls v0.6.0 (*)
+     │               │   │   ├── hyper-util v0.1.20
+     │               │   │   │   ├── axum v0.8.9 (*)
+     │               │   │   │   ├── hyper-rustls v0.27.9 (*)
+     │               │   │   │   ├── hyper-timeout v0.5.2 (*)
+     │               │   │   │   ├── hyper-tls v0.6.0 (*)
+     │               │   │   │   ├── reqwest v0.12.28 (*)
+     │               │   │   │   ├── tonic v0.12.3 (*)
+     │               │   │   │   └── wiremock v0.6.5 (*)
+     │               │   │   ├── mai-api v0.1.0 (*)
+     │               │   │   ├── reqwest v0.12.28 (*)
+     │               │   │   ├── tonic v0.12.3 (*)
+     │               │   │   └── wiremock v0.6.5 (*)
+     │               │   ├── reqwest v0.12.28 (*)
+     │               │   └── tonic v0.12.3 (*)
+     │               ├── hyper v1.9.0 (*)
+     │               ├── hyper-rustls v0.27.9 (*)
+     │               ├── hyper-timeout v0.5.2 (*)
+     │               ├── hyper-tls v0.6.0 (*)
+     │               ├── hyper-util v0.1.20 (*)
+     │               ├── mai-adapters v0.1.0
+     │               │   └── mai-api v0.1.0 (*)
+     │               ├── (dev) mai-admin v0.1.0
+     │               ├── mai-agent v0.1.0
+     │               │   ├── aog-approvals v0.1.0 (*)
+     │               │   └── aog-toolproxy v0.1.0 (*)
+     │               ├── mai-api v0.1.0 (*)
+     │               ├── mai-core v0.1.0
+     │               │   ├── mai-adapters v0.1.0 (*)
+     │               │   ├── mai-admin v0.1.0 (*)
+     │               │   ├── mai-agent v0.1.0 (*)
+     │               │   ├── mai-api v0.1.0 (*)
+     │               │   ├── mai-compliance v0.1.0
+     │               │   │   ├── aog-gateway v0.1.0 (*)
+     │               │   │   ├── aog-toolproxy v0.1.0 (*)
+     │               │   │   ├── gen-trust-staging v0.1.0
+     │               │   │   ├── hipaa-pack v0.1.0 (*)
+     │               │   │   ├── mai-admin v0.1.0 (*)
+     │               │   │   └── mai-api v0.1.0 (*)
+     │               │   ├── mai-pkg-builder v0.1.0
+     │               │   ├── mai-scheduler v0.1.0 (*)
+     │               │   └── mai-vault v0.1.0
+     │               │       └── mai-api v0.1.0 (*)
+     │               ├── mai-hil v0.1.0
+     │               │   ├── mai-adapters v0.1.0 (*)
+     │               │   ├── mai-api v0.1.0 (*)
+     │               │   └── mai-core v0.1.0 (*)
+     │               ├── mai-scheduler v0.1.0 (*)
+     │               ├── (dev) mai-sdk-rs v0.1.0 (*)
+     │               ├── mai-vault v0.1.0 (*)
+     │               ├── reqwest v0.12.28 (*)
+     │               ├── tokio-native-tls v0.3.1 (*)
+     │               ├── tokio-rustls v0.26.4
+     │               │   ├── hyper-rustls v0.27.9 (*)
+     │               │   └── reqwest v0.12.28 (*)
+     │               ├── tokio-stream v0.1.18
+     │               │   ├── mai-api v0.1.0 (*)
+     │               │   ├── tokio-test v0.4.5
+     │               │   │   ├── (dev) mai-adapters v0.1.0 (*)
+     │               │   │   ├── (dev) mai-agent v0.1.0 (*)
+     │               │   │   ├── (dev) mai-api v0.1.0 (*)
+     │               │   │   ├── (dev) mai-core v0.1.0 (*)
+     │               │   │   ├── (dev) mai-scheduler v0.1.0 (*)
+     │               │   │   ├── (dev) mai-sdk-rs v0.1.0 (*)
+     │               │   │   └── (dev) mai-vault v0.1.0 (*)
+     │               │   ├── tonic v0.12.3 (*)
+     │               │   └── tonic-reflection v0.12.3 (*)
+     │               ├── tokio-test v0.4.5 (*)
+     │               ├── tokio-tungstenite v0.29.0
+     │               │   └── axum v0.8.9 (*)
+     │               ├── tokio-util v0.7.18
+     │               │   ├── h2 v0.4.14 (*)
+     │               │   ├── mai-api v0.1.0 (*)
+     │               │   ├── reqwest v0.12.28 (*)
+     │               │   └── tower v0.4.13
+     │               │       └── tonic v0.12.3 (*)
+     │               ├── tonic v0.12.3 (*)
+     │               ├── tonic-reflection v0.12.3 (*)
+     │               ├── tower v0.4.13 (*)
+     │               ├── tower v0.5.3
+     │               │   ├── axum v0.7.9
+     │               │   │   └── tonic v0.12.3 (*)
+     │               │   ├── axum v0.8.9 (*)
+     │               │   ├── mai-api v0.1.0 (*)
+     │               │   ├── reqwest v0.12.28 (*)
+     │               │   └── tower-http v0.6.11
+     │               │       ├── mai-api v0.1.0 (*)
+     │               │       └── reqwest v0.12.28 (*)
+     │               ├── wiremock v0.6.5 (*)
+     │               ├── wsf-api v0.1.0 (*)
+     │               ├── wsf-bridge v0.1.0 (*)
+     │               ├── wsf-broker v0.1.0 (*)
+     │               ├── (dev) wsf-cache v0.1.0 (*)
+     │               ├── (dev) wsf-ledger v0.1.0 (*)
+     │               ├── wsf-seal v0.1.0 (*)
+     │               └── (dev) wsf-tenants v0.1.0 (*)
+     ├── rustix v1.1.4
+     │   └── tempfile v3.27.0
+     │       ├── (dev) mai-admin v0.1.0 (*)
+     │       ├── (dev) mai-api v0.1.0 (*)
+     │       ├── (dev) mai-vault v0.1.0 (*)
+     │       ├── native-tls v0.2.18 (*)
+     │       └── prost-build v0.13.5
+     │           ├── (build) mai-api v0.1.0 (*)
+     │           └── tonic-build v0.12.3
+     │               └── (build) mai-api v0.1.0 (*)
+     ├── security-framework v3.7.0
+     │   └── native-tls v0.2.18 (*)
+     ├── system-configuration v0.7.0
+     │   └── hyper-util v0.1.20 (*)
+     └── tower-http v0.6.11 (*)
+
+warning[duplicate]: found 2 duplicate entries for crate 'core-foundation'
+   ┌─ C:\Users\17076\Documents\Claude\Mighty Eel OS\mai/Cargo.lock:51:1
+   │  
+51 │ ╭ core-foundation 0.9.4 registry+https://github.com/rust-lang/crates.io-index
+52 │ │ core-foundation 0.10.1 registry+https://github.com/rust-lang/crates.io-index
+   │ ╰────────────────────────────────────────────────────────────────────────────┘ lock entries
+   │  
+   ├ core-foundation v0.9.4
+     └── system-configuration v0.7.0
+         └── hyper-util v0.1.20
+             ├── axum v0.8.9
+             │   ├── aog-gateway v0.1.0
+             │   ├── axum-extra v0.10.3
+             │   │   └── mai-api v0.1.0
+             │   ├── mai-api v0.1.0 (*)
+             │   ├── wsf-api v0.1.0
+             │   ├── (dev) wsf-broker v0.1.0
+             │   │   └── wsf-api v0.1.0 (*)
+             │   └── wsf-seal v0.1.0
+             │       ├── wsf-api v0.1.0 (*)
+             │       └── (dev) wsf-ledger v0.1.0
+             │           ├── hipaa-pack v0.1.0
+             │           └── wsf-api v0.1.0 (*)
+             ├── hyper-rustls v0.27.9
+             │   └── reqwest v0.12.28
+             │       ├── aog-gateway v0.1.0 (*)
+             │       ├── mai-api v0.1.0 (*)
+             │       ├── mai-sdk-rs v0.1.0
+             │       ├── wsf-api v0.1.0 (*)
+             │       ├── wsf-bridge v0.1.0
+             │       │   ├── aog-gateway v0.1.0 (*)
+             │       │   ├── wsf-api v0.1.0 (*)
+             │       │   ├── wsf-broker v0.1.0 (*)
+             │       │   ├── (dev) wsf-cache v0.1.0
+             │       │   │   └── (dev) wsf-tenants v0.1.0
+             │       │   ├── (dev) wsf-ledger v0.1.0 (*)
+             │       │   ├── wsf-seal v0.1.0 (*)
+             │       │   └── wsf-tenants v0.1.0 (*)
+             │       ├── wsf-broker v0.1.0 (*)
+             │       ├── (dev) wsf-cache v0.1.0 (*)
+             │       ├── (dev) wsf-ledger v0.1.0 (*)
+             │       ├── (dev) wsf-seal v0.1.0 (*)
+             │       └── (dev) wsf-tenants v0.1.0 (*)
+             ├── hyper-timeout v0.5.2
+             │   └── tonic v0.12.3
+             │       ├── mai-api v0.1.0 (*)
+             │       └── tonic-reflection v0.12.3
+             │           └── mai-api v0.1.0 (*)
+             ├── hyper-tls v0.6.0
+             │   └── reqwest v0.12.28 (*)
+             ├── reqwest v0.12.28 (*)
+             ├── tonic v0.12.3 (*)
+             └── wiremock v0.6.5
+                 └── (dev) mai-sdk-rs v0.1.0 (*)
+   ├ core-foundation v0.10.1
+     └── security-framework v3.7.0
+         └── native-tls v0.2.18
+             ├── hyper-tls v0.6.0
+             │   └── reqwest v0.12.28
+             │       ├── aog-gateway v0.1.0
+             │       ├── mai-api v0.1.0
+             │       ├── mai-sdk-rs v0.1.0
+             │       ├── wsf-api v0.1.0
+             │       ├── wsf-bridge v0.1.0
+             │       │   ├── aog-gateway v0.1.0 (*)
+             │       │   ├── wsf-api v0.1.0 (*)
+             │       │   ├── wsf-broker v0.1.0
+             │       │   │   └── wsf-api v0.1.0 (*)
+             │       │   ├── (dev) wsf-cache v0.1.0
+             │       │   │   └── (dev) wsf-tenants v0.1.0
+             │       │   ├── (dev) wsf-ledger v0.1.0
+             │       │   │   ├── hipaa-pack v0.1.0
+             │       │   │   └── wsf-api v0.1.0 (*)
+             │       │   ├── wsf-seal v0.1.0
+             │       │   │   ├── wsf-api v0.1.0 (*)
+             │       │   │   └── (dev) wsf-ledger v0.1.0 (*)
+             │       │   └── wsf-tenants v0.1.0 (*)
+             │       ├── wsf-broker v0.1.0 (*)
+             │       ├── (dev) wsf-cache v0.1.0 (*)
+             │       ├── (dev) wsf-ledger v0.1.0 (*)
+             │       ├── (dev) wsf-seal v0.1.0 (*)
+             │       └── (dev) wsf-tenants v0.1.0 (*)
+             ├── reqwest v0.12.28 (*)
+             └── tokio-native-tls v0.3.1
+                 ├── hyper-tls v0.6.0 (*)
+                 └── reqwest v0.12.28 (*)
+
+warning[duplicate]: found 2 duplicate entries for crate 'cpufeatures'
+   ┌─ C:\Users\17076\Documents\Claude\Mighty Eel OS\mai/Cargo.lock:54:1
+   │  
+54 │ ╭ cpufeatures 0.2.17 registry+https://github.com/rust-lang/crates.io-index
+55 │ │ cpufeatures 0.3.0 registry+https://github.com/rust-lang/crates.io-index
+   │ ╰───────────────────────────────────────────────────────────────────────┘ lock entries
+   │  
+   ├ cpufeatures v0.2.17
+     ├── aes v0.8.4
+     │   └── aes-gcm v0.10.3
+     │       ├── fabric-envelope v0.1.0
+     │       │   ├── aog-gateway v0.1.0
+     │       │   └── wsf-seal v0.1.0
+     │       │       ├── wsf-api v0.1.0
+     │       │       └── (dev) wsf-ledger v0.1.0
+     │       │           ├── hipaa-pack v0.1.0
+     │       │           └── wsf-api v0.1.0 (*)
+     │       ├── mai-compliance v0.1.0
+     │       │   ├── aog-gateway v0.1.0 (*)
+     │       │   ├── aog-toolproxy v0.1.0
+     │       │   │   └── aog-approvals v0.1.0
+     │       │   ├── gen-trust-staging v0.1.0
+     │       │   ├── hipaa-pack v0.1.0 (*)
+     │       │   ├── mai-admin v0.1.0
+     │       │   └── mai-api v0.1.0
+     │       └── mai-vault v0.1.0
+     │           └── mai-api v0.1.0 (*)
+     ├── chacha20 v0.9.1
+     │   └── chacha20poly1305 v0.10.1
+     │       └── mai-vault v0.1.0 (*)
+     ├── keccak v0.1.6
+     │   └── sha3 v0.10.9
+     │       ├── mai-admin v0.1.0 (*)
+     │       ├── mai-api v0.1.0 (*)
+     │       ├── mai-vault v0.1.0 (*)
+     │       ├── ml-dsa v0.0.4
+     │       │   ├── fabric-crypto v0.1.0
+     │       │   │   ├── aog-gateway v0.1.0 (*)
+     │       │   │   ├── fabric-envelope v0.1.0 (*)
+     │       │   │   ├── fabric-identity v0.1.0
+     │       │   │   ├── fabric-proof v0.1.0
+     │       │   │   │   ├── aog-approvals v0.1.0 (*)
+     │       │   │   │   ├── aog-gateway v0.1.0 (*)
+     │       │   │   │   ├── aog-toolproxy v0.1.0 (*)
+     │       │   │   │   ├── fabric-envelope v0.1.0 (*)
+     │       │   │   │   ├── fabric-identity v0.1.0 (*)
+     │       │   │   │   ├── fabric-revocation v0.1.0
+     │       │   │   │   │   ├── aog-gateway v0.1.0 (*)
+     │       │   │   │   │   ├── wsf-bridge v0.1.0
+     │       │   │   │   │   │   ├── aog-gateway v0.1.0 (*)
+     │       │   │   │   │   │   ├── wsf-api v0.1.0 (*)
+     │       │   │   │   │   │   ├── wsf-broker v0.1.0
+     │       │   │   │   │   │   │   └── wsf-api v0.1.0 (*)
+     │       │   │   │   │   │   ├── (dev) wsf-cache v0.1.0
+     │       │   │   │   │   │   │   └── (dev) wsf-tenants v0.1.0
+     │       │   │   │   │   │   ├── (dev) wsf-ledger v0.1.0 (*)
+     │       │   │   │   │   │   ├── wsf-seal v0.1.0 (*)
+     │       │   │   │   │   │   └── wsf-tenants v0.1.0 (*)
+     │       │   │   │   │   ├── wsf-cache v0.1.0 (*)
+     │       │   │   │   │   └── wsf-tenants v0.1.0 (*)
+     │       │   │   │   ├── fabric-token v0.1.0
+     │       │   │   │   │   ├── aog-gateway v0.1.0 (*)
+     │       │   │   │   │   ├── wsf-api v0.1.0 (*)
+     │       │   │   │   │   ├── wsf-bridge v0.1.0 (*)
+     │       │   │   │   │   ├── wsf-broker v0.1.0 (*)
+     │       │   │   │   │   ├── wsf-cache v0.1.0 (*)
+     │       │   │   │   │   ├── wsf-hardening v0.1.0
+     │       │   │   │   │   ├── (dev) wsf-ledger v0.1.0 (*)
+     │       │   │   │   │   └── wsf-seal v0.1.0 (*)
+     │       │   │   │   ├── hipaa-pack v0.1.0 (*)
+     │       │   │   │   ├── mai-compliance v0.1.0 (*)
+     │       │   │   │   ├── wsf-bridge v0.1.0 (*)
+     │       │   │   │   ├── wsf-ledger v0.1.0 (*)
+     │       │   │   │   ├── wsf-seal v0.1.0 (*)
+     │       │   │   │   └── (dev) wsf-tenants v0.1.0 (*)
+     │       │   │   ├── fabric-revocation v0.1.0 (*)
+     │       │   │   ├── fabric-token v0.1.0 (*)
+     │       │   │   ├── hipaa-pack v0.1.0 (*)
+     │       │   │   ├── wsf-api v0.1.0 (*)
+     │       │   │   ├── wsf-bridge v0.1.0 (*)
+     │       │   │   ├── wsf-broker v0.1.0 (*)
+     │       │   │   ├── wsf-cache v0.1.0 (*)
+     │       │   │   ├── wsf-hardening v0.1.0 (*)
+     │       │   │   ├── wsf-ledger v0.1.0 (*)
+     │       │   │   ├── wsf-seal v0.1.0 (*)
+     │       │   │   └── wsf-tenants v0.1.0 (*)
+     │       │   ├── gen-trust-staging v0.1.0 (*)
+     │       │   ├── mai-admin v0.1.0 (*)
+     │       │   ├── (dev) mai-api v0.1.0 (*)
+     │       │   ├── mai-compliance v0.1.0 (*)
+     │       │   └── mai-vault v0.1.0 (*)
+     │       └── ml-kem v0.2.3
+     │           └── mai-vault v0.1.0 (*)
+     ├── poly1305 v0.8.0
+     │   └── chacha20poly1305 v0.10.1 (*)
+     ├── polyval v0.6.2
+     │   └── ghash v0.5.1
+     │       └── aes-gcm v0.10.3 (*)
+     ├── sha1 v0.10.6
+     │   ├── axum v0.8.9
+     │   │   ├── aog-gateway v0.1.0 (*)
+     │   │   ├── axum-extra v0.10.3
+     │   │   │   └── mai-api v0.1.0 (*)
+     │   │   ├── mai-api v0.1.0 (*)
+     │   │   ├── wsf-api v0.1.0 (*)
+     │   │   ├── (dev) wsf-broker v0.1.0 (*)
+     │   │   └── wsf-seal v0.1.0 (*)
+     │   ├── headers v0.4.1
+     │   │   └── axum-extra v0.10.3 (*)
+     │   └── tungstenite v0.29.0
+     │       └── tokio-tungstenite v0.29.0
+     │           └── axum v0.8.9 (*)
+     └── sha2 v0.10.9
+         ├── aog-gateway v0.1.0 (*)
+         ├── fabric-proof v0.1.0 (*)
+         ├── mai-compliance v0.1.0 (*)
+         ├── wsf-api v0.1.0 (*)
+         └── wsf-broker v0.1.0 (*)
+   ├ cpufeatures v0.3.0
+     └── blake3 v1.8.5
+         ├── fabric-envelope v0.1.0
+         │   ├── aog-gateway v0.1.0
+         │   └── wsf-seal v0.1.0
+         │       ├── wsf-api v0.1.0
+         │       └── (dev) wsf-ledger v0.1.0
+         │           ├── hipaa-pack v0.1.0
+         │           └── wsf-api v0.1.0 (*)
+         ├── fabric-proof v0.1.0
+         │   ├── aog-approvals v0.1.0
+         │   ├── aog-gateway v0.1.0 (*)
+         │   ├── aog-toolproxy v0.1.0
+         │   │   └── aog-approvals v0.1.0 (*)
+         │   ├── fabric-envelope v0.1.0 (*)
+         │   ├── fabric-identity v0.1.0
+         │   ├── fabric-revocation v0.1.0
+         │   │   ├── aog-gateway v0.1.0 (*)
+         │   │   ├── wsf-bridge v0.1.0
+         │   │   │   ├── aog-gateway v0.1.0 (*)
+         │   │   │   ├── wsf-api v0.1.0 (*)
+         │   │   │   ├── wsf-broker v0.1.0
+         │   │   │   │   └── wsf-api v0.1.0 (*)
+         │   │   │   ├── (dev) wsf-cache v0.1.0
+         │   │   │   │   └── (dev) wsf-tenants v0.1.0
+         │   │   │   ├── (dev) wsf-ledger v0.1.0 (*)
+         │   │   │   ├── wsf-seal v0.1.0 (*)
+         │   │   │   └── wsf-tenants v0.1.0 (*)
+         │   │   ├── wsf-cache v0.1.0 (*)
+         │   │   └── wsf-tenants v0.1.0 (*)
+         │   ├── fabric-token v0.1.0
+         │   │   ├── aog-gateway v0.1.0 (*)
+         │   │   ├── wsf-api v0.1.0 (*)
+         │   │   ├── wsf-bridge v0.1.0 (*)
+         │   │   ├── wsf-broker v0.1.0 (*)
+         │   │   ├── wsf-cache v0.1.0 (*)
+         │   │   ├── wsf-hardening v0.1.0
+         │   │   ├── (dev) wsf-ledger v0.1.0 (*)
+         │   │   └── wsf-seal v0.1.0 (*)
+         │   ├── hipaa-pack v0.1.0 (*)
+         │   ├── mai-compliance v0.1.0
+         │   │   ├── aog-gateway v0.1.0 (*)
+         │   │   ├── aog-toolproxy v0.1.0 (*)
+         │   │   ├── gen-trust-staging v0.1.0
+         │   │   ├── hipaa-pack v0.1.0 (*)
+         │   │   ├── mai-admin v0.1.0
+         │   │   └── mai-api v0.1.0
+         │   ├── wsf-bridge v0.1.0 (*)
+         │   ├── wsf-ledger v0.1.0 (*)
+         │   ├── wsf-seal v0.1.0 (*)
+         │   └── (dev) wsf-tenants v0.1.0 (*)
+         ├── mai-agent v0.1.0
+         │   ├── aog-approvals v0.1.0 (*)
+         │   └── aog-toolproxy v0.1.0 (*)
+         ├── mai-api v0.1.0 (*)
+         ├── mai-compliance v0.1.0 (*)
+         ├── mai-core v0.1.0
+         │   ├── mai-adapters v0.1.0
+         │   │   └── mai-api v0.1.0 (*)
+         │   ├── mai-admin v0.1.0 (*)
+         │   ├── mai-agent v0.1.0 (*)
+         │   ├── mai-api v0.1.0 (*)
+         │   ├── mai-compliance v0.1.0 (*)
+         │   ├── mai-pkg-builder v0.1.0
+         │   ├── mai-scheduler v0.1.0
+         │   │   └── mai-api v0.1.0 (*)
+         │   └── mai-vault v0.1.0
+         │       └── mai-api v0.1.0 (*)
+         ├── mai-pkg-builder v0.1.0 (*)
+         ├── mai-router v0.1.0
+         │   ├── aog-gateway v0.1.0 (*)
+         │   └── rule-tester v0.1.0
+         ├── mai-scheduler v0.1.0 (*)
+         ├── mai-vault v0.1.0 (*)
+         └── wsf-bridge v0.1.0 (*)
+
+warning[duplicate]: found 3 duplicate entries for crate 'getrandom'
+    ┌─ C:\Users\17076\Documents\Claude\Mighty Eel OS\mai/Cargo.lock:107:1
+    │  
+107 │ ╭ getrandom 0.2.17 registry+https://github.com/rust-lang/crates.io-index
+108 │ │ getrandom 0.3.4 registry+https://github.com/rust-lang/crates.io-index
+109 │ │ getrandom 0.4.2 registry+https://github.com/rust-lang/crates.io-index
+    │ ╰─────────────────────────────────────────────────────────────────────┘ lock entries
+    │  
+    ├ getrandom v0.2.17
+      ├── rand_core v0.6.4
+      │   ├── crypto-common v0.1.7
+      │   │   ├── aead v0.5.2
+      │   │   │   ├── aes-gcm v0.10.3
+      │   │   │   │   ├── fabric-envelope v0.1.0
+      │   │   │   │   │   ├── aog-gateway v0.1.0
+      │   │   │   │   │   └── wsf-seal v0.1.0
+      │   │   │   │   │       ├── wsf-api v0.1.0
+      │   │   │   │   │       └── (dev) wsf-ledger v0.1.0
+      │   │   │   │   │           ├── hipaa-pack v0.1.0
+      │   │   │   │   │           └── wsf-api v0.1.0 (*)
+      │   │   │   │   ├── mai-compliance v0.1.0
+      │   │   │   │   │   ├── aog-gateway v0.1.0 (*)
+      │   │   │   │   │   ├── aog-toolproxy v0.1.0
+      │   │   │   │   │   │   └── aog-approvals v0.1.0
+      │   │   │   │   │   ├── gen-trust-staging v0.1.0
+      │   │   │   │   │   ├── hipaa-pack v0.1.0 (*)
+      │   │   │   │   │   ├── mai-admin v0.1.0
+      │   │   │   │   │   └── mai-api v0.1.0
+      │   │   │   │   └── mai-vault v0.1.0
+      │   │   │   │       └── mai-api v0.1.0 (*)
+      │   │   │   └── chacha20poly1305 v0.10.1
+      │   │   │       └── mai-vault v0.1.0 (*)
+      │   │   ├── cipher v0.4.4
+      │   │   │   ├── aes v0.8.4
+      │   │   │   │   └── aes-gcm v0.10.3 (*)
+      │   │   │   ├── aes-gcm v0.10.3 (*)
+      │   │   │   ├── chacha20 v0.9.1
+      │   │   │   │   └── chacha20poly1305 v0.10.1 (*)
+      │   │   │   ├── chacha20poly1305 v0.10.1 (*)
+      │   │   │   └── ctr v0.9.2
+      │   │   │       └── aes-gcm v0.10.3 (*)
+      │   │   ├── digest v0.10.7
+      │   │   │   ├── hmac v0.12.1
+      │   │   │   │   ├── fabric-proof v0.1.0
+      │   │   │   │   │   ├── aog-approvals v0.1.0 (*)
+      │   │   │   │   │   ├── aog-gateway v0.1.0 (*)
+      │   │   │   │   │   ├── aog-toolproxy v0.1.0 (*)
+      │   │   │   │   │   ├── fabric-envelope v0.1.0 (*)
+      │   │   │   │   │   ├── fabric-identity v0.1.0
+      │   │   │   │   │   ├── fabric-revocation v0.1.0
+      │   │   │   │   │   │   ├── aog-gateway v0.1.0 (*)
+      │   │   │   │   │   │   ├── wsf-bridge v0.1.0
+      │   │   │   │   │   │   │   ├── aog-gateway v0.1.0 (*)
+      │   │   │   │   │   │   │   ├── wsf-api v0.1.0 (*)
+      │   │   │   │   │   │   │   ├── wsf-broker v0.1.0
+      │   │   │   │   │   │   │   │   └── wsf-api v0.1.0 (*)
+      │   │   │   │   │   │   │   ├── (dev) wsf-cache v0.1.0
+      │   │   │   │   │   │   │   │   └── (dev) wsf-tenants v0.1.0
+      │   │   │   │   │   │   │   ├── (dev) wsf-ledger v0.1.0 (*)
+      │   │   │   │   │   │   │   ├── wsf-seal v0.1.0 (*)
+      │   │   │   │   │   │   │   └── wsf-tenants v0.1.0 (*)
+      │   │   │   │   │   │   ├── wsf-cache v0.1.0 (*)
+      │   │   │   │   │   │   └── wsf-tenants v0.1.0 (*)
+      │   │   │   │   │   ├── fabric-token v0.1.0
+      │   │   │   │   │   │   ├── aog-gateway v0.1.0 (*)
+      │   │   │   │   │   │   ├── wsf-api v0.1.0 (*)
+      │   │   │   │   │   │   ├── wsf-bridge v0.1.0 (*)
+      │   │   │   │   │   │   ├── wsf-broker v0.1.0 (*)
+      │   │   │   │   │   │   ├── wsf-cache v0.1.0 (*)
+      │   │   │   │   │   │   ├── wsf-hardening v0.1.0
+      │   │   │   │   │   │   ├── (dev) wsf-ledger v0.1.0 (*)
+      │   │   │   │   │   │   └── wsf-seal v0.1.0 (*)
+      │   │   │   │   │   ├── hipaa-pack v0.1.0 (*)
+      │   │   │   │   │   ├── mai-compliance v0.1.0 (*)
+      │   │   │   │   │   ├── wsf-bridge v0.1.0 (*)
+      │   │   │   │   │   ├── wsf-ledger v0.1.0 (*)
+      │   │   │   │   │   ├── wsf-seal v0.1.0 (*)
+      │   │   │   │   │   └── (dev) wsf-tenants v0.1.0 (*)
+      │   │   │   │   ├── hkdf v0.12.4
+      │   │   │   │   │   └── mai-vault v0.1.0 (*)
+      │   │   │   │   ├── mai-compliance v0.1.0 (*)
+      │   │   │   │   └── wsf-broker v0.1.0 (*)
+      │   │   │   ├── sha1 v0.10.6
+      │   │   │   │   ├── axum v0.8.9
+      │   │   │   │   │   ├── aog-gateway v0.1.0 (*)
+      │   │   │   │   │   ├── axum-extra v0.10.3
+      │   │   │   │   │   │   └── mai-api v0.1.0 (*)
+      │   │   │   │   │   ├── mai-api v0.1.0 (*)
+      │   │   │   │   │   ├── wsf-api v0.1.0 (*)
+      │   │   │   │   │   ├── (dev) wsf-broker v0.1.0 (*)
+      │   │   │   │   │   └── wsf-seal v0.1.0 (*)
+      │   │   │   │   ├── headers v0.4.1
+      │   │   │   │   │   └── axum-extra v0.10.3 (*)
+      │   │   │   │   └── tungstenite v0.29.0
+      │   │   │   │       └── tokio-tungstenite v0.29.0
+      │   │   │   │           └── axum v0.8.9 (*)
+      │   │   │   ├── sha2 v0.10.9
+      │   │   │   │   ├── aog-gateway v0.1.0 (*)
+      │   │   │   │   ├── fabric-proof v0.1.0 (*)
+      │   │   │   │   ├── mai-compliance v0.1.0 (*)
+      │   │   │   │   ├── wsf-api v0.1.0 (*)
+      │   │   │   │   └── wsf-broker v0.1.0 (*)
+      │   │   │   └── sha3 v0.10.9
+      │   │   │       ├── mai-admin v0.1.0 (*)
+      │   │   │       ├── mai-api v0.1.0 (*)
+      │   │   │       ├── mai-vault v0.1.0 (*)
+      │   │   │       ├── ml-dsa v0.0.4
+      │   │   │       │   ├── fabric-crypto v0.1.0
+      │   │   │       │   │   ├── aog-gateway v0.1.0 (*)
+      │   │   │       │   │   ├── fabric-envelope v0.1.0 (*)
+      │   │   │       │   │   ├── fabric-identity v0.1.0 (*)
+      │   │   │       │   │   ├── fabric-proof v0.1.0 (*)
+      │   │   │       │   │   ├── fabric-revocation v0.1.0 (*)
+      │   │   │       │   │   ├── fabric-token v0.1.0 (*)
+      │   │   │       │   │   ├── hipaa-pack v0.1.0 (*)
+      │   │   │       │   │   ├── wsf-api v0.1.0 (*)
+      │   │   │       │   │   ├── wsf-bridge v0.1.0 (*)
+      │   │   │       │   │   ├── wsf-broker v0.1.0 (*)
+      │   │   │       │   │   ├── wsf-cache v0.1.0 (*)
+      │   │   │       │   │   ├── wsf-hardening v0.1.0 (*)
+      │   │   │       │   │   ├── wsf-ledger v0.1.0 (*)
+      │   │   │       │   │   ├── wsf-seal v0.1.0 (*)
+      │   │   │       │   │   └── wsf-tenants v0.1.0 (*)
+      │   │   │       │   ├── gen-trust-staging v0.1.0 (*)
+      │   │   │       │   ├── mai-admin v0.1.0 (*)
+      │   │   │       │   ├── (dev) mai-api v0.1.0 (*)
+      │   │   │       │   ├── mai-compliance v0.1.0 (*)
+      │   │   │       │   └── mai-vault v0.1.0 (*)
+      │   │   │       └── ml-kem v0.2.3
+      │   │   │           └── mai-vault v0.1.0 (*)
+      │   │   └── universal-hash v0.5.1
+      │   │       ├── poly1305 v0.8.0
+      │   │       │   └── chacha20poly1305 v0.10.1 (*)
+      │   │       └── polyval v0.6.2
+      │   │           └── ghash v0.5.1
+      │   │               └── aes-gcm v0.10.3 (*)
+      │   ├── kem v0.3.0-pre.0
+      │   │   └── ml-kem v0.2.3 (*)
+      │   ├── mai-vault v0.1.0 (*)
+      │   ├── ml-dsa v0.0.4 (*)
+      │   ├── ml-kem v0.2.3 (*)
+      │   ├── rand v0.8.6
+      │   │   ├── fabric-crypto v0.1.0 (*)
+      │   │   ├── fabric-envelope v0.1.0 (*)
+      │   │   ├── mai-admin v0.1.0 (*)
+      │   │   ├── mai-api v0.1.0 (*)
+      │   │   ├── (dev) mai-compliance v0.1.0 (*)
+      │   │   ├── mai-vault v0.1.0 (*)
+      │   │   ├── tower v0.4.13
+      │   │   │   └── tonic v0.12.3
+      │   │   │       ├── mai-api v0.1.0 (*)
+      │   │   │       └── tonic-reflection v0.12.3
+      │   │   │           └── mai-api v0.1.0 (*)
+      │   │   ├── (dev) wsf-hardening v0.1.0 (*)
+      │   │   ├── wsf-seal v0.1.0 (*)
+      │   │   └── wsf-tenants v0.1.0 (*)
+      │   ├── rand_chacha v0.3.1
+      │   │   └── rand v0.8.6 (*)
+      │   └── signature v2.2.0
+      │       └── ml-dsa v0.0.4 (*)
+      └── ring v0.17.14
+          ├── rustls v0.23.40
+          │   ├── hyper-rustls v0.27.9
+          │   │   └── reqwest v0.12.28
+          │   │       ├── aog-gateway v0.1.0 (*)
+          │   │       ├── mai-api v0.1.0 (*)
+          │   │       ├── mai-sdk-rs v0.1.0
+          │   │       ├── wsf-api v0.1.0 (*)
+          │   │       ├── wsf-bridge v0.1.0 (*)
+          │   │       ├── wsf-broker v0.1.0 (*)
+          │   │       ├── (dev) wsf-cache v0.1.0 (*)
+          │   │       ├── (dev) wsf-ledger v0.1.0 (*)
+          │   │       ├── (dev) wsf-seal v0.1.0 (*)
+          │   │       └── (dev) wsf-tenants v0.1.0 (*)
+          │   ├── reqwest v0.12.28 (*)
+          │   └── tokio-rustls v0.26.4
+          │       ├── hyper-rustls v0.27.9 (*)
+          │       └── reqwest v0.12.28 (*)
+          └── rustls-webpki v0.103.13
+              └── rustls v0.23.40 (*)
+    ├ getrandom v0.3.4
+      └── rand_core v0.9.5
+          ├── rand v0.9.4
+          │   ├── gen-trust-staging v0.1.0
+          │   └── tungstenite v0.29.0
+          │       └── tokio-tungstenite v0.29.0
+          │           └── axum v0.8.9
+          │               ├── aog-gateway v0.1.0
+          │               ├── axum-extra v0.10.3
+          │               │   └── mai-api v0.1.0
+          │               ├── mai-api v0.1.0 (*)
+          │               ├── wsf-api v0.1.0
+          │               ├── (dev) wsf-broker v0.1.0
+          │               │   └── wsf-api v0.1.0 (*)
+          │               └── wsf-seal v0.1.0
+          │                   ├── wsf-api v0.1.0 (*)
+          │                   └── (dev) wsf-ledger v0.1.0
+          │                       ├── hipaa-pack v0.1.0
+          │                       └── wsf-api v0.1.0 (*)
+          └── rand_chacha v0.9.0
+              └── rand v0.9.4 (*)
+    ├ getrandom v0.4.2
+      ├── tempfile v3.27.0
+      │   ├── (dev) mai-admin v0.1.0
+      │   ├── (dev) mai-api v0.1.0
+      │   ├── (dev) mai-vault v0.1.0
+      │   │   └── mai-api v0.1.0 (*)
+      │   ├── native-tls v0.2.18
+      │   │   ├── hyper-tls v0.6.0
+      │   │   │   └── reqwest v0.12.28
+      │   │   │       ├── aog-gateway v0.1.0
+      │   │   │       ├── mai-api v0.1.0 (*)
+      │   │   │       ├── mai-sdk-rs v0.1.0
+      │   │   │       ├── wsf-api v0.1.0
+      │   │   │       ├── wsf-bridge v0.1.0
+      │   │   │       │   ├── aog-gateway v0.1.0 (*)
+      │   │   │       │   ├── wsf-api v0.1.0 (*)
+      │   │   │       │   ├── wsf-broker v0.1.0
+      │   │   │       │   │   └── wsf-api v0.1.0 (*)
+      │   │   │       │   ├── (dev) wsf-cache v0.1.0
+      │   │   │       │   │   └── (dev) wsf-tenants v0.1.0
+      │   │   │       │   ├── (dev) wsf-ledger v0.1.0
+      │   │   │       │   │   ├── hipaa-pack v0.1.0
+      │   │   │       │   │   └── wsf-api v0.1.0 (*)
+      │   │   │       │   ├── wsf-seal v0.1.0
+      │   │   │       │   │   ├── wsf-api v0.1.0 (*)
+      │   │   │       │   │   └── (dev) wsf-ledger v0.1.0 (*)
+      │   │   │       │   └── wsf-tenants v0.1.0 (*)
+      │   │   │       ├── wsf-broker v0.1.0 (*)
+      │   │   │       ├── (dev) wsf-cache v0.1.0 (*)
+      │   │   │       ├── (dev) wsf-ledger v0.1.0 (*)
+      │   │   │       ├── (dev) wsf-seal v0.1.0 (*)
+      │   │   │       └── (dev) wsf-tenants v0.1.0 (*)
+      │   │   ├── reqwest v0.12.28 (*)
+      │   │   └── tokio-native-tls v0.3.1
+      │   │       ├── hyper-tls v0.6.0 (*)
+      │   │       └── reqwest v0.12.28 (*)
+      │   └── prost-build v0.13.5
+      │       ├── (build) mai-api v0.1.0 (*)
+      │       └── tonic-build v0.12.3
+      │           └── (build) mai-api v0.1.0 (*)
+      └── uuid v1.23.1
+          ├── mai-adapters v0.1.0
+          │   └── mai-api v0.1.0 (*)
+          ├── mai-agent v0.1.0
+          │   ├── aog-approvals v0.1.0
+          │   └── aog-toolproxy v0.1.0
+          │       └── aog-approvals v0.1.0 (*)
+          ├── mai-api v0.1.0 (*)
+          ├── mai-core v0.1.0
+          │   ├── mai-adapters v0.1.0 (*)
+          │   ├── mai-admin v0.1.0 (*)
+          │   ├── mai-agent v0.1.0 (*)
+          │   ├── mai-api v0.1.0 (*)
+          │   ├── mai-compliance v0.1.0
+          │   │   ├── aog-gateway v0.1.0 (*)
+          │   │   ├── aog-toolproxy v0.1.0 (*)
+          │   │   ├── gen-trust-staging v0.1.0
+          │   │   ├── hipaa-pack v0.1.0 (*)
+          │   │   ├── mai-admin v0.1.0 (*)
+          │   │   └── mai-api v0.1.0 (*)
+          │   ├── mai-pkg-builder v0.1.0
+          │   ├── mai-scheduler v0.1.0
+          │   │   └── mai-api v0.1.0 (*)
+          │   └── mai-vault v0.1.0 (*)
+          ├── mai-scheduler v0.1.0 (*)
+          ├── mai-vault v0.1.0 (*)
+          └── wsf-bridge v0.1.0 (*)
+
+warning[duplicate]: found 3 duplicate entries for crate 'hashbrown'
+    ┌─ C:\Users\17076\Documents\Claude\Mighty Eel OS\mai/Cargo.lock:112:1
+    │  
+112 │ ╭ hashbrown 0.12.3 registry+https://github.com/rust-lang/crates.io-index
+113 │ │ hashbrown 0.14.5 registry+https://github.com/rust-lang/crates.io-index
+114 │ │ hashbrown 0.17.1 registry+https://github.com/rust-lang/crates.io-index
+    │ ╰──────────────────────────────────────────────────────────────────────┘ lock entries
+    │  
+    ├ hashbrown v0.12.3
+      └── indexmap v1.9.3
+          └── tower v0.4.13
+              └── tonic v0.12.3
+                  ├── mai-api v0.1.0
+                  └── tonic-reflection v0.12.3
+                      └── mai-api v0.1.0 (*)
+    ├ hashbrown v0.14.5
+      └── dashmap v6.2.1
+          └── mai-scheduler v0.1.0
+              └── mai-api v0.1.0
+    ├ hashbrown v0.17.1
+      └── indexmap v2.14.0
+          ├── h2 v0.4.14
+          │   ├── hyper v1.9.0
+          │   │   ├── axum v0.8.9
+          │   │   │   ├── aog-gateway v0.1.0
+          │   │   │   ├── axum-extra v0.10.3
+          │   │   │   │   └── mai-api v0.1.0
+          │   │   │   ├── mai-api v0.1.0 (*)
+          │   │   │   ├── wsf-api v0.1.0
+          │   │   │   ├── (dev) wsf-broker v0.1.0
+          │   │   │   │   └── wsf-api v0.1.0 (*)
+          │   │   │   └── wsf-seal v0.1.0
+          │   │   │       ├── wsf-api v0.1.0 (*)
+          │   │   │       └── (dev) wsf-ledger v0.1.0
+          │   │   │           ├── hipaa-pack v0.1.0
+          │   │   │           └── wsf-api v0.1.0 (*)
+          │   │   ├── hyper-rustls v0.27.9
+          │   │   │   └── reqwest v0.12.28
+          │   │   │       ├── aog-gateway v0.1.0 (*)
+          │   │   │       ├── mai-api v0.1.0 (*)
+          │   │   │       ├── mai-sdk-rs v0.1.0
+          │   │   │       ├── wsf-api v0.1.0 (*)
+          │   │   │       ├── wsf-bridge v0.1.0
+          │   │   │       │   ├── aog-gateway v0.1.0 (*)
+          │   │   │       │   ├── wsf-api v0.1.0 (*)
+          │   │   │       │   ├── wsf-broker v0.1.0 (*)
+          │   │   │       │   ├── (dev) wsf-cache v0.1.0
+          │   │   │       │   │   └── (dev) wsf-tenants v0.1.0
+          │   │   │       │   ├── (dev) wsf-ledger v0.1.0 (*)
+          │   │   │       │   ├── wsf-seal v0.1.0 (*)
+          │   │   │       │   └── wsf-tenants v0.1.0 (*)
+          │   │   │       ├── wsf-broker v0.1.0 (*)
+          │   │   │       ├── (dev) wsf-cache v0.1.0 (*)
+          │   │   │       ├── (dev) wsf-ledger v0.1.0 (*)
+          │   │   │       ├── (dev) wsf-seal v0.1.0 (*)
+          │   │   │       └── (dev) wsf-tenants v0.1.0 (*)
+          │   │   ├── hyper-timeout v0.5.2
+          │   │   │   └── tonic v0.12.3
+          │   │   │       ├── mai-api v0.1.0 (*)
+          │   │   │       └── tonic-reflection v0.12.3
+          │   │   │           └── mai-api v0.1.0 (*)
+          │   │   ├── hyper-tls v0.6.0
+          │   │   │   └── reqwest v0.12.28 (*)
+          │   │   ├── hyper-util v0.1.20
+          │   │   │   ├── axum v0.8.9 (*)
+          │   │   │   ├── hyper-rustls v0.27.9 (*)
+          │   │   │   ├── hyper-timeout v0.5.2 (*)
+          │   │   │   ├── hyper-tls v0.6.0 (*)
+          │   │   │   ├── reqwest v0.12.28 (*)
+          │   │   │   ├── tonic v0.12.3 (*)
+          │   │   │   └── wiremock v0.6.5
+          │   │   │       └── (dev) mai-sdk-rs v0.1.0 (*)
+          │   │   ├── mai-api v0.1.0 (*)
+          │   │   ├── reqwest v0.12.28 (*)
+          │   │   ├── tonic v0.12.3 (*)
+          │   │   └── wiremock v0.6.5 (*)
+          │   ├── reqwest v0.12.28 (*)
+          │   └── tonic v0.12.3 (*)
+          ├── petgraph v0.7.1
+          │   └── prost-build v0.13.5
+          │       ├── (build) mai-api v0.1.0 (*)
+          │       └── tonic-build v0.12.3
+          │           └── (build) mai-api v0.1.0 (*)
+          └── toml_edit v0.22.27
+              └── toml v0.8.23
+                  ├── embed-resource v2.5.2
+                  │   └── (build) mai-launcher v0.1.0
+                  ├── mai-adapters v0.1.0
+                  │   └── mai-api v0.1.0 (*)
+                  ├── mai-admin v0.1.0
+                  ├── mai-api v0.1.0 (*)
+                  ├── mai-compliance v0.1.0
+                  │   ├── aog-gateway v0.1.0 (*)
+                  │   ├── aog-toolproxy v0.1.0
+                  │   │   └── aog-approvals v0.1.0
+                  │   ├── gen-trust-staging v0.1.0
+                  │   ├── hipaa-pack v0.1.0 (*)
+                  │   ├── mai-admin v0.1.0 (*)
+                  │   └── mai-api v0.1.0 (*)
+                  ├── mai-core v0.1.0
+                  │   ├── mai-adapters v0.1.0 (*)
+                  │   ├── mai-admin v0.1.0 (*)
+                  │   ├── mai-agent v0.1.0
+                  │   │   ├── aog-approvals v0.1.0 (*)
+                  │   │   └── aog-toolproxy v0.1.0 (*)
+                  │   ├── mai-api v0.1.0 (*)
+                  │   ├── mai-compliance v0.1.0 (*)
+                  │   ├── mai-pkg-builder v0.1.0
+                  │   ├── mai-scheduler v0.1.0
+                  │   │   └── mai-api v0.1.0 (*)
+                  │   └── mai-vault v0.1.0
+                  │       └── mai-api v0.1.0 (*)
+                  ├── mai-hil v0.1.0
+                  │   ├── mai-adapters v0.1.0 (*)
+                  │   ├── mai-api v0.1.0 (*)
+                  │   └── mai-core v0.1.0 (*)
+                  ├── mai-pkg-builder v0.1.0 (*)
+                  ├── mai-router v0.1.0
+                  │   ├── aog-gateway v0.1.0 (*)
+                  │   └── rule-tester v0.1.0
+                  ├── mai-scheduler v0.1.0 (*)
+                  └── rule-tester v0.1.0 (*)
+
+warning[duplicate]: found 2 duplicate entries for crate 'hybrid-array'
+    ┌─ C:\Users\17076\Documents\Claude\Mighty Eel OS\mai/Cargo.lock:128:1
+    │  
+128 │ ╭ hybrid-array 0.2.3 registry+https://github.com/rust-lang/crates.io-index
+129 │ │ hybrid-array 0.3.1 registry+https://github.com/rust-lang/crates.io-index
+    │ ╰────────────────────────────────────────────────────────────────────────┘ lock entries
+    │  
+    ├ hybrid-array v0.2.3
+      └── ml-kem v0.2.3
+          └── mai-vault v0.1.0
+              └── mai-api v0.1.0
+    ├ hybrid-array v0.3.1
+      └── ml-dsa v0.0.4
+          ├── fabric-crypto v0.1.0
+          │   ├── aog-gateway v0.1.0
+          │   ├── fabric-envelope v0.1.0
+          │   │   ├── aog-gateway v0.1.0 (*)
+          │   │   └── wsf-seal v0.1.0
+          │   │       ├── wsf-api v0.1.0
+          │   │       └── (dev) wsf-ledger v0.1.0
+          │   │           ├── hipaa-pack v0.1.0
+          │   │           └── wsf-api v0.1.0 (*)
+          │   ├── fabric-identity v0.1.0
+          │   ├── fabric-proof v0.1.0
+          │   │   ├── aog-approvals v0.1.0
+          │   │   ├── aog-gateway v0.1.0 (*)
+          │   │   ├── aog-toolproxy v0.1.0
+          │   │   │   └── aog-approvals v0.1.0 (*)
+          │   │   ├── fabric-envelope v0.1.0 (*)
+          │   │   ├── fabric-identity v0.1.0 (*)
+          │   │   ├── fabric-revocation v0.1.0
+          │   │   │   ├── aog-gateway v0.1.0 (*)
+          │   │   │   ├── wsf-bridge v0.1.0
+          │   │   │   │   ├── aog-gateway v0.1.0 (*)
+          │   │   │   │   ├── wsf-api v0.1.0 (*)
+          │   │   │   │   ├── wsf-broker v0.1.0
+          │   │   │   │   │   └── wsf-api v0.1.0 (*)
+          │   │   │   │   ├── (dev) wsf-cache v0.1.0
+          │   │   │   │   │   └── (dev) wsf-tenants v0.1.0
+          │   │   │   │   ├── (dev) wsf-ledger v0.1.0 (*)
+          │   │   │   │   ├── wsf-seal v0.1.0 (*)
+          │   │   │   │   └── wsf-tenants v0.1.0 (*)
+          │   │   │   ├── wsf-cache v0.1.0 (*)
+          │   │   │   └── wsf-tenants v0.1.0 (*)
+          │   │   ├── fabric-token v0.1.0
+          │   │   │   ├── aog-gateway v0.1.0 (*)
+          │   │   │   ├── wsf-api v0.1.0 (*)
+          │   │   │   ├── wsf-bridge v0.1.0 (*)
+          │   │   │   ├── wsf-broker v0.1.0 (*)
+          │   │   │   ├── wsf-cache v0.1.0 (*)
+          │   │   │   ├── wsf-hardening v0.1.0
+          │   │   │   ├── (dev) wsf-ledger v0.1.0 (*)
+          │   │   │   └── wsf-seal v0.1.0 (*)
+          │   │   ├── hipaa-pack v0.1.0 (*)
+          │   │   ├── mai-compliance v0.1.0
+          │   │   │   ├── aog-gateway v0.1.0 (*)
+          │   │   │   ├── aog-toolproxy v0.1.0 (*)
+          │   │   │   ├── gen-trust-staging v0.1.0
+          │   │   │   ├── hipaa-pack v0.1.0 (*)
+          │   │   │   ├── mai-admin v0.1.0
+          │   │   │   └── mai-api v0.1.0
+          │   │   ├── wsf-bridge v0.1.0 (*)
+          │   │   ├── wsf-ledger v0.1.0 (*)
+          │   │   ├── wsf-seal v0.1.0 (*)
+          │   │   └── (dev) wsf-tenants v0.1.0 (*)
+          │   ├── fabric-revocation v0.1.0 (*)
+          │   ├── fabric-token v0.1.0 (*)
+          │   ├── hipaa-pack v0.1.0 (*)
+          │   ├── wsf-api v0.1.0 (*)
+          │   ├── wsf-bridge v0.1.0 (*)
+          │   ├── wsf-broker v0.1.0 (*)
+          │   ├── wsf-cache v0.1.0 (*)
+          │   ├── wsf-hardening v0.1.0 (*)
+          │   ├── wsf-ledger v0.1.0 (*)
+          │   ├── wsf-seal v0.1.0 (*)
+          │   └── wsf-tenants v0.1.0 (*)
+          ├── gen-trust-staging v0.1.0 (*)
+          ├── mai-admin v0.1.0 (*)
+          ├── (dev) mai-api v0.1.0 (*)
+          ├── mai-compliance v0.1.0 (*)
+          └── mai-vault v0.1.0
+              └── mai-api v0.1.0 (*)
+
+warning[duplicate]: found 2 duplicate entries for crate 'indexmap'
+    ┌─ C:\Users\17076\Documents\Claude\Mighty Eel OS\mai/Cargo.lock:148:1
+    │  
+148 │ ╭ indexmap 1.9.3 registry+https://github.com/rust-lang/crates.io-index
+149 │ │ indexmap 2.14.0 registry+https://github.com/rust-lang/crates.io-index
+    │ ╰─────────────────────────────────────────────────────────────────────┘ lock entries
+    │  
+    ├ indexmap v1.9.3
+      └── tower v0.4.13
+          └── tonic v0.12.3
+              ├── mai-api v0.1.0
+              └── tonic-reflection v0.12.3
+                  └── mai-api v0.1.0 (*)
+    ├ indexmap v2.14.0
+      ├── h2 v0.4.14
+      │   ├── hyper v1.9.0
+      │   │   ├── axum v0.8.9
+      │   │   │   ├── aog-gateway v0.1.0
+      │   │   │   ├── axum-extra v0.10.3
+      │   │   │   │   └── mai-api v0.1.0
+      │   │   │   ├── mai-api v0.1.0 (*)
+      │   │   │   ├── wsf-api v0.1.0
+      │   │   │   ├── (dev) wsf-broker v0.1.0
+      │   │   │   │   └── wsf-api v0.1.0 (*)
+      │   │   │   └── wsf-seal v0.1.0
+      │   │   │       ├── wsf-api v0.1.0 (*)
+      │   │   │       └── (dev) wsf-ledger v0.1.0
+      │   │   │           ├── hipaa-pack v0.1.0
+      │   │   │           └── wsf-api v0.1.0 (*)
+      │   │   ├── hyper-rustls v0.27.9
+      │   │   │   └── reqwest v0.12.28
+      │   │   │       ├── aog-gateway v0.1.0 (*)
+      │   │   │       ├── mai-api v0.1.0 (*)
+      │   │   │       ├── mai-sdk-rs v0.1.0
+      │   │   │       ├── wsf-api v0.1.0 (*)
+      │   │   │       ├── wsf-bridge v0.1.0
+      │   │   │       │   ├── aog-gateway v0.1.0 (*)
+      │   │   │       │   ├── wsf-api v0.1.0 (*)
+      │   │   │       │   ├── wsf-broker v0.1.0 (*)
+      │   │   │       │   ├── (dev) wsf-cache v0.1.0
+      │   │   │       │   │   └── (dev) wsf-tenants v0.1.0
+      │   │   │       │   ├── (dev) wsf-ledger v0.1.0 (*)
+      │   │   │       │   ├── wsf-seal v0.1.0 (*)
+      │   │   │       │   └── wsf-tenants v0.1.0 (*)
+      │   │   │       ├── wsf-broker v0.1.0 (*)
+      │   │   │       ├── (dev) wsf-cache v0.1.0 (*)
+      │   │   │       ├── (dev) wsf-ledger v0.1.0 (*)
+      │   │   │       ├── (dev) wsf-seal v0.1.0 (*)
+      │   │   │       └── (dev) wsf-tenants v0.1.0 (*)
+      │   │   ├── hyper-timeout v0.5.2
+      │   │   │   └── tonic v0.12.3
+      │   │   │       ├── mai-api v0.1.0 (*)
+      │   │   │       └── tonic-reflection v0.12.3
+      │   │   │           └── mai-api v0.1.0 (*)
+      │   │   ├── hyper-tls v0.6.0
+      │   │   │   └── reqwest v0.12.28 (*)
+      │   │   ├── hyper-util v0.1.20
+      │   │   │   ├── axum v0.8.9 (*)
+      │   │   │   ├── hyper-rustls v0.27.9 (*)
+      │   │   │   ├── hyper-timeout v0.5.2 (*)
+      │   │   │   ├── hyper-tls v0.6.0 (*)
+      │   │   │   ├── reqwest v0.12.28 (*)
+      │   │   │   ├── tonic v0.12.3 (*)
+      │   │   │   └── wiremock v0.6.5
+      │   │   │       └── (dev) mai-sdk-rs v0.1.0 (*)
+      │   │   ├── mai-api v0.1.0 (*)
+      │   │   ├── reqwest v0.12.28 (*)
+      │   │   ├── tonic v0.12.3 (*)
+      │   │   └── wiremock v0.6.5 (*)
+      │   ├── reqwest v0.12.28 (*)
+      │   └── tonic v0.12.3 (*)
+      ├── petgraph v0.7.1
+      │   └── prost-build v0.13.5
+      │       ├── (build) mai-api v0.1.0 (*)
+      │       └── tonic-build v0.12.3
+      │           └── (build) mai-api v0.1.0 (*)
+      └── toml_edit v0.22.27
+          └── toml v0.8.23
+              ├── embed-resource v2.5.2
+              │   └── (build) mai-launcher v0.1.0
+              ├── mai-adapters v0.1.0
+              │   └── mai-api v0.1.0 (*)
+              ├── mai-admin v0.1.0
+              ├── mai-api v0.1.0 (*)
+              ├── mai-compliance v0.1.0
+              │   ├── aog-gateway v0.1.0 (*)
+              │   ├── aog-toolproxy v0.1.0
+              │   │   └── aog-approvals v0.1.0
+              │   ├── gen-trust-staging v0.1.0
+              │   ├── hipaa-pack v0.1.0 (*)
+              │   ├── mai-admin v0.1.0 (*)
+              │   └── mai-api v0.1.0 (*)
+              ├── mai-core v0.1.0
+              │   ├── mai-adapters v0.1.0 (*)
+              │   ├── mai-admin v0.1.0 (*)
+              │   ├── mai-agent v0.1.0
+              │   │   ├── aog-approvals v0.1.0 (*)
+              │   │   └── aog-toolproxy v0.1.0 (*)
+              │   ├── mai-api v0.1.0 (*)
+              │   ├── mai-compliance v0.1.0 (*)
+              │   ├── mai-pkg-builder v0.1.0
+              │   ├── mai-scheduler v0.1.0
+              │   │   └── mai-api v0.1.0 (*)
+              │   └── mai-vault v0.1.0
+              │       └── mai-api v0.1.0 (*)
+              ├── mai-hil v0.1.0
+              │   ├── mai-adapters v0.1.0 (*)
+              │   ├── mai-api v0.1.0 (*)
+              │   └── mai-core v0.1.0 (*)
+              ├── mai-pkg-builder v0.1.0 (*)
+              ├── mai-router v0.1.0
+              │   ├── aog-gateway v0.1.0 (*)
+              │   └── rule-tester v0.1.0
+              ├── mai-scheduler v0.1.0 (*)
+              └── rule-tester v0.1.0 (*)
+
+warning[duplicate]: found 2 duplicate entries for crate 'matchit'
+    ┌─ C:\Users\17076\Documents\Claude\Mighty Eel OS\mai/Cargo.lock:184:1
+    │  
+184 │ ╭ matchit 0.7.3 registry+https://github.com/rust-lang/crates.io-index
+185 │ │ matchit 0.8.4 registry+https://github.com/rust-lang/crates.io-index
+    │ ╰───────────────────────────────────────────────────────────────────┘ lock entries
+    │  
+    ├ matchit v0.7.3
+      └── axum v0.7.9
+          └── tonic v0.12.3
+              ├── mai-api v0.1.0
+              └── tonic-reflection v0.12.3
+                  └── mai-api v0.1.0 (*)
+    ├ matchit v0.8.4
+      └── axum v0.8.9
+          ├── aog-gateway v0.1.0
+          ├── axum-extra v0.10.3
+          │   └── mai-api v0.1.0
+          ├── mai-api v0.1.0 (*)
+          ├── wsf-api v0.1.0
+          ├── (dev) wsf-broker v0.1.0
+          │   └── wsf-api v0.1.0 (*)
+          └── wsf-seal v0.1.0
+              ├── wsf-api v0.1.0 (*)
+              └── (dev) wsf-ledger v0.1.0
+                  ├── hipaa-pack v0.1.0
+                  └── wsf-api v0.1.0 (*)
+
+warning[duplicate]: found 2 duplicate entries for crate 'r-efi'
+    ┌─ C:\Users\17076\Documents\Claude\Mighty Eel OS\mai/Cargo.lock:243:1
+    │  
+243 │ ╭ r-efi 5.3.0 registry+https://github.com/rust-lang/crates.io-index
+244 │ │ r-efi 6.0.0 registry+https://github.com/rust-lang/crates.io-index
+    │ ╰─────────────────────────────────────────────────────────────────┘ lock entries
+    │  
+    ├ r-efi v5.3.0
+      └── getrandom v0.3.4
+          └── rand_core v0.9.5
+              ├── rand v0.9.4
+              │   ├── gen-trust-staging v0.1.0
+              │   └── tungstenite v0.29.0
+              │       └── tokio-tungstenite v0.29.0
+              │           └── axum v0.8.9
+              │               ├── aog-gateway v0.1.0
+              │               ├── axum-extra v0.10.3
+              │               │   └── mai-api v0.1.0
+              │               ├── mai-api v0.1.0 (*)
+              │               ├── wsf-api v0.1.0
+              │               ├── (dev) wsf-broker v0.1.0
+              │               │   └── wsf-api v0.1.0 (*)
+              │               └── wsf-seal v0.1.0
+              │                   ├── wsf-api v0.1.0 (*)
+              │                   └── (dev) wsf-ledger v0.1.0
+              │                       ├── hipaa-pack v0.1.0
+              │                       └── wsf-api v0.1.0 (*)
+              └── rand_chacha v0.9.0
+                  └── rand v0.9.4 (*)
+    ├ r-efi v6.0.0
+      └── getrandom v0.4.2
+          ├── tempfile v3.27.0
+          │   ├── (dev) mai-admin v0.1.0
+          │   ├── (dev) mai-api v0.1.0
+          │   ├── (dev) mai-vault v0.1.0
+          │   │   └── mai-api v0.1.0 (*)
+          │   ├── native-tls v0.2.18
+          │   │   ├── hyper-tls v0.6.0
+          │   │   │   └── reqwest v0.12.28
+          │   │   │       ├── aog-gateway v0.1.0
+          │   │   │       ├── mai-api v0.1.0 (*)
+          │   │   │       ├── mai-sdk-rs v0.1.0
+          │   │   │       ├── wsf-api v0.1.0
+          │   │   │       ├── wsf-bridge v0.1.0
+          │   │   │       │   ├── aog-gateway v0.1.0 (*)
+          │   │   │       │   ├── wsf-api v0.1.0 (*)
+          │   │   │       │   ├── wsf-broker v0.1.0
+          │   │   │       │   │   └── wsf-api v0.1.0 (*)
+          │   │   │       │   ├── (dev) wsf-cache v0.1.0
+          │   │   │       │   │   └── (dev) wsf-tenants v0.1.0
+          │   │   │       │   ├── (dev) wsf-ledger v0.1.0
+          │   │   │       │   │   ├── hipaa-pack v0.1.0
+          │   │   │       │   │   └── wsf-api v0.1.0 (*)
+          │   │   │       │   ├── wsf-seal v0.1.0
+          │   │   │       │   │   ├── wsf-api v0.1.0 (*)
+          │   │   │       │   │   └── (dev) wsf-ledger v0.1.0 (*)
+          │   │   │       │   └── wsf-tenants v0.1.0 (*)
+          │   │   │       ├── wsf-broker v0.1.0 (*)
+          │   │   │       ├── (dev) wsf-cache v0.1.0 (*)
+          │   │   │       ├── (dev) wsf-ledger v0.1.0 (*)
+          │   │   │       ├── (dev) wsf-seal v0.1.0 (*)
+          │   │   │       └── (dev) wsf-tenants v0.1.0 (*)
+          │   │   ├── reqwest v0.12.28 (*)
+          │   │   └── tokio-native-tls v0.3.1
+          │   │       ├── hyper-tls v0.6.0 (*)
+          │   │       └── reqwest v0.12.28 (*)
+          │   └── prost-build v0.13.5
+          │       ├── (build) mai-api v0.1.0 (*)
+          │       └── tonic-build v0.12.3
+          │           └── (build) mai-api v0.1.0 (*)
+          └── uuid v1.23.1
+              ├── mai-adapters v0.1.0
+              │   └── mai-api v0.1.0 (*)
+              ├── mai-agent v0.1.0
+              │   ├── aog-approvals v0.1.0
+              │   └── aog-toolproxy v0.1.0
+              │       └── aog-approvals v0.1.0 (*)
+              ├── mai-api v0.1.0 (*)
+              ├── mai-core v0.1.0
+              │   ├── mai-adapters v0.1.0 (*)
+              │   ├── mai-admin v0.1.0 (*)
+              │   ├── mai-agent v0.1.0 (*)
+              │   ├── mai-api v0.1.0 (*)
+              │   ├── mai-compliance v0.1.0
+              │   │   ├── aog-gateway v0.1.0 (*)
+              │   │   ├── aog-toolproxy v0.1.0 (*)
+              │   │   ├── gen-trust-staging v0.1.0
+              │   │   ├── hipaa-pack v0.1.0 (*)
+              │   │   ├── mai-admin v0.1.0 (*)
+              │   │   └── mai-api v0.1.0 (*)
+              │   ├── mai-pkg-builder v0.1.0
+              │   ├── mai-scheduler v0.1.0
+              │   │   └── mai-api v0.1.0 (*)
+              │   └── mai-vault v0.1.0 (*)
+              ├── mai-scheduler v0.1.0 (*)
+              ├── mai-vault v0.1.0 (*)
+              └── wsf-bridge v0.1.0 (*)
+
+warning[duplicate]: found 2 duplicate entries for crate 'rand'
+    ┌─ C:\Users\17076\Documents\Claude\Mighty Eel OS\mai/Cargo.lock:245:1
+    │  
+245 │ ╭ rand 0.8.6 registry+https://github.com/rust-lang/crates.io-index
+246 │ │ rand 0.9.4 registry+https://github.com/rust-lang/crates.io-index
+    │ ╰────────────────────────────────────────────────────────────────┘ lock entries
+    │  
+    ├ rand v0.8.6
+      ├── fabric-crypto v0.1.0
+      │   ├── aog-gateway v0.1.0
+      │   ├── fabric-envelope v0.1.0
+      │   │   ├── aog-gateway v0.1.0 (*)
+      │   │   └── wsf-seal v0.1.0
+      │   │       ├── wsf-api v0.1.0
+      │   │       └── (dev) wsf-ledger v0.1.0
+      │   │           ├── hipaa-pack v0.1.0
+      │   │           └── wsf-api v0.1.0 (*)
+      │   ├── fabric-identity v0.1.0
+      │   ├── fabric-proof v0.1.0
+      │   │   ├── aog-approvals v0.1.0
+      │   │   ├── aog-gateway v0.1.0 (*)
+      │   │   ├── aog-toolproxy v0.1.0
+      │   │   │   └── aog-approvals v0.1.0 (*)
+      │   │   ├── fabric-envelope v0.1.0 (*)
+      │   │   ├── fabric-identity v0.1.0 (*)
+      │   │   ├── fabric-revocation v0.1.0
+      │   │   │   ├── aog-gateway v0.1.0 (*)
+      │   │   │   ├── wsf-bridge v0.1.0
+      │   │   │   │   ├── aog-gateway v0.1.0 (*)
+      │   │   │   │   ├── wsf-api v0.1.0 (*)
+      │   │   │   │   ├── wsf-broker v0.1.0
+      │   │   │   │   │   └── wsf-api v0.1.0 (*)
+      │   │   │   │   ├── (dev) wsf-cache v0.1.0
+      │   │   │   │   │   └── (dev) wsf-tenants v0.1.0
+      │   │   │   │   ├── (dev) wsf-ledger v0.1.0 (*)
+      │   │   │   │   ├── wsf-seal v0.1.0 (*)
+      │   │   │   │   └── wsf-tenants v0.1.0 (*)
+      │   │   │   ├── wsf-cache v0.1.0 (*)
+      │   │   │   └── wsf-tenants v0.1.0 (*)
+      │   │   ├── fabric-token v0.1.0
+      │   │   │   ├── aog-gateway v0.1.0 (*)
+      │   │   │   ├── wsf-api v0.1.0 (*)
+      │   │   │   ├── wsf-bridge v0.1.0 (*)
+      │   │   │   ├── wsf-broker v0.1.0 (*)
+      │   │   │   ├── wsf-cache v0.1.0 (*)
+      │   │   │   ├── wsf-hardening v0.1.0
+      │   │   │   ├── (dev) wsf-ledger v0.1.0 (*)
+      │   │   │   └── wsf-seal v0.1.0 (*)
+      │   │   ├── hipaa-pack v0.1.0 (*)
+      │   │   ├── mai-compliance v0.1.0
+      │   │   │   ├── aog-gateway v0.1.0 (*)
+      │   │   │   ├── aog-toolproxy v0.1.0 (*)
+      │   │   │   ├── gen-trust-staging v0.1.0
+      │   │   │   ├── hipaa-pack v0.1.0 (*)
+      │   │   │   ├── mai-admin v0.1.0
+      │   │   │   └── mai-api v0.1.0
+      │   │   ├── wsf-bridge v0.1.0 (*)
+      │   │   ├── wsf-ledger v0.1.0 (*)
+      │   │   ├── wsf-seal v0.1.0 (*)
+      │   │   └── (dev) wsf-tenants v0.1.0 (*)
+      │   ├── fabric-revocation v0.1.0 (*)
+      │   ├── fabric-token v0.1.0 (*)
+      │   ├── hipaa-pack v0.1.0 (*)
+      │   ├── wsf-api v0.1.0 (*)
+      │   ├── wsf-bridge v0.1.0 (*)
+      │   ├── wsf-broker v0.1.0 (*)
+      │   ├── wsf-cache v0.1.0 (*)
+      │   ├── wsf-hardening v0.1.0 (*)
+      │   ├── wsf-ledger v0.1.0 (*)
+      │   ├── wsf-seal v0.1.0 (*)
+      │   └── wsf-tenants v0.1.0 (*)
+      ├── fabric-envelope v0.1.0 (*)
+      ├── mai-admin v0.1.0 (*)
+      ├── mai-api v0.1.0 (*)
+      ├── (dev) mai-compliance v0.1.0 (*)
+      ├── mai-vault v0.1.0
+      │   └── mai-api v0.1.0 (*)
+      ├── tower v0.4.13
+      │   └── tonic v0.12.3
+      │       ├── mai-api v0.1.0 (*)
+      │       └── tonic-reflection v0.12.3
+      │           └── mai-api v0.1.0 (*)
+      ├── (dev) wsf-hardening v0.1.0 (*)
+      ├── wsf-seal v0.1.0 (*)
+      └── wsf-tenants v0.1.0 (*)
+    ├ rand v0.9.4
+      ├── gen-trust-staging v0.1.0
+      └── tungstenite v0.29.0
+          └── tokio-tungstenite v0.29.0
+              └── axum v0.8.9
+                  ├── aog-gateway v0.1.0
+                  ├── axum-extra v0.10.3
+                  │   └── mai-api v0.1.0
+                  ├── mai-api v0.1.0 (*)
+                  ├── wsf-api v0.1.0
+                  ├── (dev) wsf-broker v0.1.0
+                  │   └── wsf-api v0.1.0 (*)
+                  └── wsf-seal v0.1.0
+                      ├── wsf-api v0.1.0 (*)
+                      └── (dev) wsf-ledger v0.1.0
+                          ├── hipaa-pack v0.1.0
+                          └── wsf-api v0.1.0 (*)
+
+warning[duplicate]: found 2 duplicate entries for crate 'rand_chacha'
+    ┌─ C:\Users\17076\Documents\Claude\Mighty Eel OS\mai/Cargo.lock:247:1
+    │  
+247 │ ╭ rand_chacha 0.3.1 registry+https://github.com/rust-lang/crates.io-index
+248 │ │ rand_chacha 0.9.0 registry+https://github.com/rust-lang/crates.io-index
+    │ ╰───────────────────────────────────────────────────────────────────────┘ lock entries
+    │  
+    ├ rand_chacha v0.3.1
+      └── rand v0.8.6
+          ├── fabric-crypto v0.1.0
+          │   ├── aog-gateway v0.1.0
+          │   ├── fabric-envelope v0.1.0
+          │   │   ├── aog-gateway v0.1.0 (*)
+          │   │   └── wsf-seal v0.1.0
+          │   │       ├── wsf-api v0.1.0
+          │   │       └── (dev) wsf-ledger v0.1.0
+          │   │           ├── hipaa-pack v0.1.0
+          │   │           └── wsf-api v0.1.0 (*)
+          │   ├── fabric-identity v0.1.0
+          │   ├── fabric-proof v0.1.0
+          │   │   ├── aog-approvals v0.1.0
+          │   │   ├── aog-gateway v0.1.0 (*)
+          │   │   ├── aog-toolproxy v0.1.0
+          │   │   │   └── aog-approvals v0.1.0 (*)
+          │   │   ├── fabric-envelope v0.1.0 (*)
+          │   │   ├── fabric-identity v0.1.0 (*)
+          │   │   ├── fabric-revocation v0.1.0
+          │   │   │   ├── aog-gateway v0.1.0 (*)
+          │   │   │   ├── wsf-bridge v0.1.0
+          │   │   │   │   ├── aog-gateway v0.1.0 (*)
+          │   │   │   │   ├── wsf-api v0.1.0 (*)
+          │   │   │   │   ├── wsf-broker v0.1.0
+          │   │   │   │   │   └── wsf-api v0.1.0 (*)
+          │   │   │   │   ├── (dev) wsf-cache v0.1.0
+          │   │   │   │   │   └── (dev) wsf-tenants v0.1.0
+          │   │   │   │   ├── (dev) wsf-ledger v0.1.0 (*)
+          │   │   │   │   ├── wsf-seal v0.1.0 (*)
+          │   │   │   │   └── wsf-tenants v0.1.0 (*)
+          │   │   │   ├── wsf-cache v0.1.0 (*)
+          │   │   │   └── wsf-tenants v0.1.0 (*)
+          │   │   ├── fabric-token v0.1.0
+          │   │   │   ├── aog-gateway v0.1.0 (*)
+          │   │   │   ├── wsf-api v0.1.0 (*)
+          │   │   │   ├── wsf-bridge v0.1.0 (*)
+          │   │   │   ├── wsf-broker v0.1.0 (*)
+          │   │   │   ├── wsf-cache v0.1.0 (*)
+          │   │   │   ├── wsf-hardening v0.1.0
+          │   │   │   ├── (dev) wsf-ledger v0.1.0 (*)
+          │   │   │   └── wsf-seal v0.1.0 (*)
+          │   │   ├── hipaa-pack v0.1.0 (*)
+          │   │   ├── mai-compliance v0.1.0
+          │   │   │   ├── aog-gateway v0.1.0 (*)
+          │   │   │   ├── aog-toolproxy v0.1.0 (*)
+          │   │   │   ├── gen-trust-staging v0.1.0
+          │   │   │   ├── hipaa-pack v0.1.0 (*)
+          │   │   │   ├── mai-admin v0.1.0
+          │   │   │   └── mai-api v0.1.0
+          │   │   ├── wsf-bridge v0.1.0 (*)
+          │   │   ├── wsf-ledger v0.1.0 (*)
+          │   │   ├── wsf-seal v0.1.0 (*)
+          │   │   └── (dev) wsf-tenants v0.1.0 (*)
+          │   ├── fabric-revocation v0.1.0 (*)
+          │   ├── fabric-token v0.1.0 (*)
+          │   ├── hipaa-pack v0.1.0 (*)
+          │   ├── wsf-api v0.1.0 (*)
+          │   ├── wsf-bridge v0.1.0 (*)
+          │   ├── wsf-broker v0.1.0 (*)
+          │   ├── wsf-cache v0.1.0 (*)
+          │   ├── wsf-hardening v0.1.0 (*)
+          │   ├── wsf-ledger v0.1.0 (*)
+          │   ├── wsf-seal v0.1.0 (*)
+          │   └── wsf-tenants v0.1.0 (*)
+          ├── fabric-envelope v0.1.0 (*)
+          ├── mai-admin v0.1.0 (*)
+          ├── mai-api v0.1.0 (*)
+          ├── (dev) mai-compliance v0.1.0 (*)
+          ├── mai-vault v0.1.0
+          │   └── mai-api v0.1.0 (*)
+          ├── tower v0.4.13
+          │   └── tonic v0.12.3
+          │       ├── mai-api v0.1.0 (*)
+          │       └── tonic-reflection v0.12.3
+          │           └── mai-api v0.1.0 (*)
+          ├── (dev) wsf-hardening v0.1.0 (*)
+          ├── wsf-seal v0.1.0 (*)
+          └── wsf-tenants v0.1.0 (*)
+    ├ rand_chacha v0.9.0
+      └── rand v0.9.4
+          ├── gen-trust-staging v0.1.0
+          └── tungstenite v0.29.0
+              └── tokio-tungstenite v0.29.0
+                  └── axum v0.8.9
+                      ├── aog-gateway v0.1.0
+                      ├── axum-extra v0.10.3
+                      │   └── mai-api v0.1.0
+                      ├── mai-api v0.1.0 (*)
+                      ├── wsf-api v0.1.0
+                      ├── (dev) wsf-broker v0.1.0
+                      │   └── wsf-api v0.1.0 (*)
+                      └── wsf-seal v0.1.0
+                          ├── wsf-api v0.1.0 (*)
+                          └── (dev) wsf-ledger v0.1.0
+                              ├── hipaa-pack v0.1.0
+                              └── wsf-api v0.1.0 (*)
+
+warning[duplicate]: found 2 duplicate entries for crate 'rand_core'
+    ┌─ C:\Users\17076\Documents\Claude\Mighty Eel OS\mai/Cargo.lock:249:1
+    │  
+249 │ ╭ rand_core 0.6.4 registry+https://github.com/rust-lang/crates.io-index
+250 │ │ rand_core 0.9.5 registry+https://github.com/rust-lang/crates.io-index
+    │ ╰─────────────────────────────────────────────────────────────────────┘ lock entries
+    │  
+    ├ rand_core v0.6.4
+      ├── crypto-common v0.1.7
+      │   ├── aead v0.5.2
+      │   │   ├── aes-gcm v0.10.3
+      │   │   │   ├── fabric-envelope v0.1.0
+      │   │   │   │   ├── aog-gateway v0.1.0
+      │   │   │   │   └── wsf-seal v0.1.0
+      │   │   │   │       ├── wsf-api v0.1.0
+      │   │   │   │       └── (dev) wsf-ledger v0.1.0
+      │   │   │   │           ├── hipaa-pack v0.1.0
+      │   │   │   │           └── wsf-api v0.1.0 (*)
+      │   │   │   ├── mai-compliance v0.1.0
+      │   │   │   │   ├── aog-gateway v0.1.0 (*)
+      │   │   │   │   ├── aog-toolproxy v0.1.0
+      │   │   │   │   │   └── aog-approvals v0.1.0
+      │   │   │   │   ├── gen-trust-staging v0.1.0
+      │   │   │   │   ├── hipaa-pack v0.1.0 (*)
+      │   │   │   │   ├── mai-admin v0.1.0
+      │   │   │   │   └── mai-api v0.1.0
+      │   │   │   └── mai-vault v0.1.0
+      │   │   │       └── mai-api v0.1.0 (*)
+      │   │   └── chacha20poly1305 v0.10.1
+      │   │       └── mai-vault v0.1.0 (*)
+      │   ├── cipher v0.4.4
+      │   │   ├── aes v0.8.4
+      │   │   │   └── aes-gcm v0.10.3 (*)
+      │   │   ├── aes-gcm v0.10.3 (*)
+      │   │   ├── chacha20 v0.9.1
+      │   │   │   └── chacha20poly1305 v0.10.1 (*)
+      │   │   ├── chacha20poly1305 v0.10.1 (*)
+      │   │   └── ctr v0.9.2
+      │   │       └── aes-gcm v0.10.3 (*)
+      │   ├── digest v0.10.7
+      │   │   ├── hmac v0.12.1
+      │   │   │   ├── fabric-proof v0.1.0
+      │   │   │   │   ├── aog-approvals v0.1.0 (*)
+      │   │   │   │   ├── aog-gateway v0.1.0 (*)
+      │   │   │   │   ├── aog-toolproxy v0.1.0 (*)
+      │   │   │   │   ├── fabric-envelope v0.1.0 (*)
+      │   │   │   │   ├── fabric-identity v0.1.0
+      │   │   │   │   ├── fabric-revocation v0.1.0
+      │   │   │   │   │   ├── aog-gateway v0.1.0 (*)
+      │   │   │   │   │   ├── wsf-bridge v0.1.0
+      │   │   │   │   │   │   ├── aog-gateway v0.1.0 (*)
+      │   │   │   │   │   │   ├── wsf-api v0.1.0 (*)
+      │   │   │   │   │   │   ├── wsf-broker v0.1.0
+      │   │   │   │   │   │   │   └── wsf-api v0.1.0 (*)
+      │   │   │   │   │   │   ├── (dev) wsf-cache v0.1.0
+      │   │   │   │   │   │   │   └── (dev) wsf-tenants v0.1.0
+      │   │   │   │   │   │   ├── (dev) wsf-ledger v0.1.0 (*)
+      │   │   │   │   │   │   ├── wsf-seal v0.1.0 (*)
+      │   │   │   │   │   │   └── wsf-tenants v0.1.0 (*)
+      │   │   │   │   │   ├── wsf-cache v0.1.0 (*)
+      │   │   │   │   │   └── wsf-tenants v0.1.0 (*)
+      │   │   │   │   ├── fabric-token v0.1.0
+      │   │   │   │   │   ├── aog-gateway v0.1.0 (*)
+      │   │   │   │   │   ├── wsf-api v0.1.0 (*)
+      │   │   │   │   │   ├── wsf-bridge v0.1.0 (*)
+      │   │   │   │   │   ├── wsf-broker v0.1.0 (*)
+      │   │   │   │   │   ├── wsf-cache v0.1.0 (*)
+      │   │   │   │   │   ├── wsf-hardening v0.1.0
+      │   │   │   │   │   ├── (dev) wsf-ledger v0.1.0 (*)
+      │   │   │   │   │   └── wsf-seal v0.1.0 (*)
+      │   │   │   │   ├── hipaa-pack v0.1.0 (*)
+      │   │   │   │   ├── mai-compliance v0.1.0 (*)
+      │   │   │   │   ├── wsf-bridge v0.1.0 (*)
+      │   │   │   │   ├── wsf-ledger v0.1.0 (*)
+      │   │   │   │   ├── wsf-seal v0.1.0 (*)
+      │   │   │   │   └── (dev) wsf-tenants v0.1.0 (*)
+      │   │   │   ├── hkdf v0.12.4
+      │   │   │   │   └── mai-vault v0.1.0 (*)
+      │   │   │   ├── mai-compliance v0.1.0 (*)
+      │   │   │   └── wsf-broker v0.1.0 (*)
+      │   │   ├── sha1 v0.10.6
+      │   │   │   ├── axum v0.8.9
+      │   │   │   │   ├── aog-gateway v0.1.0 (*)
+      │   │   │   │   ├── axum-extra v0.10.3
+      │   │   │   │   │   └── mai-api v0.1.0 (*)
+      │   │   │   │   ├── mai-api v0.1.0 (*)
+      │   │   │   │   ├── wsf-api v0.1.0 (*)
+      │   │   │   │   ├── (dev) wsf-broker v0.1.0 (*)
+      │   │   │   │   └── wsf-seal v0.1.0 (*)
+      │   │   │   ├── headers v0.4.1
+      │   │   │   │   └── axum-extra v0.10.3 (*)
+      │   │   │   └── tungstenite v0.29.0
+      │   │   │       └── tokio-tungstenite v0.29.0
+      │   │   │           └── axum v0.8.9 (*)
+      │   │   ├── sha2 v0.10.9
+      │   │   │   ├── aog-gateway v0.1.0 (*)
+      │   │   │   ├── fabric-proof v0.1.0 (*)
+      │   │   │   ├── mai-compliance v0.1.0 (*)
+      │   │   │   ├── wsf-api v0.1.0 (*)
+      │   │   │   └── wsf-broker v0.1.0 (*)
+      │   │   └── sha3 v0.10.9
+      │   │       ├── mai-admin v0.1.0 (*)
+      │   │       ├── mai-api v0.1.0 (*)
+      │   │       ├── mai-vault v0.1.0 (*)
+      │   │       ├── ml-dsa v0.0.4
+      │   │       │   ├── fabric-crypto v0.1.0
+      │   │       │   │   ├── aog-gateway v0.1.0 (*)
+      │   │       │   │   ├── fabric-envelope v0.1.0 (*)
+      │   │       │   │   ├── fabric-identity v0.1.0 (*)
+      │   │       │   │   ├── fabric-proof v0.1.0 (*)
+      │   │       │   │   ├── fabric-revocation v0.1.0 (*)
+      │   │       │   │   ├── fabric-token v0.1.0 (*)
+      │   │       │   │   ├── hipaa-pack v0.1.0 (*)
+      │   │       │   │   ├── wsf-api v0.1.0 (*)
+      │   │       │   │   ├── wsf-bridge v0.1.0 (*)
+      │   │       │   │   ├── wsf-broker v0.1.0 (*)
+      │   │       │   │   ├── wsf-cache v0.1.0 (*)
+      │   │       │   │   ├── wsf-hardening v0.1.0 (*)
+      │   │       │   │   ├── wsf-ledger v0.1.0 (*)
+      │   │       │   │   ├── wsf-seal v0.1.0 (*)
+      │   │       │   │   └── wsf-tenants v0.1.0 (*)
+      │   │       │   ├── gen-trust-staging v0.1.0 (*)
+      │   │       │   ├── mai-admin v0.1.0 (*)
+      │   │       │   ├── (dev) mai-api v0.1.0 (*)
+      │   │       │   ├── mai-compliance v0.1.0 (*)
+      │   │       │   └── mai-vault v0.1.0 (*)
+      │   │       └── ml-kem v0.2.3
+      │   │           └── mai-vault v0.1.0 (*)
+      │   └── universal-hash v0.5.1
+      │       ├── poly1305 v0.8.0
+      │       │   └── chacha20poly1305 v0.10.1 (*)
+      │       └── polyval v0.6.2
+      │           └── ghash v0.5.1
+      │               └── aes-gcm v0.10.3 (*)
+      ├── kem v0.3.0-pre.0
+      │   └── ml-kem v0.2.3 (*)
+      ├── mai-vault v0.1.0 (*)
+      ├── ml-dsa v0.0.4 (*)
+      ├── ml-kem v0.2.3 (*)
+      ├── rand v0.8.6
+      │   ├── fabric-crypto v0.1.0 (*)
+      │   ├── fabric-envelope v0.1.0 (*)
+      │   ├── mai-admin v0.1.0 (*)
+      │   ├── mai-api v0.1.0 (*)
+      │   ├── (dev) mai-compliance v0.1.0 (*)
+      │   ├── mai-vault v0.1.0 (*)
+      │   ├── tower v0.4.13
+      │   │   └── tonic v0.12.3
+      │   │       ├── mai-api v0.1.0 (*)
+      │   │       └── tonic-reflection v0.12.3
+      │   │           └── mai-api v0.1.0 (*)
+      │   ├── (dev) wsf-hardening v0.1.0 (*)
+      │   ├── wsf-seal v0.1.0 (*)
+      │   └── wsf-tenants v0.1.0 (*)
+      ├── rand_chacha v0.3.1
+      │   └── rand v0.8.6 (*)
+      └── signature v2.2.0
+          └── ml-dsa v0.0.4 (*)
+    ├ rand_core v0.9.5
+      ├── rand v0.9.4
+      │   ├── gen-trust-staging v0.1.0
+      │   └── tungstenite v0.29.0
+      │       └── tokio-tungstenite v0.29.0
+      │           └── axum v0.8.9
+      │               ├── aog-gateway v0.1.0
+      │               ├── axum-extra v0.10.3
+      │               │   └── mai-api v0.1.0
+      │               ├── mai-api v0.1.0 (*)
+      │               ├── wsf-api v0.1.0
+      │               ├── (dev) wsf-broker v0.1.0
+      │               │   └── wsf-api v0.1.0 (*)
+      │               └── wsf-seal v0.1.0
+      │                   ├── wsf-api v0.1.0 (*)
+      │                   └── (dev) wsf-ledger v0.1.0
+      │                       ├── hipaa-pack v0.1.0
+      │                       └── wsf-api v0.1.0 (*)
+      └── rand_chacha v0.9.0
+          └── rand v0.9.4 (*)
+
+warning[duplicate]: found 2 duplicate entries for crate 'socket2'
+    ┌─ C:\Users\17076\Documents\Claude\Mighty Eel OS\mai/Cargo.lock:288:1
+    │  
+288 │ ╭ socket2 0.5.10 registry+https://github.com/rust-lang/crates.io-index
+289 │ │ socket2 0.6.3 registry+https://github.com/rust-lang/crates.io-index
+    │ ╰───────────────────────────────────────────────────────────────────┘ lock entries
+    │  
+    ├ socket2 v0.5.10
+      └── tonic v0.12.3
+          ├── mai-api v0.1.0
+          └── tonic-reflection v0.12.3
+              └── mai-api v0.1.0 (*)
+    ├ socket2 v0.6.3
+      ├── hyper-util v0.1.20
+      │   ├── axum v0.8.9
+      │   │   ├── aog-gateway v0.1.0
+      │   │   ├── axum-extra v0.10.3
+      │   │   │   └── mai-api v0.1.0
+      │   │   ├── mai-api v0.1.0 (*)
+      │   │   ├── wsf-api v0.1.0
+      │   │   ├── (dev) wsf-broker v0.1.0
+      │   │   │   └── wsf-api v0.1.0 (*)
+      │   │   └── wsf-seal v0.1.0
+      │   │       ├── wsf-api v0.1.0 (*)
+      │   │       └── (dev) wsf-ledger v0.1.0
+      │   │           ├── hipaa-pack v0.1.0
+      │   │           └── wsf-api v0.1.0 (*)
+      │   ├── hyper-rustls v0.27.9
+      │   │   └── reqwest v0.12.28
+      │   │       ├── aog-gateway v0.1.0 (*)
+      │   │       ├── mai-api v0.1.0 (*)
+      │   │       ├── mai-sdk-rs v0.1.0
+      │   │       ├── wsf-api v0.1.0 (*)
+      │   │       ├── wsf-bridge v0.1.0
+      │   │       │   ├── aog-gateway v0.1.0 (*)
+      │   │       │   ├── wsf-api v0.1.0 (*)
+      │   │       │   ├── wsf-broker v0.1.0 (*)
+      │   │       │   ├── (dev) wsf-cache v0.1.0
+      │   │       │   │   └── (dev) wsf-tenants v0.1.0
+      │   │       │   ├── (dev) wsf-ledger v0.1.0 (*)
+      │   │       │   ├── wsf-seal v0.1.0 (*)
+      │   │       │   └── wsf-tenants v0.1.0 (*)
+      │   │       ├── wsf-broker v0.1.0 (*)
+      │   │       ├── (dev) wsf-cache v0.1.0 (*)
+      │   │       ├── (dev) wsf-ledger v0.1.0 (*)
+      │   │       ├── (dev) wsf-seal v0.1.0 (*)
+      │   │       └── (dev) wsf-tenants v0.1.0 (*)
+      │   ├── hyper-timeout v0.5.2
+      │   │   └── tonic v0.12.3
+      │   │       ├── mai-api v0.1.0 (*)
+      │   │       └── tonic-reflection v0.12.3
+      │   │           └── mai-api v0.1.0 (*)
+      │   ├── hyper-tls v0.6.0
+      │   │   └── reqwest v0.12.28 (*)
+      │   ├── reqwest v0.12.28 (*)
+      │   ├── tonic v0.12.3 (*)
+      │   └── wiremock v0.6.5
+      │       └── (dev) mai-sdk-rs v0.1.0 (*)
+      └── tokio v1.52.3
+          ├── (dev) aog-approvals v0.1.0
+          ├── aog-gateway v0.1.0 (*)
+          ├── (dev) aog-toolproxy v0.1.0
+          │   └── aog-approvals v0.1.0 (*)
+          ├── axum v0.8.9 (*)
+          ├── deadpool v0.12.3
+          │   └── wiremock v0.6.5 (*)
+          ├── h2 v0.4.14
+          │   ├── hyper v1.9.0
+          │   │   ├── axum v0.8.9 (*)
+          │   │   ├── hyper-rustls v0.27.9 (*)
+          │   │   ├── hyper-timeout v0.5.2 (*)
+          │   │   ├── hyper-tls v0.6.0 (*)
+          │   │   ├── hyper-util v0.1.20 (*)
+          │   │   ├── mai-api v0.1.0 (*)
+          │   │   ├── reqwest v0.12.28 (*)
+          │   │   ├── tonic v0.12.3 (*)
+          │   │   └── wiremock v0.6.5 (*)
+          │   ├── reqwest v0.12.28 (*)
+          │   └── tonic v0.12.3 (*)
+          ├── hyper v1.9.0 (*)
+          ├── hyper-rustls v0.27.9 (*)
+          ├── hyper-timeout v0.5.2 (*)
+          ├── hyper-tls v0.6.0 (*)
+          ├── hyper-util v0.1.20 (*)
+          ├── mai-adapters v0.1.0
+          │   └── mai-api v0.1.0 (*)
+          ├── (dev) mai-admin v0.1.0
+          ├── mai-agent v0.1.0
+          │   ├── aog-approvals v0.1.0 (*)
+          │   └── aog-toolproxy v0.1.0 (*)
+          ├── mai-api v0.1.0 (*)
+          ├── mai-core v0.1.0
+          │   ├── mai-adapters v0.1.0 (*)
+          │   ├── mai-admin v0.1.0 (*)
+          │   ├── mai-agent v0.1.0 (*)
+          │   ├── mai-api v0.1.0 (*)
+          │   ├── mai-compliance v0.1.0
+          │   │   ├── aog-gateway v0.1.0 (*)
+          │   │   ├── aog-toolproxy v0.1.0 (*)
+          │   │   ├── gen-trust-staging v0.1.0
+          │   │   ├── hipaa-pack v0.1.0 (*)
+          │   │   ├── mai-admin v0.1.0 (*)
+          │   │   └── mai-api v0.1.0 (*)
+          │   ├── mai-pkg-builder v0.1.0
+          │   ├── mai-scheduler v0.1.0
+          │   │   └── mai-api v0.1.0 (*)
+          │   └── mai-vault v0.1.0
+          │       └── mai-api v0.1.0 (*)
+          ├── mai-hil v0.1.0
+          │   ├── mai-adapters v0.1.0 (*)
+          │   ├── mai-api v0.1.0 (*)
+          │   └── mai-core v0.1.0 (*)
+          ├── mai-scheduler v0.1.0 (*)
+          ├── (dev) mai-sdk-rs v0.1.0 (*)
+          ├── mai-vault v0.1.0 (*)
+          ├── reqwest v0.12.28 (*)
+          ├── tokio-native-tls v0.3.1
+          │   ├── hyper-tls v0.6.0 (*)
+          │   └── reqwest v0.12.28 (*)
+          ├── tokio-rustls v0.26.4
+          │   ├── hyper-rustls v0.27.9 (*)
+          │   └── reqwest v0.12.28 (*)
+          ├── tokio-stream v0.1.18
+          │   ├── mai-api v0.1.0 (*)
+          │   ├── tokio-test v0.4.5
+          │   │   ├── (dev) mai-adapters v0.1.0 (*)
+          │   │   ├── (dev) mai-agent v0.1.0 (*)
+          │   │   ├── (dev) mai-api v0.1.0 (*)
+          │   │   ├── (dev) mai-core v0.1.0 (*)
+          │   │   ├── (dev) mai-scheduler v0.1.0 (*)
+          │   │   ├── (dev) mai-sdk-rs v0.1.0 (*)
+          │   │   └── (dev) mai-vault v0.1.0 (*)
+          │   ├── tonic v0.12.3 (*)
+          │   └── tonic-reflection v0.12.3 (*)
+          ├── tokio-test v0.4.5 (*)
+          ├── tokio-tungstenite v0.29.0
+          │   └── axum v0.8.9 (*)
+          ├── tokio-util v0.7.18
+          │   ├── h2 v0.4.14 (*)
+          │   ├── mai-api v0.1.0 (*)
+          │   ├── reqwest v0.12.28 (*)
+          │   └── tower v0.4.13
+          │       └── tonic v0.12.3 (*)
+          ├── tonic v0.12.3 (*)
+          ├── tonic-reflection v0.12.3 (*)
+          ├── tower v0.4.13 (*)
+          ├── tower v0.5.3
+          │   ├── axum v0.7.9
+          │   │   └── tonic v0.12.3 (*)
+          │   ├── axum v0.8.9 (*)
+          │   ├── mai-api v0.1.0 (*)
+          │   ├── reqwest v0.12.28 (*)
+          │   └── tower-http v0.6.11
+          │       ├── mai-api v0.1.0 (*)
+          │       └── reqwest v0.12.28 (*)
+          ├── wiremock v0.6.5 (*)
+          ├── wsf-api v0.1.0 (*)
+          ├── wsf-bridge v0.1.0 (*)
+          ├── wsf-broker v0.1.0 (*)
+          ├── (dev) wsf-cache v0.1.0 (*)
+          ├── (dev) wsf-ledger v0.1.0 (*)
+          ├── wsf-seal v0.1.0 (*)
+          └── (dev) wsf-tenants v0.1.0 (*)
+
+warning[duplicate]: found 2 duplicate entries for crate 'tower'
+    ┌─ C:\Users\17076\Documents\Claude\Mighty Eel OS\mai/Cargo.lock:321:1
+    │  
+321 │ ╭ tower 0.4.13 registry+https://github.com/rust-lang/crates.io-index
+322 │ │ tower 0.5.3 registry+https://github.com/rust-lang/crates.io-index
+    │ ╰─────────────────────────────────────────────────────────────────┘ lock entries
+    │  
+    ├ tower v0.4.13
+      └── tonic v0.12.3
+          ├── mai-api v0.1.0
+          └── tonic-reflection v0.12.3
+              └── mai-api v0.1.0 (*)
+    ├ tower v0.5.3
+      ├── axum v0.7.9
+      │   └── tonic v0.12.3
+      │       ├── mai-api v0.1.0
+      │       └── tonic-reflection v0.12.3
+      │           └── mai-api v0.1.0 (*)
+      ├── axum v0.8.9
+      │   ├── aog-gateway v0.1.0
+      │   ├── axum-extra v0.10.3
+      │   │   └── mai-api v0.1.0 (*)
+      │   ├── mai-api v0.1.0 (*)
+      │   ├── wsf-api v0.1.0
+      │   ├── (dev) wsf-broker v0.1.0
+      │   │   └── wsf-api v0.1.0 (*)
+      │   └── wsf-seal v0.1.0
+      │       ├── wsf-api v0.1.0 (*)
+      │       └── (dev) wsf-ledger v0.1.0
+      │           ├── hipaa-pack v0.1.0
+      │           └── wsf-api v0.1.0 (*)
+      ├── mai-api v0.1.0 (*)
+      ├── reqwest v0.12.28
+      │   ├── aog-gateway v0.1.0 (*)
+      │   ├── mai-api v0.1.0 (*)
+      │   ├── mai-sdk-rs v0.1.0
+      │   ├── wsf-api v0.1.0 (*)
+      │   ├── wsf-bridge v0.1.0
+      │   │   ├── aog-gateway v0.1.0 (*)
+      │   │   ├── wsf-api v0.1.0 (*)
+      │   │   ├── wsf-broker v0.1.0 (*)
+      │   │   ├── (dev) wsf-cache v0.1.0
+      │   │   │   └── (dev) wsf-tenants v0.1.0
+      │   │   ├── (dev) wsf-ledger v0.1.0 (*)
+      │   │   ├── wsf-seal v0.1.0 (*)
+      │   │   └── wsf-tenants v0.1.0 (*)
+      │   ├── wsf-broker v0.1.0 (*)
+      │   ├── (dev) wsf-cache v0.1.0 (*)
+      │   ├── (dev) wsf-ledger v0.1.0 (*)
+      │   ├── (dev) wsf-seal v0.1.0 (*)
+      │   └── (dev) wsf-tenants v0.1.0 (*)
+      └── tower-http v0.6.11
+          ├── mai-api v0.1.0 (*)
+          └── reqwest v0.12.28 (*)
+
+warning[duplicate]: found 2 duplicate entries for crate 'windows-core'
+    ┌─ C:\Users\17076\Documents\Claude\Mighty Eel OS\mai/Cargo.lock:364:1
+    │  
+364 │ ╭ windows-core 0.58.0 registry+https://github.com/rust-lang/crates.io-index
+365 │ │ windows-core 0.62.2 registry+https://github.com/rust-lang/crates.io-index
+    │ ╰─────────────────────────────────────────────────────────────────────────┘ lock entries
+    │  
+    ├ windows-core v0.58.0
+      └── windows v0.58.0
+          └── mai-launcher v0.1.0
+    ├ windows-core v0.62.2
+      └── iana-time-zone v0.1.65
+          └── chrono v0.4.44
+              ├── aog-approvals v0.1.0
+              ├── aog-gateway v0.1.0
+              ├── aog-toolproxy v0.1.0
+              │   └── aog-approvals v0.1.0 (*)
+              ├── fabric-token v0.1.0
+              │   ├── aog-gateway v0.1.0 (*)
+              │   ├── wsf-api v0.1.0
+              │   ├── wsf-bridge v0.1.0
+              │   │   ├── aog-gateway v0.1.0 (*)
+              │   │   ├── wsf-api v0.1.0 (*)
+              │   │   ├── wsf-broker v0.1.0
+              │   │   │   └── wsf-api v0.1.0 (*)
+              │   │   ├── (dev) wsf-cache v0.1.0
+              │   │   │   └── (dev) wsf-tenants v0.1.0
+              │   │   ├── (dev) wsf-ledger v0.1.0
+              │   │   │   ├── hipaa-pack v0.1.0
+              │   │   │   └── wsf-api v0.1.0 (*)
+              │   │   ├── wsf-seal v0.1.0
+              │   │   │   ├── wsf-api v0.1.0 (*)
+              │   │   │   └── (dev) wsf-ledger v0.1.0 (*)
+              │   │   └── wsf-tenants v0.1.0 (*)
+              │   ├── wsf-broker v0.1.0 (*)
+              │   ├── wsf-cache v0.1.0 (*)
+              │   ├── wsf-hardening v0.1.0
+              │   ├── (dev) wsf-ledger v0.1.0 (*)
+              │   └── wsf-seal v0.1.0 (*)
+              ├── mai-admin v0.1.0
+              ├── mai-agent v0.1.0
+              │   ├── aog-approvals v0.1.0 (*)
+              │   └── aog-toolproxy v0.1.0 (*)
+              ├── mai-api v0.1.0
+              ├── mai-compliance v0.1.0
+              │   ├── aog-gateway v0.1.0 (*)
+              │   ├── aog-toolproxy v0.1.0 (*)
+              │   ├── gen-trust-staging v0.1.0
+              │   ├── hipaa-pack v0.1.0 (*)
+              │   ├── mai-admin v0.1.0 (*)
+              │   └── mai-api v0.1.0 (*)
+              ├── mai-router v0.1.0
+              │   ├── aog-gateway v0.1.0 (*)
+              │   └── rule-tester v0.1.0
+              ├── mai-scheduler v0.1.0
+              │   └── mai-api v0.1.0 (*)
+              ├── mai-vault v0.1.0
+              │   └── mai-api v0.1.0 (*)
+              ├── wsf-api v0.1.0 (*)
+              ├── wsf-bridge v0.1.0 (*)
+              ├── wsf-broker v0.1.0 (*)
+              ├── wsf-cache v0.1.0 (*)
+              ├── (dev) wsf-hardening v0.1.0 (*)
+              ├── (dev) wsf-ledger v0.1.0 (*)
+              ├── wsf-seal v0.1.0 (*)
+              └── wsf-tenants v0.1.0 (*)
+
+warning[duplicate]: found 2 duplicate entries for crate 'windows-implement'
+    ┌─ C:\Users\17076\Documents\Claude\Mighty Eel OS\mai/Cargo.lock:366:1
+    │  
+366 │ ╭ windows-implement 0.58.0 registry+https://github.com/rust-lang/crates.io-index
+367 │ │ windows-implement 0.60.2 registry+https://github.com/rust-lang/crates.io-index
+    │ ╰──────────────────────────────────────────────────────────────────────────────┘ lock entries
+    │  
+    ├ windows-implement v0.58.0
+      └── windows-core v0.58.0
+          └── windows v0.58.0
+              └── mai-launcher v0.1.0
+    ├ windows-implement v0.60.2
+      └── windows-core v0.62.2
+          └── iana-time-zone v0.1.65
+              └── chrono v0.4.44
+                  ├── aog-approvals v0.1.0
+                  ├── aog-gateway v0.1.0
+                  ├── aog-toolproxy v0.1.0
+                  │   └── aog-approvals v0.1.0 (*)
+                  ├── fabric-token v0.1.0
+                  │   ├── aog-gateway v0.1.0 (*)
+                  │   ├── wsf-api v0.1.0
+                  │   ├── wsf-bridge v0.1.0
+                  │   │   ├── aog-gateway v0.1.0 (*)
+                  │   │   ├── wsf-api v0.1.0 (*)
+                  │   │   ├── wsf-broker v0.1.0
+                  │   │   │   └── wsf-api v0.1.0 (*)
+                  │   │   ├── (dev) wsf-cache v0.1.0
+                  │   │   │   └── (dev) wsf-tenants v0.1.0
+                  │   │   ├── (dev) wsf-ledger v0.1.0
+                  │   │   │   ├── hipaa-pack v0.1.0
+                  │   │   │   └── wsf-api v0.1.0 (*)
+                  │   │   ├── wsf-seal v0.1.0
+                  │   │   │   ├── wsf-api v0.1.0 (*)
+                  │   │   │   └── (dev) wsf-ledger v0.1.0 (*)
+                  │   │   └── wsf-tenants v0.1.0 (*)
+                  │   ├── wsf-broker v0.1.0 (*)
+                  │   ├── wsf-cache v0.1.0 (*)
+                  │   ├── wsf-hardening v0.1.0
+                  │   ├── (dev) wsf-ledger v0.1.0 (*)
+                  │   └── wsf-seal v0.1.0 (*)
+                  ├── mai-admin v0.1.0
+                  ├── mai-agent v0.1.0
+                  │   ├── aog-approvals v0.1.0 (*)
+                  │   └── aog-toolproxy v0.1.0 (*)
+                  ├── mai-api v0.1.0
+                  ├── mai-compliance v0.1.0
+                  │   ├── aog-gateway v0.1.0 (*)
+                  │   ├── aog-toolproxy v0.1.0 (*)
+                  │   ├── gen-trust-staging v0.1.0
+                  │   ├── hipaa-pack v0.1.0 (*)
+                  │   ├── mai-admin v0.1.0 (*)
+                  │   └── mai-api v0.1.0 (*)
+                  ├── mai-router v0.1.0
+                  │   ├── aog-gateway v0.1.0 (*)
+                  │   └── rule-tester v0.1.0
+                  ├── mai-scheduler v0.1.0
+                  │   └── mai-api v0.1.0 (*)
+                  ├── mai-vault v0.1.0
+                  │   └── mai-api v0.1.0 (*)
+                  ├── wsf-api v0.1.0 (*)
+                  ├── wsf-bridge v0.1.0 (*)
+                  ├── wsf-broker v0.1.0 (*)
+                  ├── wsf-cache v0.1.0 (*)
+                  ├── (dev) wsf-hardening v0.1.0 (*)
+                  ├── (dev) wsf-ledger v0.1.0 (*)
+                  ├── wsf-seal v0.1.0 (*)
+                  └── wsf-tenants v0.1.0 (*)
+
+warning[duplicate]: found 2 duplicate entries for crate 'windows-interface'
+    ┌─ C:\Users\17076\Documents\Claude\Mighty Eel OS\mai/Cargo.lock:368:1
+    │  
+368 │ ╭ windows-interface 0.58.0 registry+https://github.com/rust-lang/crates.io-index
+369 │ │ windows-interface 0.59.3 registry+https://github.com/rust-lang/crates.io-index
+    │ ╰──────────────────────────────────────────────────────────────────────────────┘ lock entries
+    │  
+    ├ windows-interface v0.58.0
+      └── windows-core v0.58.0
+          └── windows v0.58.0
+              └── mai-launcher v0.1.0
+    ├ windows-interface v0.59.3
+      └── windows-core v0.62.2
+          └── iana-time-zone v0.1.65
+              └── chrono v0.4.44
+                  ├── aog-approvals v0.1.0
+                  ├── aog-gateway v0.1.0
+                  ├── aog-toolproxy v0.1.0
+                  │   └── aog-approvals v0.1.0 (*)
+                  ├── fabric-token v0.1.0
+                  │   ├── aog-gateway v0.1.0 (*)
+                  │   ├── wsf-api v0.1.0
+                  │   ├── wsf-bridge v0.1.0
+                  │   │   ├── aog-gateway v0.1.0 (*)
+                  │   │   ├── wsf-api v0.1.0 (*)
+                  │   │   ├── wsf-broker v0.1.0
+                  │   │   │   └── wsf-api v0.1.0 (*)
+                  │   │   ├── (dev) wsf-cache v0.1.0
+                  │   │   │   └── (dev) wsf-tenants v0.1.0
+                  │   │   ├── (dev) wsf-ledger v0.1.0
+                  │   │   │   ├── hipaa-pack v0.1.0
+                  │   │   │   └── wsf-api v0.1.0 (*)
+                  │   │   ├── wsf-seal v0.1.0
+                  │   │   │   ├── wsf-api v0.1.0 (*)
+                  │   │   │   └── (dev) wsf-ledger v0.1.0 (*)
+                  │   │   └── wsf-tenants v0.1.0 (*)
+                  │   ├── wsf-broker v0.1.0 (*)
+                  │   ├── wsf-cache v0.1.0 (*)
+                  │   ├── wsf-hardening v0.1.0
+                  │   ├── (dev) wsf-ledger v0.1.0 (*)
+                  │   └── wsf-seal v0.1.0 (*)
+                  ├── mai-admin v0.1.0
+                  ├── mai-agent v0.1.0
+                  │   ├── aog-approvals v0.1.0 (*)
+                  │   └── aog-toolproxy v0.1.0 (*)
+                  ├── mai-api v0.1.0
+                  ├── mai-compliance v0.1.0
+                  │   ├── aog-gateway v0.1.0 (*)
+                  │   ├── aog-toolproxy v0.1.0 (*)
+                  │   ├── gen-trust-staging v0.1.0
+                  │   ├── hipaa-pack v0.1.0 (*)
+                  │   ├── mai-admin v0.1.0 (*)
+                  │   └── mai-api v0.1.0 (*)
+                  ├── mai-router v0.1.0
+                  │   ├── aog-gateway v0.1.0 (*)
+                  │   └── rule-tester v0.1.0
+                  ├── mai-scheduler v0.1.0
+                  │   └── mai-api v0.1.0 (*)
+                  ├── mai-vault v0.1.0
+                  │   └── mai-api v0.1.0 (*)
+                  ├── wsf-api v0.1.0 (*)
+                  ├── wsf-bridge v0.1.0 (*)
+                  ├── wsf-broker v0.1.0 (*)
+                  ├── wsf-cache v0.1.0 (*)
+                  ├── (dev) wsf-hardening v0.1.0 (*)
+                  ├── (dev) wsf-ledger v0.1.0 (*)
+                  ├── wsf-seal v0.1.0 (*)
+                  └── wsf-tenants v0.1.0 (*)
+
+warning[duplicate]: found 2 duplicate entries for crate 'windows-result'
+    ┌─ C:\Users\17076\Documents\Claude\Mighty Eel OS\mai/Cargo.lock:372:1
+    │  
+372 │ ╭ windows-result 0.2.0 registry+https://github.com/rust-lang/crates.io-index
+373 │ │ windows-result 0.4.1 registry+https://github.com/rust-lang/crates.io-index
+    │ ╰──────────────────────────────────────────────────────────────────────────┘ lock entries
+    │  
+    ├ windows-result v0.2.0
+      ├── windows-core v0.58.0
+      │   └── windows v0.58.0
+      │       └── mai-launcher v0.1.0
+      └── windows-strings v0.1.0
+          └── windows-core v0.58.0 (*)
+    ├ windows-result v0.4.1
+      ├── windows-core v0.62.2
+      │   └── iana-time-zone v0.1.65
+      │       └── chrono v0.4.44
+      │           ├── aog-approvals v0.1.0
+      │           ├── aog-gateway v0.1.0
+      │           ├── aog-toolproxy v0.1.0
+      │           │   └── aog-approvals v0.1.0 (*)
+      │           ├── fabric-token v0.1.0
+      │           │   ├── aog-gateway v0.1.0 (*)
+      │           │   ├── wsf-api v0.1.0
+      │           │   ├── wsf-bridge v0.1.0
+      │           │   │   ├── aog-gateway v0.1.0 (*)
+      │           │   │   ├── wsf-api v0.1.0 (*)
+      │           │   │   ├── wsf-broker v0.1.0
+      │           │   │   │   └── wsf-api v0.1.0 (*)
+      │           │   │   ├── (dev) wsf-cache v0.1.0
+      │           │   │   │   └── (dev) wsf-tenants v0.1.0
+      │           │   │   ├── (dev) wsf-ledger v0.1.0
+      │           │   │   │   ├── hipaa-pack v0.1.0
+      │           │   │   │   └── wsf-api v0.1.0 (*)
+      │           │   │   ├── wsf-seal v0.1.0
+      │           │   │   │   ├── wsf-api v0.1.0 (*)
+      │           │   │   │   └── (dev) wsf-ledger v0.1.0 (*)
+      │           │   │   └── wsf-tenants v0.1.0 (*)
+      │           │   ├── wsf-broker v0.1.0 (*)
+      │           │   ├── wsf-cache v0.1.0 (*)
+      │           │   ├── wsf-hardening v0.1.0
+      │           │   ├── (dev) wsf-ledger v0.1.0 (*)
+      │           │   └── wsf-seal v0.1.0 (*)
+      │           ├── mai-admin v0.1.0
+      │           ├── mai-agent v0.1.0
+      │           │   ├── aog-approvals v0.1.0 (*)
+      │           │   └── aog-toolproxy v0.1.0 (*)
+      │           ├── mai-api v0.1.0
+      │           ├── mai-compliance v0.1.0
+      │           │   ├── aog-gateway v0.1.0 (*)
+      │           │   ├── aog-toolproxy v0.1.0 (*)
+      │           │   ├── gen-trust-staging v0.1.0
+      │           │   ├── hipaa-pack v0.1.0 (*)
+      │           │   ├── mai-admin v0.1.0 (*)
+      │           │   └── mai-api v0.1.0 (*)
+      │           ├── mai-router v0.1.0
+      │           │   ├── aog-gateway v0.1.0 (*)
+      │           │   └── rule-tester v0.1.0
+      │           ├── mai-scheduler v0.1.0
+      │           │   └── mai-api v0.1.0 (*)
+      │           ├── mai-vault v0.1.0
+      │           │   └── mai-api v0.1.0 (*)
+      │           ├── wsf-api v0.1.0 (*)
+      │           ├── wsf-bridge v0.1.0 (*)
+      │           ├── wsf-broker v0.1.0 (*)
+      │           ├── wsf-cache v0.1.0 (*)
+      │           ├── (dev) wsf-hardening v0.1.0 (*)
+      │           ├── (dev) wsf-ledger v0.1.0 (*)
+      │           ├── wsf-seal v0.1.0 (*)
+      │           └── wsf-tenants v0.1.0 (*)
+      └── windows-registry v0.6.1
+          └── hyper-util v0.1.20
+              ├── axum v0.8.9
+              │   ├── aog-gateway v0.1.0 (*)
+              │   ├── axum-extra v0.10.3
+              │   │   └── mai-api v0.1.0 (*)
+              │   ├── mai-api v0.1.0 (*)
+              │   ├── wsf-api v0.1.0 (*)
+              │   ├── (dev) wsf-broker v0.1.0 (*)
+              │   └── wsf-seal v0.1.0 (*)
+              ├── hyper-rustls v0.27.9
+              │   └── reqwest v0.12.28
+              │       ├── aog-gateway v0.1.0 (*)
+              │       ├── mai-api v0.1.0 (*)
+              │       ├── mai-sdk-rs v0.1.0
+              │       ├── wsf-api v0.1.0 (*)
+              │       ├── wsf-bridge v0.1.0 (*)
+              │       ├── wsf-broker v0.1.0 (*)
+              │       ├── (dev) wsf-cache v0.1.0 (*)
+              │       ├── (dev) wsf-ledger v0.1.0 (*)
+              │       ├── (dev) wsf-seal v0.1.0 (*)
+              │       └── (dev) wsf-tenants v0.1.0 (*)
+              ├── hyper-timeout v0.5.2
+              │   └── tonic v0.12.3
+              │       ├── mai-api v0.1.0 (*)
+              │       └── tonic-reflection v0.12.3
+              │           └── mai-api v0.1.0 (*)
+              ├── hyper-tls v0.6.0
+              │   └── reqwest v0.12.28 (*)
+              ├── reqwest v0.12.28 (*)
+              ├── tonic v0.12.3 (*)
+              └── wiremock v0.6.5
+                  └── (dev) mai-sdk-rs v0.1.0 (*)
+
+warning[duplicate]: found 2 duplicate entries for crate 'windows-strings'
+    ┌─ C:\Users\17076\Documents\Claude\Mighty Eel OS\mai/Cargo.lock:374:1
+    │  
+374 │ ╭ windows-strings 0.1.0 registry+https://github.com/rust-lang/crates.io-index
+375 │ │ windows-strings 0.5.1 registry+https://github.com/rust-lang/crates.io-index
+    │ ╰───────────────────────────────────────────────────────────────────────────┘ lock entries
+    │  
+    ├ windows-strings v0.1.0
+      └── windows-core v0.58.0
+          └── windows v0.58.0
+              └── mai-launcher v0.1.0
+    ├ windows-strings v0.5.1
+      ├── windows-core v0.62.2
+      │   └── iana-time-zone v0.1.65
+      │       └── chrono v0.4.44
+      │           ├── aog-approvals v0.1.0
+      │           ├── aog-gateway v0.1.0
+      │           ├── aog-toolproxy v0.1.0
+      │           │   └── aog-approvals v0.1.0 (*)
+      │           ├── fabric-token v0.1.0
+      │           │   ├── aog-gateway v0.1.0 (*)
+      │           │   ├── wsf-api v0.1.0
+      │           │   ├── wsf-bridge v0.1.0
+      │           │   │   ├── aog-gateway v0.1.0 (*)
+      │           │   │   ├── wsf-api v0.1.0 (*)
+      │           │   │   ├── wsf-broker v0.1.0
+      │           │   │   │   └── wsf-api v0.1.0 (*)
+      │           │   │   ├── (dev) wsf-cache v0.1.0
+      │           │   │   │   └── (dev) wsf-tenants v0.1.0
+      │           │   │   ├── (dev) wsf-ledger v0.1.0
+      │           │   │   │   ├── hipaa-pack v0.1.0
+      │           │   │   │   └── wsf-api v0.1.0 (*)
+      │           │   │   ├── wsf-seal v0.1.0
+      │           │   │   │   ├── wsf-api v0.1.0 (*)
+      │           │   │   │   └── (dev) wsf-ledger v0.1.0 (*)
+      │           │   │   └── wsf-tenants v0.1.0 (*)
+      │           │   ├── wsf-broker v0.1.0 (*)
+      │           │   ├── wsf-cache v0.1.0 (*)
+      │           │   ├── wsf-hardening v0.1.0
+      │           │   ├── (dev) wsf-ledger v0.1.0 (*)
+      │           │   └── wsf-seal v0.1.0 (*)
+      │           ├── mai-admin v0.1.0
+      │           ├── mai-agent v0.1.0
+      │           │   ├── aog-approvals v0.1.0 (*)
+      │           │   └── aog-toolproxy v0.1.0 (*)
+      │           ├── mai-api v0.1.0
+      │           ├── mai-compliance v0.1.0
+      │           │   ├── aog-gateway v0.1.0 (*)
+      │           │   ├── aog-toolproxy v0.1.0 (*)
+      │           │   ├── gen-trust-staging v0.1.0
+      │           │   ├── hipaa-pack v0.1.0 (*)
+      │           │   ├── mai-admin v0.1.0 (*)
+      │           │   └── mai-api v0.1.0 (*)
+      │           ├── mai-router v0.1.0
+      │           │   ├── aog-gateway v0.1.0 (*)
+      │           │   └── rule-tester v0.1.0
+      │           ├── mai-scheduler v0.1.0
+      │           │   └── mai-api v0.1.0 (*)
+      │           ├── mai-vault v0.1.0
+      │           │   └── mai-api v0.1.0 (*)
+      │           ├── wsf-api v0.1.0 (*)
+      │           ├── wsf-bridge v0.1.0 (*)
+      │           ├── wsf-broker v0.1.0 (*)
+      │           ├── wsf-cache v0.1.0 (*)
+      │           ├── (dev) wsf-hardening v0.1.0 (*)
+      │           ├── (dev) wsf-ledger v0.1.0 (*)
+      │           ├── wsf-seal v0.1.0 (*)
+      │           └── wsf-tenants v0.1.0 (*)
+      └── windows-registry v0.6.1
+          └── hyper-util v0.1.20
+              ├── axum v0.8.9
+              │   ├── aog-gateway v0.1.0 (*)
+              │   ├── axum-extra v0.10.3
+              │   │   └── mai-api v0.1.0 (*)
+              │   ├── mai-api v0.1.0 (*)
+              │   ├── wsf-api v0.1.0 (*)
+              │   ├── (dev) wsf-broker v0.1.0 (*)
+              │   └── wsf-seal v0.1.0 (*)
+              ├── hyper-rustls v0.27.9
+              │   └── reqwest v0.12.28
+              │       ├── aog-gateway v0.1.0 (*)
+              │       ├── mai-api v0.1.0 (*)
+              │       ├── mai-sdk-rs v0.1.0
+              │       ├── wsf-api v0.1.0 (*)
+              │       ├── wsf-bridge v0.1.0 (*)
+              │       ├── wsf-broker v0.1.0 (*)
+              │       ├── (dev) wsf-cache v0.1.0 (*)
+              │       ├── (dev) wsf-ledger v0.1.0 (*)
+              │       ├── (dev) wsf-seal v0.1.0 (*)
+              │       └── (dev) wsf-tenants v0.1.0 (*)
+              ├── hyper-timeout v0.5.2
+              │   └── tonic v0.12.3
+              │       ├── mai-api v0.1.0 (*)
+              │       └── tonic-reflection v0.12.3
+              │           └── mai-api v0.1.0 (*)
+              ├── hyper-tls v0.6.0
+              │   └── reqwest v0.12.28 (*)
+              ├── reqwest v0.12.28 (*)
+              ├── tonic v0.12.3 (*)
+              └── wiremock v0.6.5
+                  └── (dev) mai-sdk-rs v0.1.0 (*)
+
+warning[duplicate]: found 3 duplicate entries for crate 'windows-sys'
+    ┌─ C:\Users\17076\Documents\Claude\Mighty Eel OS\mai/Cargo.lock:376:1
+    │  
+376 │ ╭ windows-sys 0.48.0 registry+https://github.com/rust-lang/crates.io-index
+377 │ │ windows-sys 0.52.0 registry+https://github.com/rust-lang/crates.io-index
+378 │ │ windows-sys 0.61.2 registry+https://github.com/rust-lang/crates.io-index
+    │ ╰────────────────────────────────────────────────────────────────────────┘ lock entries
+    │  
+    ├ windows-sys v0.48.0
+      └── winreg v0.52.0
+          └── embed-resource v2.5.2
+              └── (build) mai-launcher v0.1.0
+    ├ windows-sys v0.52.0
+      ├── notify v7.0.0
+      │   └── mai-api v0.1.0
+      ├── ring v0.17.14
+      │   ├── rustls v0.23.40
+      │   │   ├── hyper-rustls v0.27.9
+      │   │   │   └── reqwest v0.12.28
+      │   │   │       ├── aog-gateway v0.1.0
+      │   │   │       ├── mai-api v0.1.0 (*)
+      │   │   │       ├── mai-sdk-rs v0.1.0
+      │   │   │       ├── wsf-api v0.1.0
+      │   │   │       ├── wsf-bridge v0.1.0
+      │   │   │       │   ├── aog-gateway v0.1.0 (*)
+      │   │   │       │   ├── wsf-api v0.1.0 (*)
+      │   │   │       │   ├── wsf-broker v0.1.0
+      │   │   │       │   │   └── wsf-api v0.1.0 (*)
+      │   │   │       │   ├── (dev) wsf-cache v0.1.0
+      │   │   │       │   │   └── (dev) wsf-tenants v0.1.0
+      │   │   │       │   ├── (dev) wsf-ledger v0.1.0
+      │   │   │       │   │   ├── hipaa-pack v0.1.0
+      │   │   │       │   │   └── wsf-api v0.1.0 (*)
+      │   │   │       │   ├── wsf-seal v0.1.0
+      │   │   │       │   │   ├── wsf-api v0.1.0 (*)
+      │   │   │       │   │   └── (dev) wsf-ledger v0.1.0 (*)
+      │   │   │       │   └── wsf-tenants v0.1.0 (*)
+      │   │   │       ├── wsf-broker v0.1.0 (*)
+      │   │   │       ├── (dev) wsf-cache v0.1.0 (*)
+      │   │   │       ├── (dev) wsf-ledger v0.1.0 (*)
+      │   │   │       ├── (dev) wsf-seal v0.1.0 (*)
+      │   │   │       └── (dev) wsf-tenants v0.1.0 (*)
+      │   │   ├── reqwest v0.12.28 (*)
+      │   │   └── tokio-rustls v0.26.4
+      │   │       ├── hyper-rustls v0.27.9 (*)
+      │   │       └── reqwest v0.12.28 (*)
+      │   └── rustls-webpki v0.103.13
+      │       └── rustls v0.23.40 (*)
+      └── socket2 v0.5.10
+          └── tonic v0.12.3
+              ├── mai-api v0.1.0 (*)
+              └── tonic-reflection v0.12.3
+                  └── mai-api v0.1.0 (*)
+    ├ windows-sys v0.61.2
+      ├── anstyle-query v1.1.5
+      │   └── anstream v1.0.0
+      │       └── clap_builder v4.6.0
+      │           └── clap v4.6.1
+      │               ├── mai-admin v0.1.0
+      │               └── mai-pkg-builder v0.1.0
+      ├── anstyle-wincon v3.0.11
+      │   └── anstream v1.0.0 (*)
+      ├── errno v0.3.14
+      │   ├── rustix v1.1.4
+      │   │   └── tempfile v3.27.0
+      │   │       ├── (dev) mai-admin v0.1.0 (*)
+      │   │       ├── (dev) mai-api v0.1.0
+      │   │       ├── (dev) mai-vault v0.1.0
+      │   │       │   └── mai-api v0.1.0 (*)
+      │   │       ├── native-tls v0.2.18
+      │   │       │   ├── hyper-tls v0.6.0
+      │   │       │   │   └── reqwest v0.12.28
+      │   │       │   │       ├── aog-gateway v0.1.0
+      │   │       │   │       ├── mai-api v0.1.0 (*)
+      │   │       │   │       ├── mai-sdk-rs v0.1.0
+      │   │       │   │       ├── wsf-api v0.1.0
+      │   │       │   │       ├── wsf-bridge v0.1.0
+      │   │       │   │       │   ├── aog-gateway v0.1.0 (*)
+      │   │       │   │       │   ├── wsf-api v0.1.0 (*)
+      │   │       │   │       │   ├── wsf-broker v0.1.0
+      │   │       │   │       │   │   └── wsf-api v0.1.0 (*)
+      │   │       │   │       │   ├── (dev) wsf-cache v0.1.0
+      │   │       │   │       │   │   └── (dev) wsf-tenants v0.1.0
+      │   │       │   │       │   ├── (dev) wsf-ledger v0.1.0
+      │   │       │   │       │   │   ├── hipaa-pack v0.1.0
+      │   │       │   │       │   │   └── wsf-api v0.1.0 (*)
+      │   │       │   │       │   ├── wsf-seal v0.1.0
+      │   │       │   │       │   │   ├── wsf-api v0.1.0 (*)
+      │   │       │   │       │   │   └── (dev) wsf-ledger v0.1.0 (*)
+      │   │       │   │       │   └── wsf-tenants v0.1.0 (*)
+      │   │       │   │       ├── wsf-broker v0.1.0 (*)
+      │   │       │   │       ├── (dev) wsf-cache v0.1.0 (*)
+      │   │       │   │       ├── (dev) wsf-ledger v0.1.0 (*)
+      │   │       │   │       ├── (dev) wsf-seal v0.1.0 (*)
+      │   │       │   │       └── (dev) wsf-tenants v0.1.0 (*)
+      │   │       │   ├── reqwest v0.12.28 (*)
+      │   │       │   └── tokio-native-tls v0.3.1
+      │   │       │       ├── hyper-tls v0.6.0 (*)
+      │   │       │       └── reqwest v0.12.28 (*)
+      │   │       └── prost-build v0.13.5
+      │   │           ├── (build) mai-api v0.1.0 (*)
+      │   │           └── tonic-build v0.12.3
+      │   │               └── (build) mai-api v0.1.0 (*)
+      │   └── signal-hook-registry v1.4.8
+      │       └── tokio v1.52.3
+      │           ├── (dev) aog-approvals v0.1.0
+      │           ├── aog-gateway v0.1.0 (*)
+      │           ├── (dev) aog-toolproxy v0.1.0
+      │           │   └── aog-approvals v0.1.0 (*)
+      │           ├── axum v0.8.9
+      │           │   ├── aog-gateway v0.1.0 (*)
+      │           │   ├── axum-extra v0.10.3
+      │           │   │   └── mai-api v0.1.0 (*)
+      │           │   ├── mai-api v0.1.0 (*)
+      │           │   ├── wsf-api v0.1.0 (*)
+      │           │   ├── (dev) wsf-broker v0.1.0 (*)
+      │           │   └── wsf-seal v0.1.0 (*)
+      │           ├── deadpool v0.12.3
+      │           │   └── wiremock v0.6.5
+      │           │       └── (dev) mai-sdk-rs v0.1.0 (*)
+      │           ├── h2 v0.4.14
+      │           │   ├── hyper v1.9.0
+      │           │   │   ├── axum v0.8.9 (*)
+      │           │   │   ├── hyper-rustls v0.27.9
+      │           │   │   │   └── reqwest v0.12.28 (*)
+      │           │   │   ├── hyper-timeout v0.5.2
+      │           │   │   │   └── tonic v0.12.3
+      │           │   │   │       ├── mai-api v0.1.0 (*)
+      │           │   │   │       └── tonic-reflection v0.12.3
+      │           │   │   │           └── mai-api v0.1.0 (*)
+      │           │   │   ├── hyper-tls v0.6.0 (*)
+      │           │   │   ├── hyper-util v0.1.20
+      │           │   │   │   ├── axum v0.8.9 (*)
+      │           │   │   │   ├── hyper-rustls v0.27.9 (*)
+      │           │   │   │   ├── hyper-timeout v0.5.2 (*)
+      │           │   │   │   ├── hyper-tls v0.6.0 (*)
+      │           │   │   │   ├── reqwest v0.12.28 (*)
+      │           │   │   │   ├── tonic v0.12.3 (*)
+      │           │   │   │   └── wiremock v0.6.5 (*)
+      │           │   │   ├── mai-api v0.1.0 (*)
+      │           │   │   ├── reqwest v0.12.28 (*)
+      │           │   │   ├── tonic v0.12.3 (*)
+      │           │   │   └── wiremock v0.6.5 (*)
+      │           │   ├── reqwest v0.12.28 (*)
+      │           │   └── tonic v0.12.3 (*)
+      │           ├── hyper v1.9.0 (*)
+      │           ├── hyper-rustls v0.27.9 (*)
+      │           ├── hyper-timeout v0.5.2 (*)
+      │           ├── hyper-tls v0.6.0 (*)
+      │           ├── hyper-util v0.1.20 (*)
+      │           ├── mai-adapters v0.1.0
+      │           │   └── mai-api v0.1.0 (*)
+      │           ├── (dev) mai-admin v0.1.0 (*)
+      │           ├── mai-agent v0.1.0
+      │           │   ├── aog-approvals v0.1.0 (*)
+      │           │   └── aog-toolproxy v0.1.0 (*)
+      │           ├── mai-api v0.1.0 (*)
+      │           ├── mai-core v0.1.0
+      │           │   ├── mai-adapters v0.1.0 (*)
+      │           │   ├── mai-admin v0.1.0 (*)
+      │           │   ├── mai-agent v0.1.0 (*)
+      │           │   ├── mai-api v0.1.0 (*)
+      │           │   ├── mai-compliance v0.1.0
+      │           │   │   ├── aog-gateway v0.1.0 (*)
+      │           │   │   ├── aog-toolproxy v0.1.0 (*)
+      │           │   │   ├── gen-trust-staging v0.1.0
+      │           │   │   ├── hipaa-pack v0.1.0 (*)
+      │           │   │   ├── mai-admin v0.1.0 (*)
+      │           │   │   └── mai-api v0.1.0 (*)
+      │           │   ├── mai-pkg-builder v0.1.0 (*)
+      │           │   ├── mai-scheduler v0.1.0
+      │           │   │   └── mai-api v0.1.0 (*)
+      │           │   └── mai-vault v0.1.0 (*)
+      │           ├── mai-hil v0.1.0
+      │           │   ├── mai-adapters v0.1.0 (*)
+      │           │   ├── mai-api v0.1.0 (*)
+      │           │   └── mai-core v0.1.0 (*)
+      │           ├── mai-scheduler v0.1.0 (*)
+      │           ├── (dev) mai-sdk-rs v0.1.0 (*)
+      │           ├── mai-vault v0.1.0 (*)
+      │           ├── reqwest v0.12.28 (*)
+      │           ├── tokio-native-tls v0.3.1 (*)
+      │           ├── tokio-rustls v0.26.4
+      │           │   ├── hyper-rustls v0.27.9 (*)
+      │           │   └── reqwest v0.12.28 (*)
+      │           ├── tokio-stream v0.1.18
+      │           │   ├── mai-api v0.1.0 (*)
+      │           │   ├── tokio-test v0.4.5
+      │           │   │   ├── (dev) mai-adapters v0.1.0 (*)
+      │           │   │   ├── (dev) mai-agent v0.1.0 (*)
+      │           │   │   ├── (dev) mai-api v0.1.0 (*)
+      │           │   │   ├── (dev) mai-core v0.1.0 (*)
+      │           │   │   ├── (dev) mai-scheduler v0.1.0 (*)
+      │           │   │   ├── (dev) mai-sdk-rs v0.1.0 (*)
+      │           │   │   └── (dev) mai-vault v0.1.0 (*)
+      │           │   ├── tonic v0.12.3 (*)
+      │           │   └── tonic-reflection v0.12.3 (*)
+      │           ├── tokio-test v0.4.5 (*)
+      │           ├── tokio-tungstenite v0.29.0
+      │           │   └── axum v0.8.9 (*)
+      │           ├── tokio-util v0.7.18
+      │           │   ├── h2 v0.4.14 (*)
+      │           │   ├── mai-api v0.1.0 (*)
+      │           │   ├── reqwest v0.12.28 (*)
+      │           │   └── tower v0.4.13
+      │           │       └── tonic v0.12.3 (*)
+      │           ├── tonic v0.12.3 (*)
+      │           ├── tonic-reflection v0.12.3 (*)
+      │           ├── tower v0.4.13 (*)
+      │           ├── tower v0.5.3
+      │           │   ├── axum v0.7.9
+      │           │   │   └── tonic v0.12.3 (*)
+      │           │   ├── axum v0.8.9 (*)
+      │           │   ├── mai-api v0.1.0 (*)
+      │           │   ├── reqwest v0.12.28 (*)
+      │           │   └── tower-http v0.6.11
+      │           │       ├── mai-api v0.1.0 (*)
+      │           │       └── reqwest v0.12.28 (*)
+      │           ├── wiremock v0.6.5 (*)
+      │           ├── wsf-api v0.1.0 (*)
+      │           ├── wsf-bridge v0.1.0 (*)
+      │           ├── wsf-broker v0.1.0 (*)
+      │           ├── (dev) wsf-cache v0.1.0 (*)
+      │           ├── (dev) wsf-ledger v0.1.0 (*)
+      │           ├── wsf-seal v0.1.0 (*)
+      │           └── (dev) wsf-tenants v0.1.0 (*)
+      ├── mio v1.2.0
+      │   ├── notify v7.0.0
+      │   │   └── mai-api v0.1.0 (*)
+      │   └── tokio v1.52.3 (*)
+      ├── nu-ansi-term v0.50.3
+      │   └── tracing-subscriber v0.3.23
+      │       ├── mai-admin v0.1.0 (*)
+      │       ├── mai-api v0.1.0 (*)
+      │       └── mai-pkg-builder v0.1.0 (*)
+      ├── rustix v1.1.4 (*)
+      ├── schannel v0.1.29
+      │   └── native-tls v0.2.18 (*)
+      ├── socket2 v0.6.3
+      │   ├── hyper-util v0.1.20 (*)
+      │   └── tokio v1.52.3 (*)
+      ├── tempfile v3.27.0 (*)
+      ├── tokio v1.52.3 (*)
+      └── winapi-util v0.1.11
+          ├── same-file v1.0.6
+          │   └── walkdir v2.5.0
+          │       └── notify v7.0.0 (*)
+          └── walkdir v2.5.0 (*)
+
+warning[duplicate]: found 2 duplicate entries for crate 'windows-targets'
+    ┌─ C:\Users\17076\Documents\Claude\Mighty Eel OS\mai/Cargo.lock:379:1
+    │  
+379 │ ╭ windows-targets 0.48.5 registry+https://github.com/rust-lang/crates.io-index
+380 │ │ windows-targets 0.52.6 registry+https://github.com/rust-lang/crates.io-index
+    │ ╰────────────────────────────────────────────────────────────────────────────┘ lock entries
+    │  
+    ├ windows-targets v0.48.5
+      └── windows-sys v0.48.0
+          └── winreg v0.52.0
+              └── embed-resource v2.5.2
+                  └── (build) mai-launcher v0.1.0
+    ├ windows-targets v0.52.6
+      ├── windows v0.58.0
+      │   └── mai-launcher v0.1.0
+      ├── windows-core v0.58.0
+      │   └── windows v0.58.0 (*)
+      ├── windows-result v0.2.0
+      │   ├── windows-core v0.58.0 (*)
+      │   └── windows-strings v0.1.0
+      │       └── windows-core v0.58.0 (*)
+      ├── windows-strings v0.1.0 (*)
+      └── windows-sys v0.52.0
+          ├── notify v7.0.0
+          │   └── mai-api v0.1.0
+          ├── ring v0.17.14
+          │   ├── rustls v0.23.40
+          │   │   ├── hyper-rustls v0.27.9
+          │   │   │   └── reqwest v0.12.28
+          │   │   │       ├── aog-gateway v0.1.0
+          │   │   │       ├── mai-api v0.1.0 (*)
+          │   │   │       ├── mai-sdk-rs v0.1.0
+          │   │   │       ├── wsf-api v0.1.0
+          │   │   │       ├── wsf-bridge v0.1.0
+          │   │   │       │   ├── aog-gateway v0.1.0 (*)
+          │   │   │       │   ├── wsf-api v0.1.0 (*)
+          │   │   │       │   ├── wsf-broker v0.1.0
+          │   │   │       │   │   └── wsf-api v0.1.0 (*)
+          │   │   │       │   ├── (dev) wsf-cache v0.1.0
+          │   │   │       │   │   └── (dev) wsf-tenants v0.1.0
+          │   │   │       │   ├── (dev) wsf-ledger v0.1.0
+          │   │   │       │   │   ├── hipaa-pack v0.1.0
+          │   │   │       │   │   └── wsf-api v0.1.0 (*)
+          │   │   │       │   ├── wsf-seal v0.1.0
+          │   │   │       │   │   ├── wsf-api v0.1.0 (*)
+          │   │   │       │   │   └── (dev) wsf-ledger v0.1.0 (*)
+          │   │   │       │   └── wsf-tenants v0.1.0 (*)
+          │   │   │       ├── wsf-broker v0.1.0 (*)
+          │   │   │       ├── (dev) wsf-cache v0.1.0 (*)
+          │   │   │       ├── (dev) wsf-ledger v0.1.0 (*)
+          │   │   │       ├── (dev) wsf-seal v0.1.0 (*)
+          │   │   │       └── (dev) wsf-tenants v0.1.0 (*)
+          │   │   ├── reqwest v0.12.28 (*)
+          │   │   └── tokio-rustls v0.26.4
+          │   │       ├── hyper-rustls v0.27.9 (*)
+          │   │       └── reqwest v0.12.28 (*)
+          │   └── rustls-webpki v0.103.13
+          │       └── rustls v0.23.40 (*)
+          └── socket2 v0.5.10
+              └── tonic v0.12.3
+                  ├── mai-api v0.1.0 (*)
+                  └── tonic-reflection v0.12.3
+                      └── mai-api v0.1.0 (*)
+
+warning[duplicate]: found 2 duplicate entries for crate 'windows_aarch64_gnullvm'
+    ┌─ C:\Users\17076\Documents\Claude\Mighty Eel OS\mai/Cargo.lock:381:1
+    │  
+381 │ ╭ windows_aarch64_gnullvm 0.48.5 registry+https://github.com/rust-lang/crates.io-index
+382 │ │ windows_aarch64_gnullvm 0.52.6 registry+https://github.com/rust-lang/crates.io-index
+    │ ╰────────────────────────────────────────────────────────────────────────────────────┘ lock entries
+    │  
+    ├ windows_aarch64_gnullvm v0.48.5
+      └── windows-targets v0.48.5
+          └── windows-sys v0.48.0
+              └── winreg v0.52.0
+                  └── embed-resource v2.5.2
+                      └── (build) mai-launcher v0.1.0
+    ├ windows_aarch64_gnullvm v0.52.6
+      └── windows-targets v0.52.6
+          ├── windows v0.58.0
+          │   └── mai-launcher v0.1.0
+          ├── windows-core v0.58.0
+          │   └── windows v0.58.0 (*)
+          ├── windows-result v0.2.0
+          │   ├── windows-core v0.58.0 (*)
+          │   └── windows-strings v0.1.0
+          │       └── windows-core v0.58.0 (*)
+          ├── windows-strings v0.1.0 (*)
+          └── windows-sys v0.52.0
+              ├── notify v7.0.0
+              │   └── mai-api v0.1.0
+              ├── ring v0.17.14
+              │   ├── rustls v0.23.40
+              │   │   ├── hyper-rustls v0.27.9
+              │   │   │   └── reqwest v0.12.28
+              │   │   │       ├── aog-gateway v0.1.0
+              │   │   │       ├── mai-api v0.1.0 (*)
+              │   │   │       ├── mai-sdk-rs v0.1.0
+              │   │   │       ├── wsf-api v0.1.0
+              │   │   │       ├── wsf-bridge v0.1.0
+              │   │   │       │   ├── aog-gateway v0.1.0 (*)
+              │   │   │       │   ├── wsf-api v0.1.0 (*)
+              │   │   │       │   ├── wsf-broker v0.1.0
+              │   │   │       │   │   └── wsf-api v0.1.0 (*)
+              │   │   │       │   ├── (dev) wsf-cache v0.1.0
+              │   │   │       │   │   └── (dev) wsf-tenants v0.1.0
+              │   │   │       │   ├── (dev) wsf-ledger v0.1.0
+              │   │   │       │   │   ├── hipaa-pack v0.1.0
+              │   │   │       │   │   └── wsf-api v0.1.0 (*)
+              │   │   │       │   ├── wsf-seal v0.1.0
+              │   │   │       │   │   ├── wsf-api v0.1.0 (*)
+              │   │   │       │   │   └── (dev) wsf-ledger v0.1.0 (*)
+              │   │   │       │   └── wsf-tenants v0.1.0 (*)
+              │   │   │       ├── wsf-broker v0.1.0 (*)
+              │   │   │       ├── (dev) wsf-cache v0.1.0 (*)
+              │   │   │       ├── (dev) wsf-ledger v0.1.0 (*)
+              │   │   │       ├── (dev) wsf-seal v0.1.0 (*)
+              │   │   │       └── (dev) wsf-tenants v0.1.0 (*)
+              │   │   ├── reqwest v0.12.28 (*)
+              │   │   └── tokio-rustls v0.26.4
+              │   │       ├── hyper-rustls v0.27.9 (*)
+              │   │       └── reqwest v0.12.28 (*)
+              │   └── rustls-webpki v0.103.13
+              │       └── rustls v0.23.40 (*)
+              └── socket2 v0.5.10
+                  └── tonic v0.12.3
+                      ├── mai-api v0.1.0 (*)
+                      └── tonic-reflection v0.12.3
+                          └── mai-api v0.1.0 (*)
+
+warning[duplicate]: found 2 duplicate entries for crate 'windows_aarch64_msvc'
+    ┌─ C:\Users\17076\Documents\Claude\Mighty Eel OS\mai/Cargo.lock:383:1
+    │  
+383 │ ╭ windows_aarch64_msvc 0.48.5 registry+https://github.com/rust-lang/crates.io-index
+384 │ │ windows_aarch64_msvc 0.52.6 registry+https://github.com/rust-lang/crates.io-index
+    │ ╰─────────────────────────────────────────────────────────────────────────────────┘ lock entries
+    │  
+    ├ windows_aarch64_msvc v0.48.5
+      └── windows-targets v0.48.5
+          └── windows-sys v0.48.0
+              └── winreg v0.52.0
+                  └── embed-resource v2.5.2
+                      └── (build) mai-launcher v0.1.0
+    ├ windows_aarch64_msvc v0.52.6
+      └── windows-targets v0.52.6
+          ├── windows v0.58.0
+          │   └── mai-launcher v0.1.0
+          ├── windows-core v0.58.0
+          │   └── windows v0.58.0 (*)
+          ├── windows-result v0.2.0
+          │   ├── windows-core v0.58.0 (*)
+          │   └── windows-strings v0.1.0
+          │       └── windows-core v0.58.0 (*)
+          ├── windows-strings v0.1.0 (*)
+          └── windows-sys v0.52.0
+              ├── notify v7.0.0
+              │   └── mai-api v0.1.0
+              ├── ring v0.17.14
+              │   ├── rustls v0.23.40
+              │   │   ├── hyper-rustls v0.27.9
+              │   │   │   └── reqwest v0.12.28
+              │   │   │       ├── aog-gateway v0.1.0
+              │   │   │       ├── mai-api v0.1.0 (*)
+              │   │   │       ├── mai-sdk-rs v0.1.0
+              │   │   │       ├── wsf-api v0.1.0
+              │   │   │       ├── wsf-bridge v0.1.0
+              │   │   │       │   ├── aog-gateway v0.1.0 (*)
+              │   │   │       │   ├── wsf-api v0.1.0 (*)
+              │   │   │       │   ├── wsf-broker v0.1.0
+              │   │   │       │   │   └── wsf-api v0.1.0 (*)
+              │   │   │       │   ├── (dev) wsf-cache v0.1.0
+              │   │   │       │   │   └── (dev) wsf-tenants v0.1.0
+              │   │   │       │   ├── (dev) wsf-ledger v0.1.0
+              │   │   │       │   │   ├── hipaa-pack v0.1.0
+              │   │   │       │   │   └── wsf-api v0.1.0 (*)
+              │   │   │       │   ├── wsf-seal v0.1.0
+              │   │   │       │   │   ├── wsf-api v0.1.0 (*)
+              │   │   │       │   │   └── (dev) wsf-ledger v0.1.0 (*)
+              │   │   │       │   └── wsf-tenants v0.1.0 (*)
+              │   │   │       ├── wsf-broker v0.1.0 (*)
+              │   │   │       ├── (dev) wsf-cache v0.1.0 (*)
+              │   │   │       ├── (dev) wsf-ledger v0.1.0 (*)
+              │   │   │       ├── (dev) wsf-seal v0.1.0 (*)
+              │   │   │       └── (dev) wsf-tenants v0.1.0 (*)
+              │   │   ├── reqwest v0.12.28 (*)
+              │   │   └── tokio-rustls v0.26.4
+              │   │       ├── hyper-rustls v0.27.9 (*)
+              │   │       └── reqwest v0.12.28 (*)
+              │   └── rustls-webpki v0.103.13
+              │       └── rustls v0.23.40 (*)
+              └── socket2 v0.5.10
+                  └── tonic v0.12.3
+                      ├── mai-api v0.1.0 (*)
+                      └── tonic-reflection v0.12.3
+                          └── mai-api v0.1.0 (*)
+
+warning[duplicate]: found 2 duplicate entries for crate 'windows_i686_gnu'
+    ┌─ C:\Users\17076\Documents\Claude\Mighty Eel OS\mai/Cargo.lock:385:1
+    │  
+385 │ ╭ windows_i686_gnu 0.48.5 registry+https://github.com/rust-lang/crates.io-index
+386 │ │ windows_i686_gnu 0.52.6 registry+https://github.com/rust-lang/crates.io-index
+    │ ╰─────────────────────────────────────────────────────────────────────────────┘ lock entries
+    │  
+    ├ windows_i686_gnu v0.48.5
+      └── windows-targets v0.48.5
+          └── windows-sys v0.48.0
+              └── winreg v0.52.0
+                  └── embed-resource v2.5.2
+                      └── (build) mai-launcher v0.1.0
+    ├ windows_i686_gnu v0.52.6
+      └── windows-targets v0.52.6
+          ├── windows v0.58.0
+          │   └── mai-launcher v0.1.0
+          ├── windows-core v0.58.0
+          │   └── windows v0.58.0 (*)
+          ├── windows-result v0.2.0
+          │   ├── windows-core v0.58.0 (*)
+          │   └── windows-strings v0.1.0
+          │       └── windows-core v0.58.0 (*)
+          ├── windows-strings v0.1.0 (*)
+          └── windows-sys v0.52.0
+              ├── notify v7.0.0
+              │   └── mai-api v0.1.0
+              ├── ring v0.17.14
+              │   ├── rustls v0.23.40
+              │   │   ├── hyper-rustls v0.27.9
+              │   │   │   └── reqwest v0.12.28
+              │   │   │       ├── aog-gateway v0.1.0
+              │   │   │       ├── mai-api v0.1.0 (*)
+              │   │   │       ├── mai-sdk-rs v0.1.0
+              │   │   │       ├── wsf-api v0.1.0
+              │   │   │       ├── wsf-bridge v0.1.0
+              │   │   │       │   ├── aog-gateway v0.1.0 (*)
+              │   │   │       │   ├── wsf-api v0.1.0 (*)
+              │   │   │       │   ├── wsf-broker v0.1.0
+              │   │   │       │   │   └── wsf-api v0.1.0 (*)
+              │   │   │       │   ├── (dev) wsf-cache v0.1.0
+              │   │   │       │   │   └── (dev) wsf-tenants v0.1.0
+              │   │   │       │   ├── (dev) wsf-ledger v0.1.0
+              │   │   │       │   │   ├── hipaa-pack v0.1.0
+              │   │   │       │   │   └── wsf-api v0.1.0 (*)
+              │   │   │       │   ├── wsf-seal v0.1.0
+              │   │   │       │   │   ├── wsf-api v0.1.0 (*)
+              │   │   │       │   │   └── (dev) wsf-ledger v0.1.0 (*)
+              │   │   │       │   └── wsf-tenants v0.1.0 (*)
+              │   │   │       ├── wsf-broker v0.1.0 (*)
+              │   │   │       ├── (dev) wsf-cache v0.1.0 (*)
+              │   │   │       ├── (dev) wsf-ledger v0.1.0 (*)
+              │   │   │       ├── (dev) wsf-seal v0.1.0 (*)
+              │   │   │       └── (dev) wsf-tenants v0.1.0 (*)
+              │   │   ├── reqwest v0.12.28 (*)
+              │   │   └── tokio-rustls v0.26.4
+              │   │       ├── hyper-rustls v0.27.9 (*)
+              │   │       └── reqwest v0.12.28 (*)
+              │   └── rustls-webpki v0.103.13
+              │       └── rustls v0.23.40 (*)
+              └── socket2 v0.5.10
+                  └── tonic v0.12.3
+                      ├── mai-api v0.1.0 (*)
+                      └── tonic-reflection v0.12.3
+                          └── mai-api v0.1.0 (*)
+
+warning[duplicate]: found 2 duplicate entries for crate 'windows_i686_msvc'
+    ┌─ C:\Users\17076\Documents\Claude\Mighty Eel OS\mai/Cargo.lock:388:1
+    │  
+388 │ ╭ windows_i686_msvc 0.48.5 registry+https://github.com/rust-lang/crates.io-index
+389 │ │ windows_i686_msvc 0.52.6 registry+https://github.com/rust-lang/crates.io-index
+    │ ╰──────────────────────────────────────────────────────────────────────────────┘ lock entries
+    │  
+    ├ windows_i686_msvc v0.48.5
+      └── windows-targets v0.48.5
+          └── windows-sys v0.48.0
+              └── winreg v0.52.0
+                  └── embed-resource v2.5.2
+                      └── (build) mai-launcher v0.1.0
+    ├ windows_i686_msvc v0.52.6
+      └── windows-targets v0.52.6
+          ├── windows v0.58.0
+          │   └── mai-launcher v0.1.0
+          ├── windows-core v0.58.0
+          │   └── windows v0.58.0 (*)
+          ├── windows-result v0.2.0
+          │   ├── windows-core v0.58.0 (*)
+          │   └── windows-strings v0.1.0
+          │       └── windows-core v0.58.0 (*)
+          ├── windows-strings v0.1.0 (*)
+          └── windows-sys v0.52.0
+              ├── notify v7.0.0
+              │   └── mai-api v0.1.0
+              ├── ring v0.17.14
+              │   ├── rustls v0.23.40
+              │   │   ├── hyper-rustls v0.27.9
+              │   │   │   └── reqwest v0.12.28
+              │   │   │       ├── aog-gateway v0.1.0
+              │   │   │       ├── mai-api v0.1.0 (*)
+              │   │   │       ├── mai-sdk-rs v0.1.0
+              │   │   │       ├── wsf-api v0.1.0
+              │   │   │       ├── wsf-bridge v0.1.0
+              │   │   │       │   ├── aog-gateway v0.1.0 (*)
+              │   │   │       │   ├── wsf-api v0.1.0 (*)
+              │   │   │       │   ├── wsf-broker v0.1.0
+              │   │   │       │   │   └── wsf-api v0.1.0 (*)
+              │   │   │       │   ├── (dev) wsf-cache v0.1.0
+              │   │   │       │   │   └── (dev) wsf-tenants v0.1.0
+              │   │   │       │   ├── (dev) wsf-ledger v0.1.0
+              │   │   │       │   │   ├── hipaa-pack v0.1.0
+              │   │   │       │   │   └── wsf-api v0.1.0 (*)
+              │   │   │       │   ├── wsf-seal v0.1.0
+              │   │   │       │   │   ├── wsf-api v0.1.0 (*)
+              │   │   │       │   │   └── (dev) wsf-ledger v0.1.0 (*)
+              │   │   │       │   └── wsf-tenants v0.1.0 (*)
+              │   │   │       ├── wsf-broker v0.1.0 (*)
+              │   │   │       ├── (dev) wsf-cache v0.1.0 (*)
+              │   │   │       ├── (dev) wsf-ledger v0.1.0 (*)
+              │   │   │       ├── (dev) wsf-seal v0.1.0 (*)
+              │   │   │       └── (dev) wsf-tenants v0.1.0 (*)
+              │   │   ├── reqwest v0.12.28 (*)
+              │   │   └── tokio-rustls v0.26.4
+              │   │       ├── hyper-rustls v0.27.9 (*)
+              │   │       └── reqwest v0.12.28 (*)
+              │   └── rustls-webpki v0.103.13
+              │       └── rustls v0.23.40 (*)
+              └── socket2 v0.5.10
+                  └── tonic v0.12.3
+                      ├── mai-api v0.1.0 (*)
+                      └── tonic-reflection v0.12.3
+                          └── mai-api v0.1.0 (*)
+
+warning[duplicate]: found 2 duplicate entries for crate 'windows_x86_64_gnu'
+    ┌─ C:\Users\17076\Documents\Claude\Mighty Eel OS\mai/Cargo.lock:390:1
+    │  
+390 │ ╭ windows_x86_64_gnu 0.48.5 registry+https://github.com/rust-lang/crates.io-index
+391 │ │ windows_x86_64_gnu 0.52.6 registry+https://github.com/rust-lang/crates.io-index
+    │ ╰───────────────────────────────────────────────────────────────────────────────┘ lock entries
+    │  
+    ├ windows_x86_64_gnu v0.48.5
+      └── windows-targets v0.48.5
+          └── windows-sys v0.48.0
+              └── winreg v0.52.0
+                  └── embed-resource v2.5.2
+                      └── (build) mai-launcher v0.1.0
+    ├ windows_x86_64_gnu v0.52.6
+      └── windows-targets v0.52.6
+          ├── windows v0.58.0
+          │   └── mai-launcher v0.1.0
+          ├── windows-core v0.58.0
+          │   └── windows v0.58.0 (*)
+          ├── windows-result v0.2.0
+          │   ├── windows-core v0.58.0 (*)
+          │   └── windows-strings v0.1.0
+          │       └── windows-core v0.58.0 (*)
+          ├── windows-strings v0.1.0 (*)
+          └── windows-sys v0.52.0
+              ├── notify v7.0.0
+              │   └── mai-api v0.1.0
+              ├── ring v0.17.14
+              │   ├── rustls v0.23.40
+              │   │   ├── hyper-rustls v0.27.9
+              │   │   │   └── reqwest v0.12.28
+              │   │   │       ├── aog-gateway v0.1.0
+              │   │   │       ├── mai-api v0.1.0 (*)
+              │   │   │       ├── mai-sdk-rs v0.1.0
+              │   │   │       ├── wsf-api v0.1.0
+              │   │   │       ├── wsf-bridge v0.1.0
+              │   │   │       │   ├── aog-gateway v0.1.0 (*)
+              │   │   │       │   ├── wsf-api v0.1.0 (*)
+              │   │   │       │   ├── wsf-broker v0.1.0
+              │   │   │       │   │   └── wsf-api v0.1.0 (*)
+              │   │   │       │   ├── (dev) wsf-cache v0.1.0
+              │   │   │       │   │   └── (dev) wsf-tenants v0.1.0
+              │   │   │       │   ├── (dev) wsf-ledger v0.1.0
+              │   │   │       │   │   ├── hipaa-pack v0.1.0
+              │   │   │       │   │   └── wsf-api v0.1.0 (*)
+              │   │   │       │   ├── wsf-seal v0.1.0
+              │   │   │       │   │   ├── wsf-api v0.1.0 (*)
+              │   │   │       │   │   └── (dev) wsf-ledger v0.1.0 (*)
+              │   │   │       │   └── wsf-tenants v0.1.0 (*)
+              │   │   │       ├── wsf-broker v0.1.0 (*)
+              │   │   │       ├── (dev) wsf-cache v0.1.0 (*)
+              │   │   │       ├── (dev) wsf-ledger v0.1.0 (*)
+              │   │   │       ├── (dev) wsf-seal v0.1.0 (*)
+              │   │   │       └── (dev) wsf-tenants v0.1.0 (*)
+              │   │   ├── reqwest v0.12.28 (*)
+              │   │   └── tokio-rustls v0.26.4
+              │   │       ├── hyper-rustls v0.27.9 (*)
+              │   │       └── reqwest v0.12.28 (*)
+              │   └── rustls-webpki v0.103.13
+              │       └── rustls v0.23.40 (*)
+              └── socket2 v0.5.10
+                  └── tonic v0.12.3
+                      ├── mai-api v0.1.0 (*)
+                      └── tonic-reflection v0.12.3
+                          └── mai-api v0.1.0 (*)
+
+warning[duplicate]: found 2 duplicate entries for crate 'windows_x86_64_gnullvm'
+    ┌─ C:\Users\17076\Documents\Claude\Mighty Eel OS\mai/Cargo.lock:392:1
+    │  
+392 │ ╭ windows_x86_64_gnullvm 0.48.5 registry+https://github.com/rust-lang/crates.io-index
+393 │ │ windows_x86_64_gnullvm 0.52.6 registry+https://github.com/rust-lang/crates.io-index
+    │ ╰───────────────────────────────────────────────────────────────────────────────────┘ lock entries
+    │  
+    ├ windows_x86_64_gnullvm v0.48.5
+      └── windows-targets v0.48.5
+          └── windows-sys v0.48.0
+              └── winreg v0.52.0
+                  └── embed-resource v2.5.2
+                      └── (build) mai-launcher v0.1.0
+    ├ windows_x86_64_gnullvm v0.52.6
+      └── windows-targets v0.52.6
+          ├── windows v0.58.0
+          │   └── mai-launcher v0.1.0
+          ├── windows-core v0.58.0
+          │   └── windows v0.58.0 (*)
+          ├── windows-result v0.2.0
+          │   ├── windows-core v0.58.0 (*)
+          │   └── windows-strings v0.1.0
+          │       └── windows-core v0.58.0 (*)
+          ├── windows-strings v0.1.0 (*)
+          └── windows-sys v0.52.0
+              ├── notify v7.0.0
+              │   └── mai-api v0.1.0
+              ├── ring v0.17.14
+              │   ├── rustls v0.23.40
+              │   │   ├── hyper-rustls v0.27.9
+              │   │   │   └── reqwest v0.12.28
+              │   │   │       ├── aog-gateway v0.1.0
+              │   │   │       ├── mai-api v0.1.0 (*)
+              │   │   │       ├── mai-sdk-rs v0.1.0
+              │   │   │       ├── wsf-api v0.1.0
+              │   │   │       ├── wsf-bridge v0.1.0
+              │   │   │       │   ├── aog-gateway v0.1.0 (*)
+              │   │   │       │   ├── wsf-api v0.1.0 (*)
+              │   │   │       │   ├── wsf-broker v0.1.0
+              │   │   │       │   │   └── wsf-api v0.1.0 (*)
+              │   │   │       │   ├── (dev) wsf-cache v0.1.0
+              │   │   │       │   │   └── (dev) wsf-tenants v0.1.0
+              │   │   │       │   ├── (dev) wsf-ledger v0.1.0
+              │   │   │       │   │   ├── hipaa-pack v0.1.0
+              │   │   │       │   │   └── wsf-api v0.1.0 (*)
+              │   │   │       │   ├── wsf-seal v0.1.0
+              │   │   │       │   │   ├── wsf-api v0.1.0 (*)
+              │   │   │       │   │   └── (dev) wsf-ledger v0.1.0 (*)
+              │   │   │       │   └── wsf-tenants v0.1.0 (*)
+              │   │   │       ├── wsf-broker v0.1.0 (*)
+              │   │   │       ├── (dev) wsf-cache v0.1.0 (*)
+              │   │   │       ├── (dev) wsf-ledger v0.1.0 (*)
+              │   │   │       ├── (dev) wsf-seal v0.1.0 (*)
+              │   │   │       └── (dev) wsf-tenants v0.1.0 (*)
+              │   │   ├── reqwest v0.12.28 (*)
+              │   │   └── tokio-rustls v0.26.4
+              │   │       ├── hyper-rustls v0.27.9 (*)
+              │   │       └── reqwest v0.12.28 (*)
+              │   └── rustls-webpki v0.103.13
+              │       └── rustls v0.23.40 (*)
+              └── socket2 v0.5.10
+                  └── tonic v0.12.3
+                      ├── mai-api v0.1.0 (*)
+                      └── tonic-reflection v0.12.3
+                          └── mai-api v0.1.0 (*)
+
+warning[duplicate]: found 2 duplicate entries for crate 'windows_x86_64_msvc'
+    ┌─ C:\Users\17076\Documents\Claude\Mighty Eel OS\mai/Cargo.lock:394:1
+    │  
+394 │ ╭ windows_x86_64_msvc 0.48.5 registry+https://github.com/rust-lang/crates.io-index
+395 │ │ windows_x86_64_msvc 0.52.6 registry+https://github.com/rust-lang/crates.io-index
+    │ ╰────────────────────────────────────────────────────────────────────────────────┘ lock entries
+    │  
+    ├ windows_x86_64_msvc v0.48.5
+      └── windows-targets v0.48.5
+          └── windows-sys v0.48.0
+              └── winreg v0.52.0
+                  └── embed-resource v2.5.2
+                      └── (build) mai-launcher v0.1.0
+    ├ windows_x86_64_msvc v0.52.6
+      └── windows-targets v0.52.6
+          ├── windows v0.58.0
+          │   └── mai-launcher v0.1.0
+          ├── windows-core v0.58.0
+          │   └── windows v0.58.0 (*)
+          ├── windows-result v0.2.0
+          │   ├── windows-core v0.58.0 (*)
+          │   └── windows-strings v0.1.0
+          │       └── windows-core v0.58.0 (*)
+          ├── windows-strings v0.1.0 (*)
+          └── windows-sys v0.52.0
+              ├── notify v7.0.0
+              │   └── mai-api v0.1.0
+              ├── ring v0.17.14
+              │   ├── rustls v0.23.40
+              │   │   ├── hyper-rustls v0.27.9
+              │   │   │   └── reqwest v0.12.28
+              │   │   │       ├── aog-gateway v0.1.0
+              │   │   │       ├── mai-api v0.1.0 (*)
+              │   │   │       ├── mai-sdk-rs v0.1.0
+              │   │   │       ├── wsf-api v0.1.0
+              │   │   │       ├── wsf-bridge v0.1.0
+              │   │   │       │   ├── aog-gateway v0.1.0 (*)
+              │   │   │       │   ├── wsf-api v0.1.0 (*)
+              │   │   │       │   ├── wsf-broker v0.1.0
+              │   │   │       │   │   └── wsf-api v0.1.0 (*)
+              │   │   │       │   ├── (dev) wsf-cache v0.1.0
+              │   │   │       │   │   └── (dev) wsf-tenants v0.1.0
+              │   │   │       │   ├── (dev) wsf-ledger v0.1.0
+              │   │   │       │   │   ├── hipaa-pack v0.1.0
+              │   │   │       │   │   └── wsf-api v0.1.0 (*)
+              │   │   │       │   ├── wsf-seal v0.1.0
+              │   │   │       │   │   ├── wsf-api v0.1.0 (*)
+              │   │   │       │   │   └── (dev) wsf-ledger v0.1.0 (*)
+              │   │   │       │   └── wsf-tenants v0.1.0 (*)
+              │   │   │       ├── wsf-broker v0.1.0 (*)
+              │   │   │       ├── (dev) wsf-cache v0.1.0 (*)
+              │   │   │       ├── (dev) wsf-ledger v0.1.0 (*)
+              │   │   │       ├── (dev) wsf-seal v0.1.0 (*)
+              │   │   │       └── (dev) wsf-tenants v0.1.0 (*)
+              │   │   ├── reqwest v0.12.28 (*)
+              │   │   └── tokio-rustls v0.26.4
+              │   │       ├── hyper-rustls v0.27.9 (*)
+              │   │       └── reqwest v0.12.28 (*)
+              │   └── rustls-webpki v0.103.13
+              │       └── rustls v0.23.40 (*)
+              └── socket2 v0.5.10
+                  └── tonic v0.12.3
+                      ├── mai-api v0.1.0 (*)
+                      └── tonic-reflection v0.12.3
+                          └── mai-api v0.1.0 (*)
+
+warning[duplicate]: found 2 duplicate entries for crate 'wit-bindgen'
+    ┌─ C:\Users\17076\Documents\Claude\Mighty Eel OS\mai/Cargo.lock:399:1
+    │  
+399 │ ╭ wit-bindgen 0.51.0 registry+https://github.com/rust-lang/crates.io-index
+400 │ │ wit-bindgen 0.57.1 registry+https://github.com/rust-lang/crates.io-index
+    │ ╰────────────────────────────────────────────────────────────────────────┘ lock entries
+    │  
+    ├ wit-bindgen v0.51.0
+      └── wasip3 v0.4.0+wasi-0.3.0-rc-2026-01-06
+          └── getrandom v0.4.2
+              ├── tempfile v3.27.0
+              │   ├── (dev) mai-admin v0.1.0
+              │   ├── (dev) mai-api v0.1.0
+              │   ├── (dev) mai-vault v0.1.0
+              │   │   └── mai-api v0.1.0 (*)
+              │   ├── native-tls v0.2.18
+              │   │   ├── hyper-tls v0.6.0
+              │   │   │   └── reqwest v0.12.28
+              │   │   │       ├── aog-gateway v0.1.0
+              │   │   │       ├── mai-api v0.1.0 (*)
+              │   │   │       ├── mai-sdk-rs v0.1.0
+              │   │   │       ├── wsf-api v0.1.0
+              │   │   │       ├── wsf-bridge v0.1.0
+              │   │   │       │   ├── aog-gateway v0.1.0 (*)
+              │   │   │       │   ├── wsf-api v0.1.0 (*)
+              │   │   │       │   ├── wsf-broker v0.1.0
+              │   │   │       │   │   └── wsf-api v0.1.0 (*)
+              │   │   │       │   ├── (dev) wsf-cache v0.1.0
+              │   │   │       │   │   └── (dev) wsf-tenants v0.1.0
+              │   │   │       │   ├── (dev) wsf-ledger v0.1.0
+              │   │   │       │   │   ├── hipaa-pack v0.1.0
+              │   │   │       │   │   └── wsf-api v0.1.0 (*)
+              │   │   │       │   ├── wsf-seal v0.1.0
+              │   │   │       │   │   ├── wsf-api v0.1.0 (*)
+              │   │   │       │   │   └── (dev) wsf-ledger v0.1.0 (*)
+              │   │   │       │   └── wsf-tenants v0.1.0 (*)
+              │   │   │       ├── wsf-broker v0.1.0 (*)
+              │   │   │       ├── (dev) wsf-cache v0.1.0 (*)
+              │   │   │       ├── (dev) wsf-ledger v0.1.0 (*)
+              │   │   │       ├── (dev) wsf-seal v0.1.0 (*)
+              │   │   │       └── (dev) wsf-tenants v0.1.0 (*)
+              │   │   ├── reqwest v0.12.28 (*)
+              │   │   └── tokio-native-tls v0.3.1
+              │   │       ├── hyper-tls v0.6.0 (*)
+              │   │       └── reqwest v0.12.28 (*)
+              │   └── prost-build v0.13.5
+              │       ├── (build) mai-api v0.1.0 (*)
+              │       └── tonic-build v0.12.3
+              │           └── (build) mai-api v0.1.0 (*)
+              └── uuid v1.23.1
+                  ├── mai-adapters v0.1.0
+                  │   └── mai-api v0.1.0 (*)
+                  ├── mai-agent v0.1.0
+                  │   ├── aog-approvals v0.1.0
+                  │   └── aog-toolproxy v0.1.0
+                  │       └── aog-approvals v0.1.0 (*)
+                  ├── mai-api v0.1.0 (*)
+                  ├── mai-core v0.1.0
+                  │   ├── mai-adapters v0.1.0 (*)
+                  │   ├── mai-admin v0.1.0 (*)
+                  │   ├── mai-agent v0.1.0 (*)
+                  │   ├── mai-api v0.1.0 (*)
+                  │   ├── mai-compliance v0.1.0
+                  │   │   ├── aog-gateway v0.1.0 (*)
+                  │   │   ├── aog-toolproxy v0.1.0 (*)
+                  │   │   ├── gen-trust-staging v0.1.0
+                  │   │   ├── hipaa-pack v0.1.0 (*)
+                  │   │   ├── mai-admin v0.1.0 (*)
+                  │   │   └── mai-api v0.1.0 (*)
+                  │   ├── mai-pkg-builder v0.1.0
+                  │   ├── mai-scheduler v0.1.0
+                  │   │   └── mai-api v0.1.0 (*)
+                  │   └── mai-vault v0.1.0 (*)
+                  ├── mai-scheduler v0.1.0 (*)
+                  ├── mai-vault v0.1.0 (*)
+                  └── wsf-bridge v0.1.0 (*)
+    ├ wit-bindgen v0.57.1
+      └── wasip2 v1.0.3+wasi-0.2.9
+          ├── getrandom v0.3.4
+          │   └── rand_core v0.9.5
+          │       ├── rand v0.9.4
+          │       │   ├── gen-trust-staging v0.1.0
+          │       │   └── tungstenite v0.29.0
+          │       │       └── tokio-tungstenite v0.29.0
+          │       │           └── axum v0.8.9
+          │       │               ├── aog-gateway v0.1.0
+          │       │               ├── axum-extra v0.10.3
+          │       │               │   └── mai-api v0.1.0
+          │       │               ├── mai-api v0.1.0 (*)
+          │       │               ├── wsf-api v0.1.0
+          │       │               ├── (dev) wsf-broker v0.1.0
+          │       │               │   └── wsf-api v0.1.0 (*)
+          │       │               └── wsf-seal v0.1.0
+          │       │                   ├── wsf-api v0.1.0 (*)
+          │       │                   └── (dev) wsf-ledger v0.1.0
+          │       │                       ├── hipaa-pack v0.1.0
+          │       │                       └── wsf-api v0.1.0 (*)
+          │       └── rand_chacha v0.9.0
+          │           └── rand v0.9.4 (*)
+          └── getrandom v0.4.2
+              ├── tempfile v3.27.0
+              │   ├── (dev) mai-admin v0.1.0
+              │   ├── (dev) mai-api v0.1.0 (*)
+              │   ├── (dev) mai-vault v0.1.0
+              │   │   └── mai-api v0.1.0 (*)
+              │   ├── native-tls v0.2.18
+              │   │   ├── hyper-tls v0.6.0
+              │   │   │   └── reqwest v0.12.28
+              │   │   │       ├── aog-gateway v0.1.0 (*)
+              │   │   │       ├── mai-api v0.1.0 (*)
+              │   │   │       ├── mai-sdk-rs v0.1.0
+              │   │   │       ├── wsf-api v0.1.0 (*)
+              │   │   │       ├── wsf-bridge v0.1.0
+              │   │   │       │   ├── aog-gateway v0.1.0 (*)
+              │   │   │       │   ├── wsf-api v0.1.0 (*)
+              │   │   │       │   ├── wsf-broker v0.1.0 (*)
+              │   │   │       │   ├── (dev) wsf-cache v0.1.0
+              │   │   │       │   │   └── (dev) wsf-tenants v0.1.0
+              │   │   │       │   ├── (dev) wsf-ledger v0.1.0 (*)
+              │   │   │       │   ├── wsf-seal v0.1.0 (*)
+              │   │   │       │   └── wsf-tenants v0.1.0 (*)
+              │   │   │       ├── wsf-broker v0.1.0 (*)
+              │   │   │       ├── (dev) wsf-cache v0.1.0 (*)
+              │   │   │       ├── (dev) wsf-ledger v0.1.0 (*)
+              │   │   │       ├── (dev) wsf-seal v0.1.0 (*)
+              │   │   │       └── (dev) wsf-tenants v0.1.0 (*)
+              │   │   ├── reqwest v0.12.28 (*)
+              │   │   └── tokio-native-tls v0.3.1
+              │   │       ├── hyper-tls v0.6.0 (*)
+              │   │       └── reqwest v0.12.28 (*)
+              │   └── prost-build v0.13.5
+              │       ├── (build) mai-api v0.1.0 (*)
+              │       └── tonic-build v0.12.3
+              │           └── (build) mai-api v0.1.0 (*)
+              └── uuid v1.23.1
+                  ├── mai-adapters v0.1.0
+                  │   └── mai-api v0.1.0 (*)
+                  ├── mai-agent v0.1.0
+                  │   ├── aog-approvals v0.1.0
+                  │   └── aog-toolproxy v0.1.0
+                  │       └── aog-approvals v0.1.0 (*)
+                  ├── mai-api v0.1.0 (*)
+                  ├── mai-core v0.1.0
+                  │   ├── mai-adapters v0.1.0 (*)
+                  │   ├── mai-admin v0.1.0 (*)
+                  │   ├── mai-agent v0.1.0 (*)
+                  │   ├── mai-api v0.1.0 (*)
+                  │   ├── mai-compliance v0.1.0
+                  │   │   ├── aog-gateway v0.1.0 (*)
+                  │   │   ├── aog-toolproxy v0.1.0 (*)
+                  │   │   ├── gen-trust-staging v0.1.0 (*)
+                  │   │   ├── hipaa-pack v0.1.0 (*)
+                  │   │   ├── mai-admin v0.1.0 (*)
+                  │   │   └── mai-api v0.1.0 (*)
+                  │   ├── mai-pkg-builder v0.1.0
+                  │   ├── mai-scheduler v0.1.0
+                  │   │   └── mai-api v0.1.0 (*)
+                  │   └── mai-vault v0.1.0 (*)
+                  ├── mai-scheduler v0.1.0 (*)
+                  ├── mai-vault v0.1.0 (*)
+                  └── wsf-bridge v0.1.0 (*)
+
+advisories ok, bans ok, licenses ok, sources ok
+cargo deny check exit: 0

@@ -1,0 +1,124 @@
+   Compiling aog-gateway v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\aog-gateway)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.45s
+     Running unittests src\lib.rs (target\debug\deps\aog_gateway-2c474a2d30316227.exe)
+
+running 46 tests
+test app::tests::model_map_routes_and_defaults ... ok
+test http::tests::error_status_mapping ... ok
+test app::tests::model_map_no_default_misses ... ok
+test http::tests::bearer_missing_or_malformed_rejected ... ok
+test meter::tests::pricebook_local_is_free_cloud_bills ... ok
+test http::tests::bearer_extraction ... ok
+test policy::tests::default_policy_mode_is_enforce ... ok
+test policy::tests::profile_parse_defaults_and_variants ... ok
+test meter::tests::tampering_breaks_the_chain ... ok
+test meter::tests::cost_per_task_sums_a_multi_call_chain_and_chain_verifies ... ok
+test policy::tests::resolve_mode_absent_or_blank_defaults_to_enforce ... ok
+test policy::tests::resolve_mode_enforce_allowed_in_both_profiles ... ok
+test policy::tests::resolve_mode_is_case_insensitive_but_never_coerces_to_shadow ... ok
+test policy::tests::composer_honors_a_module_deny ... ok
+test policy::tests::resolve_mode_shadow_and_report_are_development_only ... ok
+test policy::tests::resolve_mode_rejects_unrecognized_values ... ok
+test provider::anthropic::tests::sse_event_dispatch ... ok
+test provider::openai::tests::done_sentinel_and_role_frame ... ok
+test provider::openai::tests::usage_frame_parsed ... ok
+test provider::tests::registry_register_get_names ... ok
+test recommend::tests::all_local_estate_has_no_break_even_and_reads_saturated ... ok
+test recommend::tests::attractive_break_even_recommends_moving_on_prem ... ok
+test recommend::tests::empty_telemetry_is_stable ... ok
+test recommend::tests::saturated_local_tier_recommends_upgrade ... ok
+test provider::anthropic::tests::system_split_and_mandatory_max_tokens ... ok
+test recommend::tests::slow_break_even_stays_on_cloud ... ok
+test route::tests::envelope_label_can_permit_cloud ... ok
+test route::tests::envelope_label_short_circuits_to_local ... ok
+test route::tests::tag_route_writes_headers ... ok
+test surface_anthropic::tests::content_blocks_flatten ... ok
+test surface_anthropic::tests::system_folds_to_a_system_turn_and_stop_maps ... ok
+test tests::accumulated_spend_exhausts_the_budget_mid_session ... ok
+test surface_openai::tests::status_json_shape ... ok
+test tests::budget_exhaustion_is_per_dimension ... ok
+test tests::spend_ledger_accumulates_and_folds_per_token ... ok
+test tokenize::tests::restore_is_noop_without_a_map ... ok
+test route::tests::phi_text_is_forced_local ... ok
+test route::tests::benign_text_is_not_forced_local ... ok
+test tokenize::tests::benign_cloud_text_untouched ... ok
+test tokenize::tests::multiple_spans_get_distinct_reversible_placeholders ... ok
+test tokenize::tests::response_detokenizes_inside_the_boundary ... ok
+test policy::tests::benign_allows_cloud ... ok
+test policy::tests::phi_denies_cloud_and_modes_differ ... ok
+test tokenize::tests::local_dispatch_is_identity ... ok
+test tokenize::tests::spans_across_messages_share_one_map ... ok
+test tokenize::tests::cloud_egress_swaps_placeholders_and_hides_the_raw_span ... ok
+
+test result: ok. 46 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+     Running unittests src\main.rs (target\debug\deps\aog_gateway-3bd1e0e947b3a52f.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\anthropic_surface.rs (target\debug\deps\anthropic_surface-f95e766e1c7fae5c.exe)
+
+running 1 test
+test anthropic_client_completes_message_and_stream ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\kill_switch.rs (target\debug\deps\kill_switch-464f4729a9438317.exe)
+
+running 1 test
+test budget_exhaustion_and_revocation_halt_the_next_call ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\live_gateway.rs (target\debug\deps\live_gateway-bb831d5af9459df3.exe)
+
+running 1 test
+test virtual_key_resolves_and_budget_preflights ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\metering.rs (target\debug\deps\metering-6ead4708c7b42c6f.exe)
+
+running 1 test
+test cost_per_task_aggregates_and_chain_verifies ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\openai_surface.rs (target\debug\deps\openai_surface-74b7a7651890db67.exe)
+
+running 1 test
+test openai_client_completes_chat_and_stream ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\policy_modes.rs (target\debug\deps\policy_modes-2e7b407e6c358934.exe)
+
+running 1 test
+test modes_change_the_same_phi_request ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\providers.rs (target\debug\deps\providers-26764ddee28904f1.exe)
+
+running 1 test
+test same_request_two_providers_one_interface_with_streaming ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests\tokenization.rs (target\debug\deps\tokenization-813c3aa0e4f65131.exe)
+
+running 3 tests
+test tokenization_is_receipted_and_backward_compatible ... ok
+test local_dispatch_is_never_tokenized ... ok
+test cloud_provider_sees_placeholders_and_response_is_detokenized ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+   Doc-tests aog_gateway
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

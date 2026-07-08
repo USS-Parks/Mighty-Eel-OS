@@ -1,0 +1,33 @@
+   Compiling futures-sink v0.3.32
+   Compiling futures-channel v0.3.32
+   Compiling wsf-ledger v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\wsf-ledger)
+   Compiling futures-util v0.3.32
+   Compiling hyper v1.9.0
+   Compiling hyper-util v0.1.20
+   Compiling tower v0.5.3
+   Compiling tokio-tungstenite v0.29.0
+   Compiling tower-http v0.6.11
+   Compiling hyper-rustls v0.27.9
+   Compiling axum v0.8.9
+   Compiling reqwest v0.12.28
+   Compiling wsf-bridge v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\wsf-bridge)
+   Compiling wsf-broker v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\wsf-broker)
+   Compiling wsf-seal v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\wsf-seal)
+   Compiling wsf-api v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\wsf-api)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 17.52s
+     Running unittests src\lib.rs (target\debug\deps\wsf_api-ff01eeb157f3f604.exe)
+
+running 10 tests
+test auth::tests::narrowing_request_succeeds_and_is_server_bound ... ok
+test auth::tests::budget_widening_is_denied ... ok
+test auth::tests::deny_all_fails_closed ... ok
+test auth::tests::disallowed_issuance_kind_is_denied ... ok
+test auth::tests::model_widening_is_denied ... ok
+test auth::tests::cross_tenant_is_denied ... ok
+test auth::tests::rate_limiter_bounds_per_window ... ok
+test auth::tests::role_elevation_is_denied ... ok
+test auth::tests::empty_request_inherits_principal_ceiling ... ok
+test auth::tests::static_authenticator_requires_known_bearer ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

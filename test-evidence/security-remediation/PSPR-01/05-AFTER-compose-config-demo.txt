@@ -1,0 +1,182 @@
+name: aog-wsf-appliance
+services:
+  aog-gateway:
+    profiles:
+      - demo
+    command:
+      - sh
+      - -c
+      - set -a && . /seed/appliance.env && exec /usr/local/bin/aog-gateway serve
+    depends_on:
+      mock-llm:
+        condition: service_started
+        required: true
+      seed:
+        condition: service_completed_successfully
+        required: true
+    environment:
+      AOG_LISTEN: 0.0.0.0:8080
+      AOG_LOCAL_BASE: http://mock-llm:8000
+      AOG_MODE: shadow
+    image: islandmountain/aog-wsf-appliance:latest
+    networks:
+      appliance: null
+    ports:
+      - mode: ingress
+        host_ip: 127.0.0.1
+        target: 8080
+        published: "8080"
+        protocol: tcp
+    volumes:
+      - type: volume
+        source: seed-data
+        target: /seed
+        read_only: true
+        volume: {}
+  console:
+    profiles:
+      - demo
+    build:
+      context: C:\Users\17076\Documents\Claude\Mighty Eel OS\mai
+      dockerfile: deployment/appliance/Dockerfile.console
+    depends_on:
+      aog-gateway:
+        condition: service_started
+        required: true
+      wsf-api:
+        condition: service_started
+        required: true
+    image: islandmountain/aog-wsf-console:latest
+    networks:
+      appliance: null
+    ports:
+      - mode: ingress
+        host_ip: 127.0.0.1
+        target: 80
+        published: "8088"
+        protocol: tcp
+  mock-llm:
+    profiles:
+      - demo
+    command:
+      - python
+      - /app/app.py
+    image: python:3.12-slim
+    networks:
+      appliance: null
+    volumes:
+      - type: bind
+        source: C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\deployment\appliance\mock-llm
+        target: /app
+        read_only: true
+        bind: {}
+  objectstore:
+    profiles:
+      - demo
+    command:
+      - server
+      - /data
+    environment:
+      MINIO_ROOT_PASSWORD: wsf-dev-secret
+      MINIO_ROOT_USER: wsf
+    image: minio/minio:latest
+    networks:
+      appliance: null
+    volumes:
+      - type: volume
+        source: minio-data
+        target: /data
+        volume: {}
+  openbao:
+    profiles:
+      - demo
+    cap_add:
+      - IPC_LOCK
+    command:
+      - server
+      - -dev
+      - -dev-root-token-id=demo-only-not-a-real-secret
+      - -dev-listen-address=0.0.0.0:8200
+    healthcheck:
+      test:
+        - CMD
+        - bao
+        - status
+        - -address=http://127.0.0.1:8200
+      timeout: 3s
+      interval: 3s
+      retries: 20
+    image: openbao/openbao:latest
+    networks:
+      appliance: null
+    ports:
+      - mode: ingress
+        host_ip: 127.0.0.1
+        target: 8200
+        published: "8200"
+        protocol: tcp
+  postgres:
+    profiles:
+      - demo
+    environment:
+      POSTGRES_DB: wsf
+      POSTGRES_PASSWORD: wsf-dev
+      POSTGRES_USER: wsf
+    image: postgres:17-alpine
+    networks:
+      appliance: null
+    volumes:
+      - type: volume
+        source: pg-data
+        target: /var/lib/postgresql/data
+        volume: {}
+  seed:
+    profiles:
+      - demo
+    build:
+      context: C:\Users\17076\Documents\Claude\Mighty Eel OS\mai
+      dockerfile: deployment/appliance/Dockerfile
+    command:
+      - /usr/local/bin/wsf-seed
+    depends_on:
+      openbao:
+        condition: service_healthy
+        required: true
+    environment:
+      WSF_OPENBAO_ADDR: http://openbao:8200
+      WSF_OPENBAO_ROLE_ID: appliance
+      WSF_OPENBAO_SECRET_ID: demo-only-approle-secret
+      WSF_OPENBAO_TOKEN: demo-only-not-a-real-secret
+      WSF_SEED_OUT: /seed/appliance.env
+    image: islandmountain/aog-wsf-appliance:latest
+    networks:
+      appliance: null
+    restart: "no"
+    user: "0:0"
+    volumes:
+      - type: volume
+        source: seed-data
+        target: /seed
+        volume: {}
+  wsf-api:
+    profiles:
+      - demo
+    command:
+      - sh
+      - -c
+      - set -a && . /seed/appliance.env && exec /usr/local/bin/wsf-api serve
+    depends_on:
+      seed:
+        condition: service_completed_successfully
+        required: true
+    environment:
+      WSF_AWS_ENDPOINT: https://sts.amazonaws.com
+      WSF_LISTEN: 0.0.0.0:8300
+    image: islandmountain/aog-wsf-appliance:latest
+    networks:
+      appliance: null
+    ports:
+      - mode: ingress
+        host_ip: 127.0.0.1
+        target: 8300
+        published: "8081"

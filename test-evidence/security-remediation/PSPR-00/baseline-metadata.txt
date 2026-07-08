@@ -1,0 +1,39 @@
+=== SECURITY REMEDIATION PSPR — BASELINE (PSPR-00) ===
+Captured: 2026-07-07 (session start)
+
+--- repo root ---
+C:\Users\17076\Documents\Claude\Mighty Eel OS\mai
+--- branch ---
+cleanup/artifact-audit
+--- HEAD ---
+6ffaaeeea0a83c7fa071e114183cfa60c5898703
+--- expected audited revision ---
+6ffaaeeea0a83c7fa071e114183cfa60c5898703
+--- remotes ---
+origin	https://github.com/USS-Parks/im-mighty-eel-mai.git (fetch)
+origin	https://github.com/USS-Parks/im-mighty-eel-mai.git (push)
+--- core.hooksPath ---
+.integrity/hooks
+--- snapshot digest (from AUDIT_REPORT.md) ---
+codex-security-snapshot/v1:sha256:b920522f2f117347053cfb8f0e35237868c1da3b9743ecd7549edb755bf7ddb4
+--- dirty tree (git status --short) ---
+ M docs/INDEX.md
+?? .opencode/
+?? AUDIT_REPORT.md
+?? docs/scans/REPOSITORY-SECURITY-AUDIT-PSPR-2026-07-06.md
+?? docs/scans/REPOSITORY-SECURITY-REMEDIATION-PSPR-2026-07-07.md
+?? docs/scans/REPOSITORY-STEM-TO-STERN-AUDIT-2026-07-07.md
+?? docs/scans/REPOSITORY-STEM-TO-STERN-PSPR-2026-07-07.md
+?? docs/scans/SECURITY-REMEDIATION-PSPR.md
+?? docs/scans/threat_model.md
+?? test-evidence/security-remediation/
+--- tool versions ---
+cargo          cargo 1.96.1 (356927216 2026-06-26)
+rustc          rustc 1.96.1 (31fca3adb 2026-06-26)
+cargo-audit    cargo-audit 0.22.1
+cargo-deny     cargo-deny 0.19.7
+ruff           ruff 0.15.14
+mypy           mypy 2.1.0 (compiled: yes)
+python         Python 3.14.4
+docker         Docker version 29.6.1, build 8900f1d
+git            git version 2.54.0.windows.1

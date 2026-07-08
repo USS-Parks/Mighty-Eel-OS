@@ -1,0 +1,12 @@
+    Checking fabric-crypto v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\fabric-crypto)
+    Checking mai-hil v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\mai-hil)
+    Checking mai-router v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\mai-router)
+    Checking fabric-proof v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\fabric-proof)
+    Checking fabric-revocation v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\fabric-revocation)
+    Checking fabric-token v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\fabric-token)
+    Checking fabric-envelope v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\fabric-envelope)
+    Checking wsf-bridge v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\wsf-bridge)
+    Checking mai-core v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\mai-core)
+    Checking mai-compliance v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\mai-compliance)
+    Checking aog-gateway v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\aog-gateway)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 13.19s

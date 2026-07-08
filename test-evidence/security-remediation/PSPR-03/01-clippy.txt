@@ -1,0 +1,2 @@
+    Checking wsf-api v0.1.0 (C:\Users\17076\Documents\Claude\Mighty Eel OS\mai\crates\wsf-api)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.48s
