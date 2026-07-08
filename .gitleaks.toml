@@ -63,6 +63,22 @@ paths = [
     # in the tree.
     '''^deployment/[^/]*-staging/''',
     '''(^|/)deployment/[^/]*-staging/''',
+
+    # Contract protocol docs (contracts/*.md) show example wire-shape JSON with
+    # illustrative token_id / key values — documentation, not credentials.
+    '''^contracts/''',
+    '''(^|/)contracts/''',
+
+    # Dated gitdoctor evidence dumps (same class as the undated ones above): the
+    # embedded strings are detect-secrets hashes of fixtures, not live secrets.
+    '''(^|/)docs/LOCAL-GITDOCTOR-(REPORT|EVIDENCE)[-0-9]*\.(md|json)$''',
+
+    # Planning doc carrying an example token in prose.
+    '''(^|/)docs/THREE-LAYER-MANIFOLD-PLAN\.md$''',
+
+    # Named test fixtures: example claim/anchor tokens inside #[test] blocks.
+    '''(^|/)crates/aogd/tests/live_openbao_anchor\.rs$''',
+    '''(^|/)crates/fabric-contracts/tests/contracts\.rs$''',
 ]
 
 # ---------------------------------------------------------------------------
@@ -87,4 +103,16 @@ regexes = [
     # The value is never honored by any production code path; it
     # exists solely to compare h1 == h2.
     '''im-test-key-12345''',
+
+    # crates/aog-toolproxy/src/scan.rs::asia_temp_key_is_redacted asserts the
+    # egress scanner redacts an example AWS temp-key shape. Test fixture only.
+    '''ASIAY34FZKBOKMUTVV7A''',
+
+    # crates/wsf-broker/src/gcp.rs test asserts the GCP broker requests public
+    # googleapis OAuth scope URLs — public constants, not secrets.
+    '''https://www\.googleapis\.com/auth/[A-Za-z0-9._-]+''',
+
+    # gcp.rs test fixture: a placeholder GCP bearer (ya29. prefix) with obvious
+    # non-secret material, asserting the broker's token plumbing.
+    '''ya29\.gcp-bearer-material''',
 ]
