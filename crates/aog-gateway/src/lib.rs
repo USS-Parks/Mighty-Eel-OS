@@ -162,9 +162,12 @@ impl Gateway {
             return Err(GatewayError::Unauthorized("token expired".to_string()));
         }
 
-        // Kill switch (G9): consult the signed revocation snapshot. A revoked token
-        // or subject halts the session's next call. No snapshot at the path = nothing
-        // revoked (fail-open on absence); a present-but-invalid snapshot fails closed.
+        // Kill switch (G9/F2): consult the signed revocation snapshot. When a
+        // revocation path is configured, a missing snapshot fails CLOSED — an
+        // operator that wired revocation must not be silently unprotected because
+        // the snapshot is absent or was deleted (F2-N2). The verified snapshot is
+        // then checked for freshness (F2-N3) and against the complete revocation
+        // predicate — every dimension, not just token id + subject (F2-N1).
         if !self.revocation_kv_path.is_empty() {
             match self
                 .openbao
@@ -187,13 +190,13 @@ impl Gateway {
                     .map_err(|e| {
                         GatewayError::Unauthorized(format!("revocation snapshot signature: {e}"))
                     })?;
-                    if snapshot.is_token_revoked(&token.token_id)
-                        || snapshot.is_subject_revoked(&token.subject_hash)
-                    {
-                        return Err(GatewayError::Revoked);
-                    }
+                    revocation_decision(&snapshot, &token, now)?;
                 }
-                Err(wsf_bridge::OpenBaoError::NotFound(_)) => {}
+                Err(wsf_bridge::OpenBaoError::NotFound(_)) => {
+                    return Err(GatewayError::Unauthorized(
+                        "revocation snapshot unavailable (fail-closed)".to_string(),
+                    ));
+                }
                 Err(e) => return Err(GatewayError::OpenBao(e)),
             }
         }
@@ -233,10 +236,117 @@ impl Gateway {
     }
 }
 
+/// A revocation snapshot is stale once `now` is at or past its `expires_at`
+/// (F2-N3). A snapshot whose expiry cannot be parsed is treated as stale
+/// (fail-closed) rather than trusted indefinitely.
+fn snapshot_is_stale(snapshot: &RevocationSnapshot, now: DateTime<Utc>) -> bool {
+    match DateTime::parse_from_rfc3339(&snapshot.expires_at) {
+        Ok(exp) => now >= exp.with_timezone(&Utc),
+        Err(_) => true,
+    }
+}
+
+/// The gateway's decision for a signature-verified revocation snapshot (F2).
+/// Fails closed on a stale snapshot; denies on any revoked dimension via the
+/// complete predicate (`RevocationSnapshot::revokes`).
+fn revocation_decision(
+    snapshot: &RevocationSnapshot,
+    token: &TrustToken,
+    now: DateTime<Utc>,
+) -> Result<(), GatewayError> {
+    if snapshot_is_stale(snapshot, now) {
+        return Err(GatewayError::Unauthorized(
+            "revocation snapshot is stale (past its freshness window)".to_string(),
+        ));
+    }
+    if snapshot.revokes(token).is_some() {
+        return Err(GatewayError::Revoked);
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use fabric_contracts::Budget;
+
+    fn now_t() -> DateTime<Utc> {
+        DateTime::parse_from_rfc3339("2026-07-04T00:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc)
+    }
+
+    fn snap(expires_at: &str) -> RevocationSnapshot {
+        RevocationSnapshot::new("s1", "2026-07-03T00:00:00Z", expires_at)
+    }
+
+    fn tok(tenant: &str) -> TrustToken {
+        use fabric_contracts::{Attenuation, Classification, RevocationStatus, Signature};
+        TrustToken {
+            token_id: "t".into(),
+            issued_at: "2026-07-03T00:00:00Z".into(),
+            expires_at: "2099-01-01T00:00:00Z".into(),
+            issuer: "wsf-bridge".into(),
+            trust_bundle_version: "2026.07.v2".into(),
+            tenant_id: tenant.into(),
+            subject_id: None,
+            subject_hash: "hmac:abc".into(),
+            service_identity: None,
+            identity_id: None,
+            roles: vec![],
+            compliance_scopes: vec![],
+            allowed_routes: vec![],
+            allowed_models: vec![],
+            max_data_classification: Classification::Restricted,
+            country: None,
+            person_type: None,
+            offline_mode: false,
+            revocation_status: RevocationStatus::Unknown,
+            budget: None,
+            attenuation: Attenuation::default(),
+            signature: Signature {
+                alg: String::new(),
+                key_id: String::new(),
+                value: String::new(),
+            },
+        }
+    }
+
+    #[test]
+    fn stale_snapshot_detected_by_expiry() {
+        let now = now_t();
+        assert!(!snapshot_is_stale(&snap("2099-01-01T00:00:00Z"), now)); // fresh
+        assert!(snapshot_is_stale(&snap("2026-07-03T00:00:00Z"), now)); // expired
+        assert!(snapshot_is_stale(&snap("not-a-date"), now)); // unparseable -> fail-closed
+    }
+
+    #[test]
+    fn revocation_decision_denies_stale_before_revokes() {
+        // Fail-closed: a stale snapshot is Unauthorized regardless of contents.
+        let s = snap("2026-07-03T00:00:00Z");
+        assert!(matches!(
+            revocation_decision(&s, &tok("baap"), now_t()),
+            Err(GatewayError::Unauthorized(_))
+        ));
+    }
+
+    #[test]
+    fn revocation_decision_denies_revoked_tenant() {
+        // F2-N1: a fresh snapshot revoking the token's TENANT denies — the
+        // dimension the old token-id + subject-only check missed.
+        let mut s = snap("2099-01-01T00:00:00Z");
+        s.revoked_tenants.push("baap".into());
+        assert!(matches!(
+            revocation_decision(&s, &tok("baap"), now_t()),
+            Err(GatewayError::Revoked)
+        ));
+    }
+
+    #[test]
+    fn revocation_decision_allows_clean_fresh_snapshot() {
+        let s = snap("2099-01-01T00:00:00Z");
+        assert!(revocation_decision(&s, &tok("baap"), now_t()).is_ok());
+    }
 
     #[test]
     fn budget_exhaustion_is_per_dimension() {

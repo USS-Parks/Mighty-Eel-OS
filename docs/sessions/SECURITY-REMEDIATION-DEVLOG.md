@@ -762,3 +762,38 @@ object scoping is a separate design item (single-operator model today).
 AF-03 -> CODE-FIXED.
 
 Commit: (this change set).
+### F2 - AOG gateway (AF-15B fail-open + revocation completeness/freshness)
+
+The gateway audit CONFIRMED-FIXED the prior AF-08/09/10/13/17 gateway work and
+surfaced three revocation gaps at the gateway's own snapshot consumer (a simpler
+path than the R1/R6 seal/broker consumers):
+- N1 (High): the kill switch checked only `is_token_revoked(token_id)` +
+  `is_subject_revoked(subject_hash)` (2 dimensions), so revoking a compromised
+  signing key, an issuer, a bundle version, or an entire TENANT (the R2 blast-radius
+  switch) was silently ineffective at the gateway.
+- N2 (Med-High): a configured revocation path with no published snapshot (NotFound)
+  was treated as "nothing revoked" - fail-OPEN, contradicting AF-15B.
+- N3 (Med): the snapshot signature was verified but never its freshness, so a stale
+  but validly-signed snapshot (predating a revocation) was accepted - a replay bypass.
+
+Changed (`crates/aog-gateway/src/lib.rs`):
+- `revocation_decision` runs the complete predicate `RevocationSnapshot::revokes`
+  (token id, subject, signing key, issuer, bundle, tenant, service identity) instead
+  of the two-field check (N1).
+- A configured revocation path with an absent snapshot now fails CLOSED (N2).
+- The verified snapshot is rejected when stale (`now >= expires_at`; an unparseable
+  expiry is treated as stale) before it is trusted (N3).
+
+Verify: fmt clean; `cargo clippy -p aog-gateway --all-targets -- -D warnings -A
+clippy::pedantic` PASS; `cargo test -p aog-gateway` PASS (new: stale-detection,
+fail-closed-on-stale, denies-revoked-tenant [the N1 dimension], allows-clean). The
+full live path (fail-closed on absent + tenant revocation halting the next call) is
+provable by the R6-style live gate against Dockerized OpenBao (X2).
+
+Residual (honest scope): N1/N2/N3 closed. Sequence-based anti-rollback (rejecting a
+replayed older-sequence snapshot within its TTL) needs the gateway to hold the last
+sequence in state; the expiry bound above caps staleness at the snapshot TTL. The
+streaming budget/tokenize follow-on and the unwired lease-based SpendLedger (F2 N4/6)
+remain documented follow-ons that predate this audit. AF-15B -> CODE-FIXED.
+
+Commit: (this change set).
