@@ -572,6 +572,26 @@ medical entity, which previously routed cloud); existing `test_phi_query_routes_
 export / tribal cases green. G3 gate ("a medical-context query routes Local") holds. Commit:
 (this change set).
 
+### G4 - router honors upstream sensitivity hints as a floor (M)
+
+`RouteRequest.upstream_flags` (caller-supplied sensitivity hints) was documented as "Combined
+with the router's own scan", but `DefaultRouter::route` never read it - an upstream "phi" hint
+was silently dropped, so a query the local classifier under-rated could route to cloud despite
+the caller flagging it (docs-vs-reality + fail-open, audit G4).
+
+Fix: `route` now elevates the classification by the floor the hints imply -
+`classify(query).max(floor_from_upstream_flags(flags))`. Hints only ever RAISE the floor (never
+lower the local scan): `phi`/`medical`/`regulated` -> Regulated, `itar`/`export`/`classified`
+-> Critical, `sensitive`/`pii` -> Sensitive, unrecognized -> Public (no effect), matched
+case-insensitively by substring. The raised classification then flows through the existing
+deny/ceiling checks (a phi hint forces local or denied). This makes the field's doc true rather
+than deleting it.
+
+Verify: fmt; clippy -D warnings PASS; `cargo test -p mai-router` PASS (65) - new
+`test_upstream_phi_hint_raises_floor` (a benign query + `phi-hint` -> Regulated floor -> Local
+or Denied, never cloud). G4 gate ("an upstream phi hint raises the floor") holds. Commit:
+(this change set).
+
 ## Phase P - posture & auth hardening (wsf-cache, ...)
 
 ### P2 - wsf-cache clock fail-closed (M, clock rollback re-opens cloud)

@@ -206,13 +206,42 @@ impl DefaultRouter {
     }
 }
 
+/// The classification floor implied by caller-supplied sensitivity hints (audit
+/// G4). Hints only ever RAISE the floor; an unrecognized hint contributes
+/// `Public` (no effect). Matched case-insensitively and by substring so common
+/// spellings ("phi", "phi-hint", "itar-controlled") all land.
+fn floor_from_upstream_flags(flags: &[String]) -> Classification {
+    let mut floor = Classification::Public;
+    for raw in flags {
+        let f = raw.to_ascii_lowercase();
+        let hint = if f.contains("itar") || f.contains("export") || f.contains("classified") {
+            Classification::Critical
+        } else if f.contains("phi") || f.contains("medical") || f.contains("regulated") {
+            Classification::Regulated
+        } else if f.contains("sensitive") || f.contains("pii") {
+            Classification::Sensitive
+        } else {
+            Classification::Public
+        };
+        floor = floor.max(hint);
+    }
+    floor
+}
+
 impl Router for DefaultRouter {
     fn route(&self, request: &RouteRequest) -> Result<RoutingDecision, RouterError> {
         if request.estimated_tokens == 0 {
             return Err(RouterError::InvalidTokenEstimate);
         }
 
-        let classification = self.classifier.classify(&request.query);
+        // Honor caller-supplied sensitivity hints as a floor (audit G4): they only
+        // ever RAISE the classification, never lower the router's own scan, so an
+        // upstream "phi" hint the local scan missed still forces the request up the
+        // ladder (and thus local / denied by the checks below).
+        let classification = self
+            .classifier
+            .classify(&request.query)
+            .max(floor_from_upstream_flags(&request.upstream_flags));
         let entity_hits: Vec<EntityMatch> = self.entities.scan(&request.query);
         let has_export_controlled = entity_hits
             .iter()
@@ -336,6 +365,28 @@ mod tests {
         match r.route(&req("What is the capital of France?")).unwrap() {
             RoutingDecision::Cloud { .. } => {}
             other => panic!("expected Cloud, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_upstream_phi_hint_raises_floor() {
+        // Audit G4: a caller's "phi" hint raises the classification floor, so a
+        // query the local scan rates Public is still forced off the default cloud
+        // route (to Local, or Denied if the floor is at/above the deny threshold).
+        let r = router();
+        let request = RouteRequest {
+            query: "what is the capital of France?".to_string(), // benign -> Public locally
+            estimated_tokens: 10,
+            profile_id: "p".to_string(),
+            role: "adult".to_string(),
+            upstream_flags: vec!["phi-hint".to_string()],
+        };
+        match r.route(&request).unwrap() {
+            RoutingDecision::Local { classification, .. } => {
+                assert!(classification >= Classification::Regulated);
+            }
+            RoutingDecision::Denied { .. } => {}
+            other => panic!("expected Local/Denied from the phi-hint floor, got {other:?}"),
         }
     }
 
