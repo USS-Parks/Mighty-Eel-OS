@@ -267,7 +267,13 @@ impl MaiServer {
         } else {
             Box::new(StubVault)
         };
-        let registry = ModelRegistry::new(vault_box);
+        // DF-01A: a Production ship profile requires an authenticated,
+        // weights-bound manifest on USB install (a legacy unsigned package is
+        // refused). Demo/dev profiles and the no-profile bring-up stay permissive
+        // for back-compat.
+        let require_signed_manifest = ship_profile.as_ref().is_some_and(|p| p.is_production());
+        let registry =
+            ModelRegistry::new(vault_box).with_signed_manifest_required(require_signed_manifest);
         let registry = Arc::new(RwLock::new(registry));
 
         let health = HealthMonitor::new(HealthConfig::default());

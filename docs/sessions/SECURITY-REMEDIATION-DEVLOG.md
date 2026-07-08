@@ -935,3 +935,31 @@ audit-chain hardening are REPORTABLE pre-integration/feature items with recorded
 direction. F7 is hardened bar Low multi-tenant design notes. No new unexplained
 high-impact row remains beyond these tracked deferrals. Per-prompt dispositions + verify
 results: `test-evidence/security-remediation/M3/README.md`.
+### X4 - independent adversarial re-scan (findings + remediation)
+
+Two delegated read-only reviewers re-audited the Phase F fixes and the broader trust
+plane. AF-03, DF-01B, AF-11/AF-19, and F4 verified SOLID; the fresh-eyes scan found NO
+new reachable Critical/High (the WebSocket handshake-role item is the latent F1-5b
+already dispositioned - `/v1/ws` requires a token and no privileged op is wired). The
+adversarial pass surfaced two real gaps in this session's own work, both fixed:
+
+- DF-01A enforcement was DORMANT: `with_signed_manifest_required` had no call site, so
+  the production `mai-api` built the registry with strict mode off and the relabel
+  attack still landed in the default config. Fixed: `mai-api/src/server.rs` enables
+  strict manifest verification whenever the server runs under a Production ship profile
+  (`ShipProfile::is_production()`); demo/dev and no-profile bring-up stay permissive.
+  The LEDGER note that had claimed production enforcement is now substantiated.
+- `validate_model_id`'s `c:evil` reject-test was platform-dependent (Windows treats
+  `c:` as a drive prefix; on Linux - the primary target - it is a valid single
+  component), so the assertion would have failed Linux CI. Removed that case; the
+  cross-platform traversal cases (`.. / \ absolute`) remain.
+
+Confirmed residuals (bounded, disclosed, tracked): the gateway does not consult the
+crate's `MonotonicRevocationStore` sequence, so an older validly-signed not-yet-expired
+snapshot can be replayed within its TTL (already noted in F2); a legitimate adapter
+frame > 8 MiB trips the F4 cap; a dead `weights_path` helper (`zfs.rs`) is unreachable.
+
+Verify: fmt clean; `cargo clippy -p mai-api -p mai-core --all-targets -- -D warnings -A
+clippy::pedantic` PASS; `cargo test -p mai-api -p mai-core` PASS.
+
+Commit: (this change set).

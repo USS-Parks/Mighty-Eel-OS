@@ -182,7 +182,6 @@ mod model_id_validation_tests {
             "a/b",
             "a\\b",
             "/abs/path",
-            "c:evil",
             ".hidden",
             "-leading-dash",
             "name\0nul",
