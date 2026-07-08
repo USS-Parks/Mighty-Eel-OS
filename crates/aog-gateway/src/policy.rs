@@ -7,9 +7,9 @@
 //! composed decision is combined with the G5 route to an `effective_route`.
 //!
 //! Three **modes** act on the same decision:
-//! * **Shadow** — decide + log, **never block** (the M1 default; ships safe).
-//! * **ReportOnly** — never block, but flag the violation for the audit surface.
-//! * **Enforce** — block a request that would egress classified data to cloud.
+//! * **Shadow** — decide + log, **never block** (development-only; explicit opt-in).
+//! * **ReportOnly** — never block, but flag the violation (development-only; explicit).
+//! * **Enforce** — block a classified-data cloud egress (the fail-closed default).
 //!
 //! M1 wires the **HIPAA** module (the AWS + HIPAA beachhead). ITAR/OCAP modules
 //! join in M2 — their evaluators need the full detector-input plumbing; the
@@ -28,12 +28,12 @@ use crate::route::GatewayRoute;
 /// Enforcement posture for a request.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum PolicyMode {
-    /// Decide + log, never block (M1 default).
-    #[default]
+    /// Decide + log, never block. Development-only; must be selected explicitly.
     Shadow,
-    /// Never block, but flag violations.
+    /// Never block, but flag violations. Development-only; must be selected explicitly.
     ReportOnly,
-    /// Block a classified-data cloud egress.
+    /// Block a classified-data cloud egress. The fail-closed default.
+    #[default]
     Enforce,
 }
 
@@ -56,6 +56,102 @@ impl PolicyMode {
             "enforce" => Some(PolicyMode::Enforce),
             _ => None,
         }
+    }
+}
+
+/// Deployment profile. Production is strict/fail-closed; development may opt into
+/// the non-blocking modes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Profile {
+    /// Strict posture: the non-blocking modes are unavailable. The fail-safe default.
+    #[default]
+    Production,
+    /// Development posture: `shadow` / `report_only` may be selected explicitly.
+    Development,
+}
+
+impl Profile {
+    /// Parse the `AOG_PROFILE` value. Absent or blank resolves to `Production`
+    /// (fail-safe: development must be opted into explicitly).
+    pub fn parse(value: Option<&str>) -> Result<Self, ModeError> {
+        match value.map(|v| v.trim().to_ascii_lowercase()).as_deref() {
+            None | Some("") | Some("production") | Some("prod") => Ok(Profile::Production),
+            Some("development") | Some("dev") => Ok(Profile::Development),
+            Some(other) => Err(ModeError::UnknownProfile(other.to_string())),
+        }
+    }
+
+    #[must_use]
+    pub fn header(self) -> &'static str {
+        match self {
+            Profile::Production => "production",
+            Profile::Development => "development",
+        }
+    }
+}
+
+/// Why policy-mode resolution failed. Every variant fails startup before bind.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ModeError {
+    /// `AOG_MODE` was an unrecognized value.
+    UnrecognizedMode(String),
+    /// A non-blocking mode (`shadow` / `report_only`) was requested under the
+    /// production profile.
+    NonBlockingInProduction(String),
+    /// `AOG_PROFILE` was an unrecognized value.
+    UnknownProfile(String),
+}
+
+impl std::fmt::Display for ModeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ModeError::UnrecognizedMode(v) => {
+                write!(
+                    f,
+                    "unrecognized AOG_MODE '{v}' (expected: shadow | report_only | enforce)"
+                )
+            }
+            ModeError::NonBlockingInProduction(v) => write!(
+                f,
+                "AOG_MODE '{v}' is a development-only non-blocking mode; the production profile \
+                 requires 'enforce' (set AOG_PROFILE=development to use it)"
+            ),
+            ModeError::UnknownProfile(v) => {
+                write!(
+                    f,
+                    "unrecognized AOG_PROFILE '{v}' (expected: production | development)"
+                )
+            }
+        }
+    }
+}
+
+impl std::error::Error for ModeError {}
+
+/// Resolve the effective policy mode from a profile and the raw `AOG_MODE` value.
+///
+/// Fail-closed:
+/// - An absent or blank `AOG_MODE` resolves to `Enforce` in every profile.
+/// - `shadow` / `report_only` are development-only and must be selected
+///   explicitly; requesting either under `Production` is an error, so startup
+///   fails before the listener binds.
+/// - An unrecognized value is an error.
+///
+/// # Errors
+/// Returns [`ModeError`] for an unrecognized mode or a non-blocking mode under
+/// the production profile.
+pub fn resolve_mode(profile: Profile, aog_mode: Option<&str>) -> Result<PolicyMode, ModeError> {
+    let raw = aog_mode.map(str::trim).unwrap_or_default();
+    if raw.is_empty() {
+        return Ok(PolicyMode::Enforce); // fail-closed default — never silent shadow
+    }
+    let mode = PolicyMode::parse(&raw.to_ascii_lowercase())
+        .ok_or_else(|| ModeError::UnrecognizedMode(raw.to_string()))?;
+    match (profile, mode) {
+        (Profile::Production, PolicyMode::Shadow | PolicyMode::ReportOnly) => {
+            Err(ModeError::NonBlockingInProduction(raw.to_string()))
+        }
+        _ => Ok(mode),
     }
 }
 
@@ -264,6 +360,102 @@ mod tests {
     use super::*;
     use crate::route::RouteSource;
     use mai_compliance::BaaDecision;
+
+    #[test]
+    fn default_policy_mode_is_enforce() {
+        assert_eq!(PolicyMode::default(), PolicyMode::Enforce);
+        assert_eq!(Profile::default(), Profile::Production);
+    }
+
+    #[test]
+    fn resolve_mode_absent_or_blank_defaults_to_enforce() {
+        for raw in [None, Some(""), Some("   "), Some("\t")] {
+            assert_eq!(
+                resolve_mode(Profile::Production, raw).unwrap(),
+                PolicyMode::Enforce
+            );
+            assert_eq!(
+                resolve_mode(Profile::Development, raw).unwrap(),
+                PolicyMode::Enforce
+            );
+        }
+    }
+
+    #[test]
+    fn resolve_mode_enforce_allowed_in_both_profiles() {
+        assert_eq!(
+            resolve_mode(Profile::Production, Some("enforce")).unwrap(),
+            PolicyMode::Enforce
+        );
+        assert_eq!(
+            resolve_mode(Profile::Development, Some("enforce")).unwrap(),
+            PolicyMode::Enforce
+        );
+    }
+
+    #[test]
+    fn resolve_mode_shadow_and_report_are_development_only() {
+        for m in ["shadow", "report_only", "report-only"] {
+            assert!(
+                matches!(
+                    resolve_mode(Profile::Production, Some(m)),
+                    Err(ModeError::NonBlockingInProduction(_))
+                ),
+                "production must reject non-blocking mode {m:?}"
+            );
+            assert!(
+                resolve_mode(Profile::Development, Some(m)).is_ok(),
+                "development must accept explicit {m:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn resolve_mode_is_case_insensitive_but_never_coerces_to_shadow() {
+        assert_eq!(
+            resolve_mode(Profile::Production, Some("ENFORCE")).unwrap(),
+            PolicyMode::Enforce
+        );
+        assert_eq!(
+            resolve_mode(Profile::Development, Some("Shadow")).unwrap(),
+            PolicyMode::Shadow
+        );
+        // A mixed-case shadow is still rejected in production — never silently coerced.
+        assert!(resolve_mode(Profile::Production, Some("ShAdOw")).is_err());
+    }
+
+    #[test]
+    fn resolve_mode_rejects_unrecognized_values() {
+        for bad in ["audit", "block-everything", "on", "1"] {
+            assert!(
+                matches!(
+                    resolve_mode(Profile::Development, Some(bad)),
+                    Err(ModeError::UnrecognizedMode(_))
+                ),
+                "{bad:?} must be rejected"
+            );
+        }
+    }
+
+    #[test]
+    fn profile_parse_defaults_and_variants() {
+        assert_eq!(Profile::parse(None).unwrap(), Profile::Production);
+        assert_eq!(Profile::parse(Some("")).unwrap(), Profile::Production);
+        assert_eq!(
+            Profile::parse(Some("production")).unwrap(),
+            Profile::Production
+        );
+        assert_eq!(Profile::parse(Some("PROD")).unwrap(), Profile::Production);
+        assert_eq!(
+            Profile::parse(Some("development")).unwrap(),
+            Profile::Development
+        );
+        assert_eq!(Profile::parse(Some("dev")).unwrap(), Profile::Development);
+        assert!(matches!(
+            Profile::parse(Some("staging")),
+            Err(ModeError::UnknownProfile(_))
+        ));
+    }
 
     fn local_route() -> GatewayRoute {
         GatewayRoute {
