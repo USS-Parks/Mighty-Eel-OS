@@ -554,3 +554,28 @@ Verify: fmt; `cargo clippy -p wsf-cache --all-targets -- -D warnings -A clippy::
 present a day-earlier clock -> Expired, no CloudAllowed) and `pre_epoch_clock_is_expired`
 (negative timestamp -> Expired, no CloudAllowed); the fresh / hard-TTL / air-gap suites stay
 green. P2 gate ("clock rollback cannot re-open cloud egress") holds. Commit: (this change set).
+
+### P3 - WebSocket identity from middleware, not the in-band handshake (M, priv-esc)
+
+`handle_auth_handshake` (`mai-api/src/streaming/ws.rs`) derived the connection's role and
+profile id from the client-supplied `auth.handshake` payload (`handshake.role`) and did **no**
+token validation at all - the doc even claimed "Validates the profile token" (false). Any
+client could send `{profile_id, role: "admin"}` and be granted admin permissions: a complete
+WebSocket auth bypass / privilege escalation. (`/v1/ws` is not auth-exempt, so the upgrade
+request was already API-key-authenticated by the middleware - that verified identity was then
+ignored.)
+
+Fix: `ws_upgrade` now extracts the middleware-authenticated `ProfileInfo` and threads it into
+the connection (`ConnectionState::authenticated(profile)`), which is authenticated from the
+start. `handle_auth_handshake` no longer reads the payload - it confirms the middleware
+identity and ignores any declared `profile_id`/`role`; the forgeable `AuthHandshake` struct is
+deleted. The module doc is corrected to state auth comes from the API key, the handshake only
+confirms (§0.5).
+
+Verify: fmt; `cargo clippy -p mai-api --all-targets -- -D warnings -A clippy::pedantic` PASS;
+`cargo test -p mai-api --lib streaming::ws` PASS (15) - new
+`test_handshake_ignores_declared_role_uses_middleware_identity` (a Guest connection sending a
+handshake declaring `admin` stays Guest, profile id unchanged) and
+`test_handshake_without_authenticated_profile_fails_closed`; removed the tests that asserted
+the in-band-role behavior. P3 gate ("a Guest key cannot self-declare admin over WS") holds.
+Commit: (this change set).

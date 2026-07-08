@@ -19,7 +19,10 @@
 //!   - `transcription.partial`: Interim speech-to-text result
 //!   - `transcription.final`: Completed transcription
 //!
-//! - **Auth handshake:** First message must be `auth.handshake` with profile token.
+//! - **Auth:** the connection is authenticated by the auth middleware from the
+//!   API key on the `/v1/ws` upgrade request; that verified identity is the
+//!   connection's authority. An optional `auth.handshake` message only *confirms*
+//!   it — the client cannot self-declare a role in-band (audit P3).
 //! - **Keepalive:** Server sends WebSocket ping every 30 seconds.
 //! - **Graceful shutdown:** Close frame with reason on server shutdown.
 //! - **Binary frames:** Accepted for `audio.chunk` (16kHz PCM, 16-bit).
@@ -38,7 +41,7 @@ use tracing::{debug, info, warn};
 use uuid::Uuid;
 
 use crate::state::AppState;
-use crate::types::{ApiChatMessage, ProfileInfo, ProfileRole};
+use crate::types::{ApiChatMessage, ProfileInfo};
 
 // ─── Constants ─────────────────────────────────────────────────────
 
@@ -68,18 +71,6 @@ pub struct ClientMessage {
     /// Message payload (type-dependent).
     #[serde(default)]
     pub payload: serde_json::Value,
-}
-
-/// Auth handshake payload.
-#[derive(Debug, Clone, Deserialize)]
-pub struct AuthHandshake {
-    /// Profile identifier.
-    pub profile_id: String,
-    /// Profile role.
-    pub role: String,
-    /// Optional display name.
-    #[serde(default)]
-    pub display_name: Option<String>,
 }
 
 /// Inference request payload (mirrors ChatCompletionRequest fields).
@@ -235,6 +226,16 @@ impl ConnectionState {
             active_requests: HashMap::new(),
         }
     }
+
+    /// A connection already authenticated by the auth middleware (audit P3): the
+    /// identity comes from the verified API key, never the in-band handshake.
+    fn authenticated(profile: ProfileInfo) -> Self {
+        Self {
+            authenticated: true,
+            profile: Some(profile),
+            active_requests: HashMap::new(),
+        }
+    }
 }
 
 // ─── WebSocket Upgrade Handler ─────────────────────────────────────
@@ -243,9 +244,16 @@ impl ConnectionState {
 ///
 /// This is registered in routes.rs. It upgrades the HTTP connection
 /// to a WebSocket and spawns the connection handler task.
-pub async fn ws_upgrade(State(state): State<AppState>, ws: WebSocketUpgrade) -> impl IntoResponse {
+pub async fn ws_upgrade(
+    State(state): State<AppState>,
+    profile: ProfileInfo,
+    ws: WebSocketUpgrade,
+) -> impl IntoResponse {
+    // `profile` is the identity the auth middleware verified from the API key on
+    // the upgrade request (/v1/ws is not auth-exempt). It — not any in-band
+    // handshake — is the connection's authority (audit P3).
     ws.max_message_size(MAX_BINARY_FRAME_SIZE)
-        .on_upgrade(move |socket| handle_ws_connection(socket, state))
+        .on_upgrade(move |socket| handle_ws_connection(socket, state, profile))
 }
 
 // ─── Connection Handler ────────────────────────────────────────────
@@ -255,9 +263,9 @@ pub async fn ws_upgrade(State(state): State<AppState>, ws: WebSocketUpgrade) -> 
 /// Manages auth handshake, message routing, keepalive pings,
 /// and graceful cleanup on disconnect.
 #[allow(clippy::too_many_lines)]
-async fn handle_ws_connection(socket: WebSocket, state: AppState) {
+async fn handle_ws_connection(socket: WebSocket, state: AppState, profile: ProfileInfo) {
     let (mut ws_tx, mut ws_rx) = socket.split();
-    let mut conn = ConnectionState::new();
+    let mut conn = ConnectionState::authenticated(profile);
     let mut ping_interval = interval(WS_PING_INTERVAL);
     let conn_id = Uuid::new_v4();
 
@@ -435,65 +443,31 @@ async fn handle_text_message(
 
 // ─── Auth Handshake ────────────────────────────────────────────────
 
-/// Process the auth.handshake message.
+/// Process the `auth.handshake` message.
 ///
-/// Validates the profile token and populates connection state.
-/// All subsequent messages on this connection use the authenticated
-/// profile for permission checks.
+/// The connection's identity is the [`ProfileInfo`] the auth middleware verified
+/// from the API key at upgrade — captured in `conn.profile`. The in-band handshake
+/// NEVER establishes or changes it: a client could otherwise self-declare `admin`
+/// (audit P3). This handler only confirms the already-authenticated identity and
+/// ignores the payload's `profile_id`/`role` entirely.
 #[allow(clippy::unnecessary_wraps)]
-fn handle_auth_handshake(conn: &mut ConnectionState, msg: &ClientMessage) -> Option<ServerMessage> {
-    if conn.authenticated {
-        return Some(ServerMessage::new(
-            "error",
-            None,
-            serde_json::json!({
-                "code": "MAI-4003",
-                "message": "Already authenticated",
-            }),
-        ));
+fn handle_auth_handshake(
+    conn: &mut ConnectionState,
+    _msg: &ClientMessage,
+) -> Option<ServerMessage> {
+    match &conn.profile {
+        Some(profile) => {
+            info!(
+                profile_id = %profile.profile_id,
+                role = ?profile.role,
+                "WebSocket handshake confirmed (identity from auth middleware)"
+            );
+            Some(ServerMessage::auth_success(&profile.profile_id))
+        }
+        // Unreachable in production: /v1/ws is behind the auth middleware, so an
+        // upgraded connection always carries a verified profile. Fail closed.
+        None => Some(ServerMessage::auth_error("connection is not authenticated")),
     }
-
-    let handshake: AuthHandshake = match serde_json::from_value(msg.payload.clone()) {
-        Ok(h) => h,
-        Err(e) => {
-            return Some(ServerMessage::auth_error(&format!(
-                "Invalid handshake payload: {e}"
-            )));
-        }
-    };
-
-    // Parse role from string
-    let role = match handshake.role.to_lowercase().as_str() {
-        "admin" => ProfileRole::Admin,
-        "adult" => ProfileRole::Adult,
-        "teen" => ProfileRole::Teen,
-        "child" => ProfileRole::Child,
-        "guest" => ProfileRole::Guest,
-        other => {
-            return Some(ServerMessage::auth_error(&format!(
-                "Unknown role: '{other}'"
-            )));
-        }
-    };
-
-    let permissions = role.permissions();
-    let profile = ProfileInfo {
-        profile_id: handshake.profile_id.clone(),
-        role,
-        display_name: handshake.display_name,
-        permissions,
-    };
-
-    conn.authenticated = true;
-    conn.profile = Some(profile);
-
-    info!(
-        profile_id = %handshake.profile_id,
-        role = %handshake.role,
-        "WebSocket auth handshake successful"
-    );
-
-    Some(ServerMessage::auth_success(&handshake.profile_id))
 }
 
 // ─── Inference Request ─────────────────────────────────────────────
@@ -681,6 +655,17 @@ fn handle_tool_result(conn: &mut ConnectionState, msg: &ClientMessage) -> Option
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::types::ProfileRole;
+
+    fn profile(role: ProfileRole) -> ProfileInfo {
+        let permissions = role.permissions();
+        ProfileInfo {
+            profile_id: "family-kid".to_string(),
+            role,
+            display_name: Some("Kid".to_string()),
+            permissions,
+        }
+    }
 
     #[test]
     fn test_server_message_auth_success() {
@@ -739,19 +724,6 @@ mod tests {
     }
 
     #[test]
-    fn test_auth_handshake_deserialize() {
-        let json = r#"{
-            "profile_id": "family-dad",
-            "role": "admin",
-            "display_name": "Dad"
-        }"#;
-        let hs: AuthHandshake = serde_json::from_str(json).unwrap();
-        assert_eq!(hs.profile_id, "family-dad");
-        assert_eq!(hs.role, "admin");
-        assert_eq!(hs.display_name.as_deref(), Some("Dad"));
-    }
-
-    #[test]
     fn test_ws_inference_request_deserialize() {
         let json = r#"{
             "model": "phi-4-mini",
@@ -802,54 +774,39 @@ mod tests {
     }
 
     #[test]
-    fn test_handle_auth_handshake() {
-        let mut conn = ConnectionState::new();
-        let msg = ClientMessage {
+    fn test_handshake_ignores_declared_role_uses_middleware_identity() {
+        // Audit P3: the connection is authenticated by the middleware as a Guest.
+        // A handshake payload self-declaring `admin` must NOT change the role — the
+        // in-band payload is ignored; the middleware identity stands.
+        let mut conn = ConnectionState::authenticated(profile(ProfileRole::Guest));
+        let forged = ClientMessage {
             msg_type: "auth.handshake".to_string(),
             request_id: None,
             payload: serde_json::json!({
-                "profile_id": "dad",
+                "profile_id": "attacker",
                 "role": "admin",
             }),
         };
-        let resp = handle_auth_handshake(&mut conn, &msg);
-        assert!(conn.authenticated);
-        assert!(conn.profile.is_some());
-        let resp = resp.unwrap();
+        let resp = handle_auth_handshake(&mut conn, &forged).unwrap();
         assert_eq!(resp.msg_type, "auth.success");
+        // Role stays Guest; profile_id stays the authenticated one, not "attacker".
+        let profile = conn.profile.as_ref().unwrap();
+        assert_eq!(profile.role, ProfileRole::Guest);
+        assert_eq!(profile.profile_id, "family-kid");
     }
 
     #[test]
-    fn test_handle_auth_handshake_bad_role() {
+    fn test_handshake_without_authenticated_profile_fails_closed() {
+        // Defensive: a connection with no middleware-verified profile cannot be
+        // authenticated by the handshake alone.
         let mut conn = ConnectionState::new();
         let msg = ClientMessage {
             msg_type: "auth.handshake".to_string(),
             request_id: None,
-            payload: serde_json::json!({
-                "profile_id": "hacker",
-                "role": "superadmin",
-            }),
-        };
-        let resp = handle_auth_handshake(&mut conn, &msg);
-        assert!(!conn.authenticated);
-        let resp = resp.unwrap();
-        assert_eq!(resp.msg_type, "auth.error");
-    }
-
-    #[test]
-    fn test_handle_auth_handshake_duplicate() {
-        let mut conn = ConnectionState::new();
-        conn.authenticated = true;
-        let msg = ClientMessage {
-            msg_type: "auth.handshake".to_string(),
-            request_id: None,
-            payload: serde_json::json!({
-                "profile_id": "dad",
-                "role": "admin",
-            }),
+            payload: serde_json::json!({ "profile_id": "x", "role": "admin" }),
         };
         let resp = handle_auth_handshake(&mut conn, &msg).unwrap();
-        assert_eq!(resp.msg_type, "error");
+        assert_eq!(resp.msg_type, "auth.error");
     }
 
     #[test]
