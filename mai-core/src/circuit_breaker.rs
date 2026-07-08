@@ -245,8 +245,18 @@ impl CircuitBreaker {
             .config
             .cooldown_multiplier
             .powf(f64::from(self.cooldown_cycles));
-        let calculated = Duration::from_secs_f64(base * multiplier);
-        calculated.min(self.config.cooldown_max)
+        let target_secs = base * multiplier;
+        let max = self.config.cooldown_max;
+        // Guard `Duration::from_secs_f64`, which PANICS on a non-finite or
+        // out-of-range value. A long outage drives `cooldown_cycles` — and thus the
+        // exponential `multiplier` — high enough to overflow f64 to infinity (audit
+        // D5: "a multi-day outage does not panic"). The cooldown is capped at
+        // `cooldown_max` regardless, so any non-finite or over-cap target clamps
+        // straight there and never reaches `from_secs_f64`.
+        if !target_secs.is_finite() || target_secs >= max.as_secs_f64() {
+            return max;
+        }
+        Duration::from_secs_f64(target_secs).min(max)
     }
 
     /// Prune entries older than `window` from a time-series deque.
@@ -293,6 +303,18 @@ mod tests {
             cb.record_failure();
         }
         assert_eq!(cb.state(), CircuitState::Open);
+    }
+
+    #[test]
+    fn test_cooldown_saturates_without_panic_after_many_trips() {
+        // Audit D5: a very high cooldown_cycles count (a long outage) must not
+        // overflow the exponential into a Duration::from_secs_f64 panic. The
+        // cooldown clamps to cooldown_max instead.
+        let mut cb = make_breaker();
+        cb.cooldown_cycles = 100_000; // 2.0^100000 overflows f64 to +inf
+        assert_eq!(cb.calculate_cooldown(), cb.config.cooldown_max);
+        cb.cooldown_cycles = 2_000; // still overflows f64
+        assert_eq!(cb.calculate_cooldown(), cb.config.cooldown_max);
     }
 
     #[test]

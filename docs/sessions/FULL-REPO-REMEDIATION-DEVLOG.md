@@ -465,6 +465,23 @@ closed. The Phase D **Mediums** (D4 lock-poison, D5 breaker `from_secs_f64`, D6 
 D7 SSE slot release, D8 streaming budget) and the D9 fuzz/soak gate remain as reachable
 robustness follow-ons below the Critical/High bar. Commit: (this change set, docs-only).
 
+### D5 - circuit-breaker cooldown panic on a long outage (M)
+
+`CircuitBreaker::calculate_cooldown` (`mai-core/src/circuit_breaker.rs`) computed
+`Duration::from_secs_f64(base * cooldown_multiplier.powf(cooldown_cycles))`. `cooldown_cycles`
+grows on every trip, so a long (multi-day) outage drives the exponential `multiplier` past
+f64's range to `+inf`; `Duration::from_secs_f64` **panics** on a non-finite (or out-of-range)
+value. The result was already `.min(cooldown_max)`, so the panic was pure downside.
+
+Fix: compute the target seconds, and if it is non-finite or at/above `cooldown_max`, return
+`cooldown_max` directly - `from_secs_f64` is only called on a finite, in-range value. The
+cooldown clamps to max exactly as before, minus the panic.
+
+Verify: fmt; clippy -D warnings PASS; `cargo test -p mai-core circuit_breaker` PASS (10) - new
+`test_cooldown_saturates_without_panic_after_many_trips` (cooldown_cycles = 100000 and 2000,
+both -> cooldown_max, no panic). D5 gate ("a multi-day outage does not panic") holds. Commit:
+(this change set).
+
 ## Phase G - compliance / routing fail-closed (mai-compliance, aog-gateway)
 
 ### G1 - composer fail-open on an unvetted request (M, PHI egress)
