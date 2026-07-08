@@ -1,0 +1,24 @@
+[package]
+name = "aog-conformance"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+aog-controller = { path = "../aog-controller" }
+aog-store = { path = "../aog-store" }
+fabric-crypto = { path = "../fabric-crypto" }
+fabric-revocation = { path = "../fabric-revocation" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+tokio = { workspace = true }
+
+[dev-dependencies]
+fabric-token = { path = "../fabric-token" }
+fabric-contracts = { path = "../fabric-contracts" }
+
+[lints]
+workspace = true

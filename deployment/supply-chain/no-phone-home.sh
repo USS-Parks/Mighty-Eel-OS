@@ -16,9 +16,15 @@ cd "$ROOT"
 fail=0
 
 # 1. No vendor call-home (our own domain) and no telemetry/analytics beacons.
+#    The Kubernetes-style API group `<name>.islandmountain.io/vN` is a schema
+#    identifier (an apiVersion / URL path on the local apiserver), NOT a network
+#    destination, so it is excluded here. A real call-home to our domain carries a
+#    scheme (`https://…islandmountain.io`) and is still caught by check 2 below,
+#    which flags any external host not on the provider/STS allowlist.
 if grep -rEniH \
      'islandmountain\.io|sentry\.io|segment\.(io|com)|mixpanel|posthog|datadoghq|google-analytics|/telemetry|/collect\?' \
-     crates/*/src --include='*.rs' 2>/dev/null; then
+     crates/*/src --include='*.rs' 2>/dev/null \
+     | grep -vE '[a-z0-9-]+\.islandmountain\.io/v[0-9]'; then
   echo "FAIL: a service references vendor call-home / telemetry (above)." >&2
   fail=1
 fi

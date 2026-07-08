@@ -10,11 +10,13 @@ name: aog-wsf-shadow
 #   3. point your OpenAI client at http://localhost:8080/v1 with key `vk_demo`
 #   4. watch cost + routing + risk on the console (http://localhost:8088)
 #
-# Dev-mode OpenBao — this is a demo, not a production deployment.
+# Dev-mode OpenBao (root token, no principal auth) — a demo, not production. Host
+# ports are loopback-bound (127.0.0.1): reachable only from this machine.
 
 services:
   openbao:
-    image: openbao/openbao:latest
+    # AS-001: third-party image digest-pinned (resolved 2026-07-07).
+    image: openbao/openbao@sha256:6150c4a6b62067db6141c8da7a6a6b5763f4f47c315343d0c848b40fecdfd452
     cap_add: [IPC_LOCK]
     command: server -dev -dev-root-token-id=root -dev-listen-address=0.0.0.0:8200
     healthcheck:
@@ -47,7 +49,7 @@ services:
     environment:
       WSF_LISTEN: 0.0.0.0:8300
     volumes: ["seed-data:/seed:ro"]
-    ports: ["8081:8300"]
+    ports: ["127.0.0.1:8081:8300"]
     depends_on:
       seed: { condition: service_completed_successfully }
 
@@ -62,7 +64,7 @@ services:
       AOG_OPENAI_KEY: ${OPENAI_API_KEY:?set OPENAI_API_KEY in deployment/shadow/.env}
       AOG_OPENAI_BASE: ${OPENAI_BASE:-https://api.openai.com}
     volumes: ["seed-data:/seed:ro"]
-    ports: ["8080:8080"]
+    ports: ["127.0.0.1:8080:8080"]
     depends_on:
       seed: { condition: service_completed_successfully }
 
@@ -71,7 +73,7 @@ services:
       context: ../..
       dockerfile: deployment/appliance/Dockerfile.console
     image: islandmountain/aog-wsf-console:latest
-    ports: ["8088:80"]
+    ports: ["127.0.0.1:8088:80"]
     depends_on: [wsf-api, aog-gateway]
 
 volumes:

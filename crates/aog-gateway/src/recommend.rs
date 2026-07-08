@@ -210,7 +210,7 @@ mod tests {
     #[test]
     fn empty_telemetry_is_stable() {
         let r = recommend(&[], RoiInputs::default());
-        assert_eq!(r.local_share, 0.0);
+        assert!(r.local_share.abs() < f64::EPSILON);
         assert_eq!(r.break_even_months, None);
         assert_eq!(r.recommendation, "stay_cloud");
         assert!(r.reasons[0].contains("no cloud spend"));

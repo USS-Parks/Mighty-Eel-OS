@@ -1,0 +1,21 @@
+[package]
+name = "aog-federation"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Loom H5: cross-air-gap estate federation via signed removable-media snapshots (policy + revocation), verifiable offline with the source public key alone."
+
+[dependencies]
+aog-estate = { path = "../aog-estate" }
+fabric-contracts = { path = "../fabric-contracts" }
+fabric-crypto = { path = "../fabric-crypto" }
+fabric-proof = { path = "../fabric-proof" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+hex = "0.4"
+
+[lints]
+workspace = true

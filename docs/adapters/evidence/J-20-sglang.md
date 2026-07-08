@@ -238,4 +238,4 @@ Integration Mock Minimums are covered, live tests are wired and skip
 cleanly, evidence note exists. The matrix rollup and any cross-adapter
 follow-ups (tool-calling pin, fork API) are convergence-session work.
 
-Copyright 2026 - Co-Authored by Basho Parks and Claude Opus 4.7 xHigh <basho@islandmountain.io> <claude@anthropic.com>
+Authored and reviewed by Basho Parks, copyright 2026

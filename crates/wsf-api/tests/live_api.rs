@@ -12,10 +12,10 @@ use std::sync::{Arc, Mutex};
 use base64::Engine;
 use fabric_contracts::Classification;
 use fabric_crypto::Signer;
-use fabric_crypto::providers::RustCryptoMlDsa87;
+use fabric_crypto::providers::{MlDsa87Verifier, RustCryptoMlDsa87};
 use reqwest::{Client, Method};
 use serde_json::{Value, json};
-use wsf_api::client::WsfClient;
+use wsf_api::client::{ClientError, WsfClient};
 use wsf_api::{AppState, ExchangeReq, IssueReq, SealReq, UnsealReq};
 use wsf_bridge::{BridgeConfig, OpenBaoAuth, OpenBaoConfig, TrustBridge};
 use wsf_broker::{AwsStsBroker, BrokerConfig};
@@ -88,18 +88,19 @@ async fn provision(c: &Client, addr: &str, tok: &str) -> (String, String) {
         Some(json!({"type":"transit"})),
     )
     .await;
+    // E2: per-tenant Transit key for the sealing tenant.
     bao(
         c,
         addr,
         tok,
         Method::POST,
-        &format!("transit/keys/{TRANSIT_KEY}"),
+        &format!("transit/keys/{TRANSIT_KEY}-{TENANT}"),
         Some(json!({"type":"aes256-gcm96"})),
     )
     .await;
 
     let policy = format!(
-        "path \"kv/data/tenants/*\" {{ capabilities=[\"read\"] }}\npath \"kv/data/broker/*\" {{ capabilities=[\"read\"] }}\npath \"transit/encrypt/{TRANSIT_KEY}\" {{ capabilities=[\"update\"] }}\npath \"transit/decrypt/{TRANSIT_KEY}\" {{ capabilities=[\"update\"] }}"
+        "path \"kv/data/tenants/*\" {{ capabilities=[\"read\"] }}\npath \"kv/data/broker/*\" {{ capabilities=[\"read\"] }}\npath \"transit/encrypt/{TRANSIT_KEY}-*\" {{ capabilities=[\"update\"] }}\npath \"transit/decrypt/{TRANSIT_KEY}-*\" {{ capabilities=[\"update\"] }}"
     );
     bao(
         c,
@@ -201,6 +202,10 @@ async fn sdk_round_trips_every_endpoint() {
 
     let bridge_signer = Arc::new(RustCryptoMlDsa87::generate("wsf-api-bridge").unwrap());
     let anchor = bridge_signer.public_key().to_vec();
+    let ledger = Arc::new(Mutex::new(Ledger::new(Arc::new(
+        RustCryptoMlDsa87::generate("wsf-api-ledger").unwrap(),
+    ))));
+    let ledger_public_key = ledger.lock().unwrap().public_key().to_vec();
     let state = AppState {
         bridge: Arc::new(TrustBridge::new(
             ob(),
@@ -220,35 +225,28 @@ async fn sdk_round_trips_every_endpoint() {
                 token_public_key: anchor.clone(),
             },
         )),
-        ledger: Arc::new(Mutex::new(Ledger::new(Arc::new(
-            RustCryptoMlDsa87::generate("wsf-api-ledger").unwrap(),
-        )))),
+        ledger: ledger.clone(),
         token_public_key: Arc::new(anchor),
-        authenticator: Arc::new(wsf_api::auth::StaticAuthenticator::new().with_principal(
-            "test-issuer",
-            wsf_api::auth::WsfPrincipal {
-                service_identity: "test-issuer".to_string(),
-                tenant_id: TENANT.to_string(),
-                roles: vec!["clinician".to_string()],
-                audience: "test-aud".to_string(),
-                budget_ceiling: None,
-                allowed_models: vec![],
-                permissions: wsf_api::auth::IssuancePermissions {
-                    self_scoped: true,
-                    delegated: true,
-                    service: true,
-                    admin: true,
-                },
-            },
+        auth: Arc::new(wsf_api::auth::LocalDevAuthenticator::for_wsf(TENANT)),
+        policy: Arc::new(wsf_api::policy::StaticTenantPolicies::single_dev(
+            TENANT,
+            &["clinician"],
         )),
-        rate_limiter: Arc::new(wsf_api::auth::RateLimiter::default()),
+        grants: Arc::new(wsf_api::grants::StaticGrants::single_dev(
+            TENANT,
+            "aws-readonly",
+            "arn:aws:iam::000000000000:role/wsf-api",
+        )),
+        // L2: only the explicitly-enrolled auditor principal may export; the
+        // SDK's default dev principal ("local-dev") is NOT enrolled.
+        auditors: Arc::new(wsf_api::audit::StaticAuditors::none().with("wsf-live-auditor")),
     };
 
     let app = wsf_api::router(state);
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let base = format!("http://{}", listener.local_addr().unwrap());
     let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
-    let sdk = WsfClient::new(base).with_credential("test-issuer");
+    let sdk = WsfClient::new(base.clone());
 
     // OpenAPI published.
     assert!(sdk.openapi().await.unwrap().contains("WSF API"));
@@ -256,12 +254,9 @@ async fn sdk_round_trips_every_endpoint() {
     // Token lifecycle.
     let token = sdk
         .issue(&IssueReq {
-            tenant_id: TENANT.to_string(),
-            subject_id: "clinician-1".to_string(),
-            roles: vec!["clinician".to_string()],
+            requested_roles: vec!["clinician".to_string()],
+            requested_models: vec![],
             budget: None,
-            allowed_models: vec![],
-            issuance_kind: None,
         })
         .await
         .expect("issue");
@@ -270,13 +265,24 @@ async fn sdk_round_trips_every_endpoint() {
         "issued token verifies"
     );
 
-    let mut child = token.clone();
-    child.token_id = format!("{}-child", token.token_id);
-    child.allowed_routes = vec![]; // narrower
-    let attenuated = sdk.attenuate(&token, &child).await.expect("attenuate");
+    // Attenuate with restriction-only intent; the child identity is derived
+    // server-side from the authenticated parent (T2).
+    let restrictions = fabric_token::TokenRestrictions {
+        new_token_id: format!("{}-child", token.token_id),
+        allowed_routes: Some(vec![]), // narrower
+        ..fabric_token::TokenRestrictions::default()
+    };
+    let attenuated = sdk
+        .attenuate(&token, &restrictions)
+        .await
+        .expect("attenuate");
     assert_eq!(
         attenuated.attenuation.parent_id,
         Some(token.token_id.clone())
+    );
+    assert_eq!(
+        attenuated.tenant_id, token.tenant_id,
+        "child inherits the parent's tenant (server-side, not caller-set)"
     );
 
     // Envelope lifecycle.
@@ -305,11 +311,11 @@ async fn sdk_round_trips_every_endpoint() {
         .expect("unseal");
     assert_eq!(plaintext, b"phi payload");
 
-    // Credential exchange (Moto STS).
+    // Credential exchange (Moto STS) — via a tenant-scoped grant id, not a raw ARN.
     let creds = sdk
         .exchange(&ExchangeReq {
             token: token.clone(),
-            role_arn: "arn:aws:iam::000000000000:role/wsf-api".to_string(),
+            grant_id: "aws-readonly".to_string(),
         })
         .await
         .expect("exchange");
@@ -326,8 +332,34 @@ async fn sdk_round_trips_every_endpoint() {
         entries.len()
     );
 
+    // L4: export is auditor-only. The SDK's default dev principal is refused…
+    match sdk.export_receipts().await {
+        Err(ClientError::Api { status, .. }) => {
+            assert_eq!(status, 403, "non-auditor export must be 403");
+        }
+        other => panic!("expected 403 for non-auditor export, got {other:?}"),
+    }
+    // …while the enrolled auditor principal exports a signed pack that
+    // verifies OFFLINE with the ledger's public key alone.
+    let pack: wsf_ledger::EvidencePack = c
+        .get(format!("{base}/v1/receipts/export"))
+        .header("x-wsf-dev-principal", "wsf-live-auditor")
+        .send()
+        .await
+        .expect("export req")
+        .error_for_status()
+        .expect("auditor export 200")
+        .json()
+        .await
+        .expect("pack json");
+    assert!(pack.count >= 3, "pack carries the session's receipts");
+    assert!(
+        wsf_ledger::verify_pack(&pack, &MlDsa87Verifier, &ledger_public_key),
+        "exported evidence pack verifies offline"
+    );
+
     server.abort();
     eprintln!(
-        "W6 live gate PASSED against {addr} (+Moto {aws}): SDK round-tripped every endpoint; OpenAPI published"
+        "W6/L4 live gate PASSED against {addr} (+Moto {aws}): SDK round-tripped every endpoint; auditor-only export verified offline"
     );
 }

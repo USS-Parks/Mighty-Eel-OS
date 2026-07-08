@@ -9,7 +9,10 @@ use fabric_contracts::{
 };
 use fabric_crypto::Signer;
 use fabric_crypto::providers::{MlDsa87Verifier, RustCryptoMlDsa87};
-use fabric_token::{TokenError, attenuate, is_expired, issue, try_spend, verify};
+use fabric_token::{
+    Operation, TokenError, TokenRestrictions, VerificationContext, attenuate, is_expired, issue,
+    try_spend, verify,
+};
 
 fn base_token(expires_at: &str) -> TrustToken {
     TrustToken {
@@ -52,19 +55,19 @@ fn base_token(expires_at: &str) -> TrustToken {
 #[test]
 fn issue_then_verify_round_trip() {
     let signer = RustCryptoMlDsa87::generate("bridge-q3").unwrap();
-    let signed = issue(base_token("2099-01-01T00:00:00Z"), &signer).unwrap();
-    assert_eq!(signed.signature.alg, "ml-dsa-87");
-    assert!(!signed.signature.value.is_empty());
-    verify(&signed, &MlDsa87Verifier, signer.public_key()).unwrap();
+    let minted = issue(base_token("2099-01-01T00:00:00Z"), &signer).unwrap();
+    assert_eq!(minted.signature.alg, "ml-dsa-87");
+    assert!(!minted.signature.value.is_empty());
+    verify(&minted, &MlDsa87Verifier, signer.public_key()).unwrap();
 }
 
 #[test]
 fn tampered_token_fails_verification() {
     let signer = RustCryptoMlDsa87::generate("k").unwrap();
-    let mut signed = issue(base_token("2099-01-01T00:00:00Z"), &signer).unwrap();
-    signed.tenant_id = "other-tenant".into(); // mutate a signed field
+    let mut minted = issue(base_token("2099-01-01T00:00:00Z"), &signer).unwrap();
+    minted.tenant_id = "other-tenant".into(); // mutate a minted field
     assert_eq!(
-        verify(&signed, &MlDsa87Verifier, signer.public_key()),
+        verify(&minted, &MlDsa87Verifier, signer.public_key()),
         Err(TokenError::InvalidSignature)
     );
 }
@@ -74,9 +77,9 @@ fn revoked_token_is_rejected() {
     let signer = RustCryptoMlDsa87::generate("k").unwrap();
     let mut t = base_token("2099-01-01T00:00:00Z");
     t.revocation_status = RevocationStatus::Revoked;
-    let signed = issue(t, &signer).unwrap();
+    let minted = issue(t, &signer).unwrap();
     assert_eq!(
-        verify(&signed, &MlDsa87Verifier, signer.public_key()),
+        verify(&minted, &MlDsa87Verifier, signer.public_key()),
         Err(TokenError::Revoked)
     );
 }
@@ -86,64 +89,92 @@ fn attenuate_narrows_and_binds_parent() {
     let signer = RustCryptoMlDsa87::generate("k").unwrap();
     let parent = issue(base_token("2099-01-01T00:00:00Z"), &signer).unwrap();
 
-    let mut child = base_token("2098-01-01T00:00:00Z"); // earlier expiry
-    child.token_id = "tok_child".into();
-    child.allowed_routes = vec![Route::LocalOnly]; // subset
-    child.allowed_models = vec!["llama-3-8b".into()]; // subset
-    child.max_data_classification = Classification::Internal; // lower
-    child.budget = Some(Budget {
-        token_cap: 100,
-        tokens_spent: 0,
-        usd_cap_cents: 50,
-        usd_spent_cents: 0,
-        tool_call_cap: 2,
-        tool_calls_spent: 0,
-    });
+    let now = Utc.with_ymd_and_hms(2026, 7, 4, 0, 0, 0).unwrap();
+    let ctx = VerificationContext::new(
+        &MlDsa87Verifier,
+        signer.public_key(),
+        now,
+        Operation::Attenuate,
+    );
+    let restrictions = TokenRestrictions {
+        new_token_id: "tok_child".into(),
+        expires_at: Some("2098-01-01T00:00:00Z".into()), // earlier
+        allowed_routes: Some(vec![Route::LocalOnly]),    // subset
+        allowed_models: Some(vec!["llama-3-8b".into()]), // subset
+        max_data_classification: Some(Classification::Internal), // lower
+        budget: Some(Budget {
+            token_cap: 100,
+            usd_cap_cents: 50,
+            tool_call_cap: 2,
+            ..Budget::default()
+        }),
+        ..TokenRestrictions::default()
+    };
 
-    let signed_child = attenuate(&parent, child, &signer).unwrap();
-    assert_eq!(signed_child.attenuation.parent_id.as_deref(), Some("tok_1"));
-    verify(&signed_child, &MlDsa87Verifier, signer.public_key()).unwrap();
+    let minted_child = attenuate(&parent, &restrictions, &ctx, None, &signer).unwrap();
+    assert_eq!(minted_child.attenuation.parent_id.as_deref(), Some("tok_1"));
+    // Identity is inherited from the authenticated parent, not caller-set.
+    assert_eq!(minted_child.tenant_id, parent.tenant_id);
+    assert_eq!(minted_child.subject_hash, parent.subject_hash);
+    // An un-restricted axis inherits the parent (roles here).
+    assert_eq!(minted_child.roles, parent.roles);
+    verify(&minted_child, &MlDsa87Verifier, signer.public_key()).unwrap();
 }
 
 #[test]
 fn attenuate_rejects_widening() {
     let signer = RustCryptoMlDsa87::generate("k").unwrap();
     let parent = issue(base_token("2099-01-01T00:00:00Z"), &signer).unwrap();
+    let now = Utc.with_ymd_and_hms(2026, 7, 4, 0, 0, 0).unwrap();
+    let ctx = VerificationContext::new(
+        &MlDsa87Verifier,
+        signer.public_key(),
+        now,
+        Operation::Attenuate,
+    );
+    let widen = |r: TokenRestrictions| attenuate(&parent, &r, &ctx, None, &signer).unwrap_err();
 
     // Widen routes: CloudAllowed is not in the parent.
-    let mut widen_route = base_token("2098-01-01T00:00:00Z");
-    widen_route.allowed_routes = vec![Route::CloudAllowed];
     assert_eq!(
-        attenuate(&parent, widen_route, &signer).unwrap_err(),
+        widen(TokenRestrictions {
+            new_token_id: "c".into(),
+            allowed_routes: Some(vec![Route::CloudAllowed]),
+            ..TokenRestrictions::default()
+        }),
         TokenError::AttenuationWidens {
             axis: "allowed_routes"
         }
     );
-
-    // Widen classification: Secret > Restricted.
-    let mut widen_class = base_token("2098-01-01T00:00:00Z");
-    widen_class.allowed_routes = vec![Route::LocalOnly];
-    widen_class.max_data_classification = Classification::Secret;
+    // Widen roles: `admin` is not in the parent (a new axis under T4).
     assert_eq!(
-        attenuate(&parent, widen_class, &signer).unwrap_err(),
+        widen(TokenRestrictions {
+            new_token_id: "c".into(),
+            roles: Some(vec!["admin".into()]),
+            ..TokenRestrictions::default()
+        }),
+        TokenError::AttenuationWidens { axis: "roles" }
+    );
+    // Widen classification: Secret > Restricted.
+    assert_eq!(
+        widen(TokenRestrictions {
+            new_token_id: "c".into(),
+            max_data_classification: Some(Classification::Secret),
+            ..TokenRestrictions::default()
+        }),
         TokenError::AttenuationWidens {
             axis: "max_data_classification"
         }
     );
-
     // Widen budget: child cap exceeds parent remaining.
-    let mut widen_budget = base_token("2098-01-01T00:00:00Z");
-    widen_budget.allowed_routes = vec![Route::LocalOnly];
-    widen_budget.budget = Some(Budget {
-        token_cap: 5000, // > parent's 1000 remaining
-        tokens_spent: 0,
-        usd_cap_cents: 10,
-        usd_spent_cents: 0,
-        tool_call_cap: 1,
-        tool_calls_spent: 0,
-    });
     assert_eq!(
-        attenuate(&parent, widen_budget, &signer).unwrap_err(),
+        widen(TokenRestrictions {
+            new_token_id: "c".into(),
+            budget: Some(Budget {
+                token_cap: 5000,
+                ..Budget::default()
+            }),
+            ..TokenRestrictions::default()
+        }),
         TokenError::AttenuationWidens { axis: "budget" }
     );
 }

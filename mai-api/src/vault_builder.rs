@@ -22,10 +22,13 @@
 //!   the builder owns the boot path.
 
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use mai_core::vault::{VaultError, VaultInterface};
-use mai_vault::{FileDevVault, VaultConfig as MaiVaultConfig, ZfsVault};
+use mai_vault::audit::AuditWriter as VaultAuditWriter;
+use mai_vault::pqc::PqcEngine;
+use mai_vault::{FileDevVault, VaultConfig as MaiVaultConfig, ZfsOps, ZfsVault};
 
 use crate::ship_profile::{ProfileMode, ShipProfile, VaultBackend};
 
@@ -43,18 +46,21 @@ pub enum VaultBuildError {
     EmptyRoot,
     #[error("vault.root {path:?} does not exist; create it before boot in production")]
     RootMissing { path: PathBuf },
+    #[error("vault initialization failed: {0}")]
+    InitFailed(String),
 }
 
 /// Construct the vault implementation selected by the profile.
 ///
-/// Behavior matrix:
+/// Behavior matrix (V1: production accepts **only** the reviewed encrypted
+/// backend — ZFS; `stub` is not a vault and `file-dev` stores plaintext):
 ///
 /// | Mode        | Backend  | allow_stub | Outcome                       |
 /// |-------------|----------|------------|-------------------------------|
 /// | production  | zfs      | false      | [`ZfsVault`]                  |
 /// | production  | zfs      | true       | [`StubAllowedInProduction`]   |
 /// | production  | stub     | any        | [`StubInProduction`]          |
-/// | production  | file-dev | false      | [`FileDevVault`]               |
+/// | production  | file-dev | any        | [`StubInProduction`]          |
 /// | local-dev   | zfs      | any        | [`ZfsVault`]                  |
 /// | local-dev   | stub     | true       | [`LocalDevStubVault`]         |
 /// | local-dev   | stub     | false      | [`StubNotAllowed`]            |
@@ -64,7 +70,15 @@ pub enum VaultBuildError {
 /// [`StubInProduction`]: VaultBuildError::StubInProduction
 /// [`FileDevVault`]: mai_vault::file_dev::FileDevVault
 /// [`StubNotAllowed`]: VaultBuildError::StubNotAllowed
-pub fn build_vault(profile: &ShipProfile) -> Result<Box<dyn VaultInterface>, VaultBuildError> {
+///
+/// V2/V3: the ZFS arm returns an **initialized** vault — PQC and audit
+/// engines constructed and initialized, the storage tree scanned, and (when
+/// `vault.dataset` is set) the live dataset's properties proven (V5) — and
+/// any initialization failure is an error, so a production boot never binds
+/// sockets over an uninitialized vault.
+pub async fn build_vault(
+    profile: &ShipProfile,
+) -> Result<Box<dyn VaultInterface>, VaultBuildError> {
     let root = profile.vault.root.as_path();
     if root.as_os_str().is_empty() {
         return Err(VaultBuildError::EmptyRoot);
@@ -89,9 +103,12 @@ pub fn build_vault(profile: &ShipProfile) -> Result<Box<dyn VaultInterface>, Vau
             }
         }
         VaultBackend::FileDev => {
-            if is_production && !root.exists() {
-                return Err(VaultBuildError::RootMissing {
-                    path: root.to_path_buf(),
+            // V1: file-dev stores model material in plaintext — a development
+            // convenience, never a production vault. Reject regardless of
+            // allow_stub or root state.
+            if is_production {
+                return Err(VaultBuildError::StubInProduction {
+                    backend: VaultBackend::FileDev,
                 });
             }
             Ok(Box::new(FileDevVault::new(zfs_config_from_root(root))))
@@ -102,8 +119,71 @@ pub fn build_vault(profile: &ShipProfile) -> Result<Box<dyn VaultInterface>, Vau
                     path: root.to_path_buf(),
                 });
             }
-            Ok(Box::new(ZfsVault::new(zfs_config_from_root(root))))
+            let mut cfg = zfs_config_from_root(root);
+            if let Some(dataset) = &profile.vault.dataset {
+                cfg.storage.dataset = dataset.clone();
+            }
+
+            // V2: engines are constructed and initialized here — the old
+            // path handed out a bare `ZfsVault::new` with no PQC, no audit
+            // writer, and nothing awaited.
+            let pqc = Arc::new(PqcEngine::new(cfg.pqc.clone()));
+            pqc.initialize()
+                .await
+                .map_err(|e| VaultBuildError::InitFailed(format!("pqc: {e}")))?;
+            let audit = Arc::new(VaultAuditWriter::with_pqc(cfg.audit.clone(), pqc.clone()));
+            audit
+                .initialize()
+                .await
+                .map_err(|e| VaultBuildError::InitFailed(format!("audit: {e}")))?;
+
+            // Storage tree must exist before the vault scans it.
+            for dir in [&cfg.storage.mount_point, &cfg.storage.staging_dir] {
+                std::fs::create_dir_all(dir)
+                    .map_err(|e| VaultBuildError::InitFailed(format!("storage tree: {e}")))?;
+            }
+
+            // V5: when the profile names the backing dataset, wire real ZFS
+            // ops so initialization proves the dataset (encryption, keys,
+            // mountpoint) instead of trusting a directory.
+            let mut vault = ZfsVault::with_engines(cfg, pqc, audit);
+            if profile.vault.dataset.is_some() {
+                vault = vault.with_zfs(ZfsOps::system());
+            }
+
+            // V3: initialization is awaited and failure is fatal — the
+            // server refuses to bind sockets over an uninitialized vault.
+            vault
+                .initialize()
+                .await
+                .map_err(|e| VaultBuildError::InitFailed(e.to_string()))?;
+            Ok(Box::new(vault))
         }
+    }
+}
+
+/// V8: measure the vault instead of certifying it blind — a storage
+/// round-trip (store → load → byte-compare) through the live
+/// [`VaultInterface`] the server will actually serve from. Engine and audit
+/// initialization are already proven by [`build_vault`] (V2/V3); this proves
+/// the storage path end-to-end. The probe id is unique per boot because the
+/// vault refuses duplicate model ids across restarts.
+pub async fn probe_vault(vault: &dyn VaultInterface) -> crate::production_guard::RuntimeOutcome {
+    use crate::production_guard::RuntimeOutcome;
+    let probe_id = format!(
+        "__mai_readiness_probe_{}",
+        chrono::Utc::now().timestamp_nanos_opt().unwrap_or_default()
+    );
+    let payload = b"mai vault readiness probe v1";
+    if let Err(e) = vault.store_model_package(&probe_id, payload).await {
+        return RuntimeOutcome::fail(format!("vault store probe failed: {e}"));
+    }
+    match vault.load_model_weights(&probe_id).await {
+        Ok(bytes) if bytes == payload => RuntimeOutcome::pass(
+            "vault storage round-trip measured (store + load + compare)".to_string(),
+        ),
+        Ok(_) => RuntimeOutcome::fail("vault probe read back different bytes".to_string()),
+        Err(e) => RuntimeOutcome::fail(format!("vault load probe failed: {e}")),
     }
 }
 

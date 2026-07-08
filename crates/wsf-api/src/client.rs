@@ -2,7 +2,7 @@
 
 use base64::Engine;
 use fabric_contracts::{Envelope, TrustToken};
-use wsf_ledger::LedgerEntry;
+use wsf_ledger::{EvidencePack, LedgerEntry};
 
 use crate::{
     AttenuateReq, ExchangeReq, ExchangeResp, IssueReq, ReceiptsResp, SealReq, TokenResp, UnsealReq,
@@ -29,7 +29,6 @@ pub enum ClientError {
 pub struct WsfClient {
     base: String,
     http: reqwest::Client,
-    credential: Option<String>,
 }
 
 impl WsfClient {
@@ -39,16 +38,7 @@ impl WsfClient {
         Self {
             base: base.into(),
             http: reqwest::Client::new(),
-            credential: None,
         }
-    }
-
-    /// Attach a bearer credential sent as `Authorization: Bearer` on every call
-    /// (required by the authenticated issuance surface).
-    #[must_use]
-    pub fn with_credential(mut self, credential: impl Into<String>) -> Self {
-        self.credential = Some(credential.into());
-        self
     }
 
     async fn post<Req: serde::Serialize, Resp: serde::de::DeserializeOwned>(
@@ -56,11 +46,12 @@ impl WsfClient {
         path: &str,
         body: &Req,
     ) -> Result<Resp, ClientError> {
-        let mut builder = self.http.post(format!("{}{path}", self.base)).json(body);
-        if let Some(cred) = &self.credential {
-            builder = builder.bearer_auth(cred);
-        }
-        let resp = builder.send().await?;
+        let resp = self
+            .http
+            .post(format!("{}{path}", self.base))
+            .json(body)
+            .send()
+            .await?;
         let status = resp.status();
         if !status.is_success() {
             return Err(ClientError::Api {
@@ -94,21 +85,24 @@ impl WsfClient {
         .await
     }
 
-    /// Attenuate a parent into a narrower child.
+    /// Attenuate a parent into a narrower child under `restrictions`. The child
+    /// identity is generated server-side from the authenticated parent — the
+    /// caller supplies narrowing intent only (plan T2).
     ///
     /// # Errors
-    /// [`ClientError`] on transport or a non-2xx response (e.g. widening → 422).
+    /// [`ClientError`] on transport or a non-2xx response (widening → 422,
+    /// unauthenticated/forged parent → 403).
     pub async fn attenuate(
         &self,
         parent: &TrustToken,
-        child: &TrustToken,
+        restrictions: &fabric_token::TokenRestrictions,
     ) -> Result<TrustToken, ClientError> {
         let r: TokenResp = self
             .post(
                 "/v1/tokens/attenuate",
                 &AttenuateReq {
                     parent: parent.clone(),
-                    child: child.clone(),
+                    restrictions: restrictions.clone(),
                 },
             )
             .await?;
@@ -169,6 +163,27 @@ impl WsfClient {
         }
         let r: ReceiptsResp = resp.json().await?;
         Ok(r.entries)
+    }
+
+    /// Export the signed evidence pack over the full ledger (plan L4).
+    /// Requires global-auditor enrollment — everyone else gets 403.
+    ///
+    /// # Errors
+    /// [`ClientError`] on transport or a non-2xx response.
+    pub async fn export_receipts(&self) -> Result<EvidencePack, ClientError> {
+        let resp = self
+            .http
+            .get(format!("{}/v1/receipts/export", self.base))
+            .send()
+            .await?;
+        let status = resp.status();
+        if !status.is_success() {
+            return Err(ClientError::Api {
+                status: status.as_u16(),
+                body: resp.text().await.unwrap_or_default(),
+            });
+        }
+        Ok(resp.json().await?)
     }
 
     /// Fetch the raw OpenAPI document.

@@ -38,6 +38,7 @@ fn baseline(mode: ProfileMode, wal_dir: PathBuf) -> ShipProfile {
         vault: VaultConfig {
             backend: VaultBackend::Zfs,
             root: PathBuf::from("/var/lib/mai/vault"),
+            dataset: None,
             require_sealed_master_key: false,
             require_pqc: false,
             allow_stub: false,

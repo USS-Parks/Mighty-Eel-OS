@@ -78,17 +78,21 @@ async fn provision(c: &Client, addr: &str, tok: &str) -> (String, String) {
         Some(json!({"type":"transit"})),
     )
     .await;
-    bao(
-        c,
-        addr,
-        tok,
-        Method::POST,
-        &format!("transit/keys/{TRANSIT_KEY}"),
-        Some(json!({"type":"aes256-gcm96"})),
-    )
-    .await;
+    // E2: one Transit key per tenant (`<base>-<tenant>`), so a tenant's wrapped
+    // material can only be unwrapped under its own key.
+    for tenant in ["tenant-a", "tenant-b"] {
+        bao(
+            c,
+            addr,
+            tok,
+            Method::POST,
+            &format!("transit/keys/{TRANSIT_KEY}-{tenant}"),
+            Some(json!({"type":"aes256-gcm96"})),
+        )
+        .await;
+    }
     let policy = format!(
-        "path \"transit/encrypt/{TRANSIT_KEY}\" {{ capabilities=[\"update\"] }}\npath \"transit/decrypt/{TRANSIT_KEY}\" {{ capabilities=[\"update\"] }}"
+        "path \"transit/encrypt/{TRANSIT_KEY}-*\" {{ capabilities=[\"update\"] }}\npath \"transit/decrypt/{TRANSIT_KEY}-*\" {{ capabilities=[\"update\"] }}"
     );
     bao(
         c,
@@ -144,14 +148,18 @@ async fn provision(c: &Client, addr: &str, tok: &str) -> (String, String) {
 }
 
 fn token(signer: &RustCryptoMlDsa87, clearance: Classification) -> TrustToken {
+    token_for(signer, clearance, "tenant-a")
+}
+
+fn token_for(signer: &RustCryptoMlDsa87, clearance: Classification, tenant: &str) -> TrustToken {
     let now = Utc::now();
     let t = TrustToken {
-        token_id: format!("tok_seal-{clearance:?}"),
+        token_id: format!("tok_seal-{tenant}-{clearance:?}"),
         issued_at: now.to_rfc3339(),
         expires_at: (now + Duration::minutes(15)).to_rfc3339(),
         issuer: "wsf-trust-bridge".to_string(),
         trust_bundle_version: "2026.07.03".to_string(),
-        tenant_id: "tenant-a".to_string(),
+        tenant_id: tenant.to_string(),
         subject_id: None,
         subject_hash: "hmac-sha256:demo".to_string(),
         service_identity: None,
@@ -256,7 +264,7 @@ async fn seal_unseal_over_http_against_live_openbao() {
 
     // 3. Unauthorized unseal — valid but under-cleared (Public) token -> 403 + deny receipt.
     let lo = token(&token_signer, Classification::Public);
-    let deny_body = json!({ "token": lo, "envelope": envelope });
+    let deny_body = json!({ "token": lo, "envelope": envelope.clone() });
     let deny_resp = http
         .post(format!("{base}/unseal"))
         .json(&deny_body)
@@ -267,6 +275,23 @@ async fn seal_unseal_over_http_against_live_openbao() {
         deny_resp.status(),
         403,
         "under-cleared unseal must be denied"
+    );
+
+    // 4. E7 cross-tenant — a fully-cleared token from ANOTHER tenant is denied
+    //    before any Transit decrypt (AF-003). Same clearance as the sealer, so
+    //    only the tenant binding stops it.
+    let other = token_for(&token_signer, Classification::Secret, "tenant-b");
+    let cross_body = json!({ "token": other, "envelope": envelope.clone() });
+    let cross_resp = http
+        .post(format!("{base}/unseal"))
+        .json(&cross_body)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(
+        cross_resp.status(),
+        403,
+        "cross-tenant unseal must be denied (E7/AF-003)"
     );
 
     // Receipts: the chain verifies and records seal-allow, unseal-allow, unseal-deny.
@@ -290,8 +315,19 @@ async fn seal_unseal_over_http_against_live_openbao() {
         "deny receipt present"
     );
 
+    // Two distinct deny receipts now: under-cleared + cross-tenant.
+    assert!(
+        service
+            .receipts_snapshot()
+            .iter()
+            .filter(|r| r.op == "unseal" && r.decision == "deny")
+            .count()
+            >= 2,
+        "under-cleared and cross-tenant denials both receipted"
+    );
+
     server.abort();
     eprintln!(
-        "W3 live gate PASSED against {bao_addr} (transit-wrapped seal + HTTP unseal + deny receipt)"
+        "W3/E7 live gate PASSED against {bao_addr} (transit-wrapped seal + HTTP unseal + under-cleared + cross-tenant denials)"
     );
 }

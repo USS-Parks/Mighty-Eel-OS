@@ -18,17 +18,18 @@ pub mod policy;
 pub mod provider;
 pub mod recommend;
 pub mod route;
+pub mod spend;
 pub mod surface_anthropic;
 pub mod surface_openai;
 pub mod tokenize;
 
-use std::collections::HashMap;
-use std::sync::Mutex;
+use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
-use fabric_contracts::{Budget, TrustToken};
+use fabric_contracts::TrustToken;
 use fabric_crypto::providers::MlDsa87Verifier;
 use fabric_revocation::RevocationSnapshot;
+use fabric_token::spend::{LocalSpendLedger, SpendLedger, Spent};
 use sha2::{Digest, Sha256};
 use wsf_bridge::OpenBaoAuth;
 
@@ -74,52 +75,19 @@ pub struct GatewayConfig {
     pub virtual_key_kv_prefix: String,
 }
 
-/// One token's accumulated runtime spend (G9). The signed token carries the caps
-/// and a spend baseline; actual usage accrues here — in the gateway — across a
-/// session, so the pre-flight check enforces cumulative budget.
-#[derive(Debug, Default, Clone, Copy)]
-struct Spent {
-    tokens: u64,
-    usd_cents: u64,
-    tool_calls: u32,
-}
-
-/// Thread-safe `token_id` → accumulated [`Spent`]. Appliance-scoped (in-memory,
-/// single gateway); an OpenBao-backed, HA-shared counter is the follow-on.
-#[derive(Debug, Default)]
-struct SpendLedger {
-    inner: Mutex<HashMap<String, Spent>>,
-}
-
-impl SpendLedger {
-    /// Add one completed call's usage to a token's running total (saturating).
-    fn add(&self, token_id: &str, tokens: u64, usd_cents: u64, tool_calls: u32) {
-        let mut g = self.inner.lock().expect("spend ledger lock");
-        let e = g.entry(token_id.to_string()).or_default();
-        e.tokens = e.tokens.saturating_add(tokens);
-        e.usd_cents = e.usd_cents.saturating_add(usd_cents);
-        e.tool_calls = e.tool_calls.saturating_add(tool_calls);
-    }
-
-    /// Fold a token's accumulated runtime spend into a budget's `*_spent` counters
-    /// (saturating), so the pre-flight sees session-cumulative usage. Unknown token
-    /// folds nothing.
-    fn apply(&self, token_id: &str, budget: &mut Budget) {
-        let g = self.inner.lock().expect("spend ledger lock");
-        if let Some(s) = g.get(token_id) {
-            budget.tokens_spent = budget.tokens_spent.saturating_add(s.tokens);
-            budget.usd_spent_cents = budget.usd_spent_cents.saturating_add(s.usd_cents);
-            budget.tool_calls_spent = budget.tool_calls_spent.saturating_add(s.tool_calls);
-        }
-    }
-}
-
 /// The gateway's auth + resolution core.
 pub struct Gateway {
     openbao: OpenBaoAuth,
     config: GatewayConfig,
-    /// G9 per-token runtime spend (session-cumulative budget enforcement).
-    spend: SpendLedger,
+    /// G9 per-token runtime spend (session-cumulative budget enforcement),
+    /// behind the `fabric_token::spend::SpendLedger` trait (X1) so the ledger is
+    /// swappable without touching the data-path API. Defaults to the
+    /// single-process [`LocalSpendLedger`] (byte-for-byte the old behavior); X2
+    /// makes it injectable so a horizontally-scaled deployment can supply a
+    /// shared ledger. (The lease-based reserve flow uses a distinct `try_spend`
+    /// API rather than `fold`/`add`; adopting it in the request path is
+    /// scale-out work that lands with the node runtime running replicas, M3b.)
+    spend: Arc<dyn SpendLedger>,
     /// G9 kill switch: KV path to the signed revocation snapshot. Empty (the
     /// default) disables the check — no snapshot source configured.
     revocation_kv_path: String,
@@ -140,9 +108,18 @@ impl Gateway {
         Self {
             openbao,
             config,
-            spend: SpendLedger::default(),
+            spend: Arc::new(LocalSpendLedger::default()),
             revocation_kv_path: String::new(),
         }
+    }
+
+    /// Swap the runtime spend ledger — e.g. a shared ledger for a horizontally
+    /// scaled estate. The default is the single-process [`LocalSpendLedger`];
+    /// this changes no data-path API (X2).
+    #[must_use]
+    pub fn with_spend_ledger(mut self, spend: Arc<dyn SpendLedger>) -> Self {
+        self.spend = spend;
+        self
     }
 
     /// Set the KV path the kill switch reads the signed revocation snapshot from
@@ -222,9 +199,12 @@ impl Gateway {
         }
 
         // Budget pre-flight (G1 static caps + G9 session-cumulative runtime spend).
+        // Metering is keyed by the attenuation lineage (T5) so sibling children
+        // share one atomic counter and cannot each spend the parent's remaining.
         if let Some(b) = &token.budget {
             let mut effective = b.clone();
-            self.spend.apply(&token.token_id, &mut effective);
+            self.spend
+                .fold(fabric_token::lineage_key(&token), &mut effective);
             if budget_exhausted(&effective) {
                 return Err(GatewayError::BudgetExhausted);
             }
@@ -234,12 +214,22 @@ impl Gateway {
         Ok(ResolvedContext { token, tenant_id })
     }
 
-    /// Record one completed call's usage against a token's budget (G9). The next
-    /// [`resolve_and_check`](Self::resolve_and_check) for the same token folds in
-    /// the cumulative spend and rejects pre-flight once a cap is reached — so
-    /// budget exhaustion blocks a session mid-flight, not just at issue time.
-    pub fn record_spend(&self, token_id: &str, tokens: u64, usd_cents: u64, tool_calls: u32) {
-        self.spend.add(token_id, tokens, usd_cents, tool_calls);
+    /// Record one completed call's usage against a token's budget (G9). `key`
+    /// must be the token's [`fabric_token::lineage_key`] (T5) so sibling children
+    /// accrue against one shared counter; the next
+    /// [`resolve_and_check`](Self::resolve_and_check) folds the cumulative spend
+    /// and rejects pre-flight once a cap is reached — so budget exhaustion blocks
+    /// a session mid-flight, not just at issue time. (A root token's lineage key
+    /// is its own id.)
+    pub fn record_spend(&self, key: &str, tokens: u64, usd_cents: u64, tool_calls: u32) {
+        self.spend.add(
+            key,
+            Spent {
+                tokens,
+                usd_cents,
+                tool_calls,
+            },
+        );
     }
 }
 
@@ -275,45 +265,35 @@ mod tests {
     }
 
     #[test]
-    fn spend_ledger_accumulates_and_folds_per_token() {
-        let led = SpendLedger::default();
-        led.add("tok-1", 100, 5, 1);
-        led.add("tok-1", 50, 3, 0);
-        let mut b = Budget {
-            token_cap: 1000,
-            usd_cap_cents: 100,
-            tool_call_cap: 10,
-            ..Default::default()
-        };
-        led.apply("tok-1", &mut b);
-        assert_eq!(b.tokens_spent, 150);
-        assert_eq!(b.usd_spent_cents, 8);
-        assert_eq!(b.tool_calls_spent, 1);
-        // an unknown token folds nothing.
-        let mut other = Budget {
-            token_cap: 1000,
-            ..Default::default()
-        };
-        led.apply("unknown", &mut other);
-        assert_eq!(other.tokens_spent, 0);
-    }
-
-    #[test]
     fn accumulated_spend_exhausts_the_budget_mid_session() {
-        // A token with room at issue time that runtime spend pushes over its cap.
-        let led = SpendLedger::default();
+        // A token with room at issue time that runtime spend pushes over its
+        // cap. (Ledger mechanics themselves are covered in fabric-token::spend,
+        // where the X1 promotion moved them.)
+        let led = LocalSpendLedger::default();
         let base = Budget {
             token_cap: 200,
             ..Default::default()
         };
-        led.add("t", 150, 0, 0);
+        led.add(
+            "t",
+            Spent {
+                tokens: 150,
+                ..Default::default()
+            },
+        );
         let mut b = base.clone();
-        led.apply("t", &mut b);
+        led.fold("t", &mut b);
         assert!(!budget_exhausted(&b), "150/200 still has room");
         // The next call tips it over — the pre-flight now rejects.
-        led.add("t", 60, 0, 0);
+        led.add(
+            "t",
+            Spent {
+                tokens: 60,
+                ..Default::default()
+            },
+        );
         let mut b = base.clone();
-        led.apply("t", &mut b);
+        led.fold("t", &mut b);
         assert!(budget_exhausted(&b), "210/200 is exhausted mid-session");
     }
 }

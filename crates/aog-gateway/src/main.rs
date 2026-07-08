@@ -3,14 +3,13 @@
 //! Reads its OpenBao AppRole creds + the WSF trust anchor (base64) from the
 //! environment (the `wsf-seed` step writes them). Registers a local
 //! OpenAI-compatible backend, plus cloud OpenAI / Anthropic when keyed, and
-//! serves in the configured mode (`enforce` by default — fail-closed; the
-//! non-blocking `shadow`/`report_only` modes require `AOG_PROFILE=development`).
+//! serves in the configured mode (`shadow` by default — the M1 posture).
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
 use std::sync::Arc;
 
 use aog_gateway::app::{AppState, ModelMap, Target};
-use aog_gateway::policy::{Profile, resolve_mode};
+use aog_gateway::policy::PolicyMode;
 use aog_gateway::provider::Registry;
 use aog_gateway::provider::anthropic::AnthropicProvider;
 use aog_gateway::provider::openai::OpenAiProvider;
@@ -52,14 +51,6 @@ async fn run() -> Result<(), String> {
         return Err(format!("unknown subcommand '{sub}' (expected: serve)"));
     }
 
-    // Fail-closed policy posture resolved FIRST — before any external dependency
-    // (OpenBao) or listener bind. Production defaults to enforce and rejects the
-    // non-blocking modes; shadow/report_only require AOG_PROFILE=development.
-    let profile =
-        Profile::parse(std::env::var("AOG_PROFILE").ok().as_deref()).map_err(|e| e.to_string())?;
-    let mode = resolve_mode(profile, std::env::var("AOG_MODE").ok().as_deref())
-        .map_err(|e| e.to_string())?;
-
     let addr = env("AOG_OPENBAO_ADDR")?;
     let role_id = env("AOG_OPENBAO_ROLE_ID")?;
     let secret_id = env("AOG_OPENBAO_SECRET_ID")?;
@@ -68,6 +59,8 @@ async fn run() -> Result<(), String> {
         .map_err(|e| format!("AOG_TOKEN_ANCHOR not base64: {e}"))?;
     let vk_prefix = env_or("AOG_VIRTUAL_KEY_PREFIX", "kv/data/aog/virtual-keys");
     let listen = env_or("AOG_LISTEN", "0.0.0.0:8080");
+    let mode_str = env_or("AOG_MODE", "shadow");
+    let mode = PolicyMode::parse(&mode_str).ok_or_else(|| format!("bad AOG_MODE '{mode_str}'"))?;
 
     let openbao = OpenBaoAuth::new(OpenBaoConfig::new(&addr, role_id, secret_id))
         .map_err(|e| format!("openbao config: {e}"))?;
@@ -111,9 +104,7 @@ async fn run() -> Result<(), String> {
         );
     }
 
-    let state = AppState::new(gateway, Arc::new(registry), Arc::new(models))
-        .with_mode(mode)
-        .with_profile(profile);
+    let state = AppState::new(gateway, Arc::new(registry), Arc::new(models)).with_mode(mode);
 
     // Merge the inference surfaces (OpenAI + Anthropic) with the auth skeleton
     // (`/healthz`, `/v1/preflight`).
@@ -124,11 +115,7 @@ async fn run() -> Result<(), String> {
     let listener = tokio::net::TcpListener::bind(&listen)
         .await
         .map_err(|e| format!("bind {listen}: {e}"))?;
-    println!(
-        "aog-gateway serving on {listen} (profile={}, mode={})",
-        profile.header(),
-        mode.header()
-    );
+    println!("aog-gateway serving on {listen} (mode={mode_str})");
     axum::serve(listener, app)
         .await
         .map_err(|e| format!("serve: {e}"))?;

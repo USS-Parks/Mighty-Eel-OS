@@ -1,0 +1,32 @@
+[package]
+name = "aog-noded"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "aog-noded — the runnable Loom edge/worker node daemon (VH3): wraps the aog-node runtime, registers its Node with the control plane over the aogd admin API, and heartbeats; serves /healthz for the conformance harness"
+
+[[bin]]
+name = "aog-noded"
+path = "src/main.rs"
+
+[lib]
+name = "aog_noded"
+path = "src/lib.rs"
+
+[dependencies]
+aog-estate = { path = "../aog-estate" }
+aog-node = { path = "../aog-node" }
+aogd = { path = "../aogd" }
+fabric-contracts = { path = "../fabric-contracts" }
+axum = { workspace = true }
+chrono = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+[lints]
+workspace = true

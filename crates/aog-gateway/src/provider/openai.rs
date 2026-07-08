@@ -53,7 +53,7 @@ impl OpenAiProvider {
         }
     }
 
-    fn body(&self, req: &CompletionRequest, stream: bool) -> Value {
+    fn body(req: &CompletionRequest, stream: bool) -> Value {
         let mut body = json!({
             "model": req.model,
             "messages": req.messages,
@@ -152,7 +152,7 @@ impl Provider for OpenAiProvider {
     }
 
     async fn complete(&self, req: &CompletionRequest) -> Result<CompletionResponse, ProviderError> {
-        let resp = self.post(&self.body(req, false)).await?;
+        let resp = self.post(&Self::body(req, false)).await?;
         let v: Value = resp
             .json()
             .await
@@ -178,7 +178,7 @@ impl Provider for OpenAiProvider {
     }
 
     async fn stream(&self, req: &CompletionRequest) -> Result<ChunkStream, ProviderError> {
-        let resp = self.post(&self.body(req, true)).await?;
+        let resp = self.post(&Self::body(req, true)).await?;
         Ok(sse_stream(resp, parse_sse))
     }
 }

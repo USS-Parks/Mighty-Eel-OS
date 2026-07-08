@@ -6,7 +6,7 @@ set -euo pipefail
 MSG_FILE="$1"
 HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
 AWK="$HOOK_DIR/footer-filter.awk"
-FOOTER="Authored and reviewed by Basho Parks, Copyright 2026"
+FOOTER="Authored and reviewed by Basho Parks, copyright 2026"
 
 work="$(mktemp)"
 # Drop git's comment + verbose-scissors lines the way git would — unless the

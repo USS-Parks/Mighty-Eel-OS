@@ -42,19 +42,35 @@
 //! and decrypts the trailing AEAD payload.
 
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 use aes_gcm::aead::{Aead, KeyInit};
 use aes_gcm::{Aes256Gcm, Nonce};
 use async_trait::async_trait;
 use hkdf::Hkdf;
 use rand::RngCore;
+use serde::{Deserialize, Serialize};
 use sha3::Sha3_256;
 use tokio::sync::RwLock;
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 
 use mai_core::vault::{KeyInfo, KeyLevel, PqcProvider, VaultError};
 
 use crate::config::PqcConfig;
+
+/// A per-model KEM key persisted to the key store (plan V9 — restart recovery).
+/// The secret is wrapped (AES-256-GCM) under the store's key-encryption key, so
+/// the file never holds a plaintext secret; the public key and metadata are
+/// clear for indexing.
+#[derive(Serialize, Deserialize)]
+struct PersistedModelKey {
+    key_id: String,
+    model_id: String,
+    public_key: Vec<u8>,
+    /// `nonce(12) || AES-256-GCM ciphertext` of the KEM secret key.
+    wrapped_secret: Vec<u8>,
+    created_at: u64,
+}
 
 // ---------------------------------------------------------------------------
 // Constants (FIPS 203 / 204 sizes)
@@ -198,6 +214,10 @@ pub struct PqcEngine {
     model_keys: RwLock<HashMap<String, String>>,
     /// Master ML-DSA signing keypair (initialised by `initialize()`).
     signing_key: RwLock<Option<DsaKeyPair>>,
+    /// Key-encryption key for wrapping persisted model secrets (plan V9).
+    /// Loaded from / created in the key store on first use, so model keys —
+    /// and therefore encrypted models — survive a restart.
+    kek: RwLock<Option<[u8; 32]>>,
 }
 
 /// An ML-KEM keypair (encapsulation).
@@ -224,7 +244,124 @@ impl PqcEngine {
             keys: RwLock::new(HashMap::new()),
             model_keys: RwLock::new(HashMap::new()),
             signing_key: RwLock::new(None),
+            kek: RwLock::new(None),
         }
+    }
+
+    /// Directory holding persisted model keys.
+    fn model_keys_dir(&self) -> PathBuf {
+        self.config.key_store_path.join("model-keys")
+    }
+
+    fn model_key_file(&self, key_id: &str) -> PathBuf {
+        self.model_keys_dir().join(format!("{key_id}.json"))
+    }
+
+    /// The key-store KEK, loaded from `<key_store>/kek.bin` or created there on
+    /// first use (plan V9). This is the root of restart recovery: the same KEK
+    /// unwraps the persisted model secrets after a reboot.
+    ///
+    /// In production the key store lives on the encrypted ZFS dataset (V4/V5)
+    /// and the KEK should additionally be TPM-sealed; in dev/no-TPM it is a
+    /// plaintext file on that (still-encrypted) dataset.
+    async fn kek(&self) -> Result<[u8; 32], VaultError> {
+        if let Some(k) = *self.kek.read().await {
+            return Ok(k);
+        }
+        let mut slot = self.kek.write().await;
+        if let Some(k) = *slot {
+            return Ok(k);
+        }
+        let path = self.config.key_store_path.join("kek.bin");
+        let kek = if path.exists() {
+            let bytes = std::fs::read(&path).map_err(|e| VaultError::IoError(e.to_string()))?;
+            let arr: [u8; 32] = bytes
+                .as_slice()
+                .try_into()
+                .map_err(|_| VaultError::PqcError("kek.bin is not 32 bytes".into()))?;
+            arr
+        } else {
+            let mut k = [0u8; 32];
+            rand::thread_rng().fill_bytes(&mut k);
+            std::fs::create_dir_all(&self.config.key_store_path)
+                .map_err(|e| VaultError::IoError(e.to_string()))?;
+            std::fs::write(&path, k).map_err(|e| VaultError::IoError(e.to_string()))?;
+            k
+        };
+        *slot = Some(kek);
+        Ok(kek)
+    }
+
+    /// Wrap a model secret under the KEK and write it to the key store.
+    async fn persist_model_key(&self, kp: &KeyPair) -> Result<(), VaultError> {
+        let kek = self.kek().await?;
+        let cipher = Aes256Gcm::new_from_slice(&kek)
+            .map_err(|e| VaultError::PqcError(format!("KEK cipher init: {e}")))?;
+        let mut nonce_bytes = [0u8; AES_NONCE_LEN];
+        rand::thread_rng().fill_bytes(&mut nonce_bytes);
+        let ct = cipher
+            .encrypt(Nonce::from_slice(&nonce_bytes), kp.secret_key.as_slice())
+            .map_err(|e| VaultError::PqcError(format!("wrap model key: {e}")))?;
+        let mut wrapped = Vec::with_capacity(AES_NONCE_LEN + ct.len());
+        wrapped.extend_from_slice(&nonce_bytes);
+        wrapped.extend_from_slice(&ct);
+        let record = PersistedModelKey {
+            key_id: kp.key_id.clone(),
+            model_id: kp.model_id.clone().unwrap_or_default(),
+            public_key: kp.public_key.clone(),
+            wrapped_secret: wrapped,
+            created_at: kp.created_at,
+        };
+        let json = serde_json::to_vec(&record).map_err(|e| VaultError::IoError(e.to_string()))?;
+        std::fs::create_dir_all(self.model_keys_dir())
+            .map_err(|e| VaultError::IoError(e.to_string()))?;
+        std::fs::write(self.model_key_file(&kp.key_id), json)
+            .map_err(|e| VaultError::IoError(e.to_string()))?;
+        Ok(())
+    }
+
+    /// Load a persisted model key into the in-memory maps, if one exists on
+    /// disk (plan V9 restart recovery). Returns whether a key was loaded.
+    async fn load_persisted_model_key(&self, model_id: &str) -> Result<bool, VaultError> {
+        let key_id = format!("model-key-{model_id}");
+        let file = self.model_key_file(&key_id);
+        if !file.exists() {
+            return Ok(false);
+        }
+        let bytes = std::fs::read(&file).map_err(|e| VaultError::IoError(e.to_string()))?;
+        let record: PersistedModelKey =
+            serde_json::from_slice(&bytes).map_err(|e| VaultError::IoError(e.to_string()))?;
+        if record.wrapped_secret.len() < AES_NONCE_LEN + 16 {
+            return Err(VaultError::PqcError(
+                "persisted key wrapper too short".into(),
+            ));
+        }
+        let kek = self.kek().await?;
+        let cipher = Aes256Gcm::new_from_slice(&kek)
+            .map_err(|e| VaultError::PqcError(format!("KEK cipher init: {e}")))?;
+        let (nonce, ct) = record.wrapped_secret.split_at(AES_NONCE_LEN);
+        let secret = cipher
+            .decrypt(Nonce::from_slice(nonce), ct)
+            .map_err(|_| VaultError::PqcError("KEK unwrap failed (wrong key store?)".into()))?;
+        {
+            let mut keys = self.keys.write().await;
+            keys.insert(
+                record.key_id.clone(),
+                KeyPair {
+                    key_id: record.key_id.clone(),
+                    public_key: record.public_key,
+                    secret_key: secret,
+                    level: KeyLevel::ModelEncryption,
+                    created_at: record.created_at,
+                    model_id: Some(model_id.to_string()),
+                },
+            );
+        }
+        self.model_keys
+            .write()
+            .await
+            .insert(model_id.to_string(), record.key_id);
+        Ok(true)
     }
 
     /// Initialise the engine: generate the master ML-DSA-87 signing keypair.
@@ -287,28 +424,39 @@ impl PqcEngine {
                 }
             }
         }
+        // V9: recover a key persisted by a prior process before generating a
+        // new one — so re-sealing the same model reuses its key and weights
+        // sealed before a restart stay decryptable.
+        if self.load_persisted_model_key(model_id).await? {
+            let model_keys = self.model_keys.read().await;
+            if let Some(key_id) = model_keys.get(model_id) {
+                let keys = self.keys.read().await;
+                if let Some(kp) = keys.get(key_id) {
+                    return Ok((kp.public_key.clone(), kp.secret_key.clone()));
+                }
+            }
+        }
         let (pk, sk) = kem_backend::keypair()?;
         let key_id = format!("model-key-{model_id}");
         #[allow(clippy::cast_sign_loss)]
         let created_at = chrono::Utc::now().timestamp() as u64;
-        {
-            let mut keys = self.keys.write().await;
-            keys.insert(
-                key_id.clone(),
-                KeyPair {
-                    key_id: key_id.clone(),
-                    public_key: pk.clone(),
-                    secret_key: sk.clone(),
-                    level: KeyLevel::ModelEncryption,
-                    created_at,
-                    model_id: Some(model_id.to_string()),
-                },
-            );
-        }
-        {
-            let mut model_keys = self.model_keys.write().await;
-            model_keys.insert(model_id.to_string(), key_id);
-        }
+        let kp = KeyPair {
+            key_id: key_id.clone(),
+            public_key: pk.clone(),
+            secret_key: sk.clone(),
+            level: KeyLevel::ModelEncryption,
+            created_at,
+            model_id: Some(model_id.to_string()),
+        };
+        // Persist before publishing in memory: a key we cannot durably store
+        // would silently fail to survive a restart, so a persist failure is an
+        // error, not a warning.
+        self.persist_model_key(&kp).await?;
+        self.keys.write().await.insert(key_id.clone(), kp);
+        self.model_keys
+            .write()
+            .await
+            .insert(model_id.to_string(), key_id);
         Ok((pk, sk))
     }
 
@@ -467,6 +615,12 @@ impl PqcProvider for PqcEngine {
         let nonce_bytes = &ciphertext[MLKEM1024_CT_LEN..MLKEM1024_CT_LEN + AES_NONCE_LEN];
         let aead_ct = &ciphertext[MLKEM1024_CT_LEN + AES_NONCE_LEN..];
 
+        // V9: recover the key from the store if this process hasn't loaded it
+        // yet (e.g. first decrypt after a restart).
+        if !self.model_keys.read().await.contains_key(model_id) {
+            self.load_persisted_model_key(model_id).await?;
+        }
+
         let model_keys = self.model_keys.read().await;
         let key_id = model_keys.get(model_id).ok_or_else(|| {
             VaultError::PqcError(format!("No KEM keypair registered for model {model_id}"))
@@ -510,6 +664,44 @@ impl PqcProvider for PqcEngine {
             .ok_or_else(|| VaultError::PqcError("Signing keypair not initialised".into()))?;
         dsa_backend::verify(package_data, signature, &kp.public_key)
     }
+
+    async fn crypto_erase_model(&self, model_id: &str) -> Result<bool, VaultError> {
+        // V7: retire the model's KEM key. Once the secret is gone, the
+        // ML-KEM-1024 + AES-256-GCM envelope on disk (and in every ZFS
+        // snapshot that retains it) can never be decapsulated again — the
+        // deletion is cryptographic, independent of copy-on-write block
+        // retention. The key id is deterministic, so erasure works whether or
+        // not this process has loaded the key into memory (V9: a key persisted
+        // by a prior boot is still retired).
+        let key_id = format!("model-key-{model_id}");
+        let mut retired = false;
+
+        self.model_keys.write().await.remove(model_id);
+        if let Some(mut kp) = self.keys.write().await.remove(&key_id) {
+            kp.secret_key.iter_mut().for_each(|b| *b = 0); // scrub before free
+            retired = true;
+        }
+
+        // Delete the persisted (KEK-wrapped) key so a restart cannot resurrect
+        // it. Absence is fine (already erased); any other IO error is real.
+        let file = self.model_key_file(&key_id);
+        match std::fs::remove_file(&file) {
+            Ok(()) => retired = true,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => {
+                warn!(model_id, error = %e, "failed to delete persisted model key");
+                return Err(VaultError::IoError(e.to_string()));
+            }
+        }
+
+        if retired {
+            info!(
+                model_id,
+                key_id, "Model encryption key retired (crypto-erase)"
+            );
+        }
+        Ok(retired)
+    }
 }
 
 // ===========================================================================
@@ -519,13 +711,18 @@ impl PqcProvider for PqcEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
 
     fn test_pqc_config() -> PqcConfig {
+        // A unique key store per call: model keys now persist to disk (V9), so
+        // a shared fixed path would leak state across tests.
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static N: AtomicU64 = AtomicU64::new(0);
+        let n = N.fetch_add(1, Ordering::Relaxed);
+        let dir = std::env::temp_dir().join(format!("mai-pqc-test-{}-{n}", std::process::id()));
         PqcConfig {
             kem_algorithm: "ML-KEM-1024".into(),
             dsa_algorithm: "ML-DSA-87".into(),
-            key_store_path: PathBuf::from("/tmp/test-keys"),
+            key_store_path: dir,
             symmetric_cipher: "AES-256-GCM".into(),
         }
     }
@@ -536,6 +733,58 @@ mod tests {
         let (pk, sk) = engine.kem_generate_keypair().await.unwrap();
         assert_eq!(pk.len(), MLKEM1024_PK_LEN);
         assert_eq!(sk.len(), MLKEM1024_SK_LEN);
+    }
+
+    #[tokio::test]
+    async fn v9_model_key_survives_restart() {
+        // Seal weights with one engine, drop it (simulating a process exit),
+        // then bring a fresh engine up over the SAME key store: it recovers
+        // the persisted, KEK-wrapped model key and decrypts the weights that
+        // were sealed before the "restart".
+        let cfg = test_pqc_config();
+        let plaintext = b"weights that must survive a reboot";
+        let ciphertext = {
+            let engine = PqcEngine::new(cfg.clone());
+            engine
+                .encrypt_model_weights("restart-model", plaintext)
+                .await
+                .unwrap()
+        }; // engine dropped: in-memory keys gone, only the key store remains.
+
+        let reborn = PqcEngine::new(cfg.clone());
+        let recovered = reborn
+            .decrypt_model_weights("restart-model", &ciphertext)
+            .await
+            .expect("a fresh engine must recover the persisted model key");
+        assert_eq!(recovered, plaintext);
+    }
+
+    #[tokio::test]
+    async fn v9_crypto_erase_survives_restart() {
+        // After crypto-erasing a model, a fresh engine over the same key store
+        // must NOT be able to decrypt retained ciphertext — the persisted key
+        // is gone, not just the in-memory copy.
+        let cfg = test_pqc_config();
+        let ciphertext = {
+            let engine = PqcEngine::new(cfg.clone());
+            let ct = engine
+                .encrypt_model_weights("erase-model", b"secret")
+                .await
+                .unwrap();
+            assert!(engine.crypto_erase_model("erase-model").await.unwrap());
+            ct
+        };
+        let reborn = PqcEngine::new(cfg.clone());
+        let err = reborn
+            .decrypt_model_weights("erase-model", &ciphertext)
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(err, VaultError::PqcError(_)),
+            "erased key must not resurrect after restart, got {err:?}"
+        );
+        // Erasing an already-absent model is a no-op that reports nothing done.
+        assert!(!reborn.crypto_erase_model("erase-model").await.unwrap());
     }
 
     #[tokio::test]

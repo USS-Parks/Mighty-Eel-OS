@@ -3,8 +3,7 @@
 <!--
   Island Mountain Mighty Eel OS — MAI/Lamprey Appliance
   Three-Layer Security Manifold (Ring-1 ↔ Ring-3) with OpenBao Trust Core
-  Copyright 2026 — Co-Authored by Basho Parks and Claude Opus 4.7 xHigh
-  <basho@islandmountain.io> <claude@anthropic.com>
+  Authored and reviewed by Basho Parks, copyright 2026
 -->
 
 ## Overview

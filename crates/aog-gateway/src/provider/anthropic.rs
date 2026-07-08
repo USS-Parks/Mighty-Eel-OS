@@ -42,7 +42,7 @@ impl AnthropicProvider {
         }
     }
 
-    fn body(&self, req: &CompletionRequest, stream: bool) -> Value {
+    fn body(req: &CompletionRequest, stream: bool) -> Value {
         let mut system = String::new();
         let mut messages = Vec::new();
         for m in &req.messages {
@@ -154,12 +154,13 @@ fn parse_sse(data: &str) -> Option<Result<StreamChunk, ProviderError>> {
 
 #[async_trait]
 impl Provider for AnthropicProvider {
+    #[allow(clippy::unnecessary_literal_bound)]
     fn name(&self) -> &str {
         "anthropic"
     }
 
     async fn complete(&self, req: &CompletionRequest) -> Result<CompletionResponse, ProviderError> {
-        let resp = self.post(&self.body(req, false)).await?;
+        let resp = self.post(&Self::body(req, false)).await?;
         let v: Value = resp
             .json()
             .await
@@ -194,7 +195,7 @@ impl Provider for AnthropicProvider {
     }
 
     async fn stream(&self, req: &CompletionRequest) -> Result<ChunkStream, ProviderError> {
-        let resp = self.post(&self.body(req, true)).await?;
+        let resp = self.post(&Self::body(req, true)).await?;
         Ok(sse_stream(resp, parse_sse))
     }
 }
@@ -205,7 +206,6 @@ mod tests {
 
     #[test]
     fn system_split_and_mandatory_max_tokens() {
-        let p = AnthropicProvider::new("http://x", "k");
         let req = CompletionRequest {
             model: "claude".into(),
             messages: vec![
@@ -215,7 +215,7 @@ mod tests {
             max_tokens: None,
             temperature: None,
         };
-        let b = p.body(&req, false);
+        let b = AnthropicProvider::body(&req, false);
         assert_eq!(b["system"], "be terse");
         assert_eq!(b["max_tokens"], DEFAULT_MAX_TOKENS);
         assert_eq!(

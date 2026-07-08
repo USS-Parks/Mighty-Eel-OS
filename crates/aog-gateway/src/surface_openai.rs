@@ -208,7 +208,7 @@ async fn chat_completions(
                 // Budget decrement (G9): accrue this call's usage against the token;
                 // the next resolve folds it in and rejects once a cap is reached.
                 state.gateway.record_spend(
-                    &ctx.token.token_id,
+                    fabric_token::lineage_key(&ctx.token),
                     u64::from(r.usage.input_tokens) + u64::from(r.usage.output_tokens),
                     state.prices.cost(
                         &provider_name,
@@ -224,7 +224,7 @@ async fn chat_completions(
         }
     };
     let resp = crate::route::tag_route(resp, &decision);
-    let resp = crate::policy::tag_policy(resp, &policy_decision, state.mode, &outcome);
+    let resp = crate::policy::tag_policy(resp, &policy_decision, state.mode, outcome);
     crate::tokenize::tag(resp, tokenized_spans)
 }
 
@@ -287,27 +287,24 @@ async fn status(State(state): State<AppState>) -> Json<Value> {
     };
     Json(status_json(
         state.mode.header(),
-        state.profile.header(),
-        state.registry.names(),
-        state.models.model_ids(),
+        &state.registry.names(),
+        &state.models.model_ids(),
         receipts,
-        head,
+        &head,
         verified,
     ))
 }
 
 fn status_json(
     mode: &str,
-    profile: &str,
-    providers: Vec<String>,
-    models: Vec<String>,
+    providers: &[String],
+    models: &[String],
     receipts: usize,
-    chain_head: String,
+    chain_head: &str,
     chain_verified: bool,
 ) -> Value {
     json!({
         "mode": mode,
-        "profile": profile,
         "providers": providers,
         "models": models,
         "receipts": receipts,
@@ -336,7 +333,7 @@ fn chat_completion_json(model: &str, r: &CompletionResponse) -> Value {
     })
 }
 
-fn chunk_json(id: &str, ts: i64, model: &str, delta: Value, finish: Option<&str>) -> String {
+fn chunk_json(id: &str, ts: i64, model: &str, delta: &Value, finish: Option<&str>) -> String {
     json!({
         "id": id,
         "object": "chat.completion.chunk",
@@ -355,7 +352,7 @@ fn chat_sse(model: String, mut chunks: ChunkStream) -> Response {
     let ts = created();
     let stream = async_stream::stream! {
         yield Ok::<Event, std::convert::Infallible>(
-            Event::default().data(chunk_json(&id, ts, &model, json!({ "role": "assistant" }), None)),
+            Event::default().data(chunk_json(&id, ts, &model, &json!({ "role": "assistant" }), None)),
         );
         let mut closed = false;
         while let Some(frame) = chunks.next().await {
@@ -363,11 +360,11 @@ fn chat_sse(model: String, mut chunks: ChunkStream) -> Response {
                 Ok(c) => {
                     if !c.delta.is_empty() {
                         yield Ok(Event::default()
-                            .data(chunk_json(&id, ts, &model, json!({ "content": c.delta }), None)));
+                            .data(chunk_json(&id, ts, &model, &json!({ "content": c.delta }), None)));
                     }
                     if c.done {
                         yield Ok(Event::default()
-                            .data(chunk_json(&id, ts, &model, json!({}), Some("stop"))));
+                            .data(chunk_json(&id, ts, &model, &json!({}), Some("stop"))));
                         closed = true;
                     }
                 }
@@ -377,7 +374,7 @@ fn chat_sse(model: String, mut chunks: ChunkStream) -> Response {
             }
         }
         if !closed {
-            yield Ok(Event::default().data(chunk_json(&id, ts, &model, json!({}), Some("stop"))));
+            yield Ok(Event::default().data(chunk_json(&id, ts, &model, &json!({}), Some("stop"))));
         }
         yield Ok(Event::default().data("[DONE]"));
     };
@@ -473,16 +470,14 @@ mod tests {
     #[test]
     fn status_json_shape() {
         let v = status_json(
-            "enforce",
-            "production",
-            vec!["anthropic".to_string(), "openai".to_string()],
-            vec!["gpt-4o".to_string()],
+            "shadow",
+            &["anthropic".to_string(), "openai".to_string()],
+            &["gpt-4o".to_string()],
             3,
-            "abcd".to_string(),
+            "abcd",
             true,
         );
-        assert_eq!(v["mode"], "enforce");
-        assert_eq!(v["profile"], "production");
+        assert_eq!(v["mode"], "shadow");
         assert_eq!(v["providers"][0], "anthropic");
         assert_eq!(v["models"][0], "gpt-4o");
         assert_eq!(v["receipts"], 3);

@@ -54,12 +54,13 @@ For any non-trivial change, link to evidence:
 
 <!-- One sentence: how do we revert this safely if it breaks in prod? Hint: most commits should be a clean `git revert <sha>` away. -->
 
-## Co-author
+## Footer
 
 <!--
-Per memory rule: every commit (and the PR's last commit) ends with
-ONE shared co-author line. Verify with `git log -1 --format=%B`.
+CANON: every commit (and the PR's last commit) ends with the canonical footer
+and never credits an AI co-author. `.githooks/commit-msg` stamps it
+automatically. Verify with `git log -1 --format=%B`.
 -->
 
 - [ ] Last commit ends with the exact line:
-      `Copyright 2026 - Co-Authored by Basho Parks and Claude Opus 4.7 xHigh <basho@islandmountain.io> <claude@anthropic.com>`
+      `Authored and reviewed by Basho Parks, copyright 2026`

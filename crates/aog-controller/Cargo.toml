@@ -1,0 +1,37 @@
+[package]
+name = "aog-controller"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+aog-apiserver = { path = "../aog-apiserver" }
+aog-estate = { path = "../aog-estate" }
+aog-scheduler = { path = "../aog-scheduler" }
+aog-store = { path = "../aog-store" }
+chrono = { workspace = true }
+fabric-contracts = { path = "../fabric-contracts" }
+fabric-crypto = { path = "../fabric-crypto" }
+fabric-proof = { path = "../fabric-proof" }
+fabric-revocation = { path = "../fabric-revocation" }
+fabric-token = { path = "../fabric-token" }
+hex = "0.4"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = "0.10"
+thiserror = { workspace = true }
+tokio = { workspace = true }
+wsf-bridge = { path = "../wsf-bridge" }
+wsf-tenants = { path = "../wsf-tenants" }
+
+[dev-dependencies]
+aog-gateway = { path = "../aog-gateway" }
+axum = { workspace = true }
+base64 = "0.22"
+wsf-seal = { path = "../wsf-seal" }
+
+[lints]
+workspace = true

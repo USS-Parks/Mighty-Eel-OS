@@ -4,7 +4,7 @@
 **Companion roster:** `IGD-REMEDIATION-ROSTER.md` (open per-session prompts)
 **Source scan:** `docs/INTERNAL-GITDOCTOR-SCAN-2026-05-26.md` (HEAD = `ee6eb13`, overall 86/100)
 **Started:** 2026-05-26
-**Owner:** Basho Parks / Claude Opus 4.7 xHigh
+**Owner:** Basho Parks
 **Co-author footer (every commit, no exceptions):**
 ```
 Copyright 2026 - Co-Authored by Basho Parks and Claude Opus 4.7 xHigh <basho@islandmountain.io> <claude@anthropic.com>
@@ -95,4 +95,4 @@ IGD-10  ──┴──> IGD-11 ──> IGD-12
 
 ---
 
-*IGD Remediation Plan — 2026-05-26 — Co-Authored by Basho Parks and Claude Opus 4.7 xHigh \<basho@islandmountain.io\> \<claude@anthropic.com\>*
+*IGD Remediation Plan — 2026-05-26 — Authored and reviewed by Basho Parks, copyright 2026*

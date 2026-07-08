@@ -208,7 +208,10 @@ async fn broker_scopes_credentials_against_localstack() {
             &token,
             &MlDsa87Verifier,
             signer.public_key(),
-            "arn:aws:iam::000000000000:role/wsf-demo",
+            &wsf_broker::GrantScope::new(
+                "arn:aws:iam::000000000000:role/wsf-demo",
+                &["s3:GetObject", "s3:ListBucket"],
+            ),
             now,
         )
         .await

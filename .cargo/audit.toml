@@ -4,8 +4,8 @@
 # but have separate config surfaces. This file mirrors the
 # `[advisories].ignore` block in `deny.toml`, with the same rationale.
 # The human-readable explanation for every entry lives in
-# `docs/INDEPENDENT-EVIDENCE-DEFERRALS.md`; keep this file synced with
-# that doc on every change.
+# `docs/compliance/INDEPENDENT-EVIDENCE-DEFERRALS.md`; keep this file
+# synced with that doc AND with deny.toml on every change.
 #
 # Do not add an ignore here that does not also exist in
 # INDEPENDENT-EVIDENCE-DEFERRALS.md. A silent ignore here would defeat
@@ -36,6 +36,15 @@ ignore = [
     # advisory. See INDEPENDENT-EVIDENCE-DEFERRALS.md §1.4.
     "RUSTSEC-2026-0176",
     "RUSTSEC-2026-0177",
+
+    # RUSTSEC-2026-0173 - proc-macro-error2 2.0.1 unmaintained.
+    # Compile-time-only proc-macro pulled transitively via
+    # validator_derive 0.20 (mai-api -> validator 0.20). validator 0.20.0
+    # is the latest release so no upgrade drops it; the advisory confirms
+    # no safe upgrade is available. Not linked into any runtime binary and
+    # off the trust path. Deferred to the post-RC1 dependency-refresh lane.
+    # See INDEPENDENT-EVIDENCE-DEFERRALS.md §1.5.
+    "RUSTSEC-2026-0173",
 
     # NOTE: RUSTSEC-2024-0436 (paste) was removed here in SOV-0.2b — paste
     # was transitive via pqcrypto-mldsa, which was dropped when the

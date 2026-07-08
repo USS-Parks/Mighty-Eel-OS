@@ -17,7 +17,7 @@ use mai_compliance::PhiDetector;
 use mai_router::{DefaultRouter, Router};
 
 use crate::meter::{PriceBook, ReceiptLedger};
-use crate::policy::{PolicyEngine, PolicyMode, Profile};
+use crate::policy::{PolicyEngine, PolicyMode};
 use crate::provider::Registry;
 use crate::{Gateway, ResolvedContext};
 
@@ -94,10 +94,8 @@ pub struct AppState {
     pub router: Arc<dyn Router + Send + Sync>,
     /// The G6 deny-wins policy engine (mai-compliance).
     pub policy: Arc<PolicyEngine>,
-    /// The G6 enforcement posture. Defaults to `Enforce` (fail-closed).
+    /// The G6 enforcement posture. Defaults to `Shadow` (never blocks) for M1.
     pub mode: PolicyMode,
-    /// The deployment profile, surfaced in readiness/audit. Defaults to `Production`.
-    pub profile: Profile,
     /// The G7 append-only receipt ledger (BLAKE3 chain over metadata-only receipts).
     pub receipts: Arc<Mutex<ReceiptLedger>>,
     /// The G7 cost model.
@@ -108,8 +106,7 @@ pub struct AppState {
 
 impl AppState {
     /// Assemble state with the default `mai-router` engine, the baseline policy
-    /// engine, `Enforce` mode + `Production` profile (the fail-closed default —
-    /// callers opt into a non-blocking mode explicitly via [`Self::with_mode`]),
+    /// engine, `Shadow` mode (the safe M1 default — decide + log, never block),
     /// a fresh receipt ledger, and the baseline price book.
     #[must_use]
     pub fn new(gateway: Arc<Gateway>, registry: Arc<Registry>, models: Arc<ModelMap>) -> Self {
@@ -119,8 +116,7 @@ impl AppState {
             models,
             router: Arc::new(DefaultRouter::with_defaults()),
             policy: Arc::new(PolicyEngine::baseline()),
-            mode: PolicyMode::Enforce,
-            profile: Profile::Production,
+            mode: PolicyMode::Shadow,
             receipts: Arc::new(Mutex::new(ReceiptLedger::new())),
             prices: Arc::new(PriceBook::baseline()),
             detector: Arc::new(PhiDetector::baseline()),
@@ -138,13 +134,6 @@ impl AppState {
     #[must_use]
     pub fn with_mode(mut self, mode: PolicyMode) -> Self {
         self.mode = mode;
-        self
-    }
-
-    /// Set the deployment profile (informational; surfaced in readiness/audit).
-    #[must_use]
-    pub fn with_profile(mut self, profile: Profile) -> Self {
-        self.profile = profile;
         self
     }
 }
@@ -174,7 +163,7 @@ pub(crate) async fn authorize(
         .gateway
         .resolve_and_check(key, Utc::now())
         .await
-        .map_err(crate::http::to_http)
+        .map_err(|e| crate::http::to_http(&e))
 }
 
 #[cfg(test)]

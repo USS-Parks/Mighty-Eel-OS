@@ -12,7 +12,8 @@
 
 services:
   openbao:
-    image: openbao/openbao:latest
+    # AS-001: third-party images digest-pinned (resolved 2026-07-07).
+    image: openbao/openbao@sha256:6150c4a6b62067db6141c8da7a6a6b5763f4f47c315343d0c848b40fecdfd452
     cap_add: [IPC_LOCK]
     command: server
     environment:
@@ -27,11 +28,12 @@ services:
     volumes:
       - openbao-data:/openbao/data
       - ./tls:/openbao/tls:ro
-    ports: ["8200:8200"]
+    # Trust core is internal-only: reachable by WSF services over the compose
+    # network, never host-published. Front it with your own authenticated ingress.
     restart: unless-stopped
 
   postgres:
-    image: postgres:17
+    image: postgres:17@sha256:ec7268a9214f943164865c1b68577c8eefd77b6a790a97c42ee2c61fdfb93769
     environment:
       POSTGRES_DB: wsf
       POSTGRES_USER: wsf
@@ -42,7 +44,7 @@ services:
     restart: unless-stopped
 
   objectstore:
-    image: minio/minio:latest
+    image: minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
     command: server /data
     environment:
       MINIO_ROOT_USER_FILE: /run/secrets/minio_user
@@ -60,8 +62,12 @@ services:
       WSF_MODE: production
       WSF_PG_URL: postgres://wsf@postgres/wsf
       WSF_OBJECTSTORE_URL: http://objectstore:9000
+      # Bind the internal compose network so replicas sit behind the load
+      # balancer. NOT host-published: the privileged routes (token issue /
+      # attenuate, seal / unseal, credential exchange, receipts) must reach the
+      # host only through an authenticated ingress, never a raw port mapping.
+      WSF_LISTEN: 0.0.0.0:8300
     depends_on: [openbao, postgres, objectstore]
-    ports: ["8300:8300"]
     deploy:
       replicas: 2
     restart: unless-stopped

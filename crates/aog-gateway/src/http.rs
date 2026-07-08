@@ -69,7 +69,7 @@ pub(crate) fn bearer_key(headers: &HeaderMap) -> Result<&str, (StatusCode, Strin
 ///
 /// `402 Payment Required` is the honest code for an exhausted budget: the key is
 /// valid, the caller has simply spent its allocation and must renew/top up.
-pub(crate) fn to_http(err: GatewayError) -> (StatusCode, String) {
+pub(crate) fn to_http(err: &GatewayError) -> (StatusCode, String) {
     let msg = err.to_string();
     match err {
         GatewayError::UnknownKey | GatewayError::Unauthorized(_) => (StatusCode::UNAUTHORIZED, msg),
@@ -88,7 +88,7 @@ async fn preflight_handler(
     let ctx = gw
         .resolve_and_check(key, Utc::now())
         .await
-        .map_err(to_http)?;
+        .map_err(|e| to_http(&e))?;
     Ok(Json(PreflightResponse {
         tenant_id: ctx.tenant_id,
         authorized: true,
@@ -126,20 +126,20 @@ mod tests {
     #[test]
     fn error_status_mapping() {
         assert_eq!(
-            to_http(GatewayError::UnknownKey).0,
+            to_http(&GatewayError::UnknownKey).0,
             StatusCode::UNAUTHORIZED
         );
         assert_eq!(
-            to_http(GatewayError::Unauthorized("expired".into())).0,
+            to_http(&GatewayError::Unauthorized("expired".into())).0,
             StatusCode::UNAUTHORIZED
         );
         assert_eq!(
-            to_http(GatewayError::BudgetExhausted).0,
+            to_http(&GatewayError::BudgetExhausted).0,
             StatusCode::PAYMENT_REQUIRED
         );
-        assert_eq!(to_http(GatewayError::Revoked).0, StatusCode::FORBIDDEN);
+        assert_eq!(to_http(&GatewayError::Revoked).0, StatusCode::FORBIDDEN);
         assert_eq!(
-            to_http(GatewayError::Malformed("bad".into())).0,
+            to_http(&GatewayError::Malformed("bad".into())).0,
             StatusCode::INTERNAL_SERVER_ERROR
         );
     }

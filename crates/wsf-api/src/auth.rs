@@ -1,517 +1,366 @@
-//! WSF principal authentication + server-derived issuance authority (AF-01).
+//! WSF transport authenticator seam (plan A2).
 //!
-//! Every privileged WSF route runs behind an [`Authenticator`]. The default is
-//! [`DenyAllAuthenticator`] — absent a configured production authenticator the
-//! trust plane refuses to mint authority (fail closed). A resolved
-//! [`WsfPrincipal`] carries the **server-side** tenant, roles, audience, budget
-//! ceiling, and model allowlist; a request body may only *narrow* these via
-//! [`derive_issue_authority`], never widen them.
+//! Establishes the calling [`WsfPrincipal`] from a verified transport
+//! credential *before* any privileged handler runs, and rejects missing,
+//! malformed, expired, wrong-audience, and wrong-tenant credentials with
+//! 401/403. The [`WsfAuthenticator`] trait is the seam; two implementations
+//! ship:
+//!
+//! * [`WorkloadAuthenticator`] — verifies a signed [`WorkloadCredential`]
+//!   presented as `Authorization: Workload <base64-json>`, checking signature,
+//!   expiry, audience, and (optionally) a bound tenant. This is the production
+//!   path (mTLS terminates at ingress and forwards a signed workload assertion;
+//!   the same verification applies to a SPIFFE JWT-SVID once wired).
+//! * [`LocalDevAuthenticator`] — an explicit development principal, never
+//!   production-grade ([`AuthStrength::LocalDev`]).
+//!
+//! The [`require_principal`] middleware runs the authenticator and inserts the
+//! principal into request extensions; handlers read it with
+//! `Extension<WsfPrincipal>` (wired in A3).
 
-use std::collections::HashMap;
-use std::sync::Mutex;
+use std::sync::Arc;
 
-use axum::http::header::AUTHORIZATION;
+use axum::Json;
+use axum::extract::{Request, State};
 use axum::http::{HeaderMap, StatusCode};
-use fabric_contracts::Budget;
+use axum::middleware::Next;
+use axum::response::{IntoResponse, Response};
+use chrono::{DateTime, Utc};
+use fabric_contracts::{Audience, AuthStrength, AuthenticatedFacts, IdentityKind, WsfPrincipal};
+use fabric_crypto::Verifier;
+use serde::{Deserialize, Serialize};
+use serde_json::json;
+use sha2::{Digest, Sha256};
 
-/// What kinds of issuance a principal is permitted to perform.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct IssuancePermissions {
-    /// Mint tokens scoped to the principal's own subject.
-    pub self_scoped: bool,
-    /// Mint tokens for other subjects within the principal's tenant.
-    pub delegated: bool,
-    /// Mint service/workload tokens.
-    pub service: bool,
-    /// Administrative issuance.
-    pub admin: bool,
+use base64::Engine;
+
+/// A signed workload credential presented at the transport edge. The caller
+/// *claims* these facts; the authenticator verifies the signature over them
+/// with the trusted authority key before any are believed.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkloadCredential {
+    /// Stable principal identifier (SPIFFE id, cert subject, AppRole name).
+    pub principal_id: String,
+    /// Principal kind.
+    #[serde(default)]
+    pub kind: IdentityKind,
+    /// Tenant the credential is bound to.
+    pub tenant_id: String,
+    /// Pseudonymized subject (empty for pure workloads).
+    #[serde(default)]
+    pub subject_hash: String,
+    /// Service identity, if any.
+    #[serde(default)]
+    pub service_identity: Option<String>,
+    /// Plane this credential is minted for.
+    pub audience: Audience,
+    /// RFC3339 expiry. Past ⇒ rejected.
+    pub expires_at: String,
+    /// Base64 raw detached signature over [`Self::signing_bytes`].
+    pub signature_b64: String,
 }
 
-/// The kind of token being requested.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum IssuanceKind {
-    /// Scoped to the principal's own subject.
-    SelfScoped,
-    /// For another subject within the tenant.
-    Delegated,
-    /// A service/workload token.
-    Service,
-}
-
-impl IssuanceKind {
-    /// Parse an issuance-kind name.
+impl WorkloadCredential {
+    /// Canonical, length-prefixed signing preimage (domain-separated). Length
+    /// prefixes make field boundaries unambiguous so no two distinct
+    /// credentials share a preimage.
     #[must_use]
-    pub fn parse(s: &str) -> Option<Self> {
-        match s {
-            "self" | "self_scoped" => Some(IssuanceKind::SelfScoped),
-            "delegated" => Some(IssuanceKind::Delegated),
-            "service" => Some(IssuanceKind::Service),
-            _ => None,
+    pub fn signing_bytes(&self) -> Vec<u8> {
+        let mut h = Sha256::new();
+        let audience_tag = match self.audience {
+            Audience::Wsf => "wsf",
+            Audience::Aog => "aog",
+            Audience::Mai => "mai",
+        };
+        for part in [
+            b"wsf-workload-credential/v1".as_slice(),
+            self.principal_id.as_bytes(),
+            self.tenant_id.as_bytes(),
+            self.subject_hash.as_bytes(),
+            self.service_identity.as_deref().unwrap_or("").as_bytes(),
+            audience_tag.as_bytes(),
+            self.expires_at.as_bytes(),
+        ] {
+            h.update((part.len() as u64).to_le_bytes());
+            h.update(part);
         }
+        h.finalize().to_vec()
     }
 }
 
-/// An authenticated caller. Every authoritative field is server-derived; the
-/// request body may only narrow it.
-#[derive(Debug, Clone)]
-pub struct WsfPrincipal {
-    /// The workload / service identity (from the authenticator).
-    pub service_identity: String,
-    /// The tenant this principal is bound to.
-    pub tenant_id: String,
-    /// Roles the principal holds (the ceiling for issued roles).
-    pub roles: Vec<String>,
-    /// Audience the principal issues for.
-    pub audience: String,
-    /// Budget ceiling (`None` = unbounded, e.g. an administrative identity).
-    pub budget_ceiling: Option<Budget>,
-    /// Model allowlist (`empty` = no identity-imposed model constraint).
-    pub allowed_models: Vec<String>,
-    /// Which issuance kinds this principal may perform.
-    pub permissions: IssuancePermissions,
-}
-
-/// Authentication / authorization failure. Everything fails closed.
+/// Why authentication failed. Maps to the HTTP status the middleware returns
+/// *before* the handler runs.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AuthError {
-    /// No credential was presented.
+    /// No credential presented.
     MissingCredential,
-    /// A credential was presented but is invalid.
-    InvalidCredential(String),
-    /// The principal is authenticated but not authorized for the action.
-    Forbidden(String),
+    /// Credential present but unparseable (bad scheme, base64, or JSON).
+    MalformedCredential(String),
+    /// Signature did not verify against the trusted authority key.
+    UntrustedCredential,
+    /// Credential is past its expiry.
+    ExpiredCredential,
+    /// Credential is for a different plane than this ingress serves.
+    WrongAudience { expected: Audience, got: Audience },
+    /// Credential is for a different tenant than this ingress is bound to.
+    WrongTenant,
 }
 
 impl AuthError {
-    /// The HTTP status for this failure.
+    /// The HTTP status: 401 for "who are you / prove it" failures, 403 for
+    /// "authenticated, but not for here" failures.
     #[must_use]
     pub fn status(&self) -> StatusCode {
         match self {
-            AuthError::MissingCredential | AuthError::InvalidCredential(_) => {
-                StatusCode::UNAUTHORIZED
-            }
-            AuthError::Forbidden(_) => StatusCode::FORBIDDEN,
+            AuthError::MissingCredential
+            | AuthError::MalformedCredential(_)
+            | AuthError::UntrustedCredential
+            | AuthError::ExpiredCredential => StatusCode::UNAUTHORIZED,
+            AuthError::WrongAudience { .. } | AuthError::WrongTenant => StatusCode::FORBIDDEN,
         }
     }
 
-    /// A safe message for this failure (never echoes credential material).
-    #[must_use]
-    pub fn message(&self) -> String {
-        match self {
-            AuthError::MissingCredential => "authentication required".to_string(),
-            AuthError::InvalidCredential(m) => format!("invalid credential: {m}"),
-            AuthError::Forbidden(m) => format!("forbidden: {m}"),
+    fn public_message(&self) -> &'static str {
+        // Deliberately terse: no oracle about which field mismatched.
+        match self.status() {
+            StatusCode::UNAUTHORIZED => "authentication required",
+            _ => "not authorized for this resource",
         }
     }
 }
 
-/// The authentication seam. A production deployment wires an mTLS / workload-
-/// identity authenticator; the default [`DenyAllAuthenticator`] fails closed.
-pub trait Authenticator: Send + Sync {
-    /// Authenticate a request from its headers, or fail closed.
-    ///
-    /// # Errors
-    /// [`AuthError`] when no valid principal can be established.
+impl IntoResponse for AuthError {
+    fn into_response(self) -> Response {
+        (
+            self.status(),
+            Json(json!({ "error": self.public_message() })),
+        )
+            .into_response()
+    }
+}
+
+/// The authenticator seam: turn transport headers into a verified principal.
+pub trait WsfAuthenticator: Send + Sync {
+    /// Establish the principal, or explain why not. Runs before every
+    /// privileged handler.
     fn authenticate(&self, headers: &HeaderMap) -> Result<WsfPrincipal, AuthError>;
 }
 
-/// Fail-closed default: rejects every request. Wired when no production
-/// authenticator is configured, so an unconfigured trust plane mints nothing.
-pub struct DenyAllAuthenticator;
+/// Verifies a signed [`WorkloadCredential`] against a trusted authority key.
+pub struct WorkloadAuthenticator {
+    verifier: Box<dyn Verifier>,
+    authority_public_key: Vec<u8>,
+    expected_audience: Audience,
+    /// If set, only credentials for this exact tenant are accepted (per-tenant
+    /// ingress). If `None`, any tenant the authority vouches for is admitted
+    /// and tenant scoping is enforced downstream (A3/A4).
+    bound_tenant: Option<String>,
+}
 
-impl Authenticator for DenyAllAuthenticator {
-    fn authenticate(&self, _headers: &HeaderMap) -> Result<WsfPrincipal, AuthError> {
-        Err(AuthError::InvalidCredential(
-            "no authenticator configured (fail-closed default)".to_string(),
+impl WorkloadAuthenticator {
+    /// New authenticator trusting `authority_public_key` for `audience`.
+    #[must_use]
+    pub fn new(
+        verifier: Box<dyn Verifier>,
+        authority_public_key: Vec<u8>,
+        audience: Audience,
+    ) -> Self {
+        Self {
+            verifier,
+            authority_public_key,
+            expected_audience: audience,
+            bound_tenant: None,
+        }
+    }
+
+    /// Bind this ingress to a single tenant (wrong-tenant ⇒ 403).
+    #[must_use]
+    pub fn bound_to_tenant(mut self, tenant_id: impl Into<String>) -> Self {
+        self.bound_tenant = Some(tenant_id.into());
+        self
+    }
+
+    fn parse(headers: &HeaderMap) -> Result<WorkloadCredential, AuthError> {
+        let raw = headers
+            .get(axum::http::header::AUTHORIZATION)
+            .ok_or(AuthError::MissingCredential)?
+            .to_str()
+            .map_err(|_| AuthError::MalformedCredential("non-ascii authorization".into()))?;
+        let b64 = raw
+            .strip_prefix("Workload ")
+            .ok_or(AuthError::MalformedCredential(
+                "expected `Workload` scheme".into(),
+            ))?;
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(b64.trim())
+            .map_err(|e| AuthError::MalformedCredential(format!("base64: {e}")))?;
+        serde_json::from_slice(&bytes)
+            .map_err(|e| AuthError::MalformedCredential(format!("json: {e}")))
+    }
+}
+
+impl WsfAuthenticator for WorkloadAuthenticator {
+    fn authenticate(&self, headers: &HeaderMap) -> Result<WsfPrincipal, AuthError> {
+        let cred = Self::parse(headers)?;
+
+        // 1. Signature over the canonical preimage. Do this FIRST — every field
+        //    below is attacker-controlled until the signature is trusted.
+        let sig = base64::engine::general_purpose::STANDARD
+            .decode(cred.signature_b64.trim())
+            .map_err(|_| AuthError::UntrustedCredential)?;
+        let ok = self
+            .verifier
+            .verify(&cred.signing_bytes(), &sig, &self.authority_public_key)
+            .map_err(|_| AuthError::UntrustedCredential)?;
+        if !ok {
+            return Err(AuthError::UntrustedCredential);
+        }
+
+        // 2. Expiry.
+        let exp = DateTime::parse_from_rfc3339(&cred.expires_at)
+            .map_err(|_| AuthError::MalformedCredential("expires_at not rfc3339".into()))?
+            .with_timezone(&Utc);
+        if Utc::now() >= exp {
+            return Err(AuthError::ExpiredCredential);
+        }
+
+        // 3. Audience.
+        if cred.audience != self.expected_audience {
+            return Err(AuthError::WrongAudience {
+                expected: self.expected_audience,
+                got: cred.audience,
+            });
+        }
+
+        // 4. Tenant binding, if this ingress is single-tenant.
+        if let Some(bound) = &self.bound_tenant
+            && &cred.tenant_id != bound
+        {
+            return Err(AuthError::WrongTenant);
+        }
+
+        Ok(WsfPrincipal::establish(
+            AuthenticatedFacts {
+                principal_id: cred.principal_id,
+                kind: cred.kind,
+                tenant_id: cred.tenant_id,
+                subject_hash: cred.subject_hash,
+                service_identity: cred.service_identity,
+                auth_strength: AuthStrength::WorkloadToken,
+                audience: cred.audience,
+            },
+            new_correlation_id(),
+            Utc::now().to_rfc3339(),
         ))
     }
 }
 
-/// A development / test authenticator that maps an explicit bearer credential to
-/// a pre-registered principal. **Not for production** — production wires an
-/// mTLS / workload-identity authenticator. Unknown or missing credentials fail
-/// closed.
-#[derive(Default)]
-pub struct StaticAuthenticator {
-    principals: HashMap<String, WsfPrincipal>,
+/// Explicit development authenticator: mints a fixed local-dev principal with
+/// no credential required. Never production-grade.
+pub struct LocalDevAuthenticator {
+    tenant_id: String,
+    audience: Audience,
+    principal_id: String,
 }
 
-impl StaticAuthenticator {
-    /// A new, empty authenticator (registers no principals — rejects everything).
+impl LocalDevAuthenticator {
+    /// Dev principal for `tenant_id` on the WSF plane.
     #[must_use]
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Register a principal behind a bearer credential.
-    #[must_use]
-    pub fn with_principal(
-        mut self,
-        credential: impl Into<String>,
-        principal: WsfPrincipal,
-    ) -> Self {
-        self.principals.insert(credential.into(), principal);
-        self
-    }
-}
-
-impl Authenticator for StaticAuthenticator {
-    fn authenticate(&self, headers: &HeaderMap) -> Result<WsfPrincipal, AuthError> {
-        let cred = bearer(headers)?;
-        self.principals
-            .get(cred)
-            .cloned()
-            .ok_or_else(|| AuthError::InvalidCredential("unknown credential".to_string()))
-    }
-}
-
-fn bearer(headers: &HeaderMap) -> Result<&str, AuthError> {
-    let raw = headers
-        .get(AUTHORIZATION)
-        .and_then(|v| v.to_str().ok())
-        .ok_or(AuthError::MissingCredential)?;
-    raw.strip_prefix("Bearer ")
-        .map(str::trim)
-        .filter(|k| !k.is_empty())
-        .ok_or(AuthError::MissingCredential)
-}
-
-/// The requested (narrowing) authority parsed from a caller's issue body.
-pub struct IssuanceRequest<'a> {
-    /// The requested issuance kind.
-    pub kind: IssuanceKind,
-    /// The requested tenant (must equal the principal's tenant, or be absent).
-    pub requested_tenant: Option<&'a str>,
-    /// The subject the token is minted for.
-    pub subject_id: &'a str,
-    /// Requested roles (must be a subset of the principal's).
-    pub requested_roles: &'a [String],
-    /// Requested budget (must be within the principal's ceiling).
-    pub requested_budget: Option<&'a Budget>,
-    /// Requested models (must be a subset of the principal's allowlist).
-    pub requested_models: &'a [String],
-}
-
-/// The server-derived authority that will actually be signed.
-#[derive(Debug, Clone)]
-pub struct DerivedAuthority {
-    /// Server-derived tenant.
-    pub tenant_id: String,
-    /// Subject the token is for.
-    pub subject_id: String,
-    /// Effective roles (⊆ principal roles).
-    pub roles: Vec<String>,
-    /// Effective audience (from the principal).
-    pub audience: String,
-    /// Effective budget (≤ ceiling).
-    pub budget: Option<Budget>,
-    /// Effective model allowlist (⊆ principal allowlist).
-    pub allowed_models: Vec<String>,
-}
-
-/// Derive the authority to sign, enforcing that the request only *narrows* the
-/// principal's authority.
-///
-/// # Errors
-/// [`AuthError::Forbidden`] when the request widens tenant, roles, budget, or
-/// models, or when the principal lacks permission for the issuance kind.
-pub fn derive_issue_authority(
-    principal: &WsfPrincipal,
-    req: &IssuanceRequest<'_>,
-) -> Result<DerivedAuthority, AuthError> {
-    let permitted = match req.kind {
-        IssuanceKind::SelfScoped => principal.permissions.self_scoped,
-        IssuanceKind::Delegated => principal.permissions.delegated,
-        IssuanceKind::Service => principal.permissions.service,
-    };
-    if !permitted {
-        return Err(AuthError::Forbidden(format!(
-            "principal '{}' may not perform {:?} issuance",
-            principal.service_identity, req.kind
-        )));
-    }
-
-    if let Some(t) = req.requested_tenant
-        && t != principal.tenant_id
-    {
-        return Err(AuthError::Forbidden(format!(
-            "cross-tenant issuance denied (principal tenant '{}', requested '{t}')",
-            principal.tenant_id
-        )));
-    }
-
-    for r in req.requested_roles {
-        if !principal.roles.iter().any(|pr| pr == r) {
-            return Err(AuthError::Forbidden(format!(
-                "role '{r}' exceeds the principal's granted roles"
-            )));
-        }
-    }
-    let roles = if req.requested_roles.is_empty() {
-        principal.roles.clone()
-    } else {
-        req.requested_roles.to_vec()
-    };
-
-    let budget = derive_budget(principal.budget_ceiling.as_ref(), req.requested_budget)?;
-    let allowed_models = derive_models(&principal.allowed_models, req.requested_models)?;
-
-    Ok(DerivedAuthority {
-        tenant_id: principal.tenant_id.clone(),
-        subject_id: req.subject_id.to_string(),
-        roles,
-        audience: principal.audience.clone(),
-        budget,
-        allowed_models,
-    })
-}
-
-fn derive_budget(
-    ceiling: Option<&Budget>,
-    requested: Option<&Budget>,
-) -> Result<Option<Budget>, AuthError> {
-    match (ceiling, requested) {
-        (None, Some(b)) => Ok(Some(b.clone())),
-        (Some(c), Some(b)) => {
-            if b.token_cap > c.token_cap
-                || b.usd_cap_cents > c.usd_cap_cents
-                || b.tool_call_cap > c.tool_call_cap
-            {
-                return Err(AuthError::Forbidden(
-                    "requested budget exceeds the principal's ceiling".to_string(),
-                ));
-            }
-            Ok(Some(b.clone()))
-        }
-        (Some(c), None) => Ok(Some(c.clone())),
-        (None, None) => Ok(None),
-    }
-}
-
-fn derive_models(allowed: &[String], requested: &[String]) -> Result<Vec<String>, AuthError> {
-    if allowed.is_empty() {
-        return Ok(requested.to_vec());
-    }
-    if requested.is_empty() {
-        return Ok(allowed.to_vec());
-    }
-    for m in requested {
-        if !allowed.iter().any(|am| am == m) {
-            return Err(AuthError::Forbidden(format!(
-                "model '{m}' is outside the principal's allowed set"
-            )));
-        }
-    }
-    Ok(requested.to_vec())
-}
-
-/// A minimal per-principal fixed-window issuance rate limiter.
-pub struct RateLimiter {
-    max_per_window: u32,
-    window_secs: i64,
-    state: Mutex<HashMap<String, (i64, u32)>>,
-}
-
-impl RateLimiter {
-    /// A limiter allowing `max_per_window` issuances per `window_secs`.
-    #[must_use]
-    pub fn new(max_per_window: u32, window_secs: i64) -> Self {
+    pub fn for_wsf(tenant_id: impl Into<String>) -> Self {
         Self {
-            max_per_window,
-            window_secs: window_secs.max(1),
-            state: Mutex::new(HashMap::new()),
+            tenant_id: tenant_id.into(),
+            audience: Audience::Wsf,
+            principal_id: "local-dev".into(),
         }
-    }
-
-    /// Record a hit for `key` at `now_epoch` (seconds); `true` when within the limit.
-    pub fn check(&self, key: &str, now_epoch: i64) -> bool {
-        let mut state = self.state.lock().expect("rate limiter lock");
-        let window = now_epoch / self.window_secs;
-        let entry = state.entry(key.to_string()).or_insert((window, 0));
-        if entry.0 != window {
-            *entry = (window, 0);
-        }
-        entry.1 += 1;
-        entry.1 <= self.max_per_window
     }
 }
 
-impl Default for RateLimiter {
-    fn default() -> Self {
-        Self::new(120, 60)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn principal() -> WsfPrincipal {
-        WsfPrincipal {
-            service_identity: "svc-a".to_string(),
-            tenant_id: "tenant-a".to_string(),
-            roles: vec!["clinician".to_string(), "reader".to_string()],
-            audience: "aud-a".to_string(),
-            budget_ceiling: Some(Budget {
-                token_cap: 1000,
-                tokens_spent: 0,
-                usd_cap_cents: 5000,
-                usd_spent_cents: 0,
-                tool_call_cap: 100,
-                tool_calls_spent: 0,
-            }),
-            allowed_models: vec!["gpt-4o".to_string(), "local".to_string()],
-            permissions: IssuancePermissions {
-                self_scoped: true,
-                delegated: true,
-                service: false,
-                admin: false,
+impl WsfAuthenticator for LocalDevAuthenticator {
+    fn authenticate(&self, headers: &HeaderMap) -> Result<WsfPrincipal, AuthError> {
+        // Optional overrides so a dev can act as a specific principal/subject.
+        let principal_id =
+            header_str(headers, "x-wsf-dev-principal").unwrap_or_else(|| self.principal_id.clone());
+        let subject_hash = header_str(headers, "x-wsf-dev-subject").unwrap_or_default();
+        Ok(WsfPrincipal::establish(
+            AuthenticatedFacts {
+                principal_id,
+                kind: IdentityKind::Human,
+                tenant_id: self.tenant_id.clone(),
+                subject_hash,
+                service_identity: None,
+                auth_strength: AuthStrength::LocalDev,
+                audience: self.audience,
             },
+            new_correlation_id(),
+            Utc::now().to_rfc3339(),
+        ))
+    }
+}
+
+fn header_str(headers: &HeaderMap, name: &str) -> Option<String> {
+    headers
+        .get(name)
+        .and_then(|v| v.to_str().ok())
+        .filter(|s| !s.is_empty())
+        .map(ToString::to_string)
+}
+
+fn new_correlation_id() -> String {
+    format!("corr-{}", uuid::Uuid::new_v4())
+}
+
+/// Axum middleware: authenticate, then inject the [`WsfPrincipal`] into
+/// extensions for the handler. On failure the request never reaches the
+/// handler — 401/403 is returned here.
+pub async fn require_principal(
+    State(auth): State<Arc<dyn WsfAuthenticator>>,
+    mut req: Request,
+    next: Next,
+) -> Response {
+    match auth.authenticate(req.headers()) {
+        Ok(principal) => {
+            req.extensions_mut().insert(principal);
+            next.run(req).await
         }
+        Err(e) => e.into_response(),
     }
+}
 
-    fn req<'a>(
-        kind: IssuanceKind,
-        tenant: Option<&'a str>,
-        roles: &'a [String],
-        budget: Option<&'a Budget>,
-        models: &'a [String],
-    ) -> IssuanceRequest<'a> {
-        IssuanceRequest {
-            kind,
-            requested_tenant: tenant,
-            subject_id: "subject-1",
-            requested_roles: roles,
-            requested_budget: budget,
-            requested_models: models,
-        }
-    }
+// Re-export so the credential minter (tests / a real issuer) can build the
+// exact preimage the authenticator verifies.
+pub use signing::mint_credential;
 
-    #[test]
-    fn deny_all_fails_closed() {
-        let a = DenyAllAuthenticator;
-        assert!(a.authenticate(&HeaderMap::new()).is_err());
-    }
+mod signing {
+    use super::WorkloadCredential;
+    use base64::Engine;
+    use fabric_contracts::Audience;
+    use fabric_crypto::Signer;
 
-    #[test]
-    fn static_authenticator_requires_known_bearer() {
-        let a = StaticAuthenticator::new().with_principal("cred-1", principal());
-        assert!(a.authenticate(&HeaderMap::new()).is_err(), "missing header");
-        let mut h = HeaderMap::new();
-        h.insert(AUTHORIZATION, "Bearer nope".parse().unwrap());
-        assert!(a.authenticate(&h).is_err(), "unknown credential");
-        let mut ok = HeaderMap::new();
-        ok.insert(AUTHORIZATION, "Bearer cred-1".parse().unwrap());
-        assert_eq!(a.authenticate(&ok).unwrap().tenant_id, "tenant-a");
-    }
-
-    #[test]
-    fn narrowing_request_succeeds_and_is_server_bound() {
-        let roles = vec!["reader".to_string()];
-        let models = vec!["local".to_string()];
-        let d = derive_issue_authority(
-            &principal(),
-            &req(
-                IssuanceKind::Delegated,
-                Some("tenant-a"),
-                &roles,
-                None,
-                &models,
-            ),
-        )
-        .unwrap();
-        assert_eq!(d.tenant_id, "tenant-a");
-        assert_eq!(d.roles, vec!["reader".to_string()]);
-        assert_eq!(d.allowed_models, vec!["local".to_string()]);
-        assert_eq!(d.audience, "aud-a");
-    }
-
-    #[test]
-    fn empty_request_inherits_principal_ceiling() {
-        let d = derive_issue_authority(
-            &principal(),
-            &req(IssuanceKind::Delegated, None, &[], None, &[]),
-        )
-        .unwrap();
-        assert_eq!(d.roles, vec!["clinician".to_string(), "reader".to_string()]);
-        assert_eq!(
-            d.allowed_models,
-            vec!["gpt-4o".to_string(), "local".to_string()]
-        );
-        assert_eq!(d.budget.unwrap().token_cap, 1000);
-    }
-
-    #[test]
-    fn cross_tenant_is_denied() {
-        let err = derive_issue_authority(
-            &principal(),
-            &req(IssuanceKind::Delegated, Some("tenant-b"), &[], None, &[]),
-        )
-        .unwrap_err();
-        assert!(matches!(err, AuthError::Forbidden(_)));
-    }
-
-    #[test]
-    fn role_elevation_is_denied() {
-        let roles = vec!["admin".to_string()];
-        let err = derive_issue_authority(
-            &principal(),
-            &req(IssuanceKind::Delegated, None, &roles, None, &[]),
-        )
-        .unwrap_err();
-        assert!(matches!(err, AuthError::Forbidden(_)));
-    }
-
-    #[test]
-    fn budget_widening_is_denied() {
-        let over = Budget {
-            token_cap: 100_000,
-            tokens_spent: 0,
-            usd_cap_cents: 5000,
-            usd_spent_cents: 0,
-            tool_call_cap: 100,
-            tool_calls_spent: 0,
+    /// Build and sign a [`WorkloadCredential`]. The credential authority (or a
+    /// test) calls this; the authenticator verifies its output.
+    #[allow(clippy::too_many_arguments)]
+    #[must_use]
+    pub fn mint_credential(
+        signer: &dyn Signer,
+        principal_id: impl Into<String>,
+        tenant_id: impl Into<String>,
+        subject_hash: impl Into<String>,
+        service_identity: Option<String>,
+        audience: Audience,
+        expires_at: impl Into<String>,
+    ) -> WorkloadCredential {
+        let mut cred = WorkloadCredential {
+            principal_id: principal_id.into(),
+            kind: fabric_contracts::IdentityKind::Workload,
+            tenant_id: tenant_id.into(),
+            subject_hash: subject_hash.into(),
+            service_identity,
+            audience,
+            expires_at: expires_at.into(),
+            signature_b64: String::new(),
         };
-        let err = derive_issue_authority(
-            &principal(),
-            &req(IssuanceKind::Delegated, None, &[], Some(&over), &[]),
-        )
-        .unwrap_err();
-        assert!(matches!(err, AuthError::Forbidden(_)));
-    }
-
-    #[test]
-    fn model_widening_is_denied() {
-        let models = vec!["claude-3-5-sonnet".to_string()];
-        let err = derive_issue_authority(
-            &principal(),
-            &req(IssuanceKind::Delegated, None, &[], None, &models),
-        )
-        .unwrap_err();
-        assert!(matches!(err, AuthError::Forbidden(_)));
-    }
-
-    #[test]
-    fn disallowed_issuance_kind_is_denied() {
-        // The fixture principal lacks `service` permission.
-        let err = derive_issue_authority(
-            &principal(),
-            &req(IssuanceKind::Service, None, &[], None, &[]),
-        )
-        .unwrap_err();
-        assert!(matches!(err, AuthError::Forbidden(_)));
-    }
-
-    #[test]
-    fn rate_limiter_bounds_per_window() {
-        let rl = RateLimiter::new(2, 60);
-        assert!(rl.check("svc-a", 0));
-        assert!(rl.check("svc-a", 10));
-        assert!(!rl.check("svc-a", 20), "third hit in window is blocked");
-        assert!(rl.check("svc-a", 60), "next window resets");
-        assert!(
-            rl.check("svc-b", 20),
-            "a different principal is independent"
-        );
+        let sig = signer.sign(&cred.signing_bytes()).expect("sign credential");
+        cred.signature_b64 = base64::engine::general_purpose::STANDARD.encode(sig);
+        cred
     }
 }

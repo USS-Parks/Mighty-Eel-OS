@@ -11,7 +11,10 @@
 //! test points it at a local mock of the token endpoint; a real-Azure run is
 //! owner-gated.
 
+use std::sync::{Arc, RwLock};
+
 use chrono::{DateTime, Utc};
+use fabric_revocation::MonotonicRevocationStore;
 use percent_encoding::{AsciiSet, NON_ALPHANUMERIC, utf8_percent_encode};
 use wsf_bridge::OpenBaoAuth;
 
@@ -58,7 +61,10 @@ impl AzureBrokerConfig {
 }
 
 /// A scoped Azure AD access token minted for a trust token.
-#[derive(Debug, Clone)]
+///
+/// `Debug` redacts the bearer token (plan B5 — parity with the AWS broker):
+/// a stray `{:?}` in a log line must never leak a live credential.
+#[derive(Clone)]
 pub struct AzureCredentials {
     /// The Azure AD access token.
     pub access_token: String,
@@ -66,11 +72,21 @@ pub struct AzureCredentials {
     pub expires_at: DateTime<Utc>,
 }
 
+impl std::fmt::Debug for AzureCredentials {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AzureCredentials")
+            .field("access_token", &"<redacted>")
+            .field("expires_at", &self.expires_at)
+            .finish()
+    }
+}
+
 /// The Azure credential broker.
 pub struct AzureBroker {
     openbao: OpenBaoAuth,
     http: reqwest::Client,
     config: AzureBrokerConfig,
+    revocation: Option<Arc<RwLock<MonotonicRevocationStore>>>,
 }
 
 /// Build the OAuth2 client-credentials form body. Pure, so it is unit-testable.
@@ -92,7 +108,16 @@ impl AzureBroker {
             openbao,
             http,
             config,
+            revocation: None,
         }
+    }
+
+    /// Wire a revocation store (plan R consumer wiring) — fail closed, same
+    /// semantics as the AWS broker.
+    #[must_use]
+    pub fn with_revocation_store(mut self, store: Arc<RwLock<MonotonicRevocationStore>>) -> Self {
+        self.revocation = Some(store);
+        self
     }
 
     /// Exchange a verified trust token for a scoped Azure AD access token. The
@@ -111,7 +136,7 @@ impl AzureBroker {
         now: DateTime<Utc>,
     ) -> Result<AzureCredentials, BrokerError> {
         // 1. Fail closed on trust.
-        verify_token(token, verifier, public_key, now)?;
+        verify_token(token, verifier, public_key, self.revocation.as_deref(), now)?;
 
         // 2. Broker's app credentials from OpenBao (never exposed downstream).
         let vault_token = self.openbao.login().await?;
@@ -190,5 +215,16 @@ mod tests {
         assert!(body.contains("client_id=client-guid"));
         assert!(body.contains("scope=https%3A%2F%2Fstorage.azure.com%2F.default"));
         assert!(body.contains("client_secret=s3cr3t%2F%2B%3D"));
+    }
+
+    #[test]
+    fn debug_output_redacts_the_access_token() {
+        let creds = AzureCredentials {
+            access_token: "eyJ.azure-bearer-material".to_string(),
+            expires_at: Utc::now(),
+        };
+        let d = format!("{creds:?}");
+        assert!(!d.contains("eyJ.azure-bearer-material"));
+        assert!(d.contains("<redacted>"));
     }
 }
