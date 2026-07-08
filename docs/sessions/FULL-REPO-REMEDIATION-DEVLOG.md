@@ -433,3 +433,34 @@ Verify: fmt; `cargo clippy -p mai-agent --all-targets -- -D warnings -A clippy::
 single-sample 0-ms frames -> `AudioBytesExceeded`, `byte_count <= 32000`) and
 `malformed_audio_frames_are_rejected` (odd-length + empty rejected, whole-sample accepted);
 existing feed/silence/take suites green. H10 closed. Commit: (this change set).
+
+### D1 - /v1/status verify DoS (H9) — VERIFIED already mitigated
+
+Re-traced H9 against current source (adversarial verification, as with H2). The
+unauthenticated-flood-triggers-O(n)-verify-under-lock vector is not present in the shipped
+code:
+- The only auth-exempt endpoint that verifies is `production_probe` (`/v1/health/production`,
+  `handlers/health.rs`). It verifies just the **last 64 entries** (`read_recent(64)`) inside a
+  500 ms `tokio::time::timeout`, then verifies lock-free (the 64-clone is the only work under
+  the store lock) - bounded, time-boxed, not an O(n) whole-chain verify.
+- An unauthenticated flood is additionally capped by the SEC-95 token-bucket rate limiter,
+  layered **outside** auth (`routes.rs`) precisely so a flood cannot exhaust the auth/verify
+  path.
+- The full O(n) chain verify (`verify_audit`, `/v1/compliance/audit/verify`) is auth +
+  `view_audit` permission-gated - not unauthenticated. `compliance_status` returns the cached
+  `integrity_status()` (O(1)), never a live verify.
+- The only unbounded in-memory ledger is `MemoryAuditWriter`, the explicit dev/test writer;
+  production uses the WAL-backed writer. mai-compliance's store is bounded (`max_in_memory`
+  eviction, U3), and its `verify_full` runs the verify outside the status lock (U2).
+
+So H9's four sub-concerns (auth-or-strip, cache, bound the ledger, no-lock-across-verify) are
+each already satisfied by existing hardening (SHIP-11 bounded probe + SEC-95 rate limit +
+auth-gated full verify) plus this remediation's U2/U3. The audit over-stated H9 by not crediting
+the 64-entry bound + timeout + rate limit. No code change - adding auth to a load-balancer
+health probe or re-bounding an already-bounded verify would be wrong/gold-plating (§13). H9
+dispositioned closed at the code boundary; docs-only.
+
+**Phase D Highs status:** H9 (verified mitigated), H10 (D2, fixed), H11 (D3, fixed) - all
+closed. The Phase D **Mediums** (D4 lock-poison, D5 breaker `from_secs_f64`, D6 toolproxy TTL,
+D7 SSE slot release, D8 streaming budget) and the D9 fuzz/soak gate remain as reachable
+robustness follow-ons below the Critical/High bar. Commit: (this change set, docs-only).
