@@ -482,6 +482,29 @@ Verify: fmt; clippy -D warnings PASS; `cargo test -p mai-core circuit_breaker` P
 both -> cooldown_max, no panic). D5 gate ("a multi-day outage does not panic") holds. Commit:
 (this change set).
 
+### D8 - streaming budget bypass (M) — owner-gated
+
+Confirmed: `surface_openai.rs`'s streaming branch calls `provider.stream()` with **no**
+`meter::record`/`record_spend` (only classified-cloud egress is refused, AF-08), while the
+non-streaming path meters + decrements. A budget-bearing token can therefore stream past its
+cap. The codebase already notes per-chunk stream metering is an unimplemented follow-on
+(`meter.rs:12`).
+
+The two closures are both owner-gated, so no unilateral code change here:
+- **Terminal-frame metering** (the audit's primary option) is a real feature - wrap the SSE
+  stream, capture the terminal usage frame, then `record_spend`. That is the correct fix and
+  belongs with the streaming-metering follow-on, not a drive-by.
+- **Refuse budgeted streaming** (the audit's fallback) closes the bypass in a few lines, but in
+  this gateway effectively *all* virtual keys are budgeted, so it disables streaming for every
+  real key - a product-capability regression. Imposing that unilaterally is out of scope
+  (§0.2, like the S4 deny decision); it also breaks the live streaming demo test
+  (`openai_surface.rs`, budgeted key) which cannot be verified without the OpenBao live gate.
+
+Prototyped the refuse-fallback, verified it closes the bypass, then reverted it (surface
+unchanged vs HEAD) pending the owner's choice. D8 stays open (Medium; cost-overrun via
+streaming, not a data/authz breach) with both fixes and their trade-offs documented. Commit:
+(this change set, docs-only).
+
 ## Phase G - compliance / routing fail-closed (mai-compliance, aog-gateway)
 
 ### G1 - composer fail-open on an unvetted request (M, PHI egress)
