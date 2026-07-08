@@ -30,4 +30,29 @@ else
   echo "[session-start] .githooks not found; skipped hooks wiring" >&2
 fi
 
+# --- Branch & Worktree canon guard (set by Basho) ---
+# The harness checks out the session BEFORE this hook runs, so this can only
+# DETECT and loudly flag an unexpected branch/worktree at session start — it
+# cannot prevent the initial checkout. Canon: never create/switch a branch or
+# worktree without Basho's explicit in-session approval. This alert forces a
+# confirmation when a session did not start on the default branch.
+default_branch="$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null | sed 's#^origin/##')"
+[ -z "$default_branch" ] && default_branch="main"
+current_branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo DETACHED)"
+git_dir="$(git rev-parse --git-dir 2>/dev/null || echo)"
+common_dir="$(git rev-parse --git-common-dir 2>/dev/null || echo)"
+in_worktree="no"
+[ -n "$git_dir" ] && [ -n "$common_dir" ] && [ "$git_dir" != "$common_dir" ] && in_worktree="yes"
+if [ "$current_branch" != "$default_branch" ] || [ "$in_worktree" = "yes" ]; then
+  echo "==================== BRANCH/WORKTREE CANON ALERT ====================" >&2
+  echo "[session-start] This session did NOT start on the default branch." >&2
+  echo "[session-start]   default branch : $default_branch" >&2
+  echo "[session-start]   current branch : $current_branch" >&2
+  echo "[session-start]   linked worktree: $in_worktree" >&2
+  echo "[session-start] CANON (set by Basho): do NOT create or switch branches" >&2
+  echo "[session-start] or open worktrees without Basho's explicit in-session" >&2
+  echo "[session-start] approval. CONFIRM with Basho before proceeding here." >&2
+  echo "====================================================================" >&2
+fi
+
 exit 0
