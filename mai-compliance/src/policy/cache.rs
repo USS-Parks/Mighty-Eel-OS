@@ -29,6 +29,7 @@ use serde::{Deserialize, Serialize};
 
 use super::bundle::PolicyBundle;
 use super::composer::AggregateDecision;
+use crate::jurisdiction::{ActorContext, CountryCode, PersonType};
 
 /// Default TTL for cache entries (60s).
 pub const DEFAULT_TTL_SECS: u64 = 60;
@@ -72,11 +73,49 @@ impl DecisionCacheConfig {
 pub struct DecisionKey([u8; 32]);
 
 impl DecisionKey {
-    /// Compute the key for the given bundle. Two bundles that differ
-    /// only in request id, timestamp, or other non-decision-relevant
-    /// fields hash to the same key.
+    /// Key for a bundle with no distinct actor context (the actor defaults to
+    /// unknown). Two bundles that differ only in request id, timestamp, or other
+    /// non-decision-relevant fields hash to the same key. Prefer
+    /// [`Self::from_bundle_and_actor`] on any path where the jurisdiction actor
+    /// (country / person type / deployment profile) influences the decision, so
+    /// two identical bundles from different actors do not collide (audit G6).
     pub fn from_bundle(bundle: &PolicyBundle) -> Self {
+        Self::from_bundle_and_actor(bundle, &ActorContext::default())
+    }
+
+    /// Key for a bundle **plus the requesting actor**. The actor's country,
+    /// person type, and deployment profile are folded in, so a decision that
+    /// varies by jurisdiction is cached per actor and never shared across them
+    /// (audit G6). This is the constructor to use on any actor-aware path.
+    pub fn from_bundle_and_actor(bundle: &PolicyBundle, actor: &ActorContext) -> Self {
         let mut h = Hasher::new();
+        Self::hash_bundle(&mut h, bundle);
+        h.update(b"|actor.country=");
+        h.update(
+            actor
+                .country
+                .as_ref()
+                .map_or("", CountryCode::as_str)
+                .as_bytes(),
+        );
+        h.update(b"|actor.person=");
+        h.update(Self::person_type_tag(actor.person_type).as_bytes());
+        h.update(b"|actor.profile=");
+        h.update(actor.deployment_profile.as_deref().unwrap_or("").as_bytes());
+        Self(*h.finalize().as_bytes())
+    }
+
+    /// Stable tag for a person type (matches the serde snake_case wire form).
+    fn person_type_tag(p: PersonType) -> &'static str {
+        match p {
+            PersonType::UsPerson => "us_person",
+            PersonType::NonUsPerson => "non_us_person",
+            PersonType::Unknown => "unknown",
+        }
+    }
+
+    /// Fold the decision-relevant projection of a bundle into `h`.
+    fn hash_bundle(h: &mut Hasher, bundle: &PolicyBundle) {
         let r = &bundle.request;
         h.update(b"req.tenant=");
         h.update(r.tenant_id.as_bytes());
@@ -123,8 +162,6 @@ impl DecisionKey {
             h.update(b"\x1f");
             h.update(r.as_bytes());
         }
-
-        Self(*h.finalize().as_bytes())
     }
 
     /// Return the raw 32-byte digest (hex-encoded by callers that
@@ -280,6 +317,7 @@ impl DecisionCache {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::jurisdiction::{ActorContext, CountryCode, PersonType};
     use crate::policy::bundle::{ClassificationResult, PolicyBundle, RequestMetadata};
     use crate::trust::TrustContext;
 
@@ -316,6 +354,48 @@ mod tests {
         let a = sample_bundle("r1");
         let b = sample_bundle("r1");
         assert_eq!(DecisionKey::from_bundle(&a), DecisionKey::from_bundle(&b));
+    }
+
+    #[test]
+    fn key_differs_by_actor_country_person_and_profile() {
+        // Audit G6: an identical bundle from a different actor must not collide.
+        let bundle = sample_bundle("r1");
+        let us = ActorContext {
+            country: Some(CountryCode::us()),
+            person_type: PersonType::UsPerson,
+            deployment_profile: None,
+        };
+        let foreign = ActorContext {
+            country: Some(CountryCode::new("FR").unwrap()),
+            person_type: PersonType::NonUsPerson,
+            deployment_profile: None,
+        };
+        let k_us = DecisionKey::from_bundle_and_actor(&bundle, &us);
+        assert_ne!(
+            k_us,
+            DecisionKey::from_bundle_and_actor(&bundle, &foreign),
+            "different country + person must not collide"
+        );
+        // Stable for the same (bundle, actor).
+        assert_eq!(k_us, DecisionKey::from_bundle_and_actor(&bundle, &us));
+        // person_type alone distinguishes.
+        let us_unknown = ActorContext {
+            person_type: PersonType::Unknown,
+            ..us.clone()
+        };
+        assert_ne!(
+            k_us,
+            DecisionKey::from_bundle_and_actor(&bundle, &us_unknown)
+        );
+        // deployment_profile alone distinguishes.
+        let us_defense = ActorContext {
+            deployment_profile: Some("defense".to_string()),
+            ..us.clone()
+        };
+        assert_ne!(
+            k_us,
+            DecisionKey::from_bundle_and_actor(&bundle, &us_defense)
+        );
     }
 
     #[test]

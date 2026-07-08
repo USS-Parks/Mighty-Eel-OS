@@ -714,3 +714,27 @@ PASS; `cargo test -p mai-compliance deid` PASS (11) - new `test_idx_token_is_sub
 (template `[PHI:{kind}#{idx}]` -> `[PHI:ssn#1]` + `[PHI:email_address#2]`, no literal `{idx}`);
 default `[PHI:{kind}]` suite unchanged. G5 gate ("template output has no literal `{idx}`") holds.
 Commit: (this change set).
+
+### G6 - fold the actor into the compliance decision-cache key (M)
+
+`DecisionKey::from_bundle` (`mai-compliance/src/policy/cache.rs`) hashed only the
+`PolicyBundle` projection (request / classification / trust) - not the jurisdiction
+`ActorContext` (country / person type / deployment profile). Two requests with an identical
+bundle but a different actor would therefore share a cache entry, so a decision that varies by
+jurisdiction (e.g. ITAR US-person vs non-US-person) could be served from the wrong actor's
+cached result. (Latent, not live: `from_bundle` has no production caller today - the cache is
+wired but not yet consulted on the actor-aware path - so this is a preventive fix so the key is
+collision-free the moment that path lands.)
+
+Fix: added `DecisionKey::from_bundle_and_actor(bundle, actor)` which folds `actor.country`,
+`person_type`, and `deployment_profile` into the digest; extracted the bundle projection into a
+shared `hash_bundle`; `from_bundle` now delegates with a default (unknown) actor and its doc
+directs actor-aware callers to the new constructor. In-memory cache, no persisted keys to
+migrate.
+
+Verify: fmt; clippy -D warnings PASS; `cargo test -p mai-compliance cache` PASS (27) - new
+`key_differs_by_actor_country_person_and_profile` (same bundle, US vs FR/non-US -> different
+keys; person type and deployment profile each distinguish; same (bundle, actor) stable); the
+existing stability / request-id-invariance / classification-sensitivity suites unchanged. G6
+gate ("two identical-bundle different-actor requests do not collide") holds. Commit: (this
+change set).
