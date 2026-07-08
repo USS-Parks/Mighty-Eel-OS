@@ -106,6 +106,14 @@ pub enum ChainError {
         #[source]
         source: BundleError,
     },
+    /// A boundary entry that must carry a periodic signature — its `(id+1)` is a
+    /// multiple of `signature_interval` — has none: the signature was stripped or
+    /// never produced. Fail closed (audit H7).
+    #[error("entry id={id} is a signing boundary but carries no signature")]
+    SignatureMissing {
+        /// Id of the boundary entry missing its signature.
+        id: u64,
+    },
 }
 
 /// Pluggable signer used by the chain manager.
@@ -321,22 +329,32 @@ pub fn verify_chain<V: BundleVerifier>(
         }
     }
 
-    // Verify periodic signatures when a verifier is supplied.
+    // Verify periodic signatures when a verifier is supplied. A boundary entry —
+    // one whose `(id+1)` is a multiple of the interval, exactly the predicate the
+    // signer uses in `finalize` — MUST carry a signature; a missing one is fail-
+    // closed (`SignatureMissing`), not skipped (audit H7: a stripped-signature
+    // boundary entry previously passed). Any present signature is verified.
     if let Some(v) = verifier
         && config.signature_interval > 0
     {
         for entry in entries {
-            let Some(sig) = entry.signature.as_ref() else {
-                continue;
-            };
-            // Same digest the signer received: BLAKE3 of canonical
-            // bytes (which exclude `signature` itself).
-            let payload_hash = entry.content_hash();
-            v.verify(&payload_hash, sig, &config.signing_key_id)
-                .map_err(|source| ChainError::SignatureVerificationFailed {
-                    id: entry.id,
-                    source,
-                })?;
+            let is_boundary = (entry.id + 1).is_multiple_of(config.signature_interval);
+            match entry.signature.as_ref() {
+                Some(sig) => {
+                    // Same digest the signer received: BLAKE3 of canonical bytes
+                    // (which exclude `signature` itself).
+                    let payload_hash = entry.content_hash();
+                    v.verify(&payload_hash, sig, &config.signing_key_id)
+                        .map_err(|source| ChainError::SignatureVerificationFailed {
+                            id: entry.id,
+                            source,
+                        })?;
+                }
+                None if is_boundary => {
+                    return Err(ChainError::SignatureMissing { id: entry.id });
+                }
+                None => {}
+            }
         }
     }
 
@@ -498,6 +516,35 @@ mod tests {
 
         let verifier = MlDsaBundleVerifier::new().with_anchor(key_id.to_string(), pk_bytes);
         verify_chain(&[a], &cfg, Some(&verifier)).expect("freshly signed chain must verify");
+    }
+
+    #[test]
+    fn verify_chain_rejects_stripped_boundary_signature() {
+        // Audit H7: a signing-boundary entry whose signature was stripped must
+        // fail closed, not be skipped.
+        use rand::rngs::OsRng;
+        let mut rng = OsRng;
+        let (signer, pk_bytes) = MlDsaChainSigner::generate(&mut rng);
+        let key_id = "audit-h7-key";
+        let cfg = ChainConfig {
+            signature_interval: 1, // every entry is a signing boundary
+            signing_key_id: key_id.to_string(),
+        };
+        let chain = HashChainManager::new(cfg.clone(), Arc::new(signer));
+        let a = chain.finalize(draft("a"));
+        let b = chain.finalize(draft("b"));
+        let verifier = MlDsaBundleVerifier::new().with_anchor(key_id.to_string(), pk_bytes);
+
+        // The clean signed chain verifies.
+        verify_chain(&[a.clone(), b.clone()], &cfg, Some(&verifier))
+            .expect("clean signed chain must verify");
+
+        // Strip the signature from the second (boundary) entry.
+        let mut stripped = vec![a, b];
+        stripped[1].signature = None;
+        let err = verify_chain(&stripped, &cfg, Some(&verifier))
+            .expect_err("a stripped boundary signature must be rejected");
+        assert!(matches!(err, ChainError::SignatureMissing { id: 1 }));
     }
 
     #[test]

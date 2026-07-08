@@ -196,3 +196,26 @@ K5) is a live-gate prompt in the same class as A6 / U5 / V6 / X2. Deferred to th
 owner/hardware lane per PSPR 0.2 alongside the other live proofs; the in-process proofs
 (K1/K2 regression tests + the K4 property suite) close H1/H2 at the code boundary in the
 meantime. Critical path continues at Phase U (audit-chain verification, reachable).
+
+## Phase U - audit-chain verification (mai-compliance)
+
+### U1 - enforce interval-boundary signatures (H7)
+
+`verify_chain` (`mai-compliance/src/audit/chain.rs`) verified only signatures that were
+*present*: the loop did `let Some(sig) = entry.signature else { continue }`. An attacker who
+stripped the signature off a signing-boundary entry (one the signer stamps because
+`(id+1) % signature_interval == 0`, per `finalize`) sailed through - the tamper-evidence a
+periodic signature is supposed to provide was defeated by simply deleting it.
+
+Changed: when a verifier is configured and `signature_interval > 0`, `verify_chain` now
+computes `is_boundary = (id+1).is_multiple_of(interval)` (the exact predicate `finalize`
+signs on) and requires a signature on every boundary entry - a missing one is the new
+fail-closed `ChainError::SignatureMissing { id }`, not a skip. Any present signature is still
+verified as before; non-boundary entries may legitimately be unsigned.
+
+Verify: fmt; `cargo clippy -p mai-compliance --all-targets -- -D warnings -A clippy::pedantic`
+PASS; `cargo test -p mai-compliance` PASS (332 tests) - new
+`verify_chain_rejects_stripped_boundary_signature` (clean signed chain verifies; stripping a
+boundary signature -> `SignatureMissing { id: 1 }`). Existing signed/unsigned/tamper/monotonic
+suites green (no legitimate unsigned-boundary-with-verifier path regressed). H7 closed at the
+verifier; the persisted-WAL leg is U2. Commit: (this change set).
