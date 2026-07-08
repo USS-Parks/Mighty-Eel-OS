@@ -53,15 +53,27 @@ struct AudioBuffer {
     silence_frames: u32,
     /// Silence threshold in frames
     silence_threshold: u32,
+    /// Absolute cap on accumulated bytes (audit H10). Bounds memory regardless of
+    /// reported frame duration — sub-millisecond / sub-sample frames floor to zero
+    /// duration, so the duration guard alone cannot stop an unbounded byte flood.
+    max_bytes: usize,
 }
 
 impl AudioBuffer {
     fn new(format: AudioFormat, max_duration_secs: u32, silence_threshold_ms: u32) -> Self {
         // Calculate silence threshold in frames
-        let bytes_per_sample = u32::from(format.bit_depth) / 8;
-        let _bytes_per_second = format.sample_rate * u32::from(format.channels) * bytes_per_sample;
+        let bytes_per_sample = u64::from(format.bit_depth) / 8;
+        let bytes_per_second = u64::from(format.sample_rate)
+            .saturating_mul(u64::from(format.channels))
+            .saturating_mul(bytes_per_sample);
         let frame_duration_ms = 20u32; // 20ms frames typical for WebSocket audio
         let silence_frames = silence_threshold_ms / frame_duration_ms;
+        // Absolute byte cap tied to the duration budget: the bytes `max_duration`
+        // seconds of this format would occupy (audit H10).
+        let max_bytes = bytes_per_second
+            .saturating_mul(u64::from(max_duration_secs))
+            .try_into()
+            .unwrap_or(usize::MAX);
 
         Self {
             data: Vec::new(),
@@ -70,12 +82,40 @@ impl AudioBuffer {
             max_duration_ms: u64::from(max_duration_secs) * 1000,
             silence_frames: 0,
             silence_threshold: silence_frames,
+            max_bytes,
         }
     }
 
     /// Append an audio frame. Returns true if the buffer is ready for
     /// transcription (silence detected or max duration reached).
     fn append_frame(&mut self, frame: &[u8]) -> Result<bool, AgentError> {
+        // Reject malformed frames before any duration arithmetic (audit H10): an
+        // empty frame carries no audio, and a frame that is not a whole number of
+        // samples both mis-aligns the stream and (sub-sample) reports zero duration
+        // while still consuming bytes. Guarding `frame_align != 0` also avoids a
+        // divide-by-zero on a degenerate (bit_depth / channels == 0) format.
+        let bytes_per_sample = usize::from(self.format.bit_depth) / 8;
+        let frame_align = bytes_per_sample * usize::from(self.format.channels);
+        if frame.is_empty() {
+            return Err(AgentError::MalformedAudioFrame("empty frame".to_owned()));
+        }
+        if frame_align == 0 || !frame.len().is_multiple_of(frame_align) {
+            return Err(AgentError::MalformedAudioFrame(format!(
+                "{} bytes is not a whole number of {frame_align}-byte samples",
+                frame.len()
+            )));
+        }
+
+        // Absolute byte cap: bounds memory even against a flood of zero-duration
+        // frames the duration guard below cannot catch (sub-ms frames floor to 0).
+        let new_len = self.data.len().saturating_add(frame.len());
+        if new_len > self.max_bytes {
+            return Err(AgentError::AudioBytesExceeded {
+                bytes: new_len,
+                max_bytes: self.max_bytes,
+            });
+        }
+
         // Check duration limit
         let frame_duration_ms = self.frame_duration_ms(frame.len());
         if self.duration_ms + frame_duration_ms > self.max_duration_ms {
@@ -493,6 +533,56 @@ mod tests {
         assert!(!ready); // Not enough silence yet
 
         assert!(mgr.buffer_size(&id).unwrap() > 0);
+    }
+
+    #[test]
+    fn zero_duration_frame_flood_is_byte_bounded() {
+        // Audit H10: a single 16-bit sample at 16 kHz floors to 0 ms
+        // (1000 / 16000 == 0), so the duration guard never trips; the byte cap
+        // must bound memory instead. 1-second budget => 32 000-byte cap.
+        let format = AudioFormat {
+            sample_rate: 16000,
+            channels: 1,
+            bit_depth: 16,
+            encoding: AudioEncoding::Pcm,
+        };
+        let mut buf = AudioBuffer::new(format, 1, 1000);
+        let one_sample = pcm_frame(5000, 1); // 2 bytes, 0 ms
+        let mut err = None;
+        for _ in 0..100_000 {
+            if let Err(e) = buf.append_frame(&one_sample) {
+                err = Some(e);
+                break;
+            }
+        }
+        assert!(
+            matches!(err, Some(AgentError::AudioBytesExceeded { .. })),
+            "a zero-duration frame flood must hit the byte cap"
+        );
+        assert!(buf.byte_count() <= 32_000, "buffer stayed bounded");
+    }
+
+    #[test]
+    fn malformed_audio_frames_are_rejected() {
+        let format = AudioFormat {
+            sample_rate: 16000,
+            channels: 1,
+            bit_depth: 16,
+            encoding: AudioEncoding::Pcm,
+        };
+        let mut buf = AudioBuffer::new(format, 30, 1000);
+        // Not a whole number of 2-byte samples.
+        assert!(matches!(
+            buf.append_frame(&[0u8; 3]),
+            Err(AgentError::MalformedAudioFrame(_))
+        ));
+        // Empty frame.
+        assert!(matches!(
+            buf.append_frame(&[]),
+            Err(AgentError::MalformedAudioFrame(_))
+        ));
+        // A whole-sample frame is accepted.
+        assert!(buf.append_frame(&pcm_frame(5000, 160)).is_ok());
     }
 
     #[test]

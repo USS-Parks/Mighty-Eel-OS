@@ -713,6 +713,12 @@ pub enum AgentError {
     #[error("Audio duration exceeded: {duration_ms}ms > {max_ms}ms")]
     AudioDurationExceeded { duration_ms: u64, max_ms: u64 },
 
+    #[error("Audio buffer byte cap exceeded: {bytes} bytes > {max_bytes}")]
+    AudioBytesExceeded { bytes: usize, max_bytes: usize },
+
+    #[error("Malformed audio frame: {0}")]
+    MalformedAudioFrame(String),
+
     #[error("STT model not available: {0}")]
     SttModelUnavailable(String),
 

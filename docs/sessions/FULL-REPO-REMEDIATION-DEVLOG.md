@@ -410,3 +410,26 @@ PASS; `cargo test -p aog-gateway` PASS (existing OpenAI/Anthropic surface + stre
 unaffected - normal operation intact). A timing-based hung-backend proof is a flaky unit test
 by nature; it belongs to the D9 fuzz/soak gate, not here. H11 closed at the client config.
 Commit: (this change set).
+
+### D2 - bound the STT audio buffer (H10)
+
+`AudioBuffer::append_frame` (`mai-agent/src/stt.rs`) guarded only on accumulated *duration*,
+computed as `samples * 1000 / sample_rate`. Two ways that floors to zero while bytes still
+accumulate: a **sub-sample** frame (`frame_bytes < bytes_per_sample*channels` -> `samples == 0`)
+and a **sub-millisecond** frame (a single 16-bit sample at 16 kHz is `1000/16000 == 0` ms).
+Either lets an attacker stream tiny frames that each append bytes but add 0 ms, so the duration
+cap never trips and `data` grows unbounded (OOM, H10). A degenerate format
+(`bit_depth/channels == 0`) additionally divided by zero in `frame_duration_ms` (panic).
+
+Fix: `append_frame` now, before any duration arithmetic, (1) rejects an empty frame and any
+frame that is not a whole number of samples (`frame.len() % frame_align`), which also guards
+`frame_align != 0` so the division can't panic; and (2) enforces an absolute byte cap
+(`max_bytes = bytes_per_second * max_duration_secs`, the memory a full utterance would occupy),
+refusing a frame that would exceed it. The byte cap is what actually bounds the sub-millisecond
+case the duration guard cannot. New `AgentError::{MalformedAudioFrame, AudioBytesExceeded}`.
+
+Verify: fmt; `cargo clippy -p mai-agent --all-targets -- -D warnings -A clippy::pedantic` PASS;
+`cargo test -p mai-agent` PASS (67) - new `zero_duration_frame_flood_is_byte_bounded` (100k
+single-sample 0-ms frames -> `AudioBytesExceeded`, `byte_count <= 32000`) and
+`malformed_audio_frames_are_rejected` (odd-length + empty rejected, whole-sample accepted);
+existing feed/silence/take suites green. H10 closed. Commit: (this change set).
