@@ -11,7 +11,7 @@ use tracing::{debug, error, info};
 use uuid::Uuid;
 
 use super::proto;
-use super::{extract_grpc_profile, role_has_permission};
+use super::{authenticate_grpc, role_has_permission};
 use crate::state::AppState;
 
 use mai_core::scheduler::{
@@ -41,7 +41,7 @@ impl proto::mai_inference_server::MaiInference for MaiInferenceService {
         &self,
         request: Request<proto::ChatCompletionRequest>,
     ) -> Result<Response<proto::ChatCompletionResponse>, Status> {
-        let (profile_id, role) = extract_grpc_profile(&request)?;
+        let (profile_id, role) = authenticate_grpc(&self.state, &request).await?;
         if !role_has_permission(&role, "inference") {
             return Err(Status::permission_denied(
                 "profile lacks inference permission",
@@ -154,7 +154,7 @@ impl proto::mai_inference_server::MaiInference for MaiInferenceService {
         &self,
         request: Request<proto::ChatCompletionRequest>,
     ) -> Result<Response<Self::ChatCompletionStreamStream>, Status> {
-        let (profile_id, role) = extract_grpc_profile(&request)?;
+        let (profile_id, role) = authenticate_grpc(&self.state, &request).await?;
         if !role_has_permission(&role, "inference") {
             return Err(Status::permission_denied(
                 "profile lacks inference permission",
@@ -286,7 +286,7 @@ impl proto::mai_inference_server::MaiInference for MaiInferenceService {
         &self,
         request: Request<proto::EmbeddingRequest>,
     ) -> Result<Response<proto::EmbeddingResponse>, Status> {
-        let (profile_id, role) = extract_grpc_profile(&request)?;
+        let (profile_id, role) = authenticate_grpc(&self.state, &request).await?;
         if !role_has_permission(&role, "inference") {
             return Err(Status::permission_denied(
                 "profile lacks inference permission",

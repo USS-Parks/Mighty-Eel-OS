@@ -128,8 +128,17 @@ pub async fn build_grpc_server(
         .add_service(power_svc)
         .add_service(registry_svc)
         .add_service(audit_svc)
-        .add_service(grpc_health_svc)
-        .add_service(reflection_svc);
+        .add_service(grpc_health_svc);
+
+    // Reflection is opt-in (F1): only expose the full service/method map when
+    // explicitly enabled. Production leaves it off so a client cannot enumerate
+    // the gRPC surface. Previously `reflection_svc` was added unconditionally,
+    // ignoring `config.enable_reflection`.
+    let router = if config.enable_reflection {
+        router.add_service(reflection_svc)
+    } else {
+        router
+    };
 
     let addr = config.bind_addr;
     let serve_future = router.serve(addr);

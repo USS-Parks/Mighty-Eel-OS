@@ -20,7 +20,7 @@
 |:--|:--|:--:|:--:|:--|:--:|:--|:--|:--|:--|:--:|
 | AF-01 | Unauthenticated WSF token issuance grants caller-selected authority | High | PSPR-03 | `crates/wsf-api/src/lib.rs:230` | 28, 31 | `wsf-api` `auth.rs` adversarial matrix (10) | `PSPR-03/` | `issue` now bearer-authed + server-derived; SDK `with_credential`; `IssueReq.issuance_kind` | live 2-tenant OpenBao proof owed (28); other privileged routes authed by PSPR-04/08/09/16 | CODE-FIXED |
 | AF-02 | Attenuation signs attacker-constructed child tokens without authenticating parent | High | PSPR-04 | `crates/fabric-token/src/lib.rs:121` | 28, 31 | pending | pending | pending | pending | OPEN |
-| AF-03 | gRPC trusts caller-authored administrator metadata | High | PSPR-05 | `mai-api/src/grpc/mod.rs:98` | 28, 31 | pending | pending | pending | pending | OPEN |
+| AF-03 | gRPC trusts caller-authored administrator metadata | High | PSPR-05 | `mai-api/src/grpc/mod.rs` (`authenticate_grpc`) | 28, 31 | `resolve_grpc_identity` matrix (valid / invalid / reject-caller-claimed / dev-fallback) | `M3/F1` | gRPC authenticates via `x-im-auth-token` against the shared key store; reflection now opt-in | closed; caller-claimed role rejected in production | CODE-FIXED |
 | AF-04 | Envelope unseal not bound to tenant/subject/audience/policy | High | PSPR-08 | `crates/wsf-seal/src/lib.rs:305` | 28, 31 | pending | pending | pending | pending | OPEN |
 | AF-05 | AWS credential exchange accepts caller-selected role ARN | High | PSPR-09 | `crates/wsf-api/src/lib.rs:333` | 28, 31 | pending | pending | pending | pending | OPEN |
 | AF-06 | Production readiness certifies a merely constructed vault | Medium | PSPR-21 | `mai-api/src/server.rs:689` | 29, 31 | pending | pending | pending | pending | OPEN |

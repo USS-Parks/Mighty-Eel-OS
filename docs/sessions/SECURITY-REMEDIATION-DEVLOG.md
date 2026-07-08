@@ -716,3 +716,49 @@ is the offline signer emitting `manifest.mldsa` and deployments constructing the
 registry in strict mode. DF-01A / DF-01B -> CODE-FIXED.
 
 Commit: (this change set).
+### F1 - MAI REST/gRPC/stream authorization (AF-03, F1-NEW-1/3, reflection)
+
+Objective: close the gRPC and REST identity-trust gaps in the MAI API surface.
+AF-03 (Critical-class) was the headline: the gRPC plane had no auth interceptor and
+trusted a caller-authored `x-im-profile: id:role` metadata string for every
+privileged authorization (power transition, model load/unload, registry scan, audit
+read, inference) - an attacker sending `x-im-profile: anyone:admin` got admin.
+
+Confirmed against source (`grpc/mod.rs:98`, `grpc/server.rs`): `extract_grpc_profile`
+read the caller-supplied role with only a string-whitelist check; `build_grpc_server`
+registered no interceptor; the module doc's "all RPCs pass through the auth
+interceptor" was false.
+
+Changed:
+- AF-03: `authenticate_grpc` resolves the caller from an `x-im-auth-token` API key
+  against the shared `ApiKeyStore` (the same store REST uses) and returns the
+  authenticated role - never the caller-claimed one. The legacy self-declared
+  `x-im-profile` path is honored only when the store explicitly enables
+  `allow_internal_profile_header` (dev/internal), the exact mirror of the REST auth
+  middleware; production rejects it. Every privileged gRPC call site
+  (power/audit/registry/models/inference) authenticates before the authz check.
+- gRPC reflection is opt-in: `build_grpc_server` honors `config.enable_reflection`
+  (previously added unconditionally, disclosing the full service/method map);
+  `MaiServer::run` defaults it off in production.
+- F1-NEW-1 (High): `POST /v1/models/install` used the caller-supplied `X-IM-Profile`
+  header for its role instead of the middleware-injected authenticated `ProfileInfo`
+  (a REST analog of AF-03 letting any valid low-privilege key escalate). It now reads
+  the authenticated identity from the request extensions.
+- F1-NEW-3: `/v1/admin/rotate-credentials` checked a non-existent "admin" permission
+  (which `check_permission` always denies, admins included) - a dead endpoint. It now
+  checks `manage_profiles` (admin-only).
+
+Verify: fmt clean; `cargo check -p mai-api` PASS; `cargo clippy -p mai-api
+--all-targets -- -D warnings -A clippy::pedantic` PASS; `cargo test -p mai-api` PASS
+(new regressions: resolve_grpc_identity valid-token / invalid-token / rejects-caller-
+claimed-role-in-production / dev-header-fallback).
+
+Residual (honest scope): AF-03 closed. gRPC transport still has no rate limiting (F1
+item6, Low); MaiHealth is intentionally unauthenticated (F1-4b, Low, mirrors the REST
+health exemption); the WS self-declared-role path (F1-5b) is latent (WS privileged ops
+are stubs) - dispositioned for the streaming-auth follow-on. The "admin sees all
+tenants" IDOR (F1 item7) loses its forge-admin amplification with AF-03; per-tenant
+object scoping is a separate design item (single-operator model today).
+AF-03 -> CODE-FIXED.
+
+Commit: (this change set).

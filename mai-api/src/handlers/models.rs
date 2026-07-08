@@ -47,10 +47,13 @@ pub async fn install_handler_raw(
 ) -> axum::response::Response {
     let (parts, body) = req.into_parts();
 
-    // Extract profile from headers (before consuming body)
-    let profile = match crate::auth::extract_profile(&parts.headers) {
-        Ok(p) => p,
-        Err(e) => return e.into_response(),
+    // Use the identity the auth middleware authenticated and injected into the
+    // request extensions, NOT the caller-supplied X-IM-Profile header (F1-NEW-1).
+    // Re-parsing the header would let any valid low-privilege key present
+    // `X-IM-Profile: x:admin` and escalate to admin on this route.
+    let profile = match parts.extensions.get::<ProfileInfo>() {
+        Some(p) => p.clone(),
+        None => return ApiError::Unauthorized.into_response(),
     };
 
     // Check permission

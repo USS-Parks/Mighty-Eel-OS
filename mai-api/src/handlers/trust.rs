@@ -340,7 +340,10 @@ pub async fn rotate_credentials(
     profile: ProfileInfo,
     Json(req): Json<RotateCredentialsRequest>,
 ) -> Result<impl IntoResponse, ApiError> {
-    check_permission(&profile, "admin")?;
+    // F1-NEW-3: "admin" is not a defined permission name (check_permission would
+    // reject every caller, admins included); credential rotation is an admin-only
+    // profile-management operation.
+    check_permission(&profile, "manage_profiles")?;
 
     let guard = state.openbao_bridge.read().await;
     let bridge = guard.as_ref().ok_or(ApiError::ServiceUnavailable)?;

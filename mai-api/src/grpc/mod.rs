@@ -14,12 +14,13 @@
 //! - `MaiAudit`: Audit log retrieval
 //! - `Health`: Standard grpc.health.v1 (Check + Watch)
 //!
-//! # Auth Interceptor
+//! # Authentication
 //!
-//! All RPCs pass through the auth interceptor which extracts the profile
-//! from gRPC metadata (`x-im-profile` key) using the same logic as the
-//! REST auth middleware. The profile_id is injected into request messages
-//! before reaching service implementations.
+//! Privileged RPCs authenticate the caller per-request via `authenticate_grpc`,
+//! which resolves the role from an `x-im-auth-token` API key against the shared
+//! `ApiKeyStore` — the same store the REST path uses. Caller-supplied role
+//! metadata (`x-im-profile`) is honored only as an explicit dev fallback when the
+//! store has `allow_internal_profile_header` enabled (never in production).
 
 #![allow(unused_variables, dead_code)]
 
@@ -58,6 +59,10 @@ pub mod registry;
 pub mod server;
 
 use tonic::{Request, Status};
+
+use crate::auth::ApiKeyStore;
+use crate::state::AppState;
+use crate::types::ProfileRole;
 
 /// Shared helper to convert a `mai-core` `ModelSummary` to the gRPC `ModelDetail`.
 ///
@@ -141,6 +146,63 @@ pub fn role_has_permission(role: &str, permission: &str) -> bool {
     }
 }
 
+/// gRPC metadata key carrying the API key (mirrors the REST `X-IM-Auth-Token`).
+pub const GRPC_AUTH_TOKEN_KEY: &str = "x-im-auth-token";
+
+/// Lowercase role name consumed by [`role_has_permission`].
+fn role_to_str(role: ProfileRole) -> &'static str {
+    match role {
+        ProfileRole::Admin => "admin",
+        ProfileRole::Adult => "adult",
+        ProfileRole::Teen => "teen",
+        ProfileRole::Child => "child",
+        ProfileRole::Guest => "guest",
+    }
+}
+
+/// Resolve the authenticated caller identity for a privileged gRPC request
+/// (finding AF-03). The role is derived from a verified `x-im-auth-token` API
+/// key against the shared key store — never from caller-supplied `x-im-profile`
+/// metadata. The legacy self-declared-profile path is honored only when the
+/// store explicitly enables `allow_internal_profile_header` (dev/internal),
+/// exactly mirroring the REST auth middleware; in production it is unreachable.
+#[allow(clippy::result_large_err)]
+pub fn resolve_grpc_identity<T>(
+    store: &ApiKeyStore,
+    request: &Request<T>,
+) -> Result<(String, String), Status> {
+    if let Some(token) = request.metadata().get(GRPC_AUTH_TOKEN_KEY) {
+        let raw = token.to_str().map_err(|_| {
+            Status::unauthenticated("x-im-auth-token contains non-ASCII characters")
+        })?;
+        let entry = store
+            .validate(raw)
+            .ok_or_else(|| Status::unauthenticated("invalid api key"))?;
+        return Ok((
+            entry.profile_id.clone(),
+            role_to_str(entry.role).to_string(),
+        ));
+    }
+    if store.allow_internal_profile_header {
+        // Dev/internal only: trust the self-declared profile header. This path is
+        // off in production (`allow_internal_profile_header == false`).
+        return extract_grpc_profile(request);
+    }
+    Err(Status::unauthenticated(
+        "missing x-im-auth-token; caller-supplied x-im-profile is not trusted",
+    ))
+}
+
+/// Authenticate a privileged gRPC request against the shared key store.
+#[allow(clippy::result_large_err)]
+pub async fn authenticate_grpc<T>(
+    state: &AppState,
+    request: &Request<T>,
+) -> Result<(String, String), Status> {
+    let store = state.auth.key_store.read().await;
+    resolve_grpc_identity(&store, request)
+}
+
 /// Convert an ApiError-style error into a tonic Status.
 pub fn api_error_to_status(code: &str, message: &str) -> Status {
     if code.starts_with("MAI-1") {
@@ -210,6 +272,54 @@ mod tests {
         assert!(!role_has_permission("child", "list_models"));
         assert!(role_has_permission("guest", "inference"));
         assert!(!role_has_permission("guest", "list_models"));
+    }
+
+    #[test]
+    fn test_resolve_grpc_identity_valid_token() {
+        let mut store = ApiKeyStore::new();
+        store.add_key_raw("im-secret", "svc".to_string(), ProfileRole::Admin, None);
+        let mut req = Request::new(());
+        req.metadata_mut()
+            .insert(GRPC_AUTH_TOKEN_KEY, "im-secret".parse().unwrap());
+        let (id, role) = resolve_grpc_identity(&store, &req).unwrap();
+        assert_eq!(id, "svc");
+        assert_eq!(role, "admin");
+    }
+
+    #[test]
+    fn test_resolve_grpc_identity_invalid_token() {
+        let store = ApiKeyStore::new();
+        let mut req = Request::new(());
+        req.metadata_mut()
+            .insert(GRPC_AUTH_TOKEN_KEY, "wrong".parse().unwrap());
+        let err = resolve_grpc_identity(&store, &req).unwrap_err();
+        assert_eq!(err.code(), tonic::Code::Unauthenticated);
+    }
+
+    #[test]
+    fn test_resolve_grpc_identity_rejects_caller_claimed_role() {
+        // AF-03 regression: a caller-supplied x-im-profile with no API key must
+        // NOT confer a role when the internal-header path is off (production).
+        let store = ApiKeyStore::new(); // allow_internal_profile_header = false
+        let mut req = Request::new(());
+        req.metadata_mut()
+            .insert(GRPC_PROFILE_KEY, "attacker:admin".parse().unwrap());
+        let err = resolve_grpc_identity(&store, &req).unwrap_err();
+        assert_eq!(err.code(), tonic::Code::Unauthenticated);
+    }
+
+    #[test]
+    fn test_resolve_grpc_identity_dev_header_fallback() {
+        // Dev/internal only: with the header path explicitly enabled, a
+        // self-declared profile is honored (mirrors REST semantics).
+        let mut store = ApiKeyStore::new();
+        store.allow_internal_profile_header = true;
+        let mut req = Request::new(());
+        req.metadata_mut()
+            .insert(GRPC_PROFILE_KEY, "dev:admin".parse().unwrap());
+        let (id, role) = resolve_grpc_identity(&store, &req).unwrap();
+        assert_eq!(id, "dev");
+        assert_eq!(role, "admin");
     }
 
     #[test]

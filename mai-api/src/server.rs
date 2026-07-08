@@ -480,7 +480,9 @@ impl MaiServer {
 
         let grpc_config = GrpcServerConfig {
             bind_addr: grpc_addr,
-            enable_reflection: true,
+            // Reflection off by default (F1): do not disclose the gRPC schema in
+            // production. Operators can enable it for local development.
+            enable_reflection: false,
             ..GrpcServerConfig::default()
         };
 

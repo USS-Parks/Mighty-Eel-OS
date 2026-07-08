@@ -8,7 +8,7 @@ use tonic::{Request, Response, Status};
 use tracing::{debug, info};
 
 use super::proto;
-use super::{extract_grpc_profile, model_summary_to_proto_detail, role_has_permission};
+use super::{authenticate_grpc, model_summary_to_proto_detail, role_has_permission};
 use crate::state::AppState;
 
 use mai_core::registry::ModelFilter;
@@ -31,7 +31,7 @@ impl proto::mai_registry_server::MaiRegistry for MaiRegistryService {
         &self,
         request: Request<proto::RegistryQueryRequest>,
     ) -> Result<Response<proto::RegistryQueryResponse>, Status> {
-        let (profile_id, role) = extract_grpc_profile(&request)?;
+        let (profile_id, role) = authenticate_grpc(&self.state, &request).await?;
         if !role_has_permission(&role, "list_models") {
             return Err(Status::permission_denied(
                 "profile lacks list_models permission",
@@ -102,7 +102,7 @@ impl proto::mai_registry_server::MaiRegistry for MaiRegistryService {
         &self,
         request: Request<proto::ScanModelsRequest>,
     ) -> Result<Response<proto::ScanModelsResponse>, Status> {
-        let (profile_id, role) = extract_grpc_profile(&request)?;
+        let (profile_id, role) = authenticate_grpc(&self.state, &request).await?;
         if !role_has_permission(&role, "registry_write") {
             return Err(Status::permission_denied(
                 "admin role required for registry scan",
