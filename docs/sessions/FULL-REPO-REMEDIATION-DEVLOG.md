@@ -271,3 +271,30 @@ Verify: fmt; clippy -D warnings PASS; `cargo test -p mai-compliance` PASS (335 t
 clean sealed WAL round-trips through unseal + hex and verifies); `wal_roundtrip_in_temp_file`
 updated for hex framing. H8 closed (U1 boundary sigs + U3 false positive + U2 from-head WAL);
 the restart-tamper live proof is U5. Commit: (this change set).
+
+### U4 - production crypto guard (2/3 verified done; signer leg deferred)
+
+"Refuse NullSigner / NullSealer / AcceptAll* in production." Two legs are already
+implemented and wired fail-closed into boot (verified, not re-done):
+- **NullSealer**: `mai-api/src/sealer_builder.rs::build_sealer` returns
+  `NullSealerAllowedInProduction` when a production profile sets
+  `audit.allow_null_sealer=true`, and `ship_profile.rs` rejects the same at parse time;
+  `server.rs::apply_ship_profile` maps the builder error to `ServerError::Init` (boot fails).
+  Runtime introspection is `production_guard.rs` AUDIT-005 + `compliance_sealer_real`.
+- **AcceptAll bundle verifier**: `build_trust_components` returns
+  `TrustBuildError::AcceptAllInProduction`, wired to `ServerError::Init` the same way
+  (`mai-api/tests/trust_production.rs` covers both).
+
+**Deferred - NullSigner (audit-chain signer):** `server.rs` builds the compliance
+`AuditLog` with the default `NullSigner` (no `.signer(..)`), so the chain is hash-linked but
+unsigned in production. Closing this *correctly* is not just a boot guard: a chain signer is
+only useful if its signatures are verifiable, which needs a **stable** provisioned ML-DSA
+chain-signing key (its public half registered with verifiers) plus `ChainConfig.signing_key_id`
+/ anchor coordination. Unlike the AEAD data key, an ephemeral per-boot key is wrong (verifiers
+could never match it), and wiring a signer with an empty `key_id` would emit signatures nothing
+can verify - disguised incompleteness (CANON 11). This is signing-infra work (PSPR 0.2), lane-
+deferred with A2 / K5 / V1 / V6. Until it lands, the chain's tamper-evidence is the hash link
+(now verified from the true head, U1-U3) rather than periodic signatures. Recorded, not faked.
+
+Verify: no code change this prompt (the two live legs already exist and are gated); disposition
+recorded here. Commit: (this change set, docs-only).
