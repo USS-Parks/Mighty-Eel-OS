@@ -639,3 +639,52 @@ handshake declaring `admin` stays Guest, profile id unchanged) and
 `test_handshake_without_authenticated_profile_fails_closed`; removed the tests that asserted
 the in-band-role behavior. P3 gate ("a Guest key cannot self-declare admin over WS") holds.
 Commit: (this change set).
+
+---
+
+## Session close — status & disposition of the remaining roster
+
+**Closed this STS (fix + tests + full verify gate, one commit each):** every audit Critical and
+High, and every security-relevant Medium.
+- Criticals/Highs: C1 (0.2 contain + A1 auth), C2 (0.2 contain; A2 transport deferred), H3 (A3),
+  H1 (K1+K4), H2 (K2), key-zeroize (K3), H7 (U1), H8 (U2+U3+U5), H6 (V2+V3), H10 (D2), H11 (D3).
+- Security Mediums: G1 (composer PHI-egress fail-open), G2 (classifier empty-tier), G3 (medical
+  entity floor), G4 (upstream-hint floor), P2 (clock rollback), P3 (WS priv-esc), D5 (breaker panic).
+- Verified-already-mitigated / doc-reconciled: H9 (D1), H4 (S doc + owner deny-option), U4 (2/3
+  wired; signer leg deferred).
+
+**Deferred — genuine §0.2 boundaries (hardware / multi-node / live / owner), documented above:**
+A2/A4/A5/A6 (mTLS + quorum + durable receipts + >=3-node live), K5 (OpenBao live), S1-S3
+(TPM/attestation hardware), V1/V4/V5/V6 (TPM seal + convergence + ZFS/TPM live), U-live, U4-signer
+(stable chain-key provisioning), D8 (streaming budget — owner capability decision), D9 & X2/X3
+(fuzz/soak/live suite), X1/X4-X7 (clean-checkout ladder, independent re-scan, red-team, go/no-go).
+
+**Remaining reachable Mediums/Lows — NOT yet done, dispositioned for a follow-on STS** (each is
+below the Critical/High/security-Medium bar this session cleared; recorded so none is lost):
+- **G5** de-id `{idx}` template substitution — bounded (string templating). Correctness, not egress.
+- **G6** fold `ActorContext` (country/person_type) into the compliance `DecisionKey` — bounded;
+  a cache-collision correctness fix.
+- **G7** detector NFKC/homoglyph/whitespace normalization + `entities.rs` non-ASCII offset-drift —
+  obfuscation-bypass (security-relevant) but **feature-sized**: needs a unicode-normalization dep +
+  a homoglyph table + offset remap. Warrants its own prompt, not a drive-by.
+- **G8** negative-control test gate for the fail-closed paths (G1-G4 already carry their own).
+- **D4** lock-poison hardening (`unwrap_or_else(|e| e.into_inner())`) across request-hot-path std
+  locks — bounded but many sites; mechanical sweep.
+- **D6** toolproxy `task_usage` TTL/session eviction + `execute`/`review` `tokio::time::timeout` —
+  bounded DoS hardening. **D7** SSE scheduler-slot release on stream drop — bounded resource fix.
+- **P1** `wsf-api` production guard (`assert_production_ready`, refuse public bind without a workload
+  key) — likely partly present like U4; needs verification + any gap. **P4** canned-success
+  endpoints (WS inference, gRPC embeddings/stream, `scan_models`, `list_profiles`) -> explicit
+  not-implemented status (honesty). **P5** posture startup-refusal + endpoint-honesty tests.
+- **Q1-Q7** hygiene / §11: **Q1** scrub CANON roster step-codes from ~82 `src/` files (**large
+  mechanical**); **Q2** tighten the no-slop scanner to catch them; **Q3** fix the known dangling
+  refs (`fabric-proof/bundle.rs:75` `F6-N7`, `audit/entry.rs` `BUILD-EXECUTION-PLAN-V2-UPDATED.md`,
+  `aog-scheduler/filters.rs:2` `mai-scheduler`); **Q4** doc-path drift; **Q5** `mai-hil` blanket
+  `#![allow]`; **Q6** honest heuristics + operator-config overflow guards; **Q7** full-tree gate.
+
+**Note:** this remediation's own source comments cite audit finding ids (`H1`, `G4`, ...) and
+carry two `TODO(basho)` markers (attestation S2, WS-STT) — all reference the audit report / real
+follow-ons (not build-roster provenance), so they pass the current no-slop gate. Q1/Q2 should keep
+audit-finding references distinct from CANON roster step-codes when the scanner is tightened.
+
+Branch `session/AUDIT-FIX-1`; no push (awaiting explicit approval per §0.4 / project CLAUDE.md).
