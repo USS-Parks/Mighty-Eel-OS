@@ -10,6 +10,8 @@ use ml_dsa::{
     SigningKey, VerifyingKey,
 };
 
+use zeroize::Zeroize;
+
 use crate::error::CryptoError;
 use crate::{MLDSA87_PK_LEN, MLDSA87_SIG_LEN, MLDSA87_SK_LEN, Signer, Verifier};
 
@@ -34,6 +36,10 @@ impl RustCryptoMlDsa87 {
         let kp = MlDsa87::key_gen_internal(&seed);
         let secret_key = kp.signing_key().encode().to_vec();
         let public_key = kp.verifying_key().encode().to_vec();
+        // Wipe the KDF seed now that the keypair is derived — the seed alone
+        // reconstructs the whole secret key. Clears the buffer we own; the
+        // transient copy inside `key_gen_internal` is owned by ml-dsa.
+        seed_bytes.zeroize();
         Ok((public_key, secret_key))
     }
 
@@ -99,6 +105,16 @@ impl Signer for RustCryptoMlDsa87 {
         let sk = SigningKey::<MlDsa87>::decode(&sk_encoded);
         let sig: Signature<MlDsa87> = sk.sign(message);
         Ok(sig.encode().to_vec())
+    }
+}
+
+impl Drop for RustCryptoMlDsa87 {
+    /// Wipe the secret key from memory on drop (K3). Only the secret is cleared;
+    /// `key_id` and `public_key` are not sensitive. Best-effort: guards the key
+    /// against lingering in a freed heap buffer, not against copies ml-dsa made
+    /// internally while signing.
+    fn drop(&mut self) {
+        self.secret_key.zeroize();
     }
 }
 

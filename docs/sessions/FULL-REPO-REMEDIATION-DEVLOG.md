@@ -144,3 +144,27 @@ Verify: fmt; clippy -D warnings PASS; `cargo test -p fabric-token` PASS - new
 InvalidSignature; fails on the old code, passes now). Blast radius clean: `cargo test -p
 aog-apiserver -p wsf-bridge -p wsf-cache -p aogd -p fabric-revocation` all green (mint+verify
 round-trips unaffected). Commit: (this change set).
+
+### K3 - zeroize the ML-DSA secret key + KDF seed (H-crypto-hygiene)
+
+`RustCryptoMlDsa87` held `secret_key: Vec<u8>` (the offline/air-gap ML-DSA-87 signing key)
+with no `Drop`, so on drop the key stayed in freed heap memory; likewise the 32-byte KDF
+`seed_bytes` in `keypair()` - which alone reconstructs the whole secret key - was left on the
+stack. A memory-hygiene gap (post-use secret residue), not a logic flaw.
+
+Changed (`fabric-crypto`): added the audited `zeroize` 1.8 crate (already in-tree via
+wsf-broker) as a direct dep; `keypair()` now `seed_bytes.zeroize()`s once the keypair is
+derived; and a manual `impl Drop for RustCryptoMlDsa87` wipes `secret_key` on drop. The wipe
+is deliberately scoped to the secret only - `key_id` and `public_key` are not sensitive.
+
+Honest scope: this is best-effort. It clears the buffers this crate owns; it does not reach
+copies `ml-dsa`'s `key_gen_internal` / `sign` make internally (third-party, outside our
+control) or the plain `(Vec,Vec)` `keypair()` hands to external key-storage callers by design.
+Manual `Drop` (not `#[derive(ZeroizeOnDrop)]`) so only the one secret field is targeted.
+
+Verify: fmt; clippy -D warnings PASS; `cargo test -p fabric-crypto` PASS - existing sign/verify
++ from_keypair round-trips green (the zeroize wiring preserves function), plus new
+`signer_drop_is_sound_after_zeroize_wiring` (drop an ephemeral signer, an independent one
+still verifies: no double-free / cross-talk). The wipe itself is a Drop-time guarantee of the
+`zeroize` crate, verified by code review + preserved-function tests (not observable post-free
+without UB). Commit: (this change set).
