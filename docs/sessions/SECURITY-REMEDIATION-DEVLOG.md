@@ -828,3 +828,28 @@ accept/reject matrix; existing plan_require_signed_rejects_unsigned still green)
 AF-11 / AF-19 -> CODE-FIXED.
 
 Commit: (this change set).
+### F8 - deployment/IaC/supply-chain (AF-20 image pin)
+
+Objective: close AF-20 (production-like deployment images use mutable tags). The F8
+audit CONFIRMED the rest of the supply-chain posture is strong - AS-001 third-party
+digest pins hold in the production HA stack; no dev-mode OpenBao / known root token /
+host-published privileged plane / committed secret / privileged container in any
+production manifest; the supply-chain workflow cosign-signs + attests an SBOM.
+
+Confirmed against source (`deployment/wsf-ha/docker-compose.yml:59`): the production
+HA reference published `islandmountain/wsf-api:latest` - a mutable tag with no
+rollback/reproducibility anchor. (The report's `:57` pointed at the preceding comment.)
+
+Changed: pinned to `islandmountain/wsf-api:${WSF_API_VERSION:-v0.1.0}` - an immutable
+release tag (default tracks the workspace version), never `latest`, overridable per
+release. Every third-party pull in this stack is already digest-pinned (AS-001).
+
+Verify: `yaml.safe_load` parses; no `:latest` remains in the production HA manifest.
+
+Residual (dispositioned, not fixed): the demo appliance stack pulls mutable third-party
+tags (F8-N1, Low - demo/loopback, not production); the compose/profile validator is not
+yet a CI gate (F8-N3, Low - a Layer-3 gap; the validator + its 10-case test exist and
+run as a documented manual step). Both are Low, demo/ops-plane items outside AF-20's
+production scope. AF-20 -> CODE-FIXED.
+
+Commit: (this change set).

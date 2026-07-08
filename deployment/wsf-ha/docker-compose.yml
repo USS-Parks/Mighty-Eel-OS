@@ -56,7 +56,10 @@ services:
 
   # Stateless — scale with `deploy.replicas` / `docker compose up --scale`.
   wsf-api:
-    image: islandmountain/wsf-api:latest
+    # AF-20: first-party build output pinned to an immutable release tag, never
+    # `latest`. Override per release via WSF_API_VERSION; the default tracks the
+    # workspace version.
+    image: islandmountain/wsf-api:${WSF_API_VERSION:-v0.1.0}
     environment:
       WSF_OPENBAO_ADDR: https://openbao:8200
       WSF_MODE: production
