@@ -282,7 +282,10 @@ pub fn record(ledger: &Mutex<ReceiptLedger>, prices: &PriceBook, c: &Completion)
         c.usage.input_tokens,
         c.usage.output_tokens,
     );
-    let mut guard = ledger.lock().expect("receipt ledger lock");
+    // Recover from a poisoned lock instead of panicking: a prior panic in another
+    // request must not wedge the per-completion receipt path (audit D4). The region
+    // is a single next_id + append, so a recovered guard is consistent.
+    let mut guard = ledger.lock().unwrap_or_else(|e| e.into_inner());
     let receipt = GatewayReceipt {
         request_id: guard.next_id(),
         at: Utc::now().to_rfc3339(),
@@ -327,6 +330,37 @@ mod tests {
             workflow_id: Some(wf.to_string()),
             tokenized_spans: 0,
         }
+    }
+
+    #[test]
+    fn poisoned_receipt_ledger_recovers_instead_of_wedging() {
+        // D4: a panic while another request held the receipt-ledger lock must not
+        // wedge the ledger for every later request. The hot-path sites now recover
+        // the guard via `unwrap_or_else(|e| e.into_inner())` instead of `.expect(..)`,
+        // and the locked region (next_id + append) leaves consistent state on unwind.
+        let ledger = Mutex::new(ReceiptLedger::new());
+        ledger
+            .lock()
+            .unwrap()
+            .append(receipt("task-1", "openai", 7));
+
+        // Poison the lock: panic while the guard is held.
+        let poisoned = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _g = ledger.lock().unwrap();
+            panic!("simulated request panic under the receipt lock");
+        }));
+        assert!(poisoned.is_err(), "the closure panicked as set up");
+        assert!(
+            ledger.is_poisoned(),
+            "precondition: the lock is now poisoned"
+        );
+
+        // The hardened access pattern still yields a usable guard, and the
+        // pre-panic receipt is intact — no wedge, no data loss.
+        let guard = ledger.lock().unwrap_or_else(|e| e.into_inner());
+        assert!(guard.verify(), "recovered chain still verifies");
+        assert_eq!(guard.receipts().len(), 1, "the pre-panic receipt survived");
+        assert_eq!(guard.cost_per_task("task-1"), 7);
     }
 
     #[test]

@@ -864,3 +864,31 @@ Verify: fmt; `cargo clippy -p mai-api --all-targets -- -D warnings -A clippy::pe
 release-on-drop timing is verified by construction (guard lives in the task; the loop breaks
 promptly on disconnect/complete); a wall-clock disconnect test would be inherently flaky and
 belongs to the live suite. D7 gate holds. Commit: (this change set).
+
+### D4 - lock-poison recovery on the receipt-ledger hot path (M)
+
+`aog-gateway` locked the shared receipt ledger with `.lock().expect("receipt ledger lock")`
+at four request-hot sites - `meter::record` (the per-completion append) and the `/v1/usage`,
+`/v1/roi`, `/v1/status` read paths (`surface_openai.rs`). A panic while any one request held
+that lock poisons the `Mutex`, so with `.expect(..)` every subsequent request would then panic
+unwrapping the `PoisonError` - one transient fault cascades into a hard gateway outage (audit
+D4, "a poisoned lock must not turn a single fault into an outage").
+
+Fix: those four sites recover the guard with `.lock().unwrap_or_else(|e| e.into_inner())`. Each
+locked region is trivially recovery-safe: `record` does a single `next_id` + `append` (the hash
+chain stays consistent on unwind - the append is one `push`, so a half-appended receipt is not
+representable), and the three read paths only read aggregates / head / verify. A recovered guard
+therefore observes intact state.
+
+Scope: this is the request-hot slice. The broader workspace still holds ~100 std-lock
+`.lock().unwrap()/.expect()` sites across aog-toolproxy, mai-compliance, mai-api, mai-scheduler
+and the wsf-* crates; each needs a per-site recovery-safety judgment (plus the audit's companion
+"keep fallible work out of the locked region" review), so the full sweep is a tracked mechanical
++ review follow-on - deliberately not folded in here, to keep this change reviewable and avoid a
+blanket edit that could paper over a genuinely-unsafe region (CANON 13).
+
+Verify: fmt; `cargo clippy -p aog-gateway --all-targets -- -D warnings -A clippy::pedantic`
+PASS; `cargo test -p aog-gateway` PASS (62) - new `poisoned_receipt_ledger_recovers_instead_of_wedging`
+poisons a real `Mutex<ReceiptLedger>` (panic under the held guard), then asserts the hardened
+pattern still yields a usable guard whose pre-panic receipt and chain are intact. D4 gate
+("poisoned lock does not cascade") holds for the request path. Commit: (this change set).

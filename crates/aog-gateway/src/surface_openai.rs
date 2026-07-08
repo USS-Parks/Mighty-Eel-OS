@@ -256,7 +256,7 @@ async fn usage(State(state): State<AppState>, headers: HeaderMap) -> Response {
         Err(e) => return e.into_response(),
     };
     let (aggregates, head, verified) = {
-        let led = state.receipts.lock().expect("receipt ledger lock");
+        let led = state.receipts.lock().unwrap_or_else(|e| e.into_inner());
         (
             led.aggregate_for_tenant(&ctx.tenant_id),
             led.head_hex(),
@@ -297,7 +297,7 @@ async fn roi(
         window_days: q.window_days.unwrap_or(defaults.window_days),
     };
     let aggregates = {
-        let led = state.receipts.lock().expect("receipt ledger lock");
+        let led = state.receipts.lock().unwrap_or_else(|e| e.into_inner());
         led.aggregate_for_tenant(&ctx.tenant_id)
     };
     Json(crate::recommend::recommend(&aggregates, inputs)).into_response()
@@ -309,7 +309,7 @@ async fn roi(
 /// virtual key.
 async fn status(State(state): State<AppState>) -> Json<Value> {
     let (receipts, head, verified) = {
-        let led = state.receipts.lock().expect("receipt ledger lock");
+        let led = state.receipts.lock().unwrap_or_else(|e| e.into_inner());
         (led.receipts().len(), led.head_hex(), led.verify())
     };
     Json(status_json(
