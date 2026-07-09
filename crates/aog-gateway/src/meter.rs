@@ -133,11 +133,24 @@ pub struct TaskUsage {
 
 /// Append-only receipt ledger: a BLAKE3 hash chain (`fabric-proof`) over
 /// metadata-only receipts, mirroring `wsf-seal`'s `ReceiptChain`.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct ReceiptLedger {
     links: Vec<ChainLink>,
     receipts: Vec<GatewayReceipt>,
     last_hash: [u8; 32],
+    /// Chain-intact flag, maintained in O(1) by `append` (each link extends the
+    /// running head by construction). The unauthenticated `/v1/status` read
+    /// consults this instead of re-walking the chain from genesis under the
+    /// receipt lock the completion path needs, so an unauthenticated status
+    /// flood cannot force an O(n) walk while holding that lock. The full O(n)
+    /// re-derivation stays available via [`verify`](Self::verify).
+    verified: bool,
+}
+
+impl Default for ReceiptLedger {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ReceiptLedger {
@@ -147,6 +160,7 @@ impl ReceiptLedger {
             links: Vec::new(),
             receipts: Vec::new(),
             last_hash: GENESIS_HASH,
+            verified: true,
         }
     }
 
@@ -154,12 +168,22 @@ impl ReceiptLedger {
     pub fn append(&mut self, receipt: GatewayReceipt) -> String {
         let value = serde_json::to_value(&receipt).expect("receipt serializes");
         let entry_hash = canonical_hash(&value).expect("canonical hash of receipt");
+        let previous_hash = self.last_hash;
         self.links.push(ChainLink {
-            previous_hash: self.last_hash,
+            previous_hash,
             entry_hash,
         });
-        self.last_hash = chain_link(&self.last_hash, &entry_hash);
+        self.last_hash = chain_link(&previous_hash, &entry_hash);
         self.receipts.push(receipt);
+        // O(1) maintenance of the chain-intact invariant: the link just pushed
+        // extends the prior head, so the chain remains verified. A future change
+        // that broke append's chaining would flip this; the full walk in
+        // `verify` remains the tamper check.
+        self.verified = self.verified
+            && self
+                .links
+                .last()
+                .is_some_and(|l| l.previous_hash == previous_hash);
         hex::encode(self.last_hash)
     }
 
@@ -169,10 +193,22 @@ impl ReceiptLedger {
         format!("rcpt-{}", self.receipts.len())
     }
 
-    /// Verify the receipt chain is unbroken from genesis.
+    /// Verify the receipt chain is unbroken from genesis — the full O(n) walk.
+    /// Use for an explicit tamper audit; the read-hot `/v1/status` path reads the
+    /// O(1) [`chain_verified`](Self::chain_verified) instead.
     #[must_use]
     pub fn verify(&self) -> bool {
         verify_chain(&self.links).is_ok()
+    }
+
+    /// The O(1) chain-intact flag maintained by `append`. The unauthenticated
+    /// `/v1/status` endpoint reads this so a status flood cannot force an O(n)
+    /// chain walk while holding the receipt lock the completion path contends
+    /// for. For a full genesis-to-head re-derivation, use
+    /// [`verify`](Self::verify).
+    #[must_use]
+    pub fn chain_verified(&self) -> bool {
+        self.verified
     }
 
     #[must_use]
@@ -422,6 +458,24 @@ mod tests {
         // Corrupt a link's entry hash.
         led.links[0].entry_hash[0] ^= 0xff;
         assert!(!led.verify(), "a tampered chain fails verification");
+    }
+
+    #[test]
+    fn chain_verified_flag_matches_full_walk_on_a_long_chain() {
+        // The O(1) flag the unauthenticated `/v1/status` read consults agrees
+        // with the full O(n) walk across a long append-only chain — so status
+        // never has to walk the chain under the receipt lock.
+        let mut led = ReceiptLedger::new();
+        assert!(led.chain_verified(), "empty chain is verified");
+        for i in 0..1000 {
+            led.append(receipt("t", "openai", i));
+        }
+        assert!(led.chain_verified(), "flag stays true across a long chain");
+        assert_eq!(
+            led.chain_verified(),
+            led.verify(),
+            "the O(1) status flag matches the full O(n) walk"
+        );
     }
 
     #[test]

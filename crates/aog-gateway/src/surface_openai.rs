@@ -310,7 +310,10 @@ async fn roi(
 async fn status(State(state): State<AppState>) -> Json<Value> {
     let (receipts, head, verified) = {
         let led = state.receipts.lock().unwrap_or_else(|e| e.into_inner());
-        (led.receipts().len(), led.head_hex(), led.verify())
+        // O(1) reads only — never the O(n) `verify()` — so an unauthenticated
+        // `/v1/status` flood cannot starve the completion path of the receipt
+        // lock.
+        (led.receipts().len(), led.head_hex(), led.chain_verified())
     };
     Json(status_json(
         state.mode.header(),
