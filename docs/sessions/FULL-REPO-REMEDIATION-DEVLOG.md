@@ -1020,3 +1020,31 @@ and exhausted the disk; all-target compilation is proven by clippy, and the stri
 are green. Post-scrub grep of the enumerated families over `.rs/.toml` shows only the vetted
 `slop-ok:` lines. Q1 gate ("zero roster codes in non-exempt crate source") holds for the
 enumerated families; the scanner that enforces it is Q2. Commit: (this change set).
+
+### Q2 - tighten the no-slop scanner PROV pattern + ship-pipeline exemptions (L)
+
+The scanner's PROV caught only `Session <n>`/`BF-#`/`S# hookup`/`plan-spec scaffold`/`S(05-49)` -
+it missed the `SHIP-##`/`VH#`/`AF-##`/`K#`/phase-letter provenance Q1 scrubbed, so the mechanical
+gate did not cover what Q1 cleaned. Extended PROV with: the distinctive prefixes `SHIP-[0-9]`,
+`VH[0-9]`, `AF-[0-9]`; bare `K[0-9]\b` (keygen phase - catches a planted "K3" while `\b` excludes
+`K8s`/`K80`); and the H/N/R/U phase-letters only in a provenance CONTEXT - a parenthetical
+`([HNRU]#(/[A-Z]#)*)` ("(H6)", "(H8/U2)"), `audit|finding [HKNRU]#`, or `[HKNRU]# gate|FIX|hookup|
+convergence|live gate`. The context/word-boundary constraints leave domain vocab alone (`H100`,
+`U1` country codes, NVLink `NV#`, AWS `S3`) and the broader letter-families (A/B/D/E/F/L/T/V/W)
+that Q1 did not scrub.
+
+Exemptions: the ship pipeline + repo tooling legitimately carry the `SHIP-##` step taxonomy as
+DATA (`ship_session` fields, `carried_forward` config, CI job names, test subjects), not stray
+comment provenance - exempted like docs/DEVLOG in both the full-scan pathspec set and the staged
+`case`: `config/`, `deployment/`, `packaging/`, `scripts/`, `tools/*_tests/`, top-level `tests/`,
+`.github/`, `pyproject.toml`, `deny.toml`, `.gitleaks.toml`. The scanner's self-exemption widened
+`*no-slop-scan.sh` -> `*no-slop-scan*.sh` so its new self-test (which plants the codes as fixtures)
+is not flagged.
+
+Test: new `.integrity/scripts/no-slop-scan.test.sh` builds a hermetic throwaway git repo and
+asserts the four gate behaviors - a planted `K3`+`SHIP-09` in `src/` is flagged (exit 1); the same
+codes in `config/` (ship-pipeline) and `docs/` pass; and a `slop-ok:` annotation is honored.
+
+Verify: `bash no-slop-scan.sh full` PASS (clean over the whole post-Q1 tree, incl. the tracked
+test file); `bash no-slop-scan.test.sh` PASS (4/4). Q2 gate ("scanner flags a planted K3/SHIP-09
+in src; passes on docs") holds. Commit: (this change set).

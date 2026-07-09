@@ -3,7 +3,8 @@
 #
 # Committed source is the product, not the transcript of how it was built. This scan
 # blocks the residue an AI "session" workflow leaks into code:
-#   PROV  build-phase markers  — "Session <N>", "BF-<N>", "S<N> hookup", "plan-spec scaffold"
+#   PROV  roster step-codes    — "Session <N>", "BF-<N>", "SHIP-##", "VH#", "AF-##", "S<N> hookup",
+#                                bare "K3" + phase-letters in context ("(H6)", "audit H7", "R6 live gate")
 #   DEBT  untracked debt        — bare TODO/FIXME/XXX/HACK (must be TODO(owner): …)
 #   UNFIN unfinished shipped code — todo!()/unimplemented!() outside tests
 #   STUB  confessions in comments — leading "// Stub: …" / "# Placeholder: …", "for now,"
@@ -18,7 +19,9 @@
 #
 # Exempt by design (legitimately carry the build taxonomy or describe the rule):
 #   docs/  PLANNING/  **/sessions/  *DEVLOG*  *ROSTER*  *CHANGELOG*  CANON*  *CLAUDE.md
-#   **/hooks/  and this scanner itself.
+#   **/hooks/  this scanner + its self-test, and the ship pipeline + repo tooling that carries
+#   the SHIP-## step vocabulary as data:  config/  deployment/  packaging/  scripts/
+#   tools/*_tests/  tests/  .github/  pyproject.toml  deny.toml  .gitleaks.toml
 set -uo pipefail
 
 MODE="${1:-staged}"
@@ -31,16 +34,28 @@ VIOL="$(mktemp)"; trap 'rm -f "$VIOL"' EXIT
 # critical on Windows where process spawn is expensive). '*' matches across '/'.
 SPECS=( '*.rs' '*.py' '*.js' '*.mjs' '*.ts' '*.tsx' '*.go' '*.toml' '*.proto'
         '*.sh' '*.bash' '*.ps1' '*.c' '*.cc' '*.cpp' '*.h' '*.hpp' '*.java' '*.rb' '*.yaml' '*.yml'
-        ':(exclude)*no-slop-scan.sh' ':(exclude)*CANON*' ':(exclude,glob)**/docs/**'
+        ':(exclude)*no-slop-scan*.sh' ':(exclude)*CANON*' ':(exclude,glob)**/docs/**'
         ':(exclude,glob)**/PLANNING/**' ':(exclude,glob)**/sessions/**' ':(exclude)*DEVLOG*'
         ':(exclude)*ROSTER*' ':(exclude)*CHANGELOG*' ':(exclude)*CLAUDE.md' ':(exclude,glob)**/hooks/**'
-        ':(exclude)*gitdoctor*' )   # sibling slop-scanner: contains the vocabulary as data, like this file
+        ':(exclude)*gitdoctor*'     # sibling slop-scanner: contains the vocabulary as data, like this file
+        # Ship pipeline + repo tooling carry the SHIP-##/step taxonomy as DATA
+        # (ship_session fields, carried_forward config, test subjects), not stray
+        # comment provenance — exempt like docs/DEVLOG (Q2).
+        ':(exclude,glob)config/**' ':(exclude,glob)deployment/**' ':(exclude,glob)packaging/**'
+        ':(exclude,glob)scripts/**' ':(exclude,glob)tools/*_tests/**' ':(exclude,glob)tests/**'
+        ':(exclude,glob).github/**' ':(exclude)*pyproject.toml' ':(exclude)*deny.toml'
+        ':(exclude)*.gitleaks.toml' )
 # todo!()/unimplemented!() are tolerated only in test code.
 NOTEST=( ':(exclude,glob)**/tests/**' ':(exclude)*_test.rs' ':(exclude,glob)**/test_*.py' )
 
-# S(05-49): bare roster shorthand ("per S41 acceptance criteria"). S1-S4 excluded
-# (AWS S3 etc.); annotate any legitimate S## with slop-ok.
-PROV='(\bSessions?[ -][0-9])|(\bBF-[0-9])|(\bS[0-9]+ hookup)|(plan-spec scaffold)|(\bS(0[5-9]|[1-4][0-9])[a-e]?\b)'
+# Roster/finding step-codes (Q1/Q2): distinctive prefixes SHIP-##, VH#, AF-##, BF-#,
+# Session <n>; the S(05-49) bare shorthand ("per S41"); bare K# (keygen phase, e.g. a
+# planted "K3"); and H/N/R/U phase-letters only in a provenance CONTEXT — "(H6)",
+# "(H8/U2)", "audit H7", "K1 gate", "N1 FIX", "R6 live gate". Domain vocab is left
+# alone: H100/K8s/K80/S3 (word-boundary), U1 country codes, NVLink NV#. S1-S4 excluded
+# (AWS S3); annotate any legitimate hit with slop-ok. The ship pipeline's own SHIP-##
+# data lives in the exempt tooling paths above.
+PROV='(\bSessions?[ -][0-9])|(\bBF-[0-9])|(\bS[0-9]+ hookup)|(plan-spec scaffold)|(\bS(0[5-9]|[1-4][0-9])[a-e]?\b)|(\bSHIP-[0-9])|(\bVH[0-9])|(\bAF-[0-9])|(\bK[0-9]\b)|(\((audit )?[HNRU][0-9]+(/[A-Z][0-9]+)*\))|(\b(audit|finding) [HKNRU][0-9])|(\b[HKNRU][0-9]+ (gate|FIX|hookup|convergence|live gate))'
 DEBT='\b(TODO|FIXME|XXX|HACK)\b([^(]|$)'
 UNFIN='\b(todo!|unimplemented!)\('
 # Confession-shape only: a comment LEADING with "Stub:"/"Placeholder —", or "for
@@ -64,7 +79,8 @@ scan_full() {
 
 gated_staged() {
   case "$1" in
-    *no-slop-scan.sh|*gitdoctor*|*/hooks/*|*CANON*|*/docs/*|*/PLANNING/*|*/sessions/*|*DEVLOG*|*ROSTER*|*CHANGELOG*|*CLAUDE.md) return 1 ;;
+    *no-slop-scan*.sh|*gitdoctor*|*/hooks/*|*CANON*|*/docs/*|*/PLANNING/*|*/sessions/*|*DEVLOG*|*ROSTER*|*CHANGELOG*|*CLAUDE.md) return 1 ;;
+    config/*|deployment/*|packaging/*|scripts/*|tests/*|tools/*_tests/*|.github/*|*pyproject.toml|*deny.toml|*.gitleaks.toml) return 1 ;;  # ship-pipeline: SHIP-## is legit data (Q2)
   esac
   case "$1" in
     *.rs|*.py|*.js|*.mjs|*.ts|*.tsx|*.go|*.toml|*.proto|*.sh|*.bash|*.ps1|*.c|*.cc|*.cpp|*.h|*.hpp|*.java|*.rb|*.yaml|*.yml) return 0 ;;
