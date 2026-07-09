@@ -1073,3 +1073,26 @@ Verify: grep of `BUILD-EXECUTION-PLAN`/`F6-N7`/`see the crate docs` over `.rs` -
 `cargo check -p mai-compliance -p aog-scheduler -p mai-scheduler -p mai-api --all-targets` PASS
 (comment-only). Q3 gate ("no comment cites a non-existent file/id/crate") holds. Commit: (this
 change set).
+
+### Q4 - doc-path drift: repoint flat docs/FOO.md at their category homes (L)
+
+22 comment references cited a doc by a flat `docs/FOO.md` path when the file had moved into a
+`docs/<category>/` home (the scanner's basename DOC check passed them, but the paths were wrong).
+Repointed each to its real location:
+- -> `docs/compliance/`: TRUST-BUNDLE-SPEC, LOCAL-TRUST-CACHE, TRUST-MANIFOLD, SERVICE-IDENTITY,
+  SECURITY-PRODUCTION, AUDIT-RETENTION, TRUST-BRIDGE-PRODUCTION
+- -> `docs/architecture/`: IPC-PROTOCOL
+- -> `docs/operations/`: OPENBAO-INTEGRATION, OBSERVABILITY
+- -> `docs/scans/`: SCAN-1-INTERNAL-GITDOCTOR-REPORT, SCAN-1-SECURITY-FALSE-POSITIVES
+- -> `docs/sessions/`: SHIP-HARDENING-PLAN
+
+across mai-compliance (trust_cache, trust, lib, ocap, jurisdiction, bundle), mai-adapters
+(bridge), and mai-api (production_guard, openbao_client, ship_profile, rate_limit, main, lib,
+handlers/metrics + the ship_11 observability test). `docs/LOOM-DR-RUNBOOK.md` was left unchanged -
+it is correctly a top-level doc. Bare filename mentions without a `docs/` prefix are a different
+citation style and out of this prompt's "flat docs/FOO.md" scope.
+
+Verify: grep of flat `docs/[^/]+\.md` over `.rs` -> only the two correct LOOM-DR-RUNBOOK refs
+remain; every repointed target resolves (glob-confirmed); `cargo check -p mai-compliance
+-p mai-adapters -p mai-api --all-targets` PASS (comment-only). Q4 gate ("every cited doc path
+resolves") holds. Commit: (this change set).

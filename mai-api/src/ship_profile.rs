@@ -1,6 +1,6 @@
 //! Ship profile: typed representation + parse-time validation for the
 //! `deployment/ship/profile.toml` schema documented in
-//! `mai/docs/SHIP-HARDENING-PLAN.md` §3 (Workstream 1).
+//! `mai/docs/sessions/SHIP-HARDENING-PLAN.md` §3 (Workstream 1).
 //!
 //! Scope:
 //! - Define the schema as Rust types.

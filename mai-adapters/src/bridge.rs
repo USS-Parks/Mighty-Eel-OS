@@ -12,7 +12,7 @@
 //!   Request:         `{"request_id": "<uuid>", "type": "<method>", "payload": {}}\n`
 //!   Response events: `{"request_id": "<uuid>", "type": "<event_type>", ...}\n`
 //!
-//! See `mai/docs/IPC-PROTOCOL.md` for the full specification.
+//! See `mai/docs/architecture/IPC-PROTOCOL.md` for the full specification.
 
 use serde::{Deserialize, Serialize};
 

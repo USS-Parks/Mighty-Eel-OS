@@ -1,7 +1,7 @@
 //! Acceptance tests: observability surface.
 //!
 //! Covers every "Acceptance Tests" bullet from
-//! `docs/SHIP-HARDENING-PLAN.md` §10 (line 847):
+//! `docs/sessions/SHIP-HARDENING-PLAN.md` §10 (line 847):
 //!
 //! 1. Metrics endpoint does not expose secrets.
 //! 2. Health `ready` fails when audit writer fails.

@@ -4,7 +4,7 @@
 //! back to the most recent signed policy bundle and revocation snapshot
 //! held locally. This module is the in-memory state model for that
 //! cache; the on-disk format is (this module) and signature
-//! verification is (see [`crate::bundle`] and `docs/TRUST-BUNDLE-SPEC.md`).
+//! verification is (see [`crate::bundle`] and `docs/compliance/TRUST-BUNDLE-SPEC.md`).
 //!
 //! Two refresh entry points:
 //!
@@ -100,7 +100,7 @@ pub struct CacheThresholds {
 impl Default for CacheThresholds {
     /// Sensible defaults: warn after 1 hour, expire after 24 hours.
     /// Operators override per deployment profile (see
-    /// `docs/LOCAL-TRUST-CACHE.md` §3).
+    /// `docs/compliance/LOCAL-TRUST-CACHE.md` §3).
     fn default() -> Self {
         Self {
             warn_after: Duration::from_secs(60 * 60),

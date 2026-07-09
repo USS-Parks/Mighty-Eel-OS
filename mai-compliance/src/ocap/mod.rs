@@ -22,7 +22,7 @@
 //!
 //! ## TrustContext expectations
 //!
-//! Per `docs/SERVICE-IDENTITY.md`, OCAP must receive a `&TrustContext` on
+//! Per `docs/compliance/SERVICE-IDENTITY.md`, OCAP must receive a `&TrustContext` on
 //! every decision call. OCAP particularly depends on:
 //!
 //! - `tenant_id` — drives the tenant governance lookup (which tribal

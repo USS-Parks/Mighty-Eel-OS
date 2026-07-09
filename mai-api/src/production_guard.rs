@@ -547,7 +547,7 @@ fn register_vault_checks(ctx: &mut CheckContext) {
         CheckSeverity::Critical,
         "SHIP-03", // slop-ok: names the deferred check's ship-plan step (operator data)
         "vault opens, sealed master key loads, root directory is writable",
-        "ensure /var/lib/mai/vault is initialized; see docs/SECURITY-PRODUCTION.md",
+        "ensure /var/lib/mai/vault is initialized; see docs/compliance/SECURITY-PRODUCTION.md",
     );
 }
 
@@ -653,7 +653,7 @@ fn register_audit_checks(ctx: &mut CheckContext) {
         CheckSeverity::Critical,
         "SHIP-04", // slop-ok: names the deferred check's ship-plan step (operator data)
         "API audit WAL writable, chain verifies, append round-trip succeeds",
-        "ensure audit.wal_dir is writable by the mai user; see docs/AUDIT-RETENTION.md",
+        "ensure audit.wal_dir is writable by the mai user; see docs/compliance/AUDIT-RETENTION.md",
     );
     ctx.deferred(
         "PROD-AUDIT-101",
@@ -760,7 +760,7 @@ fn register_trust_checks(ctx: &mut CheckContext) {
         CheckSeverity::Critical,
         "SHIP-06", // slop-ok: names the deferred check's ship-plan step (operator data)
         "trust bundle present, signature verifies, revocation snapshot fresh",
-        "load a signed bundle into trust.bundle_cache_dir; see docs/TRUST-BRIDGE-PRODUCTION.md",
+        "load a signed bundle into trust.bundle_cache_dir; see docs/compliance/TRUST-BRIDGE-PRODUCTION.md",
     );
 }
 

@@ -26,8 +26,8 @@
 //! - [`trust`] — `TrustContext` and supporting enums (service identity,
 //!   compliance scope, allowed route, data classification, revocation
 //!   status). Every Lamprey decision path
-//!   accepts a `&TrustContext`. See `docs/TRUST-MANIFOLD.md` and
-//!   `docs/SERVICE-IDENTITY.md` for the architecture.
+//!   accepts a `&TrustContext`. See `docs/compliance/TRUST-MANIFOLD.md` and
+//!   `docs/compliance/SERVICE-IDENTITY.md` for the architecture.
 //!
 //! Tribal data sovereignty:
 //!
@@ -39,7 +39,7 @@
 //! Trust bundle verification:
 //!
 //! - [`bundle`] — ML-DSA-87-backed verifier for signed policy bundles
-//!   and signed claims. See `docs/TRUST-BUNDLE-SPEC.md` for the wire
+//!   and signed claims. See `docs/compliance/TRUST-BUNDLE-SPEC.md` for the wire
 //!   format and verification algorithm.
 //! - [`subject_hash`] — HMAC-SHA256 pseudonymization of subject ids for
 //!   audit correlation.

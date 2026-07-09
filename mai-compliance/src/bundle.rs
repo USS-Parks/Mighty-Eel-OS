@@ -1,6 +1,6 @@
 //! Signed claim and policy-bundle verification.
 //!
-//! See `docs/TRUST-BUNDLE-SPEC.md` for the wire format and verification
+//! See `docs/compliance/TRUST-BUNDLE-SPEC.md` for the wire format and verification
 //! algorithm. This module owns the Rust projection of those schemas plus
 //! the [`BundleVerifier`] trait and an ML-DSA-87-backed default impl.
 //!

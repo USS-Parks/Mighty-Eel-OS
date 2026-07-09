@@ -5,7 +5,7 @@
 //! intentionally auth-exempt — operators scrape from a host-local
 //! Prometheus / VictoriaMetrics scraper that runs on the same machine
 //! as `mai-api`, and a `127.0.0.1`-only listener (see
-//! `docs/OBSERVABILITY.md`) is the operator-deployed posture. The
+//! `docs/operations/OBSERVABILITY.md`) is the operator-deployed posture. The
 //! redaction guarantee on
 //! [`crate::metrics::sanitize_label_value`] means the body never
 //! contains prompts, completions, API keys, or vault tokens even if a

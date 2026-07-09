@@ -4,7 +4,7 @@
 //! component onward, along with the supporting enums
 //! (service identity, compliance scope, allowed route, data
 //! classification, revocation status). The wire-level claim that
-//! produces a `TrustContext` is defined in `docs/TRUST-MANIFOLD.md`
+//! produces a `TrustContext` is defined in `docs/compliance/TRUST-MANIFOLD.md`
 //! §4; this module is the in-memory decision-time projection.
 //!
 //! The split is deliberate:
@@ -91,7 +91,7 @@ impl SubjectHash {
 }
 
 /// One of the nine service identities defined in
-/// `docs/SERVICE-IDENTITY.md` §2.
+/// `docs/compliance/SERVICE-IDENTITY.md` §2.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum ServiceIdentity {
@@ -135,7 +135,7 @@ impl ServiceIdentity {
 
 /// Compliance domains the policy runtime is permitted to evaluate
 /// against. Absence of a scope means "must not evaluate" — not
-/// "no concern". See `docs/SERVICE-IDENTITY.md` §4.3.
+/// "no concern". See `docs/compliance/SERVICE-IDENTITY.md` §4.3.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ComplianceScope {

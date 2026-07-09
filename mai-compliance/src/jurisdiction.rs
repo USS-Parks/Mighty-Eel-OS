@@ -26,7 +26,7 @@
 //! 2. Country blocklist hit → DenyExport.
 //! 3. ITAR scope missing on an ITAR query → DenyExport.
 //! 4. Unknown revocation on an ITAR query → DenyExport (most-restrictive
-//!    default; see `docs/SERVICE-IDENTITY.md` §4.5).
+//!    default; see `docs/compliance/SERVICE-IDENTITY.md` §4.5).
 //! 5. ITAR country / person gate (existing).
 //! 6. Allowed-route ceiling collapses Allow → RouteLocal.
 //! 7. Offline mode collapses Allow → RouteLocal.

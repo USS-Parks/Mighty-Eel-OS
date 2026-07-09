@@ -9,7 +9,7 @@
 //! correlation ID + metrics observation) and adds the integration
 //! tests against the live `axum::Router`.
 //!
-//! Design choices (justified in `docs/SCAN-1-INTERNAL-GITDOCTOR-REPORT.md`):
+//! Design choices (justified in `docs/scans/SCAN-1-INTERNAL-GITDOCTOR-REPORT.md`):
 //!
 //! * **In-process token bucket, no new crate.** This is air-gapped
 //!   middleware running on a single appliance. Adding `tower_governor`

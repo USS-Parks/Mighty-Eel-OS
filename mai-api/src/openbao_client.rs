@@ -1,7 +1,7 @@
 //! OpenBao Trust Bridge HTTP client.
 //!
 //! Implements the Ring-1 ↔ Ring-3 bridge protocol defined in
-//! `mai/docs/OPENBAO-INTEGRATION.md` §4 (Claim Issuance Flow):
+//! `mai/docs/operations/OPENBAO-INTEGRATION.md` §4 (Claim Issuance Flow):
 //!
 //! 1. Authenticate to OpenBao via AppRole
 //! 2. Look up tenant attributes from KV
