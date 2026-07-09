@@ -1232,5 +1232,17 @@ order - V5 kill-under-scale, V8 scale (100 workloads x 5 replicas), V10 revocati
 commits, minority fences), V7 chaos+soak (5 kill/heal cycles, identical converged end
 state) - ALL_GATES_GREEN; teardown clean. Evidence:
 `test-evidence/full-repo-remediation/M6/live-gates/LOOM-SUMMARY.md` (+ `loom-gates-run.log`,
-local-only). Both X2 live legs now GREEN on this host; committing the compose fix un-reds
-the CI `loom-live` job. Commit: pending owner approval.
+local-only). Both X2 live legs now GREEN on this host. Commit: `d957570`.
+
+### X2 follow-through - CI toolchain drift at the tip (Rust 1.97 stable)
+
+Overnight the hosted runners' rolling stable moved to Rust 1.97.0, which (a) promoted
+clippy `for_kv_map` - one hit, `mai-adapters/src/manager.rs` iterating a map's discarded
+kv pairs; fixed to `.values()` (sole site tree-wide; the sibling kv-discarding loops all
+iterate Vec pairs, verified) - commit `248dd1f`; and (b) invalidated every rust-cache
+key, so the cold full-workspace build overran the hosted runner's free disk (`No space
+left on device` in the runner's own diag log; rust-check red, both live gates skipped
+again). Hardened the three cargo-building CI jobs (rust-check, wsf-live, integration-ci):
+free ~18 GB of preinstalled runner bundles up front, `cache-on-failure: true` so even a
+red run seeds the next cache, and `CARGO_PROFILE_DEV_DEBUG=0` (CI-only; no debuginfo in
+dev/test artifacts). Commit: (this change set).
