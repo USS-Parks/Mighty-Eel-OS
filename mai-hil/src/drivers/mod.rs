@@ -1,4 +1,3 @@
-#![allow(unused_variables, dead_code, missing_docs)]
 //! Hardware driver implementations for MAI HIL.
 //!
 //! Each driver implements the HIL traits:

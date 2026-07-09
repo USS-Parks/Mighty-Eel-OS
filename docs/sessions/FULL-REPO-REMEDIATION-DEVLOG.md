@@ -1096,3 +1096,21 @@ Verify: grep of flat `docs/[^/]+\.md` over `.rs` -> only the two correct LOOM-DR
 remain; every repointed target resolves (glob-confirmed); `cargo check -p mai-compliance
 -p mai-adapters -p mai-api --all-targets` PASS (comment-only). Q4 gate ("every cited doc path
 resolves") holds. Commit: (this change set).
+
+### Q5 - remove the mai-hil crate-wide blanket allow (L)
+
+`mai-hil` carried `#![allow(unused_variables, dead_code, missing_docs)]` at the crate root and
+repeated in the four driver modules (`lib.rs`, `drivers/{nvidia,amd,cpu,mod}.rs`) - a blanket
+suppression that hides real unused/dead code and undocumented API. Removed all five.
+
+Outcome: the crate is already clippy-clean without them - the allow was cruft, not covering any
+actual defect. `missing_docs` is not enabled workspace-wide (a no-op here), and the
+unused_variables / dead_code the allow nominally covered do not exist: the driver stubs' unused
+params are already `_`-prefixed. The audit-noted secure-load (`unseal_tpm_key` /
+`decrypt_and_verify` on the Nvidia/AMD/CPU/TetraMem drivers) returns
+`Err(HilError::NotImplemented)` - a truthful not-implemented, not a fabricated success - so
+nothing needs feature-gating.
+
+Verify: `cargo clippy -p mai-hil --all-targets -- -D warnings -A clippy::pedantic` PASS (clean
+without the blanket allow); `cargo test -p mai-hil` PASS (7). Q5 gate ("mai-hil clippy-clean
+under CI flags without the blanket allow") holds. Commit: (this change set).

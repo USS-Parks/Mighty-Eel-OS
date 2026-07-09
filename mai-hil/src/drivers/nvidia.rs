@@ -1,4 +1,3 @@
-#![allow(unused_variables, dead_code, missing_docs)]
 //! NVIDIA CUDA Driver Implementation
 //!
 //! Uses nvml-wrapper (NVML bindings) for GPU discovery, thermal monitoring,

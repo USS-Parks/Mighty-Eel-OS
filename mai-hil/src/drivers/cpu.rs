@@ -1,4 +1,3 @@
-#![allow(unused_variables, dead_code, missing_docs)]
 //! Generic CPU Fallback Driver Implementation
 //!
 //! Uses /proc/cpuinfo, /proc/meminfo, and sysfs thermal zones for

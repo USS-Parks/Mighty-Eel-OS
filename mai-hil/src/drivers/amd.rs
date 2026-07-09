@@ -1,4 +1,3 @@
-#![allow(unused_variables, dead_code, missing_docs)]
 //! AMD ROCm Driver Implementation
 //!
 //! Uses `rocm-smi` CLI via tokio::process::Command for GPU discovery,

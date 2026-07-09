@@ -1,4 +1,3 @@
-#![allow(unused_variables, dead_code, missing_docs)]
 #![doc = "Island Mountain MAI - Hardware Interface Layer (HIL)"]
 // unsafe_code is explicitly denied in trait modules.
 // Driver implementations (mai-hil/src/drivers/) are permitted to use unsafe
