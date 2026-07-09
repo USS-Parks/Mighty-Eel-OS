@@ -1,6 +1,6 @@
-//! Filter plugins. S1 ships the readiness foundation — the concrete deletion of
-//! `mai-scheduler`'s fake-metrics defect (see the crate docs). Later prompts add
-//! the ring filter (S3) and the attestation predicate (S4) here.
+//! Filter plugins: hard filters that keep a node out of scheduling unless it has
+//! actually reported. The readiness filter is the foundation; the ring filter and
+//! the attestation predicate live here too.
 
 use crate::framework::Filter;
 use crate::types::{FilterVerdict, NodeSnapshot, ScheduleRequest};
@@ -8,9 +8,9 @@ use crate::types::{FilterVerdict, NodeSnapshot, ScheduleRequest};
 /// Hard filter: a node is a candidate only when it has actually reported —
 /// `status.ready` is true and a heartbeat is present.
 ///
-/// This inverts the defect the revival deletes. `mai-scheduler` scored a
-/// zero-telemetry instance as maximally healthy; here a node with no reconciled
-/// liveness is `Unfit`, never assumed live (doctrine I-4). Because a
+/// A zero-telemetry instance must never be scored as maximally healthy; here a
+/// node with no reconciled liveness is `Unfit`, never assumed live (doctrine I-4).
+/// Because a
 /// [`NodeSnapshot`] projects a status-less node to `ready == false`, an
 /// unmeasured node fails this filter by construction — there is no path by which
 /// the absence of a signal becomes a favourable one.

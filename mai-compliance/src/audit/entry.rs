@@ -118,9 +118,9 @@ impl RuleMatch {
 /// correlation fields (Appendix A §A.9).
 ///
 /// These bridge a credential event in the cloud trust system to a
-/// Lamprey decision recorded locally. The JSON shape matches the
-/// `BUILD-EXECUTION-PLAN-V2-UPDATED.md` example exactly so the cloud
-/// store can deserialise without a translation layer.
+/// Lamprey decision recorded locally. The JSON shape matches the cloud
+/// trust system's correlation-event schema exactly so the cloud store
+/// can deserialise without a translation layer.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CorrelationFields {
     /// OpenBao credential event that authorised the request. `None`

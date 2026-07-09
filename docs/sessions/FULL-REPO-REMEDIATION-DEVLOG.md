@@ -1048,3 +1048,28 @@ codes in `config/` (ship-pipeline) and `docs/` pass; and a `slop-ok:` annotation
 Verify: `bash no-slop-scan.sh full` PASS (clean over the whole post-Q1 tree, incl. the tracked
 test file); `bash no-slop-scan.test.sh` PASS (4/4). Q2 gate ("scanner flags a planted K3/SHIP-09
 in src; passes on docs") holds. Commit: (this change set).
+
+### Q3 - fix dangling references (L)
+
+The audit's three cited dangling references, plus their un-cited siblings:
+- `fabric-proof/bundle.rs` "(finding F6-N7)" — already removed by the Q1 scrub (F#-N# was in Q1's
+  enumerated set); grep-confirmed gone.
+- `BUILD-EXECUTION-PLAN-V2-UPDATED.md` / `BUILD-EXECUTION-PLAN.md` — no such file in the tree.
+  Cited in FOUR comments (not just the audit's `audit/entry.rs`): also `mai-compliance/ocap/mod.rs`,
+  `mai-scheduler/tests/gate_c_session33.rs`, `mai-api/tests/auth_gate_a.rs`. Each rephrased to state
+  the actual contract / criteria without the non-existent plan doc (and the gate_c doc-string's
+  dangling leading `":"` — a stripped-prefix artifact — cleaned up).
+- `aog-scheduler/filters.rs` "`mai-scheduler`'s fake-metrics defect (see the crate docs)" — a
+  dangling cross-reference: aog-scheduler does not depend on mai-scheduler (deps: aog-estate,
+  fabric-contracts), so its docs cannot point at that crate's docs. The module + readiness-filter
+  doc-strings now describe what the filters DO (keep an unreported node out of scheduling) without
+  the cross-crate build narrative.
+
+Note: `ocap/mod.rs` still cites `docs/SERVICE-IDENTITY.md` — that file EXISTS (at
+`docs/compliance/SERVICE-IDENTITY.md`), so it is doc-path drift (Q4), not a dangling ref; its
+basename resolves, so the scanner's DOC check already passes.
+
+Verify: grep of `BUILD-EXECUTION-PLAN`/`F6-N7`/`see the crate docs` over `.rs` -> zero;
+`cargo check -p mai-compliance -p aog-scheduler -p mai-scheduler -p mai-api --all-targets` PASS
+(comment-only). Q3 gate ("no comment cites a non-existent file/id/crate") holds. Commit: (this
+change set).

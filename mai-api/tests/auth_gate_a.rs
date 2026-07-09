@@ -1,7 +1,7 @@
 //! Gate A acceptance tests.
 //!
-//! Verifies the four BUILD-EXECUTION-PLAN.md acceptance criteria at
-//! the router level with a strict (production-like) `AuthState`:
+//! Verifies the four acceptance criteria at the router level with a
+//! strict (production-like) `AuthState`:
 //!
 //! 1. Missing token returns `401 Unauthorized`.
 //! 2. Invalid token returns `401 Unauthorized`.

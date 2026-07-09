@@ -1,7 +1,7 @@
 //! Gate C acceptance tests.
 //!
-//! Each test maps directly to one criterion in BUILD-EXECUTION-PLAN.md's
-//! ": Multi-Instance Scheduling" acceptance section. The new
+//! Each test maps directly to one acceptance criterion for multi-instance
+//! scheduling. The new
 //! primitives (`kv::offload`, `kv::tiered`, `preemption`
 //! `balancer`, `decision_cache`) carry their own unit tests; this file
 //! verifies the integrated user-visible behavior.
