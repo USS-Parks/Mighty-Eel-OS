@@ -462,6 +462,14 @@ impl MaiServer {
 
         info!("All components initialized, building servers");
 
+        // Bind safety, checked against the address the socket actually binds,
+        // fail-closed before any listener opens (see `check_bind_safety`).
+        check_bind_safety(
+            ship_profile.as_ref(),
+            &self.config.server.bind_address,
+            std::env::var_os("MAI_ALLOW_INSECURE_BIND").is_some(),
+        )?;
+
         // -- Step 5: Start REST + gRPC servers--
         let rest_addr: SocketAddr = format!(
             "{}:{}",
@@ -795,7 +803,8 @@ fn apply_ship_profile(
 ///   `allow_internal_profile_header` flag inherits the profile field
 ///   (default `false`) so it can never silently diverge from the
 ///   value the production guard checked. With no profile at all, the
-///   legacy dev default of `true` is preserved.
+///   bypass defaults OFF (fail closed), re-enabled only by the explicit
+///   `MAI_DEV_ALLOW_PROFILE_HEADER` opt-in.
 #[allow(clippy::print_stdout)]
 fn load_auth_state(profile: Option<&ShipProfile>) -> Result<AuthState, ServerError> {
     let is_production = profile
@@ -866,14 +875,14 @@ fn load_auth_state(profile: Option<&ShipProfile>) -> Result<AuthState, ServerErr
 
     info!("First-boot admin key generated (printed to stdout, NOT logged)");
 
-    // The runtime store's `allow_internal_profile_header`
-    // flag must match the profile field the production guard checks
-    // (`PROD-AUTH-002`). When a profile is present we mirror its
-    // value; with no profile we keep the legacy dev default of `true`
-    // for the no-profile bring-up path.
+    // The runtime store's `allow_internal_profile_header` flag must match the
+    // profile field the production guard checks (`PROD-AUTH-002`). When a profile
+    // is present we mirror its value; with no profile the bypass defaults OFF
+    // (fail closed) and is re-enabled only by an explicit dev opt-in, so a fresh
+    // no-profile bring-up never silently trusts a forged profile header.
     let bypass = profile
         .map(|p| p.auth.allow_internal_profile_header)
-        .unwrap_or(true);
+        .unwrap_or_else(no_profile_header_bypass);
     let mut store = auth::ApiKeyStore::new();
     store.allow_internal_profile_header = bypass;
     store.add_key_hashed(
@@ -883,6 +892,50 @@ fn load_auth_state(profile: Option<&ShipProfile>) -> Result<AuthState, ServerErr
         Some("First-Boot Admin".to_string()),
     );
     Ok(AuthState::with_key_store(store))
+}
+
+/// Whether the internal-profile-header bypass is on when no ship profile is
+/// loaded: OFF by default (fail closed), re-enabled by
+/// `MAI_DEV_ALLOW_PROFILE_HEADER` for a trusted local dev loop.
+fn no_profile_header_bypass() -> bool {
+    std::env::var_os("MAI_DEV_ALLOW_PROFILE_HEADER").is_some()
+}
+
+/// Fail-closed bind safety, checked against the address the socket actually
+/// binds. Under a ship profile the socket must bind exactly the address the
+/// production guard validated (`PROD-NET-002` checks the profile's declared
+/// bind, but the socket uses `ServerConfig`). With no ship profile the guard is
+/// inactive, so a non-loopback bind is refused unless `allow_insecure` — an
+/// explicit operator opt-in on a trusted isolated network.
+fn check_bind_safety(
+    ship_profile: Option<&ShipProfile>,
+    socket_bind: &str,
+    allow_insecure: bool,
+) -> Result<(), ServerError> {
+    let socket_bind = socket_bind.trim();
+    match ship_profile {
+        Some(sp) => {
+            let declared = sp.network.bind_address.trim();
+            if socket_bind != declared {
+                return Err(ServerError::Init(format!(
+                    "server.bind_address {socket_bind:?} does not match the ship profile's \
+                     network.bind_address {declared:?}; the socket must bind the address the \
+                     production guard validated"
+                )));
+            }
+        }
+        None => {
+            if !mai_adapters::validation::is_loopback(socket_bind) && !allow_insecure {
+                return Err(ServerError::Init(format!(
+                    "no ship profile loaded and bind address {socket_bind:?} is non-loopback; \
+                     the production guard is inactive, so refusing to expose the API off-host. \
+                     Load MAI_SHIP_PROFILE, bind a loopback address, or set \
+                     MAI_ALLOW_INSECURE_BIND=1 to accept the risk on a trusted isolated network"
+                )));
+            }
+        }
+    }
+    Ok(())
 }
 
 /// Wait for a shutdown signal: SIGTERM, SIGINT (Unix), or ctrl-c.
@@ -1462,10 +1515,11 @@ refresh_interval_ms = 250
     fn test_load_auth_state_no_config() {
         // Legacy no-profile bring-up path: when no ship profile is
         // supplied and the default AUTH_KEYS_CONFIG_PATH does not
-        // exist, load_auth_state generates a first-boot key and
-        // returns a working AuthState with the dev bypass on. This
-        // behavior is preserved for the no-profile case so existing
-        // dev/test runs are unaffected.
+        // exist, load_auth_state generates a first-boot key and returns a
+        // working AuthState. With no profile the internal-profile-header bypass
+        // now defaults OFF (fail closed); it is re-enabled only by the explicit
+        // MAI_DEV_ALLOW_PROFILE_HEADER opt-in, so a forged header without an API
+        // key is rejected by default.
         let auth = load_auth_state(None).expect("no-profile first-boot must not fail");
         let rt = tokio::runtime::Builder::new_current_thread()
             .enable_all()
@@ -1474,8 +1528,50 @@ refresh_interval_ms = 250
         rt.block_on(async {
             let store = auth.key_store.read().await;
             assert_eq!(store.len(), 1);
-            assert!(store.allow_internal_profile_header);
+            assert!(
+                !store.allow_internal_profile_header,
+                "no-profile bypass defaults off (fail closed) without the dev opt-in"
+            );
         });
+    }
+
+    #[test]
+    fn bind_safety_no_profile_refuses_non_loopback_without_optin() {
+        // The reachable fail-open: no ship profile + a routable bind would expose
+        // the dev-default surface off-host. Fail closed unless an explicit opt-in.
+        assert!(
+            check_bind_safety(None, "127.0.0.1", false).is_ok(),
+            "loopback ok"
+        );
+        assert!(
+            check_bind_safety(None, "::1", false).is_ok(),
+            "ipv6 loopback ok"
+        );
+        assert!(
+            check_bind_safety(None, "10.0.0.5", false).is_err(),
+            "no-profile non-loopback bind fails closed"
+        );
+        assert!(
+            check_bind_safety(None, "10.0.0.5", true).is_ok(),
+            "explicit insecure-bind opt-in permits a non-loopback bind"
+        );
+    }
+
+    #[test]
+    fn bind_safety_ship_profile_requires_socket_matches_declared() {
+        let toml = ship17_baseline_toml("/nonexistent/bind-safety-dev.toml")
+            .replace("mode = \"production\"", "mode = \"local-dev\"");
+        let profile =
+            crate::ship_profile::parse_ship_profile(&toml).expect("baseline ship toml parses");
+        // The profile declares bind 127.0.0.1; the socket must bind the same.
+        assert!(
+            check_bind_safety(Some(&profile), "127.0.0.1", false).is_ok(),
+            "socket bind matching the guard-validated declared bind is ok"
+        );
+        assert!(
+            check_bind_safety(Some(&profile), "10.0.0.5", false).is_err(),
+            "socket binding a different address than the guard validated fails closed"
+        );
     }
 
     // ---- KNOWN-ISSUES Issue 13 regression coverage ----
