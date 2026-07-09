@@ -24,10 +24,18 @@ SLO_SECS="${V5_SLO_SECS:-3}"
 REV_KEY="wsf/revocation/estate"
 CPS="cp1 cp2 cp3 cp4 cp5"
 
-write_to() { # svc key value-json-array
+write_to() { # svc key value-json-array — bounded retry: an election window on a
+  # contended runner must not fail a must-succeed write one-shot.
   body='{"Put":{"key":"'"$2"'","value":'"$3"',"expected":"Any"}}'
-  docker exec "${PROJECT}-$1-1" curl -s --max-time 6 -X POST \
-    -H 'content-type: application/json' -d "$body" http://127.0.0.1:4600/admin/write
+  wt_n=0
+  while :; do
+    wt_r="$(docker exec "${PROJECT}-$1-1" curl -s --max-time 6 -X POST \
+      -H 'content-type: application/json' -d "$body" http://127.0.0.1:4600/admin/write)" || wt_r=""
+    case "$wt_r" in *Applied*) printf '%s' "$wt_r"; return 0 ;; esac
+    wt_n=$((wt_n + 1))
+    if [ "$wt_n" -ge 10 ]; then printf '%s' "$wt_r"; return 0; fi
+    sleep 1
+  done
 }
 get_from() { # svc key
   docker exec "${PROJECT}-$1-1" curl -s --max-time 6 -X POST \

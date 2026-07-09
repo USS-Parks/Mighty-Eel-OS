@@ -1269,4 +1269,21 @@ loops and `publish_revocation` route through it. Verify: fmt no-op;
 opt-in profiles). Landing this exposed a `verify-tree.sh` false positive: CHECK 3 counted
 lines-containing braces (`grep -c`), not occurrences, so a balanced 298/298 file read as
 delta -5 and blocked staging; the counter now uses `grep -o | wc -l` (separate commit).
-Commit: (this change set).
+Commits: `82fe676` (scanner), `b48b291` (bars).
+
+### X2 follow-through - leader-transparency completed across both estates (round 2)
+
+At `b48b291` the first fix held - the KillSwitchUnderScale bar went green in Lamprey with
+zero forward errors - but an even heavier-contended run (563s for the lib suite) exposed
+the remaining one-shots of the same class: v3's counter seed and scale_target's
+estate-load resolution died on "no confirmed leader to ..." (the cluster was still holding
+its first election when the single-attempt check ran; v3 failed 15s into the binary), and
+on the live estate the loom-live V8 gate failed a round-robin write mid-election ("has to
+forward request to ... cp2") - the same class, real address, no retry. Completed the
+class: `confirmed_leader_within` (bounded leader resolution) + the v3 seed routed through
+`leader_write` in bars.rs; and the must-succeed `write_to` helper in gates v5/v7/v8/v10
+got a bounded retry (cluster-init's post() precedent). v4-split-brain deliberately
+untouched: its minority-partition write must fail, so a blanket retry there would be
+wrong. Verify: bash -n on all four scripts; fmt no-op; `cargo clippy -p aog-conformance
+--all-targets -- -D warnings -A clippy::pedantic` clean; `cargo test -p aog-conformance
+--lib` green (3 passed, 5 ignored opt-ins). Commit: (this change set).

@@ -101,6 +101,24 @@ async fn leader_write(nodes: &[Arc<RaftNode>], op: Op) -> Result<(), String> {
     }
 }
 
+/// A confirmed leader's index, awaited across election gaps (bounded): a
+/// mid-election `None` on a contended runner must not abort a bar one-shot.
+async fn confirmed_leader_within(
+    nodes: &[Arc<RaftNode>],
+    window: Duration,
+) -> Result<usize, String> {
+    let deadline = Instant::now() + window;
+    loop {
+        if let Some(li) = confirmed_leader(nodes).await {
+            return Ok(li);
+        }
+        if Instant::now() >= deadline {
+            return Err("no confirmed leader within the election-settle window".to_owned());
+        }
+        tokio::time::sleep(Duration::from_millis(25)).await;
+    }
+}
+
 /// [`put`] via [`leader_write`] — for bars whose earlier phases (fault
 /// injection, kill/heal cycles, contended runners) can move leadership.
 async fn leader_put(nodes: &[Arc<RaftNode>], key: &str, value: &str) -> Result<(), String> {
@@ -432,19 +450,19 @@ pub async fn linearizable_under_faults(
         .await
         .map_err(|e| format!("change membership: {e:?}"))?;
 
-    // Seed the counter at 0 on the authoritative leader.
+    // Seed the counter at 0, leader-transparently: on a contended runner the
+    // first election may still be settling when the bar starts.
     {
-        let li = confirmed_leader(&nodes)
-            .await
-            .ok_or("no confirmed leader to seed the counter")?;
-        nodes[li]
-            .write(Op::Put {
+        leader_write(
+            &nodes,
+            Op::Put {
                 key: KEY.to_owned(),
                 value: b"0".to_vec(),
                 expected: Precondition::Absent,
-            })
-            .await
-            .map_err(|e| format!("seed write failed: {e:?}"))?;
+            },
+        )
+        .await
+        .map_err(|e| format!("seed write failed: {e}"))?;
     }
 
     // Concurrent CAS-increment clients.
@@ -772,9 +790,9 @@ pub async fn scale_target(replicas: u64, workloads: usize) -> Result<String, Str
     let slo = Duration::from_secs(120);
 
     let (_cluster, nodes) = spawn_cluster(replicas, "loom-conformance-scale").await?;
-    let li = confirmed_leader(&nodes)
+    let li = confirmed_leader_within(&nodes, Duration::from_secs(10))
         .await
-        .ok_or("no confirmed leader to load the estate")?;
+        .map_err(|e| format!("{e} (loading the estate)"))?;
     let leader = Arc::clone(&nodes[li]);
 
     // Ingest M workloads, leader-transparently (leadership may move mid-ingest
