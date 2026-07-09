@@ -479,11 +479,16 @@ impl Scheduler {
             RequestType::FunctionCall | RequestType::Structured
         );
 
-        let requires_vision = false; // would check payload in production
+        // TODO(basho): inspect the request payload for image/vision parts; until
+        // multimodal payloads are wired this conservatively assumes text-only.
+        let requires_vision = false;
 
         ComplexityScore {
             input_tokens,
-            output_tokens: input_tokens / 2, // rough estimate
+            // Heuristic pre-inference estimate for the promotion decision — the true
+            // output length is only known after generation, so this is intentionally
+            // approximate, not a reported token count.
+            output_tokens: input_tokens / 2,
             is_complex_task: is_complex,
             requires_vision,
             requires_tool_calling: request.request_type == RequestType::FunctionCall,

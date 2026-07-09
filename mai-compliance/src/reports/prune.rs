@@ -53,7 +53,7 @@ impl PruneConfig {
             .get(report_type.as_str())
             .copied()
             .unwrap_or(self.default_retention_days);
-        u64::from(days) * 24 * 60 * 60 * 1_000_000_000
+        u64::from(days).saturating_mul(24 * 60 * 60 * 1_000_000_000)
     }
 }
 

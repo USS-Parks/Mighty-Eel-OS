@@ -154,7 +154,9 @@ impl ReportSchedule {
         }
         match self.last_run_unix_nanos {
             None => true,
-            Some(last) => now.saturating_sub(last) >= self.period_secs * 1_000_000_000,
+            Some(last) => {
+                now.saturating_sub(last) >= self.period_secs.saturating_mul(1_000_000_000)
+            }
         }
     }
 }
@@ -433,7 +435,7 @@ impl ReportManager {
         };
         let mut results = Vec::with_capacity(due.len());
         for sched in due {
-            let window_nanos = sched.window_secs * 1_000_000_000;
+            let window_nanos = sched.window_secs.saturating_mul(1_000_000_000);
             let from = now_unix_nanos.saturating_sub(window_nanos);
             let request = ReportRequest {
                 report_type: sched.report_type.clone(),

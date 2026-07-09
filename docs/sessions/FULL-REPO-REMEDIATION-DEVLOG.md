@@ -1114,3 +1114,28 @@ nothing needs feature-gating.
 Verify: `cargo clippy -p mai-hil --all-targets -- -D warnings -A clippy::pedantic` PASS (clean
 without the blanket allow); `cargo test -p mai-hil` PASS (7). Q5 gate ("mai-hil clippy-clean
 under CI flags without the blanket allow") holds. Commit: (this change set).
+
+### Q6 - honest heuristics + operator-config overflow guards (L)
+
+Five stubs/heuristics that could fake success or panic, made honest:
+- `scheduler::evaluate_complexity`: `requires_vision = false // would check payload in production`
+  and `output_tokens = input/2 // rough estimate` -> the first is now a `TODO(basho):` (text-only
+  assumed until multimodal payloads are wired), the second an explicit "heuristic pre-inference
+  estimate, not a reported count".
+- `hotswap` GPU handlers used the `gpu_id` string directly as an `adapter_id` (register / unregister
+  / set_health) with a "For now: the adapter ID IS the GPU mapping" confession. Three sites now
+  carry a `TODO(basho):` that a GPU is not an adapter and a real GPU->adapter mapping is unwired
+  (the registration is real, just a placeholder id - not a fake success).
+- `mai-vault` `VectorManager::backup_to_vault` / `restore_from_vault` returned `Ok` (a fake backup
+  id, a silent restore) while doing nothing. Now a real in-memory snapshot: backup clones the
+  collection state under the id, restore reloads it (an unknown id is `SnapshotNotFound`, not a
+  silent success). `CollectionData` gains `#[derive(Clone)]`; the test proves a store -> backup ->
+  delete -> restore round-trip and that a bogus id errors.
+- Operator-config integer overflow: the report-scheduler / pruner convert operator-set
+  seconds/days to nanoseconds by `secs * 1_000_000_000` (and `days * 86_400 * 1e9`) - a large
+  config value overflows u64 and panics in debug. `reports/api.rs` (`period_secs`, `window_secs`)
+  and `reports/prune.rs` (retention `days`) now use `saturating_mul`.
+
+Verify: fmt; `cargo clippy -p mai-core -p mai-compliance -p mai-vault --all-targets -- -D warnings
+-A clippy::pedantic` PASS; `cargo test -p mai-core -p mai-compliance -p mai-vault` PASS (636). Q6
+gate ("no stub returns fake success; no operator config panics") holds. Commit: (this change set).

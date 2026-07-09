@@ -34,9 +34,14 @@ pub struct VectorManager {
     collections: RwLock<HashMap<String, CollectionData>>,
     /// Backup counter for generating backup IDs.
     backup_counter: RwLock<u64>,
+    /// In-memory snapshots keyed by backup id — this backend's stand-in for the
+    /// durable Qdrant->ZFS backup a real deployment performs. A backup actually
+    /// preserves the collection state so a later restore reloads it.
+    snapshots: RwLock<HashMap<String, HashMap<String, CollectionData>>>,
 }
 
 /// Data for a single collection.
+#[derive(Clone)]
 struct CollectionData {
     config: CollectionConfig,
     points: Vec<EmbeddingPoint>,
@@ -49,6 +54,7 @@ impl VectorManager {
             config,
             collections: RwLock::new(HashMap::new()),
             backup_counter: RwLock::new(0),
+            snapshots: RwLock::new(HashMap::new()),
         }
     }
 
@@ -252,17 +258,34 @@ impl VectorStore for VectorManager {
     }
 
     async fn backup_to_vault(&self) -> Result<String, VaultError> {
+        // Snapshot the current collection state so a later restore can reload it.
+        // A production deployment additionally copies this to the ZFS vault; here
+        // the snapshot lives in-process alongside the in-memory store.
+        let snapshot = self.collections.read().await.clone();
         let mut counter = self.backup_counter.write().await;
         *counter += 1;
         let backup_id = format!("qdrant-backup-{}", *counter);
-        info!(backup_id = %backup_id, "Vector store backed up to vault (stub)");
-        // In production: trigger Qdrant snapshot and copy to ZFS vault.
+        let collections = snapshot.len();
+        self.snapshots
+            .write()
+            .await
+            .insert(backup_id.clone(), snapshot);
+        info!(backup_id = %backup_id, collections, "Vector store snapshotted");
         Ok(backup_id)
     }
 
     async fn restore_from_vault(&self, backup_id: &str) -> Result<(), VaultError> {
-        info!(backup_id = %backup_id, "Restoring vector store from vault backup (stub)");
-        // In production: restore Qdrant snapshot from ZFS vault.
+        // Reload the collection state captured by the matching backup. An unknown
+        // backup id is an error, not a silent success.
+        let snapshot = self
+            .snapshots
+            .read()
+            .await
+            .get(backup_id)
+            .cloned()
+            .ok_or_else(|| VaultError::SnapshotNotFound(backup_id.to_string()))?;
+        *self.collections.write().await = snapshot;
+        info!(backup_id = %backup_id, "Vector store restored from snapshot");
         Ok(())
     }
 }
@@ -411,12 +434,26 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_backup_and_restore() {
+    async fn test_backup_and_restore_round_trips_state() {
         let mgr = VectorManager::new(test_vector_config());
+        mgr.create_collection(&test_collection_config("rag", 2))
+            .await
+            .unwrap();
+        mgr.store_embeddings("rag", &[make_point("p", vec![1.0, 0.0])])
+            .await
+            .unwrap();
+
         let backup_id = mgr.backup_to_vault().await.unwrap();
         assert!(backup_id.starts_with("qdrant-backup-"));
 
+        // Mutate after the backup, then restore: the mutation is undone.
+        mgr.delete_collection("rag").await.unwrap();
+        assert!(mgr.point_count("rag").await.is_err());
         mgr.restore_from_vault(&backup_id).await.unwrap();
+        assert_eq!(mgr.point_count("rag").await.unwrap(), 1);
+
+        // An unknown backup id is an error, not a silent success.
+        assert!(mgr.restore_from_vault("nope").await.is_err());
     }
 
     #[tokio::test]

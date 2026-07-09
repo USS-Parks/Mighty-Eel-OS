@@ -418,9 +418,9 @@ impl HotSwapManager {
             }
             SwapTarget::Hardware { event } => {
                 if let HardwareChangeEvent::GpuRemoved { gpu_id } = event {
-                    // Mark all adapters on this GPU as unhealthy
-                    // In production: query HIL for adapter-to-GPU mapping
-                    // For now: log intent; the adapter ID IS the GPU mapping
+                    // TODO(basho): a GPU is not an adapter. This uses the gpu_id
+                    // directly as an adapter_id until a HIL adapter-to-GPU mapping
+                    // is wired; a GPU hosting multiple adapters is not handled yet.
                     scheduler.set_adapter_health(gpu_id, false);
                     info!("Paused routing: GPU {gpu_id} adapters marked unhealthy");
                 } else {
@@ -492,6 +492,8 @@ impl HotSwapManager {
             SwapTarget::Hardware { event } => {
                 if let HardwareChangeEvent::GpuRemoved { gpu_id } = event {
                     let mut scheduler = self.scheduler.write().await;
+                    // TODO(basho): gpu_id used as adapter_id (placeholder) — see the
+                    // GpuAdded handler; a real GPU->adapter mapping is not wired yet.
                     scheduler.unregister_adapter(gpu_id);
                     let mut health = self.health_monitor.write().await;
                     health.unregister_adapter(gpu_id);
@@ -544,6 +546,10 @@ impl HotSwapManager {
                 match event {
                     HardwareChangeEvent::GpuAdded { gpu_id } => {
                         let mut scheduler = self.scheduler.write().await;
+                        // TODO(basho): a GPU is not an adapter — this registers a
+                        // placeholder adapter keyed by the gpu_id until a real
+                        // GPU->adapter mapping (which adapters a new GPU can host)
+                        // is wired. No real adapter binds here today.
                         scheduler.register_adapter(gpu_id.clone(), vec![], 4, vec![gpu_id.clone()]);
                         let mut health = self.health_monitor.write().await;
                         health.register_adapter(gpu_id.clone());
