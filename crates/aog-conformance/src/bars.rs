@@ -73,6 +73,49 @@ async fn delete(node: &RaftNode, key: &str) -> Result<(), String> {
     .map_err(|e| format!("delete {key} failed: {e:?}"))
 }
 
+/// Leader-transparent write: commit `op` via the currently-confirmed leader,
+/// re-resolving when an election moves leadership mid-run. In-process replicas
+/// advertise no forwarding address (`BasicNode { addr: "" }`), so openraft's
+/// ForwardToLeader hint cannot be followed — re-picking the confirmed leader
+/// handle and retrying (bounded) is the in-process equivalent of the live
+/// harness's leader-transparent writes.
+async fn leader_write(nodes: &[Arc<RaftNode>], op: Op) -> Result<(), String> {
+    let deadline = Instant::now() + Duration::from_secs(10);
+    let mut last = String::from("no confirmed leader");
+    loop {
+        if let Some(li) = confirmed_leader(nodes).await {
+            match nodes[li].write(op.clone()).await {
+                Ok(_) => return Ok(()),
+                // Churn until proven persistent: leadership can move between
+                // confirmation and commit. Re-resolve and retry; a real failure
+                // keeps failing and surfaces at the deadline.
+                Err(e) => last = format!("{e:?}"),
+            }
+        }
+        if Instant::now() >= deadline {
+            return Err(format!(
+                "write kept failing across leadership churn: {last}"
+            ));
+        }
+        tokio::time::sleep(Duration::from_millis(25)).await;
+    }
+}
+
+/// [`put`] via [`leader_write`] — for bars whose earlier phases (fault
+/// injection, kill/heal cycles, contended runners) can move leadership.
+async fn leader_put(nodes: &[Arc<RaftNode>], key: &str, value: &str) -> Result<(), String> {
+    leader_write(
+        nodes,
+        Op::Put {
+            key: key.to_owned(),
+            value: value.as_bytes().to_vec(),
+            expected: Precondition::Any,
+        },
+    )
+    .await
+    .map_err(|e| format!("put {key} failed: {e}"))
+}
+
 /// A level-triggered reconciler that records the *current* store value for each
 /// key it is woken for — the observable end state the fuzz compares against the
 /// store's authoritative state.
@@ -566,26 +609,19 @@ async fn publish_revocation(
     snapshot.revoked_tokens = tokens.iter().map(|t| (*t).to_owned()).collect();
     let sealed = sign_snapshot(snapshot, signer).map_err(|e| format!("sign snapshot: {e}"))?;
     let bytes = serde_json::to_vec(&sealed).map_err(|e| format!("encode snapshot: {e}"))?;
-    // Await a confirmed leader with a bounded retry: a transient election gap
-    // (e.g. under a contended CI runner) must not abort the publish one-shot.
-    let deadline = Instant::now() + Duration::from_secs(10);
-    let li = loop {
-        if let Some(i) = confirmed_leader(nodes).await {
-            break i;
-        }
-        if Instant::now() >= deadline {
-            return Err("no confirmed leader to publish the revocation".to_owned());
-        }
-        tokio::time::sleep(Duration::from_millis(25)).await;
-    };
-    nodes[li]
-        .write(Op::Put {
+    // Leader-transparent publish with a bounded retry: a transient election gap
+    // or a mid-flight leadership move (e.g. under a contended CI runner) must
+    // not abort the publish one-shot.
+    leader_write(
+        nodes,
+        Op::Put {
             key: REV_PATH.to_owned(),
             value: bytes,
             expected: Precondition::Any,
-        })
-        .await
-        .map_err(|e| format!("publish write failed: {e:?}"))?;
+        },
+    )
+    .await
+    .map_err(|e| format!("publish write failed: {e}"))?;
     Ok(())
 }
 
@@ -663,13 +699,10 @@ pub async fn kill_switch_under_scale(replicas: u64, workloads: usize) -> Result<
 
     // Scale: populate the estate with `workloads` objects — the load the kill
     // switch must stay correct under (bar 7 is kill-switch-*under-scale*).
-    {
-        let li = confirmed_leader(&nodes)
-            .await
-            .ok_or("no confirmed leader to load the estate")?;
-        for i in 0..workloads {
-            put(&nodes[li], &format!("Workload/scale-{i:05}"), "spec").await?;
-        }
+    // Leader-transparent: leadership may sit anywhere (or move) after the
+    // suite's earlier fault-injection bars.
+    for i in 0..workloads {
+        leader_put(&nodes, &format!("Workload/scale-{i:05}"), "spec").await?;
     }
 
     // Publish the kill through the leader; wait for it to reach every replica.
@@ -744,10 +777,11 @@ pub async fn scale_target(replicas: u64, workloads: usize) -> Result<String, Str
         .ok_or("no confirmed leader to load the estate")?;
     let leader = Arc::clone(&nodes[li]);
 
-    // Ingest M workloads through the leader; time the commit throughput.
+    // Ingest M workloads, leader-transparently (leadership may move mid-ingest
+    // on a contended runner); time the commit throughput.
     let ingest_start = Instant::now();
     for i in 0..workloads {
-        put(&leader, &format!("{PREFIX}scale-{i:05}"), "spec").await?;
+        leader_put(&nodes, &format!("{PREFIX}scale-{i:05}"), "spec").await?;
     }
     let ingest = ingest_start.elapsed();
 

@@ -1245,4 +1245,28 @@ left on device` in the runner's own diag log; rust-check red, both live gates sk
 again). Hardened the three cargo-building CI jobs (rust-check, wsf-live, integration-ci):
 free ~18 GB of preinstalled runner bundles up front, `cache-on-failure: true` so even a
 red run seeds the next cache, and `CARGO_PROFILE_DEV_DEBUG=0` (CI-only; no debuginfo in
-dev/test artifacts). Commit: (this change set).
+dev/test artifacts). Commit: `d3eecaf`.
+
+### X2 follow-through - conformance suite writes made leader-transparent (Lamprey red)
+
+`Lamprey MAI Validation` failed at `d3eecaf` (twice, incl. a rerun) on
+`aog-conformance::suite_runs_green_and_asserts_linearizability`: the ScaleTarget and
+KillSwitchUnderScale bars wrote through a node handle resolved once, and when the suite's
+earlier fault-injection bars left leadership elsewhere, openraft answered ForwardToLeader
+with the in-process empty address (`BasicNode { addr: "" }`) - election-timing dependent,
+which is why it flipped green/red across commits that never touched the crate. The
+correctness bars (idempotent reconcile; linearizable writes under partitions + failovers)
+passed in the same runs: harness robustness, the in-process twin of the live estate's
+LOOM-REV1 leader-transparent writes. The standalone aggressive-profile tests were already
+`#[ignore]`d for exactly this election-timing sensitivity; the suite test they defer to
+now earns its "non-flaky at modest scale" claim.
+
+Fix (`crates/aog-conformance/src/bars.rs`): a bounded `leader_write` primitive
+(re-confirm leader + retry across churn, 10s deadline) plus `leader_put`; both bar ingest
+loops and `publish_revocation` route through it. Verify: fmt no-op;
+`cargo clippy -p aog-conformance --all-targets -- -D warnings -A clippy::pedantic` clean;
+`cargo test -p aog-conformance --lib` green (3 passed incl. the suite test, 5 ignored
+opt-in profiles). Landing this exposed a `verify-tree.sh` false positive: CHECK 3 counted
+lines-containing braces (`grep -c`), not occurrences, so a balanced 298/298 file read as
+delta -5 and blocked staging; the counter now uses `grep -o | wc -l` (separate commit).
+Commit: (this change set).
