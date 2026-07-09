@@ -1,8 +1,8 @@
-//! R2 gate — "deleting a Tenant revokes its tokens everywhere + GCs children;
+//! "deleting a Tenant revokes its tokens everywhere + GCs children;
 //! no dangling capability." Plus orphan collection by owner reference.
 //!
 //! The full loop runs live in-process: real apiserver state (admission chain,
-//! receipts, front-door authenticator), real controllers on the R1 runtime.
+//! receipts, front-door authenticator), real controllers on the runtime.
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -175,7 +175,7 @@ async fn deleting_a_tenant_revokes_its_tokens_and_gcs_children() {
         .await
         .unwrap();
 
-    // The Phase-R controllers on the R1 runtime.
+    // The Phase-R controllers on the runtime.
     let mut gc = Controller::new(
         "gc",
         state.informer(""),

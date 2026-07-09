@@ -1,5 +1,5 @@
-//! N5 gate — a containerized workload lifecycle via the containerd driver, with
-//! parity to the process driver (N4). Env-gated on `LOOM_CONTAINER_CLI` (e.g.
+//! A containerized workload lifecycle via the containerd driver, with
+//! parity to the process driver. Env-gated on `LOOM_CONTAINER_CLI` (e.g.
 //! `docker` or `nerdctl`); skips when no container CLI is configured, so it is
 //! inert on the air-gap appliance path where the process driver is the default.
 #![allow(clippy::print_stderr)]
@@ -10,9 +10,7 @@ use aog_node::driver::{WorkloadDriver, WorkloadHandle, WorkloadRun, WorkloadStat
 #[test]
 fn a_containerized_workload_has_a_lifecycle() {
     let Ok(cli) = std::env::var("LOOM_CONTAINER_CLI") else {
-        eprintln!(
-            "SKIP a_containerized_workload_has_a_lifecycle: LOOM_CONTAINER_CLI unset (N5 gate)"
-        );
+        eprintln!("SKIP a_containerized_workload_has_a_lifecycle: LOOM_CONTAINER_CLI unset (gate)");
         return;
     };
     let image = std::env::var("LOOM_CONTAINER_IMAGE").unwrap_or_else(|_| "alpine".to_owned());
@@ -38,7 +36,7 @@ fn a_containerized_workload_has_a_lifecycle() {
     driver.stop(&handle).expect("stop");
     assert_ne!(driver.inspect(&handle).unwrap(), WorkloadState::Running);
 
-    // Clean restart under the same name (parity with the process driver, N4).
+    // Clean restart under the same name (parity with the process driver).
     let restarted = driver.start(&run).expect("restart container");
     assert_eq!(driver.inspect(&restarted).unwrap(), WorkloadState::Running);
     driver.stop(&restarted).expect("final stop");

@@ -1,4 +1,4 @@
-//! redb-backed [`Backend`] — the durable engine chosen at K2 (A4). All revision
+//! redb-backed [`Backend`] — the durable engine chosen (A4). All revision
 //! and CAS logic stays in `Store`; this module only persists bytes in a single
 //! ACID table, `Versioned` serialized as JSON.
 

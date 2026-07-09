@@ -109,7 +109,7 @@ impl Signer for RustCryptoMlDsa87 {
 }
 
 impl Drop for RustCryptoMlDsa87 {
-    /// Wipe the secret key from memory on drop (K3). Only the secret is cleared;
+    /// Wipe the secret key from memory on drop. Only the secret is cleared;
     /// `key_id` and `public_key` are not sensitive. Best-effort: guards the key
     /// against lingering in a freed heap buffer, not against copies ml-dsa made
     /// internally while signing.

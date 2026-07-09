@@ -1,4 +1,4 @@
-//! H4 — encrypted estate backup + cold restore. A backup is the estate's
+//! Encrypted estate backup + cold restore. A backup is the estate's
 //! committed key/value content, serialized and **envelope-sealed** (AES-256-GCM
 //! under a 32-byte data key, `fabric-envelope`) so it is ciphertext at rest — safe
 //! to write to removable media or off-site storage. Restore unseals it with the

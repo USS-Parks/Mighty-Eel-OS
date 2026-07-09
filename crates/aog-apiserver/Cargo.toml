@@ -5,7 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Loom control-plane API server (K5): typed CRUD per estate kind, every mutation forced through the admission choke point. AuthN/policy/seal/receipt stages land K6-K9."
+description = "Loom control-plane API server: typed CRUD per estate kind, every mutation forced through the admission choke point, with AuthN/policy/seal/receipt stages."
 
 [dependencies]
 aog-estate = { path = "../aog-estate" }

@@ -364,7 +364,7 @@ pub async fn rotate_credentials(
 
 /// `POST /v1/auth/exchange_token`
 ///
-/// Profile-aware token exchange (SHIP-07 Slice B). Behaviour switches
+/// Profile-aware token exchange. Behaviour switches
 /// on [`AppState::trust_exchange_mode`], itself populated by
 /// [`crate::trust_builder::build_trust_components`] when the server
 /// boots with a ship profile:
@@ -372,7 +372,7 @@ pub async fn rotate_credentials(
 /// | Mode                                     | Behaviour                                                        |
 /// |------------------------------------------|------------------------------------------------------------------|
 /// | [`TrustExchangeMode::LocalDevSynthetic`] | Mint the legacy synthetic local-dev token (back-compat default). |
-/// | [`TrustExchangeMode::OpenBaoBridge`]     | Return 503 until the live bridge client lands (SHIP-08+).        |
+/// | [`TrustExchangeMode::OpenBaoBridge`]     | Return 503 until the live bridge client lands.        |
 /// | [`TrustExchangeMode::Disabled`]          | Return 410 Gone with [`ApiError::EndpointDisabled`].             |
 ///
 /// The synthetic token is *not* cryptographic — it is a stable
@@ -445,7 +445,7 @@ pub async fn exchange_token(
 }
 
 /// Build the legacy synthetic local-dev token. Pulled out of the
-/// handler body so the SHIP-07 mode switch above stays readable.
+/// handler body so the mode switch above stays readable.
 fn mint_local_dev_synthetic(
     profile: ProfileInfo,
     req: ExchangeTokenRequest,

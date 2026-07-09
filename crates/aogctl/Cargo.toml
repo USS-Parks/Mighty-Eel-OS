@@ -5,7 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "aogctl — the Loom control-plane CLI (K11 kernel subset): apply/get/describe/delete against aog-apiserver with a WSF token"
+description = "aogctl — the Loom control-plane CLI: apply/get/describe/delete against aog-apiserver with a WSF token"
 
 [[bin]]
 name = "aogctl"

@@ -1,4 +1,4 @@
-//! R5 — the Capability / budget controller.
+//! The Capability / budget controller.
 //!
 //! A `Capability` declares the scope + budget tokens are minted from. Its
 //! budget is enforced through the **shared** spend ledger (X1): every replica
@@ -6,8 +6,8 @@
 //! by [`spend_key`], so the cap holds across the estate — the F3 contract,
 //! no longer per-process. The shared record is created lazily by the first
 //! lease acquisition; this controller's job is lifecycle: a live, valid
-//! capability is reported `Ready` (tokens may be resolved against it, R8),
-//! and a terminating one is left to the GC/finalizer machinery (R2).
+//! capability is reported `Ready` (tokens may be resolved against it),
+//! and a terminating one is left to the GC/finalizer machinery.
 
 use std::future::Future;
 
@@ -40,7 +40,7 @@ impl CapabilityController {
             return Ok(Action::Done);
         };
         if is_terminating(&object) {
-            return Ok(Action::Done); // teardown is the GC's job (R2)
+            return Ok(Action::Done); // teardown is the GC's job
         }
         let ResourceObject::Capability(capability) = object else {
             return Ok(Action::Done);

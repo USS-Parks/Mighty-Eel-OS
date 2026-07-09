@@ -2,7 +2,7 @@
 //!
 //! Why not depend on mai-api? See the matching note in
 //! `tools/mai-admin/src/profile.rs`. Both modules go away once
-//! SHIP-07-endpoint-and-cli lands and mai-api is buildable in the
+//! the endpoint-and-cli session lands and mai-api is buildable in the
 //! shared workspace again.
 //!
 //! Compatibility contract: the on-disk JSON line format must match the

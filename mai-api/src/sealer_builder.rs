@@ -1,10 +1,10 @@
-//! SHIP-05: Audit-sealer builder.
+//! Audit-sealer builder.
 //!
 //! Select the [`StoreSealer`] implementation for the compliance audit
 //! WAL based on the parsed [`ShipProfile`]. This is the sealer analog
 //! of [`crate::vault_builder`].
 //!
-//! Scope (SHIP-05):
+//! Scope:
 //! - Helper function [`build_sealer`].
 //! - Production profile rejects [`NullSealer`] and demands a real
 //!   AEAD key on disk.
@@ -14,16 +14,15 @@
 //!   the encryption path.
 //! - Conventional key location: `<audit.wal_dir>/sealer.key`.
 //!
-//! Out of scope (SHIP-05):
-//! - Wiring into [`crate::server::MaiServer`]. The SHIP-07 convergence
+//! Out of scope:
+//! - Wiring into [`crate::server::MaiServer`]. The convergence
 //!   step swaps the current `NullSealer` defaults in the audit
 //!   bootstrap for the builder's output.
 //! - Vault-managed key acquisition. The key file is the bring-up
-//!   contract; SHIP-07 folds it under the vault seal.
-//! - Production-guard runtime check IDs (`PROD-AUDIT-*`). SHIP-04 owns
-//!   audit-init guard wiring; the sealer check ID is added at
-//!   convergence so the two sessions do not collide on
-//!   `production_guard.rs`.
+//!   contract; the convergence step folds it under the vault seal.
+//! - Production-guard runtime check IDs (`PROD-AUDIT-*`). The
+//!   audit-init guard wiring is owned separately; the sealer check ID
+//!   is added at convergence.
 
 use std::fs;
 use std::path::{Path, PathBuf};

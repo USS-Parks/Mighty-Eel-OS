@@ -1,4 +1,4 @@
-//! R7 — provider health probing: the signal the [`ProviderPoolController`]
+//! Provider health probing: the signal the [`ProviderPoolController`]
 //! (crate::providers) folds into a pool's schedulable set.
 //!
 //! A [`HealthProbe`] answers "is this model endpoint reachable right now?".

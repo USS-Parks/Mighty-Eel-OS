@@ -1,4 +1,4 @@
-//! R2/R3/R6 — the complete revocation predicate, honored by the shared
+//! The complete revocation predicate, honored by the shared
 //! verification path. A real ML-DSA-signed snapshot revokes a token on every
 //! supported dimension, and `verify_in_context` (hence `attenuate` and any
 //! consumer using it) denies it. A stale snapshot fails closed.
@@ -134,7 +134,7 @@ fn every_dimension_revokes_the_token() {
 
 #[test]
 fn a_revoked_token_cannot_be_attenuated() {
-    // R3 through a real consumer (attenuate): a token revoked by the snapshot is
+    // Through a real consumer (attenuate): a token revoked by the snapshot is
     // refused before any child is minted.
     let anchor = RustCryptoMlDsa87::generate("anchor").unwrap();
     let parent = token(&anchor);

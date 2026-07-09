@@ -1,4 +1,4 @@
-//! SHIP-06 acceptance tests for `mai_api::trust_builder`.
+//! Acceptance tests for `mai_api::trust_builder`.
 //!
 //! Covers the behavior matrix in `trust_builder.rs` plus the
 //! plan-§7 acceptance list:
@@ -673,7 +673,7 @@ fn loaded_verifier_accepts_signed_bundle_round_trip() {
 
     // Trait-object verification: avoid `verified_payload`'s `Sized` bound
     // by calling `BundleVerifier::verify` through the `Arc<dyn …>`
-    // directly. This is the same lookup path SHIP-07 convergence will
+    // directly. This is the same lookup path convergence will
     // use from `MaiServer::run()`.
     let hash = payload_hash(&bundle.metadata, &bundle.payload).expect("hash must serialize");
     let sig_bytes = hex::decode(&bundle.signature.bytes_hex).expect("signature hex must decode");

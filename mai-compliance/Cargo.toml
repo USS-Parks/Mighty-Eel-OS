@@ -31,7 +31,7 @@ hmac = "0.12"
 sha2 = "0.10"
 hex = "0.4"
 
-# SHIP-05: AeadSealer for compliance audit at-rest encryption. AES-256-GCM
+# AeadSealer for compliance audit at-rest encryption. AES-256-GCM
 # matches the vault crate's bulk cipher choice. Random nonces are drawn from
 # the OS CSPRNG via `rand`.
 aes-gcm = "0.10"

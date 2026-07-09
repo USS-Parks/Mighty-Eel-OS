@@ -7,7 +7,7 @@
 //!   * **scale-down cleanup** — lowering `replicas` drops the excess
 //!     `Placement`s *and deletes their runtime tokens from OpenBao*, so the node
 //!     can no longer fetch a token for a replica that no longer exists (the
-//!     running replica is drained by N9; estate-wide token revocation is R9's
+//!     running replica is drained by the node; estate-wide token revocation is the
 //!     `RevocationIntent`, not this cleanup).
 #![allow(clippy::print_stderr)]
 

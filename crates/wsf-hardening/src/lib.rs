@@ -169,7 +169,7 @@ pub fn assert_production_ready(cfg: &DeploymentConfig) -> Result<(), Vec<GuardVi
 }
 
 /// The Loom control-plane facts the prod guard checks beyond the base
-/// [`DeploymentConfig`] (H6): the Raft voter count (a single-node quorum is not HA)
+/// [`DeploymentConfig`]: the Raft voter count (a single-node quorum is not HA)
 /// and whether the policy bundles it would serve are signed.
 #[derive(Debug, Clone)]
 pub struct LoomDeployment<'a> {
@@ -181,7 +181,7 @@ pub struct LoomDeployment<'a> {
     pub bundles_signed: bool,
 }
 
-/// The Loom production guard (H6): the base WSF dev-fixture guard
+/// The Loom production guard: the base WSF dev-fixture guard
 /// ([`production_guard`]) **plus** Loom's HA and signed-bundle requirements —
 /// reject a single-node quorum and an unsigned bundle in production. Empty =
 /// production-ready. A no-op in [`DeployMode::Dev`].

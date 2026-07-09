@@ -1,11 +1,11 @@
-//! SHIP-10 acceptance tests for `mai-admin restore plan` / `restore
+//! Acceptance tests for `mai-admin restore plan` / `restore
 //! apply` driven through the library surface, plus DR drills covering
 //! the disaster scenarios called out in SHIP-HARDENING-PLAN §9.5.
 //!
 //! Every test starts by laying out a realistic ship-state directory
 //! under a tempdir (mirroring `backup_e2e.rs::fixture`), takes a
 //! backup, then exercises a restore path. The fixture is intentionally
-//! identical to SHIP-09's — restore is the inverse of backup, so the
+//! identical to the backup suite's — restore is the inverse of backup, so the
 //! two suites must share a state contract.
 
 use std::path::{Path, PathBuf};

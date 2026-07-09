@@ -1,7 +1,7 @@
-//! K3 / H1 — the Raft node over the K2 store. openraft (0.9) on top of redb:
+//! The Raft node over the store. openraft (0.9) on top of redb:
 //! linearizable writes via `client_write`, committed state durable across a
-//! restart. K3 ran one voter with a no-peer stub network; H1 adds the multi-node
-//! path — [`RaftNode::join`] onto a [`Cluster`], `add_learner` + `change_membership`
+//! restart. A single voter runs with a no-peer stub network; the multi-node path
+//! adds [`RaftNode::join`] onto a [`Cluster`], `add_learner` + `change_membership`
 //! to form a ≥3-node control plane, leader election/failover, and a leadership
 //! [`RaftNode::leadership`] watch that drives a controller's `SharedGate` so only
 //! the leader reconciles.
@@ -51,7 +51,7 @@ pub struct RaftNode {
 
 impl RaftNode {
     /// Start the node over `dir` (creating the redb stores), recovering any
-    /// persisted log + state machine, with the no-peer K3 network. Does **not**
+    /// persisted log + state machine, with the no-peer network. Does **not**
     /// initialize a cluster — use [`RaftNode::bootstrap`] for a fresh single-node
     /// estate or [`RaftNode::join`] for a multi-node one.
     ///
@@ -79,8 +79,8 @@ impl RaftNode {
         Self::build(node_id, dir, network).await
     }
 
-    /// Start the node over `dir` wired to `network` — the no-peer stub for K3, a
-    /// [`Cluster`] network for H1.
+    /// Start the node over `dir` wired to `network` — the no-peer stub, a
+    /// [`Cluster`] network.
     async fn build<N>(node_id: NodeId, dir: impl AsRef<Path>, network: N) -> Result<Self, NodeError>
     where
         N: RaftNetworkFactory<TypeConfig>,
@@ -114,7 +114,7 @@ impl RaftNode {
     }
 
     /// Start a node wired to `cluster` and register its handle so peers can reach
-    /// it (H1). It joins un-initialized; the bootstrap node forms the cluster with
+    /// it. It joins un-initialized; the bootstrap node forms the cluster with
     /// [`initialize`](Self::initialize) then [`add_learner`](Self::add_learner) +
     /// [`change_membership`](Self::change_membership).
     ///
@@ -154,7 +154,7 @@ impl RaftNode {
     }
 
     /// Initialize a fresh cluster with `voters` as its initial members and wait
-    /// for a leader. Call once, on the bootstrap node (H1).
+    /// for a leader. Call once, on the bootstrap node.
     ///
     /// # Errors
     /// [`NodeError::Raft`] on a raft failure.
@@ -171,7 +171,7 @@ impl RaftNode {
     }
 
     /// Add `id` as a learner (non-voting) and wait for it to catch up — the first
-    /// step of admitting a node to the cluster (H1). The node must already have
+    /// step of admitting a node to the cluster. The node must already have
     /// [`join`](Self::join)ed.
     ///
     /// # Errors
@@ -225,7 +225,7 @@ impl RaftNode {
             .ok_or_else(|| NodeError::Raft("leader elected but not reported".to_owned()))
     }
 
-    /// **Quorum-confirmed** leadership (H2 fencing): performs a ReadIndex
+    /// **Quorum-confirmed** leadership (fencing): performs a ReadIndex
     /// (openraft `ensure_linearizable`) that only returns `Ok` when a quorum still
     /// acknowledges this node as leader. A partitioned minority leader — which in
     /// classic Raft still *believes* it leads — cannot confirm a quorum and
@@ -239,7 +239,7 @@ impl RaftNode {
     }
 
     /// A watch of this node's leadership, updated on every Raft state change — the
-    /// H1 wiring a `SharedGate` follows, so losing leadership stops this replica
+    /// wiring a `SharedGate` follows, so losing leadership stops this replica
     /// reconciling on the next pass (fail-closed for action, doctrine I-4).
     #[must_use]
     pub fn leadership(&self) -> tokio::sync::watch::Receiver<bool> {
@@ -272,7 +272,7 @@ impl RaftNode {
         self.raft.clone()
     }
 
-    /// Trigger a Raft snapshot (H3 compaction) and wait until it is built to the
+    /// Trigger a Raft snapshot (compaction) and wait until it is built to the
     /// applied index, so the state machine is captured and the log before it can
     /// be purged. A node recovers the same estate from the snapshot + the log tail.
     ///
@@ -299,7 +299,7 @@ impl RaftNode {
         Ok(())
     }
 
-    /// The log index of the last snapshot this node has taken, if any (H3).
+    /// The log index of the last snapshot this node has taken, if any.
     #[must_use]
     pub fn last_snapshot(&self) -> Option<u64> {
         self.raft.metrics().borrow().snapshot.map(|s| s.index)
@@ -317,7 +317,7 @@ impl RaftNode {
     }
 
     /// A prefix-scoped [`Informer`](crate::raft::watch::Informer) over this
-    /// node's committed state (K4 read path for controllers).
+    /// node's committed state (read path for controllers).
     #[must_use]
     pub fn informer(&self, prefix: impl Into<String>) -> crate::raft::watch::Informer {
         crate::raft::watch::Informer::new(self.sm.clone(), prefix)

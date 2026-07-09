@@ -1,11 +1,11 @@
-//! SHIP-05: AEAD sealer for the compliance audit WAL.
+//! AEAD sealer for the compliance audit WAL.
 //!
 //! Replaces the bring-up [`NullSealer`] in production: every audit
 //! entry is encrypted at rest with AES-256-GCM and a fresh 96-bit
 //! nonce. Output format on disk is `nonce (12B) || ciphertext || tag`.
 //!
-//! Key acquisition is intentionally out of scope here. SHIP-05 ships
-//! the primitive plus an explicit-key constructor; SHIP-07 wiring
+//! Key acquisition is intentionally out of scope here. This module ships
+//! the primitive plus an explicit-key constructor; later wiring
 //! folds the key under the vault-managed key path.
 //!
 //! [`NullSealer`]: super::store::NullSealer
@@ -44,7 +44,7 @@ pub struct AeadSealer {
 }
 
 impl AeadSealer {
-    /// Build a sealer from an explicit 32-byte key. SHIP-07 convergence
+    /// Build a sealer from an explicit 32-byte key. Later wiring
     /// loads the key out of the vault; until then callers supply it
     /// directly.
     pub fn new(key_bytes: &[u8; AEAD_SEALER_KEY_LEN]) -> Self {
@@ -76,7 +76,7 @@ impl AeadSealer {
     }
 
     /// Decrypt a sealed record produced by this sealer. Provided for
-    /// tests and the SHIP-07 audit reader; not part of the
+    /// tests and the audit reader; not part of the
     /// [`StoreSealer`] write-only contract.
     pub fn unseal(&self, sealed: &[u8]) -> Result<Vec<u8>, aes_gcm::Error> {
         if sealed.len() < AEAD_SEALER_NONCE_LEN {

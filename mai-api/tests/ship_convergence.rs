@@ -1,13 +1,13 @@
-//! SHIP-07 convergence acceptance tests.
+//! Convergence acceptance tests.
 //!
-//! Asserts that the SHIP-03/04/05/06 builders compose under a
+//! Asserts that the builders compose under a
 //! parse-validated profile and that the runtime-introspection results
 //! flip every deferred `PROD-*-100/101` (plus `PROD-POLICY-001`) check
 //! from Deferred to Pass.
 //!
 //! These tests intentionally stay off the network and off the
 //! production socket bind so they can run on any host. They exercise
-//! every public surface SHIP-07 introduced:
+//! every public surface the convergence introduced:
 //!
 //! - [`mai_api::production_guard::RuntimeChecks`] /
 //!   [`mai_api::production_guard::RuntimeOutcome`].
@@ -31,7 +31,7 @@ use mai_api::trust_builder::build_trust_components;
 use mai_api::vault_builder::build_vault;
 use mai_api::{MaiServer, ServerError};
 
-/// Programmatic local-dev profile that all four SHIP-03/04/05/06
+/// Programmatic local-dev profile that all four
 /// builders accept. Uses tempdir-rooted state so the test is hermetic
 /// and works on Windows + Linux + macOS.
 fn local_dev_profile(state_dir: PathBuf) -> ShipProfile {
@@ -110,8 +110,8 @@ fn local_dev_profile(state_dir: PathBuf) -> ShipProfile {
 
 #[tokio::test]
 async fn all_builders_compose_under_local_dev_profile() {
-    // Every SHIP-03..SHIP-06 builder must produce a usable component
-    // from the same parse-validated profile. This is the SHIP-07
+    // Every builder must produce a usable component
+    // from the same parse-validated profile. This is the
     // composition contract: one profile in, four real components out,
     // no demo defaults reachable accidentally.
     let temp = tempfile::tempdir().unwrap();
@@ -133,7 +133,7 @@ async fn all_builders_compose_under_local_dev_profile() {
 
 #[test]
 fn runtime_pass_lifts_every_deferred_id_under_production_profile() {
-    // Drive the SHIP-07 readiness flow from the production_guard side:
+    // Drive the readiness flow from the production_guard side:
     // a parse-validated production profile starts with six deferred
     // runtime checks; feeding the matching RuntimeChecks::pass results
     // flips every one of them to Pass and the report becomes
@@ -271,7 +271,7 @@ fn runtime_fail_in_any_critical_id_blocks_ship_ready() {
 
 #[tokio::test]
 async fn mai_server_rejects_missing_ship_profile_path() {
-    // SHIP-07 wires `MaiServer::with_ship_profile`. A non-existent
+    // The convergence wires `MaiServer::with_ship_profile`. A non-existent
     // path must surface as ServerError::Config so production startup
     // fails closed before any component is constructed.
     let bogus = PathBuf::from("/this/path/does/not/exist/for-ship-07-test.toml");

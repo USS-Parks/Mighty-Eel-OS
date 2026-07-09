@@ -1,4 +1,4 @@
-//! K10 — a stored object at an older schema version is served at the hub version,
+//! A stored object at an older schema version is served at the hub version,
 //! converted transparently on read; the default (identity) registry serves stored
 //! objects unchanged.
 

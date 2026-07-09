@@ -1,8 +1,8 @@
-//! VH2 gate — three `aogd` daemons form a control plane and replicate a write,
+//! Three `aogd` daemons form a control plane and replicate a write,
 //! driven entirely through the admin API over the `aog-wire` transport (not the
 //! in-process `Cluster`). Proves the daemon + admin surface + wire transport are a
 //! working multi-node control plane — the unit the Phase-V containerized harness
-//! (VH4+) will run in Docker.
+//! will run in Docker.
 
 use std::time::{Duration, Instant};
 

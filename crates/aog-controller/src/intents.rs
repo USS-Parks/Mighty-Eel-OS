@@ -1,14 +1,14 @@
-//! R2 — the revocation indexer: `RevocationIntent` objects → the front door's
+//! The revocation indexer: `RevocationIntent` objects → the front door's
 //! live kill view.
 //!
 //! Every reconcile rebuilds the [`RevocationView`] from the **full** intent
 //! list (level-triggered: the view is a pure function of current desired
 //! state, so duplicate or dropped intent events cannot skew it), swaps it into
-//! the authenticator the K6 front door consults on every request, and then
+//! the authenticator the front door consults on every request, and then
 //! marks each newly-enforced intent `Ready`/propagated through admission — a
 //! receipted acknowledgment that the kill is live on this replica.
 //!
-//! `Ring` targets are indexed nowhere yet: ring darkness is the R4 TrustRing
+//! `Ring` targets are indexed nowhere yet: ring darkness is the TrustRing
 //! controller's mechanism. Their intents stay `Pending` — an unenforced kill
 //! is never reported as propagated (doctrine: enforced, not asserted).
 
@@ -60,7 +60,7 @@ impl RevocationIndexer {
                     view.tenants.insert(id.clone());
                     enforced.push(intent);
                 }
-                // Ring darkness is enforced by the TrustRing controller (R4);
+                // Ring darkness is enforced by the TrustRing controller;
                 // until then a ring intent is honestly not propagated.
                 RevocationTarget::Ring(_) => {}
             }
@@ -80,7 +80,7 @@ impl RevocationIndexer {
             let status = acked.status.get_or_insert_with(Default::default);
             status.phase = aog_estate::Phase::Ready;
             status.propagated = true;
-            status.replicas_denied = 1; // this replica; R9 counts the estate
+            status.replicas_denied = 1; // this replica; the revocation controller counts the estate
             self.client
                 .update(ResourceObject::RevocationIntent(acked))
                 .await?;

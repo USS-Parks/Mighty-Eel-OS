@@ -74,7 +74,7 @@ pub enum ApiError {
     /// MAI-5002: Air-gap violation detected
     AirGapViolation(String),
     /// MAI-5003: Endpoint deliberately disabled by the active profile
-    /// (SHIP-07: e.g. `POST /v1/auth/exchange_token` under a profile
+    /// (e.g. `POST /v1/auth/exchange_token` under a profile
     /// with `TrustExchangeMode::Disabled`). Distinguished from a 404 so
     /// operators can tell "endpoint disabled by config" from "route
     /// missing from build".

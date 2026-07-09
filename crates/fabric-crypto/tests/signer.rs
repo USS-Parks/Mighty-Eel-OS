@@ -55,7 +55,7 @@ fn from_keypair_reconstructs_a_usable_signer() {
 
 #[test]
 fn signer_drop_is_sound_after_zeroize_wiring() {
-    // K3: the signer wipes its secret key on drop. Exercise the Drop path and
+    // The signer wipes its secret key on drop. Exercise the Drop path and
     // confirm an independent signer is unaffected (no double-free, no cross-talk).
     let msg = b"post-drop soundness";
     let survivor = RustCryptoMlDsa87::generate("survivor").unwrap();

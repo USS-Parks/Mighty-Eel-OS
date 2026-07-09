@@ -977,3 +977,46 @@ Verify: fmt; `cargo clippy -p mai-api --all-targets -- -D warnings -A clippy::pe
 `posture_*` tests pass, 11 pre-existing unaffected). P5 gate ("M-posture closed") holds for the
 harness-testable surface; the two process/WS live checks are enumerated for X. Commit: (this
 change set).
+
+### Q1 - scrub CANON §11 roster step-codes from crate source (L, systemic)
+
+Removed roster/finding provenance codes from committed **crate source** comments so shipped code
+no longer names which build session, roster step, or audit finding produced it (§11; provenance
+lives in git history + PLANNING/DEVLOG). Scope executed = the roster's enumerated families
+(`K#/H#/N#/S#(05-49)/R#/U#/VH#/SHIP-##/BF-#/AF-##/F#-N#/Session <n>`) across every `.rs`/`.toml`
+crate under `mai-api`, `tools/mai-admin`, `mai-sdk-rs`, `mai-compliance`, `mai-agent`, `mai-core`,
+`mai-scheduler`, `mai-adapters`, `mai-vault`, `mai-hil`, and all `crates/*` (aog-*, wsf-*, fabric-*).
+
+Method: five parallel scrub agents over disjoint crate groups did the comment rewrites (~290
+comment occurrences; each grammatical, comments-only, no code/identifier/string touched),
+reporting every code they found in a string literal for the parent to handle. A single verified
+`[System.IO.File]` pass then scrubbed the ~20 runtime/test/toml string occurrences they flagged
+(CLI banners, metric help, live-gate SKIP/PASSED eprintln, Cargo.toml `description` fields,
+snapshot `notes`), and 5 `REG-AF-###` comment labels were folded into their descriptions (the
+`reg_af_00#_*` test fn names keep the registry linkage).
+
+Vetted `slop-ok:` exceptions (the code is operator/test DATA, not a comment): the
+`production_guard` deferred-check `which_session` values (8; operator-facing readiness data), and
+`auth_bypass_consistency` which asserts the readiness message cites `SHIP-17`.
+
+Deliberately OUT of scope, documented so the residual is visible (not silently left):
+- **Broader provenance letter-families** — `A/B/D/E/F/L/T/V/W`, `plan …`/`Phase …`/`Prompt …`/
+  `Gate …`, `F#-N#`, and single-digit `S#` — pervade the tree (esp. wsf/fabric/aog + mai-vault's
+  `V#` cluster) but are outside the roster's enumerated Q1 set. A comprehensive §11 sweep of the
+  whole provenance vocabulary is a larger follow-on.
+- **Ship-pipeline SHIP-## as domain data** — `config/*.toml` (`carried_forward`), the
+  `tools/{ship12,packaging,gpu_release,burnin}_tests/*.py` suites, `scripts/*.py`, `deployment/`,
+  `packaging/`, `pyproject.toml`, `.gitleaks.toml`, `deny.toml`, `tests/` — where `SHIP-##` are the
+  ship pipeline's own step identifiers / `ship_session` fields / test subjects (e.g. `assert
+  report["ship_session"] == "SHIP-14"`), not stray comment provenance. Q2 EXEMPTS these paths in
+  the scanner (mirroring the existing docs/DEVLOG/ROSTER exemptions) rather than scrub legit data.
+
+Verify: `cargo fmt` (193 files, 657+/657- — balanced text-for-text, no structural loss);
+`cargo clippy --workspace --all-targets -- -D warnings -A clippy::pedantic` PASS (every target,
+incl. all test code, compiles clean); `cargo test -p mai-api -p mai-admin` PASS (425) - the only
+crates whose *runtime* strings changed (comment-only changes cannot affect other crates' tests).
+A full `cargo test --workspace` was not run to green because its incremental cache reached 118 GB
+and exhausted the disk; all-target compilation is proven by clippy, and the string-touched crates
+are green. Post-scrub grep of the enumerated families over `.rs/.toml` shows only the vetted
+`slop-ok:` lines. Q1 gate ("zero roster codes in non-exempt crate source") holds for the
+enumerated families; the scanner that enforces it is Q2. Commit: (this change set).

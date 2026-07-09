@@ -141,7 +141,7 @@ impl AuditWriter {
     /// field** — the whole entry with its two output fields (`entry_hash` and
     /// `pqc_signature`) blanked. This binds `entry_id`, `model_id`, token counts,
     /// `latency_ms`, `adapter_id`, `error_code`, and `ip_source` into the chain,
-    /// not just the original five (audit H6: editing any persisted field now
+    /// not just the original five (editing any persisted field now
     /// breaks `verify`). Producer and verifier share this function, so the digest
     /// is self-consistent across the chain.
     fn compute_entry_hash(entry: &VaultAuditEntry) -> String {
@@ -548,7 +548,7 @@ mod tests {
 
     #[test]
     fn entry_hash_covers_previously_unhashed_fields() {
-        // Audit H6/V2: the entry hash now binds every security-relevant field, not
+        // The entry hash now binds every security-relevant field, not
         // just previous_hash/timestamp/profile_id/action/status. Editing a field
         // the old 5-field hash ignored must change the digest.
         let base = make_entry(

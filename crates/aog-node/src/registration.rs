@@ -1,4 +1,4 @@
-//! N1 — node registration. A node joins with a `fabric-identity` leaf signed by
+//! Node registration. A node joins with a `fabric-identity` leaf signed by
 //! the trust anchor, plus its declared attestation profile + capacity (the
 //! [`Node`] spec). The control plane admits it only if the leaf verifies against
 //! the roster's anchor key **and** names this node; a mis-signed, expired-kind,

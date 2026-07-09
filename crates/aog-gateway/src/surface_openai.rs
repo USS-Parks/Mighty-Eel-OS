@@ -173,7 +173,7 @@ async fn chat_completions(
 
     let mut tokenized_spans = 0u32;
     let resp = if body.get("stream").and_then(Value::as_bool).unwrap_or(false) {
-        // AF-08 fail-closed: the streaming path does not yet tokenize egress or
+        // Fail-closed: the streaming path does not yet tokenize egress or
         // meter/receipt per chunk. Until it does, refuse a stream that would send
         // un-tokenized sensitive spans to a cloud provider rather than leak them.
         let spans =
@@ -430,7 +430,7 @@ async fn completions(
     headers: HeaderMap,
     Json(body): Json<Value>,
 ) -> Response {
-    // AF-10: the legacy completion endpoint runs the SAME governance pipeline as
+    // The legacy completion endpoint runs the SAME governance pipeline as
     // chat — auth, classify/route, policy, tokenize egress, meter/receipt, budget
     // — never a bare provider call.
     let ctx = match authorize(&state, &headers).await {

@@ -1,4 +1,4 @@
-//! `mai-admin restore plan` / `restore apply` implementation. SHIP-10.
+//! `mai-admin restore plan` / `restore apply` implementation.
 //!
 //! Restore is the inverse of [`crate::backup::create_backup`]: it
 //! reloads the manifest at `<backup_dir>/manifest.json`, verifies the
@@ -35,13 +35,13 @@
 //! What restore deliberately does NOT do:
 //! * It does not reseal vault payloads. Vault data stays at rest under
 //!   its own backend (ZFS replication or whatever the operator runs);
-//!   the backup records only a `vault_snapshot_ref` pointer. SHIP-09's
+//!   the backup records only a `vault_snapshot_ref` pointer. That
 //!   discipline carries forward unchanged.
 //! * It does not write a `profile.toml`. The operator supplies a fresh
 //!   profile (or symlinks an existing one) whose paths point at the
 //!   restored layout. This keeps restore environment-agnostic.
 //! * It does not chown / chmod. Filesystem permissions are the
-//!   operator's responsibility — packaging (SHIP-08) sets them up.
+//!   operator's responsibility — packaging sets them up.
 
 use std::path::{Path, PathBuf};
 
@@ -74,7 +74,7 @@ pub enum ActionKind {
     Tree,
 }
 
-/// Validate a manifest-supplied component path (finding AF-11). It must be a
+/// Validate a manifest-supplied component path. It must be a
 /// relative path composed only of `Normal` components — no absolute/root, no
 /// drive prefix, no `.`/`..` — so joining it onto the backup or target root
 /// cannot escape that root. Returns the validated relative path.
@@ -304,7 +304,7 @@ pub fn plan_restore(
     // apply() so a corrupt backup cannot ever touch the target.
     let mut actions: Vec<RestoreAction> = Vec::with_capacity(manifest.components.len());
     for component in &manifest.components {
-        // AF-11: refuse any component path that could escape the backup/target
+        // Refuse any component path that could escape the backup/target
         // root before it is joined onto either.
         let safe_rel = validate_component_path(&component.path)?;
         let source_abs = backup_dir.join(&safe_rel);
@@ -660,7 +660,7 @@ mod tests {
 
     #[test]
     fn component_path_validation_rejects_escape() {
-        // AF-11: manifest-supplied component paths must stay within the root.
+        // Manifest-supplied component paths must stay within the root.
         for bad in ["../etc/passwd", "/abs/path", "a/../../b", ""] {
             assert!(
                 matches!(

@@ -1,6 +1,6 @@
-//! VH5b-c — provision the daemon's trust material from OpenBao.
+//! Provision the daemon's trust material from OpenBao.
 //!
-//! `Sealer::generate()` (VH5b-a) mints a *fresh, ephemeral* signer per process
+//! `Sealer::generate()` mints a *fresh, ephemeral* signer per process
 //! and uses a fixed placeholder data key; the anchor arrives as a raw env hex.
 //! That is the kernel default the `aog-apiserver` seal explicitly flags as the
 //! Phase-W OpenBao seam. This module is that seam for `aogd`: at startup a node

@@ -1,6 +1,6 @@
 // A CLI legitimately writes to stdout/stderr.
 #![allow(clippy::print_stdout, clippy::print_stderr)]
-//! `aogctl` binary — a formatting shell over [`aogctl::Client`] (K11 kernel subset).
+//! `aogctl` binary — a formatting shell over [`aogctl::Client`] (kernel subset).
 //!
 //! Usage:
 //!   aogctl apply -f <file>          create-or-update a resource from a JSON file

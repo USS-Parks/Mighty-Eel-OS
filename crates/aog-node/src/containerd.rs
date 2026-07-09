@@ -1,8 +1,8 @@
-//! N5 — the containerd driver (optional). Runs a workload replica as a container
+//! The containerd driver (optional). Runs a workload replica as a container
 //! through a containerd-compatible CLI (`nerdctl` / `ctr`; also `docker`, which
 //! is containerd-backed). It satisfies the same [`WorkloadDriver`] trait as the
-//! process driver (N4) — a workload's lifecycle is identical whichever runs it,
-//! the parity the N3 trait guarantees. On the air-gap appliance the process
+//! process driver — a workload's lifecycle is identical whichever runs it,
+//! the parity the trait guarantees. On the air-gap appliance the process
 //! driver is the default; this driver is for hosts already running containerd.
 
 use std::process::Command;

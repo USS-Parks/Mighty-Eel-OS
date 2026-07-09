@@ -1,4 +1,4 @@
-//! R1 — the controller workqueue: dedup, per-key exponential backoff, delayed
+//! The controller workqueue: dedup, per-key exponential backoff, delayed
 //! requeue. K8s-workqueue shaped, level-triggered: a queued key means
 //! "reconcile this key at least once more", so adding a key that is already
 //! queued coalesces into the one pending run (a duplicate event costs
@@ -13,7 +13,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::time::{Duration, Instant};
 
 /// Per-key exponential backoff: `base * 2^(n-1)` before the `n`-th
-/// consecutive retry, capped at `max`. This is the R1 rate limit on a failing
+/// consecutive retry, capped at `max`. This is the rate limit on a failing
 /// key — a broken object retries ever more slowly instead of hot-looping the
 /// controller, while one success ([`WorkQueue::forget`]) resets it.
 #[derive(Debug, Clone, Copy)]

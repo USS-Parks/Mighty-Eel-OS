@@ -117,14 +117,14 @@ pub fn build_router(state: AppState) -> Router {
             get(handlers::health::hardware_health),
         )
         .route("/v1/health/system", get(handlers::health::system_health))
-        // J-13: disk/RAM/CPU rollup moved off /v1/health/system to free
+        // Disk/RAM/CPU rollup moved off /v1/health/system to free
         // that path for the adapter-rollup endpoint above. The shape
         // is unchanged; the path is the only break.
         .route(
             "/v1/health/resources",
             get(handlers::health::resources_health),
         )
-        // SHIP-11: operational health probes (live / ready / production)
+        // Operational health probes (live / ready / production)
         // distinct from the hardware-oriented endpoints above. See
         // handlers/health.rs for the four-state semantics table.
         .route("/v1/health/live", get(handlers::health::live_probe))
@@ -134,7 +134,7 @@ pub fn build_router(state: AppState) -> Router {
             get(handlers::health::production_probe),
         );
 
-    // SHIP-11: Prometheus metrics exposition. Auth-exempt (operator
+    // Prometheus metrics exposition. Auth-exempt (operator
     // scrapers run host-local). Lives outside `health_routes` because
     // the path is `/v1/metrics`, not `/v1/health/*`.
     let metrics_routes =
@@ -146,7 +146,7 @@ pub fn build_router(state: AppState) -> Router {
             "/v1/system/airgap",
             get(handlers::system::get_airgap_status),
         )
-        // SHIP-07 Slice B: live production-readiness report. Admin-only;
+        // Live production-readiness report. Admin-only;
         // 422 when the server booted without a ship profile.
         .route(
             "/v1/system/production-readiness",
@@ -286,7 +286,7 @@ pub fn build_router(state: AppState) -> Router {
 
     // Merge all route groups and apply middleware. Middleware layers
     // run *outside in*: the last `.layer(...)` call sees the request
-    // first. SHIP-11 middleware needs to wrap auth so the metrics
+    // first. Middleware needs to wrap auth so the metrics
     // counter sees every request (including 401s) and so the
     // correlation ID is set before any handler — including the auth
     // failure path — has a chance to log.
@@ -314,7 +314,7 @@ pub fn build_router(state: AppState) -> Router {
             state.clone(),
             crate::middleware::rate_limit_middleware,
         ))
-        // SHIP-11: observability layers (innermost-to-outermost order
+        // Observability layers (innermost-to-outermost order
         // below means OUTERMOST when the request arrives). Metrics
         // middleware needs the correlation span to be active when it
         // emits its own counter logs, so correlation goes last.

@@ -1,9 +1,9 @@
-//! R9 gate — "an intent → the token is denied on every replica AND on an
+//! "an intent → the token is denied on every replica AND on an
 //! air-gapped node via media", against a **live** OpenBao and the **real**
 //! `aog-gateway` kill switch (A3.2 no-mock-only).
 //!
-//! A virtual key is provisioned (R8) so the gateway resolves it to a token;
-//! declaring a `RevocationIntent` for that token makes the R9 controller publish
+//! A virtual key is provisioned so the gateway resolves it to a token;
+//! declaring a `RevocationIntent` for that token makes the controller publish
 //! a signed snapshot to the online kill-switch path AND to a removable-media
 //! file. The same gateway then refuses the key (`Revoked`), and the media
 //! snapshot — verified offline with the public key alone — reports the token
@@ -173,7 +173,7 @@ async fn settle<R: Reconciler>(c: &mut Controller<R>) {
 async fn an_intent_denies_a_token_on_every_replica_and_over_media() {
     let Some(addr) = openbao_addr() else {
         eprintln!(
-            "SKIP an_intent_denies_a_token_on_every_replica_and_over_media: WSF_OPENBAO_ADDR unset (R9 live gate)"
+            "SKIP an_intent_denies_a_token_on_every_replica_and_over_media: WSF_OPENBAO_ADDR unset (live gate)"
         );
         return;
     };
@@ -224,7 +224,7 @@ async fn an_intent_denies_a_token_on_every_replica_and_over_media() {
     )
     .with_revocation_path(REV_PATH);
 
-    // Provision a resolvable key (R8): a capability + a virtual key → a token.
+    // Provision a resolvable key: a capability + a virtual key → a token.
     client
         .ensure_created(ResourceObject::Capability(Resource::new(
             "cap",

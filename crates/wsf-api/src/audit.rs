@@ -1,6 +1,6 @@
 //! Global-auditor authorization (plan L2 remainder).
 //!
-//! Tenant scoping is the default and only posture for `/v1/receipts` (AF-007).
+//! Tenant scoping is the default and only posture for `/v1/receipts`.
 //! A **global auditor** is the one server-designated exception: a principal the
 //! operator has explicitly enrolled — by authenticated `principal_id`, never by
 //! anything the caller submits — who may read receipts across tenants and

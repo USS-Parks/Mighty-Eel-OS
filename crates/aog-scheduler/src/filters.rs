@@ -95,13 +95,13 @@ impl Filter for RingFilter {
 /// A bare high-floor claim with no platform/PCR is refused and the workload
 /// stays Pending rather than force-placed to relieve pressure (doctrine I-2/I-4).
 ///
-/// LIMITATION (2026-07-08 audit, finding H4): the `platform` + `pcr` are the
+/// LIMITATION (2026-07-08 audit): the `platform` + `pcr` are the
 /// node's **self-declared** values — this filter checks their *presence*, it does
 /// not yet verify a control-plane-checked hardware quote (signed quote + AK cert
 /// chain + pinned reference PCRs + fresh nonce). That verification needs real
 /// TPM/attestation hardware and is deferred to the hardware lane; until it lands
 /// a node that asserts a platform + PCR is trusted for Restricted+ placement.
-/// Fully closing H4 is either that verification or an owner decision to deny
+/// Fully closing this gap is either that verification or an owner decision to deny
 /// Restricted+ fail-closed (a placement-capability change, so owner-gated).
 #[derive(Debug, Clone, Copy, Default)]
 pub struct AttestationFilter;
@@ -129,7 +129,7 @@ impl Filter for AttestationFilter {
         // is not attestation (I-4). Public / Internal need no hardware root.
         if ceiling >= Classification::Restricted {
             // TODO(basho): the platform + pcr below are node-self-declared
-            // (2026-07-08 audit, finding H4). Verify a control-plane-checked
+            // (2026-07-08 audit). Verify a control-plane-checked
             // hardware quote (AK cert chain + pinned PCRs + fresh nonce) before
             // trusting them; blocked on TPM/attestation hardware.
             if node.attestation.platform == AttestationPlatform::None {

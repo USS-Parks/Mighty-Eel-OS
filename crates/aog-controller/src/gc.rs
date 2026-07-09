@@ -1,4 +1,4 @@
-//! R2 — the garbage collector: cascading delete + orphan collection.
+//! The garbage collector: cascading delete + orphan collection.
 //!
 //! Watches the whole estate. Two duties, both level-triggered off a single
 //! key wake-up:

@@ -1,4 +1,4 @@
-//! VH1 gate — a 3-node Loom control plane forms consensus over the real
+//! A 3-node Loom control plane forms consensus over the real
 //! `aog-wire` HTTP transport (not the in-process `Cluster`): a leader is elected,
 //! and a committed write replicates to the followers across sockets.
 

@@ -1,4 +1,4 @@
-//! N6 — edge admission with the W5 offline-safe cache. The node verifies a
+//! Edge admission with the W5 offline-safe cache. The node verifies a
 //! runtime token **locally** (signature, expiry, revocation) and narrows the
 //! route it may use to what the node's current connectivity safely allows
 //! (`fabric-cache`). Fail-static (doctrine I-4): an unreachable control plane or

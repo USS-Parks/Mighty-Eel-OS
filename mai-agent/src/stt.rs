@@ -53,7 +53,7 @@ struct AudioBuffer {
     silence_frames: u32,
     /// Silence threshold in frames
     silence_threshold: u32,
-    /// Absolute cap on accumulated bytes (audit H10). Bounds memory regardless of
+    /// Absolute cap on accumulated bytes. Bounds memory regardless of
     /// reported frame duration — sub-millisecond / sub-sample frames floor to zero
     /// duration, so the duration guard alone cannot stop an unbounded byte flood.
     max_bytes: usize,
@@ -69,7 +69,7 @@ impl AudioBuffer {
         let frame_duration_ms = 20u32; // 20ms frames typical for WebSocket audio
         let silence_frames = silence_threshold_ms / frame_duration_ms;
         // Absolute byte cap tied to the duration budget: the bytes `max_duration`
-        // seconds of this format would occupy (audit H10).
+        // seconds of this format would occupy.
         let max_bytes = bytes_per_second
             .saturating_mul(u64::from(max_duration_secs))
             .try_into()
@@ -89,7 +89,7 @@ impl AudioBuffer {
     /// Append an audio frame. Returns true if the buffer is ready for
     /// transcription (silence detected or max duration reached).
     fn append_frame(&mut self, frame: &[u8]) -> Result<bool, AgentError> {
-        // Reject malformed frames before any duration arithmetic (audit H10): an
+        // Reject malformed frames before any duration arithmetic: an
         // empty frame carries no audio, and a frame that is not a whole number of
         // samples both mis-aligns the stream and (sub-sample) reports zero duration
         // while still consuming bytes. Guarding `frame_align != 0` also avoids a
@@ -537,7 +537,7 @@ mod tests {
 
     #[test]
     fn zero_duration_frame_flood_is_byte_bounded() {
-        // Audit H10: a single 16-bit sample at 16 kHz floors to 0 ms
+        // A single 16-bit sample at 16 kHz floors to 0 ms
         // (1000 / 16000 == 0), so the duration guard never trips; the byte cap
         // must bound memory instead. 1-second budget => 32 000-byte cap.
         let format = AudioFormat {

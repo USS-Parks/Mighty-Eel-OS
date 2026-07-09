@@ -9,7 +9,7 @@
 //!   mai-api /etc/mai/server.toml                  # Load config from file
 //!   mai-api --config path.toml                    # Explicit flag form
 //!   mai-api validate --profile deployment/ship/profile.toml [--json]
-//!                                                 # SHIP-02 readiness check
+//!                                                 # readiness check
 
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
@@ -25,7 +25,7 @@ use mai_api::ship_profile::load_ship_profile;
 
 #[tokio::main]
 async fn main() -> ExitCode {
-    // The SHIP-02 `validate` subcommand bypasses the tracing subscriber
+    // The `validate` subcommand bypasses the tracing subscriber
     // so its stdout is the report and nothing else. Other paths set
     // tracing up first.
     let args: Vec<String> = std::env::args().collect();
@@ -74,8 +74,8 @@ async fn main() -> ExitCode {
     }
 }
 
-/// SHIP-02 stop-gap CLI. The full `mai-ship-validate` binary lands in
-/// SHIP-07; this subcommand exists so operators can dry-run the
+/// Stop-gap CLI. The full `mai-ship-validate` binary lands later;
+/// this subcommand exists so operators can dry-run the
 /// production guard against a profile today.
 ///
 /// Exit codes:
@@ -111,10 +111,10 @@ fn run_validate_subcommand(args: &[String]) -> ExitCode {
             "-h" | "--help" => {
                 println!("Usage: mai-api validate --profile <PATH> [--json]");
                 println!();
-                println!("Run the SHIP-02 production readiness guard against a");
+                println!("Run the production readiness guard against a");
                 println!("ship profile. Config-only checks today; runtime checks");
-                println!("(vault open, audit append, trust bundle verify) land in");
-                println!("SHIP-03..SHIP-06 and currently report DEFERRED.");
+                println!("(vault open, audit append, trust bundle verify) are not");
+                println!("yet wired and currently report DEFERRED.");
                 return ExitCode::SUCCESS;
             }
             other => {

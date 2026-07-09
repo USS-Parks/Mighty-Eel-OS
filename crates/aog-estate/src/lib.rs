@@ -24,7 +24,7 @@ use serde::{Deserialize, Serialize};
 pub use kinds::*;
 
 /// The API group + version every Loom resource is served under. Schema
-/// evolution is handled by conversion (K10); this is the current stored form.
+/// evolution is handled by conversion; this is the current stored form.
 pub const API_VERSION: &str = "aog.islandmountain.io/v1";
 
 /// The resource kinds Loom orchestrates (addendum A1.5).
@@ -176,7 +176,7 @@ pub struct ReceiptRef {
     pub chain: Option<String>,
 }
 
-/// Reference to the object that owns this one (R2). An object whose owner is
+/// Reference to the object that owns this one. An object whose owner is
 /// gone — or exists under a different `uid` (a recreated namesake is a new
 /// owner) — is an orphan, collected by the GC controller. Owner references are
 /// set at create and frozen thereafter: ownership cannot be hijacked by update.

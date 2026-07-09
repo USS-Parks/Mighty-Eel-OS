@@ -4,7 +4,7 @@
 //! placements already made), mints a runtime trust token scoped to the
 //! workload's `Capability`, persists that token to OpenBao so the node can fetch
 //! it, and creates the `Placement` through the admission choke point — which
-//! validates, seals, and **receipts** the binding (K9), so no separate receipt
+//! validates, seals, and **receipts** the binding, so no separate receipt
 //! step is needed here. A replica with no attestation-satisfying node stays
 //! Pending; it is never force-placed.
 //!
@@ -188,7 +188,7 @@ impl SchedulerController {
     }
 
     /// Build the `Placement` resource for a binding, owned by its workload so the
-    /// GC reclaims it when the workload is deleted (R2/W9).
+    /// GC reclaims it when the workload is deleted (W9).
     fn build_placement(
         workload: &Workload,
         placement_name: &str,
@@ -271,7 +271,7 @@ impl SchedulerController {
 
         // Scale down first: free capacity before packing. Each dropped replica's
         // runtime token is deleted from OpenBao (revoked) and its `Placement`
-        // removed; the node runtime drains the replica (N9).
+        // removed; the node runtime drains the replica.
         for ordinal in &plan.delete {
             if let Some(placement) = by_ordinal.get(ordinal) {
                 let pname = placement.metadata.name.clone();
@@ -286,7 +286,7 @@ impl SchedulerController {
 
         // Scale up: mint a scoped runtime token per new ordinal, persist it to
         // OpenBao for the node to fetch, and create the attested `Placement`
-        // through admission (which receipts the binding, K9).
+        // through admission (which receipts the binding).
         for (ordinal, node) in &plan.create {
             let pname = placement_name(name, *ordinal);
             let token_id = format!("rt:{pname}");

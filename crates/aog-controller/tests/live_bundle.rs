@@ -1,7 +1,7 @@
-//! R6 gate — "a bundle update reaches all nodes; signature verifies at the
+//! "a bundle update reaches all nodes; signature verifies at the
 //! edge; stale bundle rejected", against a **live** OpenBao (A3.2 no-mock-only).
 //!
-//! Env-gated on `WSF_OPENBAO_ADDR` like the R3/R4 live suites; returns cleanly
+//! Env-gated on `WSF_OPENBAO_ADDR` like the live suites; returns cleanly
 //! otherwise. Real crypto end to end: the controller signs each `PolicyBundle`
 //! with an ML-DSA control-plane key and publishes it to the live KV-v2 channel
 //! `kv/data/policy-bundles/<name>`; an edge cache fetches it and verifies with
@@ -184,7 +184,7 @@ async fn get_bundle(client: &EstateClient) -> aog_estate::PolicyBundle {
 async fn a_policy_bundle_is_signed_distributed_and_verified_at_the_edge() {
     let Some(addr) = openbao_addr() else {
         eprintln!(
-            "SKIP a_policy_bundle_is_signed_distributed_and_verified_at_the_edge: WSF_OPENBAO_ADDR unset (R6 live gate)"
+            "SKIP a_policy_bundle_is_signed_distributed_and_verified_at_the_edge: WSF_OPENBAO_ADDR unset (live gate)"
         );
         return;
     };

@@ -26,7 +26,7 @@ use futures::stream::BoxStream;
 use serde::{Deserialize, Serialize};
 
 /// Connect timeout for provider HTTP clients: bounds TCP+TLS establishment so a
-/// dead or unroutable backend fails fast instead of hanging (audit H11 / D3).
+/// dead or unroutable backend fails fast instead of hanging (audit D3).
 const PROVIDER_CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
 /// Idle read timeout: the maximum gap between bytes of a response. Bounds a
 /// backend that connects then stalls. There is deliberately NO total request
@@ -36,7 +36,7 @@ const PROVIDER_CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_
 /// local model.
 const PROVIDER_READ_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(120);
 
-/// The shared provider HTTP client, with hang guards (D3/H11): a `connect_timeout`
+/// The shared provider HTTP client, with hang guards (D3): a `connect_timeout`
 /// and an idle `read_timeout` bound a dead or stalled backend, while omitting a
 /// total `timeout` keeps long SSE completions intact. The config is static, so
 /// `build` only fails on a TLS-backend init fault (an unrecoverable deployment

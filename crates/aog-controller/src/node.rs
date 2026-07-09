@@ -1,4 +1,4 @@
-//! N2 (control-plane leg) — the node controller enforces liveness. A node whose
+//! The node controller enforces liveness. A node whose
 //! heartbeat has aged past the freshness window, or that reports not-ready, is
 //! marked down and its `Placement`s are evicted, so the scheduler re-places
 //! those replicas on live nodes — the "killed node reschedules" guarantee.

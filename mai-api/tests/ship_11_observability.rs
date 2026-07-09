@@ -1,4 +1,4 @@
-//! SHIP-11 acceptance tests: observability surface.
+//! Acceptance tests: observability surface.
 //!
 //! Covers every "Acceptance Tests" bullet from
 //! `docs/SHIP-HARDENING-PLAN.md` §10 (line 847):
@@ -229,7 +229,7 @@ async fn ship11_metrics_exposition_has_required_structure() {
         .unwrap();
     let body = String::from_utf8_lossy(&body);
 
-    // Every SHIP-11 family has at least a `# TYPE` line.
+    // Every metric family has at least a `# TYPE` line.
     for family in [
         "mai_requests_total",
         "mai_request_duration_ms",

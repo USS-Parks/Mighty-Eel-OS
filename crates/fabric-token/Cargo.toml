@@ -20,11 +20,11 @@ hex = "0.4"
 
 [dev-dependencies]
 tokio = { workspace = true }
-# Deterministic (seeded) randomized attenuation-monotonicity property suite (K4).
+# Deterministic (seeded) randomized attenuation-monotonicity property suite.
 rand = "0.8"
 
 [features]
-# (Retired) The AF-001/AF-006 adversarial fixtures in tests/security_regression.rs
+# (Retired) The adversarial fixtures in tests/security_regression.rs
 # were quarantined behind this feature while they asserted the *vulnerable*
 # behavior. Phase T landed the fix, so they now assert the *repaired* behavior and
 # run in the default product suite; the feature is kept as an empty no-op so any

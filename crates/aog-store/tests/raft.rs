@@ -1,4 +1,4 @@
-//! K3 gate: a linearizable write is committed + applied through openraft, and
+//! A linearizable write is committed + applied through openraft, and
 //! committed state survives a node restart (recovered from the durable stores).
 
 use std::path::PathBuf;

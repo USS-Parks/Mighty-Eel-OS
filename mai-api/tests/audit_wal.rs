@@ -1,4 +1,4 @@
-//! SHIP-04 acceptance tests for `mai_api::audit_wal`.
+//! Acceptance tests for `mai_api::audit_wal`.
 //!
 //! Lives outside the crate so the tests only see the public API
 //! (`mai_api::audit_wal::*` + `mai_api::audit::*`). If any test
@@ -11,7 +11,7 @@
 //! - Tampered WAL fails verification.
 //! - Missing WAL directory fails production startup.
 //! - Audit write failure surfaces an Err (the production guard
-//!   wires that into the fail-closed policy at SHIP-07 convergence).
+//!   wires that into the fail-closed policy at convergence).
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -162,7 +162,7 @@ async fn ship04_replay_outcome_reports_rotated_count() {
 #[tokio::test]
 async fn ship04_audit_write_failure_surfaces_error() {
     // Construct a writer, then delete its WAL dir under it. The next
-    // write must return an error (which the SHIP-07 convergence step
+    // write must return an error (which the convergence step
     // will route into the fail-closed policy for regulated requests).
     let temp = tempfile::tempdir().unwrap();
     let cfg = WalAuditConfig::for_dir(temp.path());

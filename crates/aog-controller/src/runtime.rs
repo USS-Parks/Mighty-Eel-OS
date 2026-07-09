@@ -1,5 +1,5 @@
-//! R1 — the level-triggered controller runtime. A [`Controller`] wires one
-//! [`Reconciler`] to a store informer (K4): each sync it (1) refreshes the
+//! The level-triggered controller runtime. A [`Controller`] wires one
+//! [`Reconciler`] to a store informer: each sync it (1) refreshes the
 //! informer cache, (2) enqueues every key whose revision changed since last
 //! observed — duplicates coalesce in the [`WorkQueue`] — and (3), only when
 //! its [`LeaderGate`] says this replica leads, drains due retries and runs
@@ -9,15 +9,15 @@
 //! Level-triggered means a reconciler is handed only a *key*: it must read
 //! current authoritative state and converge toward it, never interpret the
 //! event that woke it. Dropping or duplicating events therefore cannot
-//! change the end state (the R1 gate, proven in `tests/replay.rs`): a drop
+//! change the end state (proven in `tests/replay.rs`): a drop
 //! is recovered by the informer's lag re-list, a duplicate is one extra
 //! idempotent reconcile of the same current state.
 //!
 //! Leader gating ("singleton controllers"): a non-leader still observes —
 //! cache warm, queue accumulating — but never acts. On takeover, the queue
 //! it built is exactly the reconcile-everything a new leader owes the
-//! estate. The single-node kernel runs [`AlwaysLeader`]; H1 wires
-//! [`SharedGate`] to Raft leadership.
+//! estate. The single-node kernel runs [`AlwaysLeader`]; a multi-node
+//! control plane wires [`SharedGate`] to Raft leadership.
 
 use std::collections::BTreeMap;
 use std::future::Future;
@@ -69,7 +69,7 @@ impl LeaderGate for AlwaysLeader {
     }
 }
 
-/// A settable gate — flipped by whatever owns leadership (Raft at H1; tests
+/// A settable gate — flipped by whatever owns leadership (Raft; tests
 /// directly). Loss of leadership takes effect on the next sync: fail-closed
 /// for action, not for observation.
 #[derive(Debug, Default)]
@@ -85,7 +85,7 @@ impl SharedGate {
         self.0.store(leader, Ordering::SeqCst);
     }
 
-    /// Drive this gate from a Raft leadership watch (H1): the gate opens when the
+    /// Drive this gate from a Raft leadership watch: the gate opens when the
     /// node leads and closes when it does not, so only the leader's controllers
     /// reconcile. Leadership loss takes effect on the gate at once and on action
     /// the next sync — fail-closed for action, not observation (doctrine I-4). The

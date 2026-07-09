@@ -1,8 +1,8 @@
 //! The read side of the control plane. [`StoreReader`] holds the shared
 //! `RaftNode` but exposes **only** reads — it has no method that mutates the
-//! store. Every write goes through [`crate::admission::Admission`] (part of the
-//! K5 gate). Reads serve objects at the estate's **hub version**: a stored object
-//! at an older schema version is converted transparently on read (K10), so old
+//! store. Every write goes through [`crate::admission::Admission`]. Reads serve
+//! objects at the estate's **hub version**: a stored object
+//! at an older schema version is converted transparently on read, so old
 //! objects keep being served across a kind bump.
 
 use std::sync::Arc;
@@ -31,14 +31,14 @@ impl StoreReader {
         }
     }
 
-    /// Replace the read-path conversion registry (K10). Default is the identity.
+    /// Replace the read-path conversion registry. Default is the identity.
     #[must_use]
     pub fn with_conversions(mut self, conversions: ConversionRegistry) -> Self {
         self.conversions = Arc::new(conversions);
         self
     }
 
-    /// A prefix-scoped informer over the committed estate (K4) — the wakeup
+    /// A prefix-scoped informer over the committed estate — the wakeup
     /// stream Phase-R controllers watch. Read-only, like everything here.
     #[must_use]
     pub fn informer(&self, prefix: impl Into<String>) -> aog_store::raft::watch::Informer {

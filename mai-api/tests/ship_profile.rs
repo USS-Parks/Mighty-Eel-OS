@@ -1,10 +1,10 @@
-//! Integration test for SHIP-01.
+//! Integration test for the ship profile.
 //!
 //! Confirms that the canonical `deployment/ship/profile.toml` checked
 //! into the repo agrees with the Rust schema in
 //! `mai_api::ship_profile`. If this test breaks, either the TOML
 //! drifted from the contract or the Rust types did — both are
-//! acceptance-test failures for the SHIP-01 plan.
+//! acceptance-test failures.
 //!
 //! Per `SHIP-HARDENING-PLAN.md` §3 the "Done When" line says
 //! `cargo test -p mai-api ship_profile` must pass. The unit tests in
@@ -119,7 +119,7 @@ fn ship_profile_production_example_template_parses_and_validates() {
 
 #[test]
 fn parse_ship_profile_is_pure_string_path() {
-    // Smoke: the in-memory parser exposed to SHIP-07's validator CLI
+    // Smoke: the in-memory parser exposed to the validator CLI
     // accepts the same content that load_ship_profile reads from disk.
     let path = ship_profile_path();
     let content = std::fs::read_to_string(&path).expect("read profile.toml");

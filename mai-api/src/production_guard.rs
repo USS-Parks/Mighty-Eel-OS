@@ -5,14 +5,14 @@
 //! §6 (Workstream 4) check list. One report → one ID per violation →
 //! one remediation hint per violation.
 //!
-//! Scope (SHIP-02 + SHIP-07 convergence):
+//! Scope:
 //! - Define [`ProductionReadinessReport`], [`ProductionCheck`],
 //!   [`CheckSeverity`], [`CheckStatus`].
 //! - Implement the config-only checks: anything decidable from the
 //!   profile struct alone.
 //! - Register the runtime-only checks (vault open, audit append round
 //!   trip, trust bundle verify, etc.) with `CheckStatus::Deferred`.
-//!   SHIP-07 convergence adds [`RuntimeChecks`] and
+//!   Convergence adds [`RuntimeChecks`] and
 //!   [`ProductionReadinessReport::evaluate_with_runtime`] so each
 //!   deferred ID flips from Deferred to Pass / Fail when the server
 //!   bootstrap supplies an introspection result.
@@ -27,8 +27,7 @@
 //!   TRUST / AUTH / DASH / NET / POLICY / OBS.
 //! - IDs are stable. New checks append; existing IDs never get reused
 //!   or renumbered. Operators wire alerts against the ID.
-//! - IDs ≥ 100 are runtime checks (SHIP-03+); IDs < 100 are config-only
-//!   (this session).
+//! - IDs ≥ 100 are runtime checks; IDs < 100 are config-only.
 
 use std::collections::BTreeSet;
 
@@ -40,7 +39,7 @@ use crate::ship_profile::{AuditWriter, ProfileMode, ShipProfile, TrustVerifier, 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum CheckSeverity {
-    /// Non-blocking. Useful for surfaces like "deferred to SHIP-04".
+    /// Non-blocking. Useful for surfaces like "deferred to a later step".
     Info,
     /// Should be addressed but does not by itself block ship-readiness.
     Warning,
@@ -150,7 +149,7 @@ impl ProductionReadinessReport {
     /// the supplied detail. Fields left `None` stay Deferred so the
     /// report still names the gap.
     ///
-    /// The SHIP-07 convergence wires this into `MaiServer::run()` so
+    /// The convergence wires this into `MaiServer::run()` so
     /// production startup fails closed on any flipped Critical Fail.
     pub fn evaluate_with_runtime(profile: &ShipProfile, runtime: &RuntimeChecks) -> Self {
         let mut report = Self::evaluate(profile);
@@ -159,7 +158,7 @@ impl ProductionReadinessReport {
     }
 
     /// Mutate an existing report in place by applying `runtime`. Used
-    /// by [`Self::evaluate_with_runtime`] and the SHIP-07 readiness
+    /// by [`Self::evaluate_with_runtime`] and the readiness
     /// endpoint where the config-only pass already ran.
     pub fn apply_runtime(&mut self, runtime: &RuntimeChecks) {
         let mut apply = |id: &str, outcome: Option<&RuntimeOutcome>| {
@@ -228,13 +227,13 @@ impl ProductionReadinessReport {
     }
 
     /// Render the report as JSON suitable for the
-    /// `mai-api validate --json` CLI form and the SHIP-07
+    /// `mai-api validate --json` CLI form and the
     /// `/v1/system/production-readiness` endpoint.
     pub fn to_json(&self) -> serde_json::Result<String> {
         serde_json::to_string_pretty(self)
     }
 
-    /// Sanity check used by SHIP-02 tests: every ID in `expected`
+    /// Sanity check used by tests: every ID in `expected`
     /// appears exactly once in the report. Catches typos and
     /// duplicate registrations.
     #[doc(hidden)]
@@ -259,10 +258,10 @@ pub struct ReadinessCounts {
     pub skipped: usize,
 }
 
-// ----- Runtime introspection (SHIP-07 convergence) -----------------
+// ----- Runtime introspection -----------------
 
 /// Runtime introspection results gathered during `MaiServer::run()`
-/// startup, after the SHIP-03/04/05/06 builders have run. Each field
+/// startup, after the builders have run. Each field
 /// is `None` when the check was not performed; `Some` flips the
 /// corresponding deferred ID to Pass or Fail in the readiness report.
 ///
@@ -287,8 +286,8 @@ pub struct RuntimeChecks {
     pub auth_keys_nonempty: Option<RuntimeOutcome>,
     /// `PROD-AUTH-101` — runtime auth store's
     /// `allow_internal_profile_header` flag matches the profile field
-    /// the static `PROD-AUTH-002` check verified. SHIP-17 (closes
-    /// KNOWN-ISSUES Issue 13): catches the case where the loader
+    /// the static `PROD-AUTH-002` check verified. This check (closes
+    /// KNOWN-ISSUES Issue 13) catches the case where the loader
     /// silently enables the X-IM-Internal-Profile bypass even though
     /// the profile declared it disabled.
     pub auth_internal_bypass_consistent: Option<RuntimeOutcome>,
@@ -546,7 +545,7 @@ fn register_vault_checks(ctx: &mut CheckContext) {
     ctx.deferred(
         "PROD-VAULT-100",
         CheckSeverity::Critical,
-        "SHIP-03",
+        "SHIP-03", // slop-ok: names the deferred check's ship-plan step (operator data)
         "vault opens, sealed master key loads, root directory is writable",
         "ensure /var/lib/mai/vault is initialized; see docs/SECURITY-PRODUCTION.md",
     );
@@ -652,16 +651,16 @@ fn register_audit_checks(ctx: &mut CheckContext) {
     ctx.deferred(
         "PROD-AUDIT-100",
         CheckSeverity::Critical,
-        "SHIP-04",
+        "SHIP-04", // slop-ok: names the deferred check's ship-plan step (operator data)
         "API audit WAL writable, chain verifies, append round-trip succeeds",
         "ensure audit.wal_dir is writable by the mai user; see docs/AUDIT-RETENTION.md",
     );
     ctx.deferred(
         "PROD-AUDIT-101",
         CheckSeverity::Critical,
-        "SHIP-05",
+        "SHIP-05", // slop-ok: names the deferred check's ship-plan step (operator data)
         "compliance audit sealer is vault-backed AEAD (not NullSealer) at runtime",
-        "wire mai-compliance AuditLog to vault AEAD sealer per SHIP-05",
+        "wire mai-compliance AuditLog to vault AEAD sealer",
     );
 }
 
@@ -759,7 +758,7 @@ fn register_trust_checks(ctx: &mut CheckContext) {
     ctx.deferred(
         "PROD-TRUST-100",
         CheckSeverity::Critical,
-        "SHIP-06",
+        "SHIP-06", // slop-ok: names the deferred check's ship-plan step (operator data)
         "trust bundle present, signature verifies, revocation snapshot fresh",
         "load a signed bundle into trust.bundle_cache_dir; see docs/TRUST-BRIDGE-PRODUCTION.md",
     );
@@ -808,14 +807,14 @@ fn register_auth_checks(ctx: &mut CheckContext) {
     ctx.deferred(
         "PROD-AUTH-100",
         CheckSeverity::Critical,
-        "SHIP-07",
+        "SHIP-07", // slop-ok: names the deferred check's ship-plan step (operator data)
         "auth keys file is loadable and contains at least one entry",
         "populate auth.auth_keys_path with at least one rotated key",
     );
     ctx.deferred(
         "PROD-AUTH-101",
         CheckSeverity::Critical,
-        "SHIP-17",
+        "SHIP-17", // slop-ok: names the deferred check's ship-plan step (operator data)
         "runtime auth store's allow_internal_profile_header matches the profile field",
         "ensure the auth bootstrap honors auth.auth_keys_path; never let the first-boot fallback enable the X-IM-Internal-Profile bypass under a production profile",
     );
@@ -871,7 +870,7 @@ fn register_policy_checks(ctx: &mut CheckContext) {
     ctx.deferred(
         "PROD-POLICY-001",
         CheckSeverity::Critical,
-        "SHIP-05",
+        "SHIP-05", // slop-ok: names the deferred check's ship-plan step (operator data)
         "compliance policy modules load and template composes",
         "ensure config/compliance/*.toml is present in [paths].config_dir",
     );
@@ -983,7 +982,7 @@ alerts_enabled = true
         }
     }
 
-    /// Stable catalogue of every check ID SHIP-02 registers. Adding a
+    /// Stable catalogue of every check ID the guard registers. Adding a
     /// new check means adding it here and to the registry above —
     /// both in one PR, never one without the other.
     const EXPECTED_CHECK_IDS: &[&str] = &[
@@ -1030,14 +1029,14 @@ alerts_enabled = true
         "PROD-POLICY-001",
     ];
 
-    /// SHIP-01 parsing rejects most of these violations before the
-    /// guard ever runs. For SHIP-02 we exercise the guard directly by
+    /// Profile parsing rejects most of these violations before the
+    /// guard ever runs. We exercise the guard directly by
     /// mutating fields on a parsed ShipProfile.
     fn mutate<F>(f: F) -> ProductionReadinessReport
     where
         F: FnOnce(&mut ShipProfile),
     {
-        // Parse local-dev so SHIP-01 doesn't reject the mutations
+        // Parse local-dev so the parser doesn't reject the mutations
         // before the guard runs. Then flip mode to production so the
         // guard's production-only checks engage.
         let toml = baseline_toml().replace("mode = \"production\"", "mode = \"local-dev\"");
@@ -1208,7 +1207,7 @@ alerts_enabled = true
         assert!(text.contains("Remediation:"));
     }
 
-    // ----- SHIP-07 convergence: runtime checks -------------------------
+    // ----- Convergence: runtime checks -------------------------
 
     fn all_passing_runtime() -> RuntimeChecks {
         RuntimeChecks {

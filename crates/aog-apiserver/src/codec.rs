@@ -23,7 +23,7 @@ pub fn kind_prefix(kind: Kind) -> String {
 
 /// Map a URL path segment to a [`Kind`]. Accepts the canonical kind name
 /// (e.g. `Tenant`) and reuses the `Kind` deserializer, so the mapping can never
-/// drift from the enum. `aogctl` (K11) parses the same way.
+/// drift from the enum. `aogctl` parses the same way.
 #[must_use]
 pub fn parse_kind(segment: &str) -> Option<Kind> {
     serde_json::from_value::<Kind>(serde_json::Value::String(segment.to_owned())).ok()
@@ -57,7 +57,7 @@ pub fn decode(versioned: &Versioned) -> Result<ResourceObject, ApiError> {
 
 /// Parse stored bytes into a JSON value for serving, overlaying the authoritative
 /// `resource_version` from the store's `mod_revision`. Unlike [`decode`], it does
-/// not require the bytes to match the current typed schema — the read path (K10)
+/// not require the bytes to match the current typed schema — the read path
 /// may then convert an older stored version up to the hub version.
 ///
 /// # Errors

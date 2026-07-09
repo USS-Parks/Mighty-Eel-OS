@@ -1,4 +1,4 @@
-//! K4 gate: the informer tracks applied changes, and reconstructs the full
+//! The informer tracks applied changes, and reconstructs the full
 //! state after a dropped/lagged watch — no missed final state.
 
 use std::path::PathBuf;

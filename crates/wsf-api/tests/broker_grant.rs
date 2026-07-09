@@ -1,5 +1,5 @@
-//! B6 live gate — credential exchange is grant-scoped, never raw-ARN
-//! (AF-004). Black-box against the real WSF API + live OpenBao + Moto STS.
+//! B6 live gate — credential exchange is grant-scoped, never raw-ARN.
+//! Black-box against the real WSF API + live OpenBao + Moto STS.
 //!
 //! Env-gated on `WSF_OPENBAO_ADDR` (+ Moto at 127.0.0.1:5566). Proves: an
 //! approved grant brokers scoped creds; a smuggled `role_arn` is rejected
@@ -239,7 +239,7 @@ async fn exchange_is_grant_scoped_not_raw_arn() {
     assert!(!creds["access_key_id"].as_str().unwrap_or("").is_empty());
 
     // 2. A smuggled raw role_arn is rejected outright (422) — the caller cannot
-    //    name a cloud identity anymore (the AF-004 input is gone).
+    //    name a cloud identity anymore (the input is gone).
     let raw = exchange(json!({
         "token": token,
         "role_arn": "arn:aws:iam::999999999999:role/attacker"

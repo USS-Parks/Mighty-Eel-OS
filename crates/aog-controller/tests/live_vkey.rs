@@ -1,4 +1,4 @@
-//! R8 gate — "a key change is reflected at the gateway without restart",
+//! "a key change is reflected at the gateway without restart",
 //! against a **live** OpenBao and the **real** `aog-gateway` (A3.2
 //! no-mock-only). The controller writes the gateway's key-resolution entries;
 //! the same `Gateway` instance resolves before and after the change — no
@@ -184,7 +184,7 @@ async fn get_vkey(client: &EstateClient) -> VirtualKey {
 async fn a_virtual_key_change_is_reflected_at_the_gateway_without_restart() {
     let Some(addr) = openbao_addr() else {
         eprintln!(
-            "SKIP a_virtual_key_change_is_reflected_at_the_gateway_without_restart: WSF_OPENBAO_ADDR unset (R8 live gate)"
+            "SKIP a_virtual_key_change_is_reflected_at_the_gateway_without_restart: WSF_OPENBAO_ADDR unset (live gate)"
         );
         return;
     };

@@ -1,5 +1,5 @@
 //! Shared harness for the aog-apiserver integration tests: an authenticated app
-//! (K6 front door) and helpers to mint ML-DSA trust tokens and send JSON
+//! (front door) and helpers to mint ML-DSA trust tokens and send JSON
 //! requests in-process (`tower::ServiceExt::oneshot`, no socket bound).
 #![allow(dead_code)]
 
@@ -104,7 +104,7 @@ pub async fn authed_app(dir_name: &str) -> (Router, String) {
 }
 
 /// Like [`authed_app`] but also returns a clone of the [`AppState`] so a test can
-/// inspect the receipt ledger (K9).
+/// inspect the receipt ledger.
 pub async fn authed_app_state(dir_name: &str) -> (Router, AppState, String) {
     let signer = anchor();
     let auth = Authenticator::new(signer.public_key().to_vec());
@@ -115,7 +115,7 @@ pub async fn authed_app_state(dir_name: &str) -> (Router, AppState, String) {
     (router(state.clone()), state, header)
 }
 
-/// An authenticated app + state configured with a K10 conversion registry.
+/// An authenticated app + state configured with a conversion registry.
 pub async fn authed_app_with_conversions(
     dir_name: &str,
     conversions: ConversionRegistry,

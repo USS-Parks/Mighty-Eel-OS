@@ -2,7 +2,7 @@
 //! `deployment/ship/profile.toml` schema documented in
 //! `mai/docs/SHIP-HARDENING-PLAN.md` §3 (Workstream 1).
 //!
-//! Scope (SHIP-01):
+//! Scope:
 //! - Define the schema as Rust types.
 //! - Parse the TOML.
 //! - Reject obviously-unsafe shapes at parse time (no demo defaults,
@@ -10,12 +10,12 @@
 //!   no wildcard bind, required persistent paths, required trust
 //!   anchor / bundle-on-boot, required non-empty key store).
 //!
-//! Out of scope (SHIP-01):
+//! Out of scope:
 //! - Wiring into `ServerConfig` or `MaiServer` startup. The runtime
-//!   guard with check IDs lands in SHIP-02 (`production_guard.rs`).
+//!   guard with check IDs lands in `production_guard.rs`.
 //! - Filesystem existence checks for the configured paths. Those run
 //!   inside the runtime guard once it owns the boot path.
-//! - The validator CLI. That ships in SHIP-07.
+//! - The validator CLI. That ships later.
 //!
 //! Profile modes:
 //! - `production`: the customer-facing posture. Every rule below is
@@ -484,8 +484,8 @@ impl ShipProfile {
         }
 
         // -- [observability] -------------------------------------------------
-        // No production-only invariants on observability at SHIP-01.
-        // Alert wiring lands in SHIP-11; until then the fields parse
+        // No production-only invariants on observability yet.
+        // Alert wiring lands later; until then the fields parse
         // and are stored for downstream sessions to consume.
 
         Ok(())
@@ -513,7 +513,7 @@ pub fn load_ship_profile(path: &Path) -> Result<ShipProfile, ShipProfileError> {
 }
 
 /// Parse a ship profile from an in-memory TOML string and validate it.
-/// Exposed so unit tests and the SHIP-07 validator CLI can reuse the
+/// Exposed so unit tests and the validator CLI can reuse the
 /// same parse path without touching disk.
 pub fn parse_ship_profile(content: &str) -> Result<ShipProfile, ShipProfileError> {
     let profile: ShipProfile =
@@ -749,7 +749,7 @@ alerts_enabled = true
     fn local_dev_mode_skips_production_invariants() {
         // local-dev is permitted to set allow_demo_defaults = true and
         // still parse. This is the convenience path validate() leaves
-        // open for SHIP-02..SHIP-07 to migrate into the runtime guard.
+        // open for later migration into the runtime guard.
         let toml = baseline()
             .replace("mode = \"production\"", "mode = \"local-dev\"")
             .replace("allow_demo_defaults = false", "allow_demo_defaults = true")

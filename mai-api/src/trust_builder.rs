@@ -1,10 +1,10 @@
-//! SHIP-06: Trust builder.
+//! Trust builder.
 //!
 //! Construct the trust-side bootstrap components (`BundleVerifier` +
 //! `TrustExchangeMode`) for the API server from a parsed `ShipProfile`.
 //! This is the trust analog of `vault_builder` and `sealer_builder`.
 //!
-//! Scope (SHIP-06):
+//! Scope:
 //!
 //! - [`TrustExchangeMode`] enum (LocalDevSynthetic / OpenBaoBridge /
 //!   Disabled) — selects how `POST /v1/auth/exchange_token` mints
@@ -20,23 +20,23 @@
 //!   `<trust.bundle_cache_dir>/bundle.json` and verify it against the
 //!   loaded anchors. Production startup must call this and refuse to
 //!   bind on any error; the wiring lives in `MaiServer::run()` at the
-//!   SHIP-07 convergence step.
+//!   convergence step.
 //! - Conventional on-disk anchor file: `<anchors_dir>/<key_id>.pub`,
 //!   exactly 2592 bytes of raw ML-DSA-87 public key.
 //!
-//! Out of scope (SHIP-06):
+//! Out of scope:
 //!
 //! - Wiring into [`crate::server::MaiServer`]. Server bootstrap still
 //!   constructs [`AppState`] with [`AcceptAllBundleVerifier`]; the
-//!   SHIP-07 convergence step swaps that to
+//!   convergence step swaps that to
 //!   `build_trust_components(&profile)?.bundle_verifier` and flips
 //!   `production_guard::PROD-TRUST-100` from `Deferred` to live.
-//! - The live OpenBao bridge HTTP client. SHIP-06 ships the
+//! - The live OpenBao bridge HTTP client. This builder ships the
 //!   [`TrustExchangeMode`] flag and rejects `LocalDevSynthetic` in
 //!   production; the bridge client lands in a follow-up session.
-//! - Loading a bundle *into* the live [`LocalTrustCache`]. SHIP-06
+//! - Loading a bundle *into* the live [`LocalTrustCache`]. This builder
 //!   verifies the bundle on disk; the cache hydration call from the
-//!   verified bundle lands at convergence so SHIP-06 cannot collide
+//!   verified bundle lands at convergence so it cannot collide
 //!   on `state.rs`.
 //!
 //! [`AppState`]: crate::state::AppState
@@ -78,7 +78,7 @@ pub fn boot_bundle_path(profile: &ShipProfile) -> PathBuf {
 /// Selected behavior for `POST /v1/auth/exchange_token`.
 ///
 /// The handler in `mai-api/src/handlers/trust.rs` switches on this at
-/// the SHIP-07 convergence step; right now the handler still always
+/// the convergence step; right now the handler still always
 /// mints the local-dev synthetic token regardless of profile.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TrustExchangeMode {
@@ -110,7 +110,7 @@ impl TrustExchangeMode {
 }
 
 /// Outputs of [`build_trust_components`]. Each field is plumbed into
-/// [`crate::state::AppState`] by the SHIP-07 convergence step.
+/// [`crate::state::AppState`] by the convergence step.
 pub struct TrustComponents {
     /// Verifier installed on [`AppState::bundle_verifier`]. In
     /// production this is a fully-populated [`MlDsaBundleVerifier`];
@@ -450,7 +450,7 @@ fn load_anchors(
 /// can surface it.
 ///
 /// Production startup must call this and refuse to bind on any
-/// error. The call lives in `MaiServer::run()` at the SHIP-07
+/// error. The call lives in `MaiServer::run()` at the
 /// convergence step.
 pub fn verify_boot_bundle(
     profile: &ShipProfile,

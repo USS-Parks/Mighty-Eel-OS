@@ -1,5 +1,5 @@
-//! N9 — eviction + drain. A planned eviction (maintenance, reschedule) drains
-//! **gracefully**: it gates new traffic (readiness → false, N7), lets in-flight
+//! Eviction + drain. A planned eviction (maintenance, reschedule) drains
+//! **gracefully**: it gates new traffic (readiness → false), lets in-flight
 //! authorized calls finish, and honours the workload's disruption budget so no
 //! more replicas are unavailable at once than allowed. A **Tier-0 revocation**
 //! drains **immediately** — a compromised or killed workload halts now, in-flight
@@ -76,8 +76,8 @@ pub fn plan_drain(reason: DrainReason, inflight: u64, budget: DisruptionBudget) 
 }
 
 /// Execute a drain `action` against the driver: stop the instance for a
-/// `StopNow` or `ForceStopNow`; leave it running (traffic gated by the caller,
-/// N7) for a `WaitForInflight` or `Defer`. Returns whether the instance was
+/// `StopNow` or `ForceStopNow`; leave it running (traffic gated by the caller)
+/// for a `WaitForInflight` or `Defer`. Returns whether the instance was
 /// stopped.
 ///
 /// # Errors

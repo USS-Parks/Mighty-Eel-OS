@@ -1,22 +1,22 @@
-//! `aogd` — the minimal Loom control-plane node daemon (Phase V, VH2).
+//! `aogd` — the minimal Loom control-plane node daemon (Phase V).
 //!
-//! VH1 gave the control plane an over-the-wire Raft transport (`aog-wire`); VH2
-//! packages it as a runnable **daemon**: a [`RaftNode`] on that transport, serving
+//! The control plane's over-the-wire Raft transport lives in `aog-wire`; this
+//! crate packages it as a runnable **daemon**: a [`RaftNode`] on that transport, serving
 //! its peer `/raft/*` endpoints alongside a thin **admin API** the conformance
 //! harness drives — `initialize` / `add-learner` / `change-membership` (membership
 //! carrying real peer URLs), `write` / `get`, `leader`, and `healthz`. Several of
 //! these over the wire are the containerized multi-node estate the Phase-V
 //! partition / kill / scale gates (V4/V5/V7/V8/V10) run on.
 //!
-//! VH5b lands the trust surface. When trust material is provisioned, the daemon
+//! A trust surface layers on top. When trust material is provisioned, the daemon
 //! also serves the **authenticated** `aog-apiserver` CRUD over its own node via
 //! [`aog_apiserver::AppState::from_raft`] — every `/apis/**` request must carry a
-//! valid trust token (K6), fail-closed. The anchor arrives one of two ways: a raw
-//! env public key (`AOGD_ANCHOR_PUBKEY`, VH5b-a), or — taking precedence —
-//! OpenBao-custodied trust material read at startup (`AOGD_OPENBAO_*`, VH5b-c; see
+//! valid trust token, fail-closed. The anchor arrives one of two ways: a raw
+//! env public key (`AOGD_ANCHOR_PUBKEY`), or — taking precedence —
+//! OpenBao-custodied trust material read at startup (`AOGD_OPENBAO_*`; see
 //! [`provision`]), which also custodies the field-seal data key + child-mint signer
-//! so sealed state is stable and shared across the estate. Per-node wire mTLS is
-//! VH5b-b ([`aog_wire::tls`]). The VH2 wire + admin surface still runs when no
+//! so sealed state is stable and shared across the estate. Per-node wire mTLS lives
+//! in [`aog_wire::tls`]. The wire + admin surface still runs when no
 //! anchor is set.
 
 pub mod admin;
@@ -66,16 +66,16 @@ pub struct Config {
     pub advertise: String,
     /// The WSF trust-anchor public key (raw ML-DSA-87 bytes) every presented token
     /// must verify under. When set, the daemon serves the **authenticated**
-    /// `aog-apiserver` CRUD surface (VH5b-a); when `None`, only the VH2 wire + admin
+    /// `aog-apiserver` CRUD surface; when `None`, only the wire + admin
     /// surface is served. Ignored when `openbao` is set (that takes precedence).
     pub anchor_pubkey: Option<Vec<u8>>,
     /// OpenBao coordinates for reading the daemon's trust material at startup
-    /// (VH5b-c). When set, the anchor **and** the field-seal key + signer come from
+    /// When set, the anchor **and** the field-seal key + signer come from
     /// the KV-v2 record at `trust_path`, taking precedence over `anchor_pubkey`.
     pub openbao: Option<OpenBaoTrust>,
 }
 
-/// OpenBao coordinates for provisioning a node's trust material (VH5b-c). The
+/// OpenBao coordinates for provisioning a node's trust material. The
 /// daemon logs in with the AppRole credential and reads one KV-v2 record — the
 /// WSF anchor plus the field-seal data key and child-mint signer.
 #[derive(Debug, Clone)]
@@ -110,7 +110,7 @@ impl Config {
             .map_err(|e| DaemonError::Config(format!("AOGD_LISTEN: {e}")))?;
         let advertise =
             std::env::var("AOGD_ADVERTISE").unwrap_or_else(|_| format!("http://{listen}"));
-        // Optional VH5b-a trust anchor: hex-encoded ML-DSA-87 public key.
+        // Optional trust anchor: hex-encoded ML-DSA-87 public key.
         let anchor_pubkey = match std::env::var("AOGD_ANCHOR_PUBKEY") {
             Ok(hex_str) => Some(
                 hex::decode(hex_str.trim())
@@ -118,7 +118,7 @@ impl Config {
             ),
             Err(_) => None,
         };
-        // Optional VH5b-c OpenBao trust source. When the address is set the
+        // Optional OpenBao trust source. When the address is set the
         // AppRole credential is required; the trust path defaults to the estate
         // convention. Takes precedence over AOGD_ANCHOR_PUBKEY at start.
         let openbao = match std::env::var("AOGD_OPENBAO_ADDR") {
@@ -147,7 +147,7 @@ impl Config {
 pub struct Daemon {
     node: Arc<RaftNode>,
     advertise: String,
-    /// Authenticated API state (VH5b), present when an anchor was provisioned.
+    /// Authenticated API state, present when an anchor was provisioned.
     state: Option<AppState>,
 }
 
@@ -162,10 +162,10 @@ impl Daemon {
             RaftNode::start_with_network(config.node_id, &config.data_dir, WireNetwork::new())
                 .await?,
         );
-        // VH5b: when trust material is provisioned, serve the authenticated
+        // When trust material is provisioned, serve the authenticated
         // aog-apiserver CRUD over this very node (the `from_raft` seam), fail-closed.
-        // Precedence: OpenBao-custodied material (VH5b-c) over the env anchor +
-        // ephemeral kernel sealer (VH5b-a). Absent both, only the VH2 wire + admin
+        // Precedence: OpenBao-custodied material over the env anchor +
+        // ephemeral kernel sealer. Absent both, only the wire + admin
         // surface runs.
         let state = if let Some(bao) = &config.openbao {
             let material = provision::from_openbao(bao).await?;
@@ -202,7 +202,7 @@ impl Daemon {
                 .as_ref()
                 .map(aog_apiserver::AppState::authenticator),
         ));
-        // VH5b: the authenticated CRUD surface, when an anchor is provisioned.
+        // The authenticated CRUD surface, when an anchor is provisioned.
         if let Some(state) = &self.state {
             app = app.merge(aog_apiserver::api_router(state.clone()));
         }

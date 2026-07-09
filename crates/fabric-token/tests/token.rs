@@ -74,7 +74,7 @@ fn tampered_token_fails_verification() {
 
 #[test]
 fn tampered_key_id_or_alg_fails_verification() {
-    // K2 (audit H2): the signature binds its own key_id + alg. Swapping the
+    // The signature binds its own key_id + alg. Swapping the
     // declared signing-key identity or algorithm on a minted token invalidates it.
     // Without this binding those fields sit outside the signed payload and a
     // substitution rides along undetected — latent the moment a verifier resolves

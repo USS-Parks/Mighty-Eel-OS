@@ -1,8 +1,8 @@
 //! Typed CRUD handlers. Every mutating route funnels through
 //! [`crate::admission::Admission::admit`] with the verified [`Principal`] the
-//! front-door authenticator (K6) stashed in request extensions; the read routes
+//! front-door authenticator stashed in request extensions; the read routes
 //! use the read-only [`crate::reader::StoreReader`]. There is no handler path
-//! that writes the store directly (the K5 gate).
+//! that writes the store directly.
 
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
@@ -130,7 +130,7 @@ pub async fn update(
         )
         .await?;
     // An update that removed the last finalizer from a terminating object
-    // completed its two-phase delete (R2): there is no object left to return.
+    // completed its two-phase delete: there is no object left to return.
     let Some(stored) = outcome.object else {
         return Ok(Json(json!({
             "kind": kind.to_string(),
@@ -143,7 +143,7 @@ pub async fn update(
 }
 
 /// `DELETE .../{kind}/{name}` — remove a resource. With finalizers present this
-/// is the first phase of a two-phase delete (R2): the object is stamped
+/// is the first phase of a two-phase delete: the object is stamped
 /// terminating and returned (200); without finalizers it is removed now (204).
 ///
 /// # Errors

@@ -1,4 +1,4 @@
-//! H3 gate — restore + receipt-chain continuity. A snapshot/restore of the estate
+//! Restore + receipt-chain continuity. A snapshot/restore of the estate
 //! (aog-store) reproduces it **exactly**, and the receipt chain (`wsf-ledger`) — a
 //! physically separate, hash-chained store (A1.4: intent and proof never share a
 //! store) — **remains chained** across that restore: the estate restore neither

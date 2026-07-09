@@ -1,6 +1,6 @@
-//! Single-node network for K3. There are no peers, so these RPCs are never
+//! Single-node network. There are no peers, so these RPCs are never
 //! issued; openraft still requires a `RaftNetworkFactory` for its type surface.
-//! H1 replaces this with a real transport (mTLS, sender-constrained per I-3).
+//! A real transport replaces this (mTLS, sender-constrained per I-3).
 
 use std::io;
 

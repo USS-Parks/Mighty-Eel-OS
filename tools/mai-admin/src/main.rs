@@ -1,6 +1,6 @@
 //! `mai-admin` CLI entry point.
 //!
-//! SHIP-09 wires `backup create` and `backup verify`. SHIP-10 adds
+//! Wires `backup create` and `backup verify`, plus
 //! `restore plan` and `restore apply`. The remaining `audit`, `trust`,
 //! and `vault` subcommands ship in later sessions and stub here with a
 //! clear exit-with-message so the operator UX of `mai-admin --help`
@@ -45,10 +45,10 @@ struct Cli {
 
 #[derive(Subcommand, Debug)]
 enum Command {
-    /// Backup management. SHIP-09.
+    /// Backup management.
     #[command(subcommand)]
     Backup(BackupCmd),
-    /// Restore management. SHIP-10.
+    /// Restore management.
     #[command(subcommand)]
     Restore(RestoreCmd),
     /// Audit chain verification. Pending session.
@@ -101,7 +101,7 @@ enum RestoreCmd {
         #[arg(long)]
         verifying_key: Option<PathBuf>,
         /// Skip the signed-manifest requirement and plan a restore of an
-        /// unsigned or unverified backup (AF-19: verification is on by default).
+        /// unsigned or unverified backup (verification is on by default).
         #[arg(long, default_value_t = false)]
         allow_unsigned: bool,
         /// Emit machine-readable JSON instead of the human report.
@@ -119,7 +119,7 @@ enum RestoreCmd {
         target: PathBuf,
         #[arg(long)]
         verifying_key: Option<PathBuf>,
-        /// Skip the signed-manifest requirement (AF-19: verification is on by
+        /// Skip the signed-manifest requirement (verification is on by
         /// default).
         #[arg(long, default_value_t = false)]
         allow_unsigned: bool,
@@ -171,7 +171,7 @@ enum BackupCmd {
         #[arg(long)]
         verifying_key: Option<PathBuf>,
         /// Skip the signed-manifest requirement and verify an unsigned or
-        /// unverified backup (AF-19: verification is on by default).
+        /// unverified backup (verification is on by default).
         #[arg(long, default_value_t = false)]
         allow_unsigned: bool,
         /// Emit machine-readable JSON instead of the human report.

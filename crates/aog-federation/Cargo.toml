@@ -5,7 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Loom H5: cross-air-gap estate federation via signed removable-media snapshots (policy + revocation), verifiable offline with the source public key alone."
+description = "Loom cross-air-gap estate federation via signed removable-media snapshots (policy + revocation), verifiable offline with the source public key alone."
 
 [dependencies]
 aog-estate = { path = "../aog-estate" }

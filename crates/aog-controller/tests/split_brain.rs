@@ -1,4 +1,4 @@
-//! H2 gate (load-bearing) — split-brain safety under a **real** partition: an
+//! Split-brain safety under a **real** partition: an
 //! injected partition fences the minority (it serves no authoritative allow), and
 //! the kill switch is honored under partition (the fenced minority authorizes
 //! nothing). A leader isolated into a minority cannot confirm a quorum (openraft's

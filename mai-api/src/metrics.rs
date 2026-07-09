@@ -1,4 +1,4 @@
-//! SHIP-11: Prometheus-compatible metrics registry.
+//! Prometheus-compatible metrics registry.
 //!
 //! `MetricsRegistry` is a small, dependency-free counter / gauge /
 //! histogram store that renders into the Prometheus text exposition
@@ -14,12 +14,12 @@
 //!
 //! ## Why no `prometheus` crate dependency
 //!
-//! SHIP-11 ships into an air-gapped product; every dep adds licensing
+//! MAI ships into an air-gapped product; every dep adds licensing
 //! review surface and supply-chain risk. The exposition format is
 //! short and stable, the registry needs only ~300 lines, and the
 //! existing `tokio` + `serde` deps already cover the heavy lifting.
 //!
-//! ## Redaction guarantee (SHIP-11 acceptance test)
+//! ## Redaction guarantee (acceptance test)
 //!
 //! Metric names and label values are constrained to a small ASCII
 //! alphabet by [`sanitize_label_value`]. Callers cannot leak prompts,
@@ -39,7 +39,7 @@ use parking_lot_compat::RwLock;
 
 // ─── Canonical metric names (SHIP-HARDENING-PLAN §10 / line 789) ───
 //
-// Every name a SHIP-11-listed metric must use lives here. Tests
+// Every name a metric must use lives here. Tests
 // reference these constants directly so a typo in a `inc()` call site
 // becomes a compile-time error, not a silent miss in dashboards.
 
@@ -60,9 +60,9 @@ pub const GPU_MEMORY_USED_BYTES: &str = "mai_gpu_memory_used_bytes";
 pub const KV_CACHE_USED_BYTES: &str = "mai_kv_cache_used_bytes";
 pub const POLICY_DECISIONS_TOTAL: &str = "mai_policy_decisions_total";
 pub const COMPLIANCE_REPORT_GENERATION_TOTAL: &str = "mai_compliance_report_generation_total";
-// SHIP-09/10 will produce these. SHIP-11 reserves the names so the
-// alert rules in `packaging/alerts/mai-alerts.yml` can reference them
-// today; counters start at zero and stay there until SHIP-09 lands.
+// The backup writers will produce these later. The names are reserved
+// so the alert rules in `packaging/alerts/mai-alerts.yml` can reference
+// them today; counters start at zero and stay there until then.
 pub const BACKUP_SUCCESS_TOTAL: &str = "mai_backup_success_total";
 pub const BACKUP_FAILURE_TOTAL: &str = "mai_backup_failure_total";
 
@@ -152,7 +152,7 @@ fn sanitize_label_name(s: &str) -> String {
 /// values are truncated at 128 bytes so a poorly-instrumented caller
 /// cannot stream a prompt or a JWT into a label.
 ///
-/// SHIP-11 acceptance: the observability test attempts to attach
+/// Acceptance: the observability test attempts to attach
 /// `value = "sk-live-{32 hex}"` / `value = "Bearer ..."` / `value =
 /// "/etc/mai/vault/token"` and asserts none of them survive into the
 /// `/v1/metrics` output verbatim.
@@ -265,7 +265,7 @@ pub struct MetricsRegistry {
 }
 
 impl MetricsRegistry {
-    /// Build a new, empty registry with all SHIP-11 metric families
+    /// Build a new, empty registry with all metric families
     /// pre-declared. Pre-declaring means the exposition output always
     /// shows the family (with a `# TYPE` line) even before the first
     /// observation — dashboards never see "no such metric" gaps right
@@ -357,9 +357,17 @@ impl MetricsRegistry {
             MetricKind::Counter,
             "Compliance reports generated.",
         );
-        // Reserved for SHIP-09/10; safe to alert on today (always zero).
-        me.declare(BACKUP_SUCCESS_TOTAL, MetricKind::Counter, "Successful backup operations (SHIP-09: writer not wired yet, counter stays at 0 until then).");
-        me.declare(BACKUP_FAILURE_TOTAL, MetricKind::Counter, "Failed backup operations (SHIP-09: writer not wired yet, counter stays at 0 until then).");
+        // Reserved for later; safe to alert on today (always zero).
+        me.declare(
+            BACKUP_SUCCESS_TOTAL,
+            MetricKind::Counter,
+            "Successful backup operations (writer not wired yet, counter stays at 0 until then).",
+        );
+        me.declare(
+            BACKUP_FAILURE_TOTAL,
+            MetricKind::Counter,
+            "Failed backup operations (writer not wired yet, counter stays at 0 until then).",
+        );
         me
     }
 
@@ -634,7 +642,7 @@ mod tests {
 
     #[test]
     fn test_label_value_redacts_secrets() {
-        // SHIP-11 acceptance test: secrets attached as label values
+        // Acceptance test: secrets attached as label values
         // must never appear verbatim in the exposition output.
         let r = MetricsRegistry::default();
         r.inc(

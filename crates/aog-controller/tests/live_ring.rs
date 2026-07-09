@@ -1,7 +1,7 @@
-//! R4 gate — "disabling a ring key makes its envelopes unreadable + halts
+//! "disabling a ring key makes its envelopes unreadable + halts
 //! ring workloads", against a **live** OpenBao (A3.2 no-mock-only closure).
 //!
-//! Env-gated on `WSF_OPENBAO_ADDR` like the W1/R3 live suites; returns cleanly
+//! Env-gated on `WSF_OPENBAO_ADDR` like the W1 live suites; returns cleanly
 //! otherwise. Real crypto end to end: an envelope is sealed through
 //! `wsf-seal` under the ring's Transit key, readable while the ring is live,
 //! and **provably unreadable** the moment a `RevocationIntent` darkens the
@@ -200,7 +200,7 @@ async fn settle2<A: Reconciler, B: Reconciler>(a: &mut Controller<A>, b: &mut Co
 async fn darkening_a_ring_kills_its_envelopes_and_halts_its_workloads() {
     let Some(addr) = openbao_addr() else {
         eprintln!(
-            "SKIP darkening_a_ring_kills_its_envelopes_and_halts_its_workloads: WSF_OPENBAO_ADDR unset (R4 live gate)"
+            "SKIP darkening_a_ring_kills_its_envelopes_and_halts_its_workloads: WSF_OPENBAO_ADDR unset (live gate)"
         );
         return;
     };

@@ -1,6 +1,6 @@
 //! `mai-ship-validate` — standalone production-readiness validator.
 //!
-//! SHIP-07 Slice B. Runs the same [`ProductionReadinessReport`] that
+//! Runs the same [`ProductionReadinessReport`] that
 //! `MaiServer::run()` uses at startup, but as a one-shot CLI that an
 //! operator (or CI) can invoke against any ship profile + optional
 //! state directory without binding sockets or starting components
@@ -17,7 +17,7 @@
 //! Without `--state-dir` only the config-only checks evaluate; the
 //! runtime checks (`PROD-*-100/101`, `PROD-POLICY-001`) stay Deferred
 //! and the report is ship-ready as long as the config-only checks
-//! pass. With `--state-dir` the validator exercises the SHIP-03/04/05/06
+//! pass. With `--state-dir` the validator exercises the
 //! builders against the profile so the runtime checks flip Pass / Fail
 //! against the real filesystem state.
 //!
@@ -172,7 +172,7 @@ fn print_usage() {
 }
 
 fn print_help() {
-    println!("mai-ship-validate — SHIP-07 production readiness validator");
+    println!("mai-ship-validate — production readiness validator");
     println!();
     println!("Usage:");
     println!("  mai-ship-validate --profile <PATH> [--state-dir <PATH>] [--json]");
@@ -191,7 +191,7 @@ fn print_help() {
     println!("  4  internal validator error");
 }
 
-/// Exercise the SHIP-03/04/05/06 builders against the profile and
+/// Exercise the builders against the profile and
 /// package their outcomes into a [`RuntimeChecks`] for the readiness
 /// report. Mirrors the runtime introspection that
 /// `MaiServer::apply_ship_profile` collects at boot, but without
@@ -259,7 +259,7 @@ async fn evaluate_runtime(profile: &ShipProfile) -> RuntimeChecks {
         match load_api_keys_from_toml(&profile.auth.auth_keys_path) {
             Ok(store) if !store.is_empty() => {
                 let nonempty = RuntimeOutcome::pass(format!("{} key(s) loaded", store.len()));
-                // SHIP-17 / PROD-AUTH-101: the loaded store's
+                // PROD-AUTH-101: the loaded store's
                 // allow_internal_profile_header must match the
                 // profile field that the static guard inspects.
                 let profile_bypass = profile.auth.allow_internal_profile_header;
@@ -311,7 +311,7 @@ async fn evaluate_runtime(profile: &ShipProfile) -> RuntimeChecks {
     };
 
     // Policy template loads infallibly via PolicyManager::from_template.
-    // Once SHIP-05 wires per-tenant template selection, this branch will
+    // Once per-tenant template selection is wired, this branch will
     // exercise the configured template's load path.
     let policy_modules_loaded = RuntimeOutcome::pass("standard policy modules loaded".to_string());
 

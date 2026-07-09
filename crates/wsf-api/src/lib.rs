@@ -107,7 +107,7 @@ pub fn router(state: AppState) -> Router {
 /// the authenticated [`WsfPrincipal`] and the tenant's issuance policy. This
 /// type carries *requests*, not authority: `deny_unknown_fields` means an
 /// attempt to smuggle a `tenant_id` / `subject_id` / `roles` authority field is
-/// a 422, not a silent override (closes AF-002).
+/// a 422, not a silent override.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct IssueReq {
@@ -198,7 +198,7 @@ pub struct UnsealResp {
 
 /// Credential-exchange request (plan B1). Carries a tenant-scoped `grant_id`,
 /// never a raw cloud identity: `deny_unknown_fields` means a smuggled `role_arn`
-/// is a 422, not honored (closes AF-004's raw-ARN input).
+/// is a 422, not honored.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ExchangeReq {
@@ -310,7 +310,7 @@ async fn issue(
     Json(req): Json<IssueReq>,
 ) -> Result<Json<TokenResp>, ApiError> {
     // Authority is derived from the authenticated principal + server-side tenant
-    // policy — never from the request body (plan A3, closes AF-002). Every
+    // policy — never from the request body (plan A3). Every
     // allow and deny is receipted (plan A4).
     let roles = &req.requested_roles;
     if !principal.is_for(Audience::Wsf) {
@@ -664,7 +664,7 @@ async fn receipts(
     // middleware) and **mandatorily tenant-scoped** to the caller's tenant. A
     // receipt is returned only if it carries a `tenant_id` equal to the
     // principal's. Cross-tenant identifier guessing therefore returns no rows
-    // and no existence oracle (AF-007). Receipts without a tenant binding are
+    // and no existence oracle. Receipts without a tenant binding are
     // withheld from tenant-scoped reads (fail closed).
     if !principal.is_for(Audience::Wsf) {
         return Err(ApiError::new(
@@ -812,7 +812,7 @@ mod issue_authz_tests {
         let ok: Result<IssueReq, _> = serde_json::from_str(r#"{"requested_roles":["user"]}"#);
         assert!(ok.is_ok());
         // Any attempt to smuggle authority is a hard parse error (deny_unknown_fields),
-        // not a silently-ignored field — the structural half of the AF-002 fix.
+        // not a silently-ignored field — the structural half of the fix.
         for smuggle in [
             r#"{"tenant_id":"victim","requested_roles":["user"]}"#,
             r#"{"subject_id":"someone-else"}"#,

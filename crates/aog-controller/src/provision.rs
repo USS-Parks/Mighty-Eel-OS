@@ -1,4 +1,4 @@
-//! R3 — the Tenant controller: a declared `Tenant` becomes a live OpenBao
+//! The Tenant controller: a declared `Tenant` becomes a live OpenBao
 //! tenant record, and stays converged with it.
 //!
 //! Reconciles `Tenant` desired state against `kv/data/tenants/<id>` through
@@ -72,7 +72,7 @@ impl TenantProvisioner {
     /// Every control-plane token id enumerable from the tenant's estate
     /// objects (the admission-minted scoped children) — what deprovision can
     /// concretely revoke in the snapshot. Tenant-wide coverage at the front
-    /// door comes from the R2 `RevocationIntent`; R9 fans it estate-wide.
+    /// door comes from the `RevocationIntent`, fanned estate-wide.
     async fn tenant_token_ids(&self, tenant: &str) -> Result<Vec<String>, ReconcileError> {
         let mut ids = BTreeSet::new();
         for kind in Kind::ALL {

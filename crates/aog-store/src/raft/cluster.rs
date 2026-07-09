@@ -1,12 +1,12 @@
-//! H1 — the in-process multi-node transport. A [`Cluster`] is a registry of the
+//! The in-process multi-node transport. A [`Cluster`] is a registry of the
 //! peer `Raft` handles; the [`ClusterNetwork`] factory routes openraft's
 //! `append_entries` / `vote` / `install_snapshot` RPCs by direct call to the
 //! target's handle. This runs **real** openraft consensus — election,
 //! replication, commit — across ≥3 nodes in one process, which is what proves
-//! leader failover and no-lost-committed-state (the H1 gate) without a network.
+//! leader failover and no-lost-committed-state without a network.
 //!
 //! An `isolated` set injects a partition: a node in it neither sends nor receives
-//! RPCs, exactly as a severed link would. H2 uses it to fence a minority and
+//! RPCs, exactly as a severed link would. It is used to fence a minority and
 //! assert split-brain safety; here it is the seam. (A real over-the-wire mTLS
 //! transport is the deployment packaging; the consensus correctness it must carry
 //! is what this harness pins.)

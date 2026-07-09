@@ -1,4 +1,4 @@
-//! X1 + R5 gate — "budgets hold across ≥3 replicas under load (live);
+//! X1 gate — "budgets hold across ≥3 replicas under load (live);
 //! over-spend ≤ ε; no per-call shared-store round-trip", and "concurrent
 //! decrement across 3 apiserver clients never over-spends a cap (live)".
 //!
@@ -192,7 +192,7 @@ fn usd(cents: u64) -> Spent {
 async fn three_replicas_never_over_spend_a_capability_cap_live() {
     let Some(addr) = openbao_addr() else {
         eprintln!(
-            "SKIP three_replicas_never_over_spend_a_capability_cap_live: WSF_OPENBAO_ADDR unset (X1/R5 live gate)"
+            "SKIP three_replicas_never_over_spend_a_capability_cap_live: WSF_OPENBAO_ADDR unset (live gate)"
         );
         return;
     };
@@ -291,7 +291,7 @@ async fn three_replicas_never_over_spend_a_capability_cap_live() {
         total_calls += calls;
     }
 
-    // The R5 gate: concurrent decrement never over-spends the cap…
+    // The invariant: concurrent decrement never over-spends the cap…
     assert!(
         total_approved <= 10_000,
         "over-spend: {total_approved} > 10000"

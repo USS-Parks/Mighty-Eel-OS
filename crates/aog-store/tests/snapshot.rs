@@ -1,4 +1,4 @@
-//! H3 gate (estate side) — a Raft snapshot compacts the state machine, and a
+//! A Raft snapshot compacts the state machine, and a
 //! restart recovers the **exact** estate (every key, value, and revision) from
 //! the snapshot plus the log tail. Point-in-time restore is "reopen the durable
 //! stores"; the snapshot is what lets the log before it be purged without losing

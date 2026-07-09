@@ -72,7 +72,7 @@ impl BundleVerifier for MlDsaBundleVerifier {
 
 /// Bring-up / test helper: accepts every signature. Never wire into a real
 /// path — no runtime guard currently rejects it, so callers must not select it
-/// outside tests (finding F6-N7).
+/// outside tests.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct AcceptAllBundleVerifier;
 

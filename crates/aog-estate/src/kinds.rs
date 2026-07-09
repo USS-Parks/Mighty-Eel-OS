@@ -110,7 +110,7 @@ pub struct ModelEndpoint {
     pub healthy: bool,
 }
 
-/// The subject of a revocation (R9). A ring or tenant fans out to many tokens.
+/// The subject of a revocation. A ring or tenant fans out to many tokens.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case", tag = "target", content = "id")]
 pub enum RevocationTarget {
@@ -197,7 +197,7 @@ pub struct TrustRingStatus {
     pub phase: Phase,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub key_version: Option<u32>,
-    /// A disabled ring key darkens the ring (R4): its envelopes stop unsealing.
+    /// A disabled ring key darkens the ring: its envelopes stop unsealing.
     #[serde(default)]
     pub dark: bool,
 }

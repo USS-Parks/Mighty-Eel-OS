@@ -1,4 +1,4 @@
-//! R6 — the PolicyBundle controller: a declared `PolicyBundle` is signed and
+//! The PolicyBundle controller: a declared `PolicyBundle` is signed and
 //! published to the channel every gateway/node edge polls, and its status
 //! records where it reached.
 //!
@@ -79,7 +79,7 @@ impl<S: BundleStore> PolicyBundleController<S> {
         };
 
         // Terminating: pull the artifact from the channel; the estate object is
-        // R2 GC's to collect.
+        // GC's to collect.
         if bundle.metadata.deletion_timestamp.is_some() {
             self.store.retract(name).await?;
             return Ok(Action::Done);

@@ -1,4 +1,4 @@
-//! VH5b-c live gate — `aogd` sources its trust anchor **and** field-seal material
+//! `aogd` sources its trust anchor **and** field-seal material
 //! from a LIVE OpenBao, then serves the authenticated CRUD over it.
 //!
 //! Env-gated (no `#[ignore]`) on `WSF_OPENBAO_ADDR` — the `wsf-live` CI job's dev
@@ -209,7 +209,7 @@ async fn provision(
 #[tokio::test]
 async fn aogd_trust_from_live_openbao() {
     let Some(addr) = openbao_addr() else {
-        eprintln!("SKIP aogd_trust_from_live_openbao: WSF_OPENBAO_ADDR unset (VH5b-c live gate)");
+        eprintln!("SKIP aogd_trust_from_live_openbao: WSF_OPENBAO_ADDR unset (live gate)");
         return;
     };
 
@@ -283,5 +283,5 @@ async fn aogd_trust_from_live_openbao() {
         "a token under the OpenBao-provisioned anchor must be admitted"
     );
 
-    eprintln!("VH5b-c live gate PASSED against {addr}");
+    eprintln!("live gate PASSED against {addr}");
 }

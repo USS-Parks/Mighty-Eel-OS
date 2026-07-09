@@ -1,19 +1,19 @@
-//! SHIP-03: Vault builder.
+//! Vault builder.
 //!
 //! Construct a [`VaultInterface`] implementation from a parsed
-//! [`ShipProfile`]. This is the bridge between SHIP-01's typed
+//! [`ShipProfile`]. This is the bridge between the typed
 //! profile and the live [`mai_vault::ZfsVault`] that
 //! `ModelRegistry` consumes.
 //!
-//! Scope (SHIP-03):
+//! Scope:
 //! - Helper function [`build_vault`].
 //! - Production profile rejects every non-real vault path.
 //! - Local-dev profile permits the inline [`LocalDevStubVault`]
 //!   only when `vault.allow_stub=true`.
 //! - Existence check on `vault.root` for production mode.
 //!
-//! Out of scope (SHIP-03):
-//! - Wiring into `MaiServer::run()`. That lands in the SHIP-07
+//! Out of scope:
+//! - Wiring into `MaiServer::run()`. That lands in the
 //!   convergence step alongside the production guard's runtime
 //!   checks (`PROD-VAULT-100..102`).
 //! - First-boot key initialization. SHIP-HARDENING-PLAN §4 step 5
@@ -204,7 +204,7 @@ fn zfs_config_from_root(root: &Path) -> MaiVaultConfig {
 
 /// Stub vault used only when the profile is local-dev and explicitly
 /// opts into `allow_stub=true`. Behavior matches the legacy
-/// `server::StubVault`; the legacy one is retired in the SHIP-07
+/// `server::StubVault`; the legacy one is retired in the
 /// convergence step.
 struct LocalDevStubVault;
 

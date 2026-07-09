@@ -1,9 +1,9 @@
-//! N8 — attestation-liveness (the differentiator, A1.3.6). Liveness here is not
+//! Attestation-liveness (the differentiator, A1.3.6). Liveness here is not
 //! "is it responding" but "is it still the code we trust." The node periodically
 //! re-measures each running workload; on **drift** from its sealed measurement it
 //! **evicts** the workload and **revokes its runtime token**, so the token is
-//! denied estate-wide — the revocation reuses R9's fan-out, and the node's own
-//! edge admission (N6) applies the same snapshot. A tampered replica does not
+//! denied estate-wide — the revocation reuses the fan-out, and the node's own
+//! edge admission applies the same snapshot. A tampered replica does not
 //! merely restart; it is removed and cut off.
 
 use chrono::{DateTime, Utc};
@@ -70,7 +70,7 @@ pub fn check(
 }
 
 /// Build a signed, emergency revocation snapshot denying every drifted token —
-/// the artifact R9 fans out estate-wide and the edge (N6) applies.
+/// the artifact fans out estate-wide and the edge applies.
 ///
 /// # Errors
 /// Propagates a signing error.

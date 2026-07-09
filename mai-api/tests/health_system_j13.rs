@@ -1,4 +1,4 @@
-//! J-13 integration tests for the `/v1/health/system` adapter rollup
+//! Integration tests for the `/v1/health/system` adapter rollup
 //! and the renamed `/v1/health/resources` endpoint.
 //!
 //! Validates the JSON shape and overall-verdict semantics. The
@@ -141,7 +141,7 @@ async fn system_health_empty_registry_is_ok() {
     );
 }
 
-/// J-13 moved the old disk/RAM/CPU body from /v1/health/system to
+/// The old disk/RAM/CPU body moved from /v1/health/system to
 /// /v1/health/resources. Confirm the rename works and the original
 /// shape is preserved on the new path.
 #[tokio::test]

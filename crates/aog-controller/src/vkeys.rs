@@ -1,4 +1,4 @@
-//! R8 — the VirtualKey controller: a declared `VirtualKey` becomes a resolvable
+//! The VirtualKey controller: a declared `VirtualKey` becomes a resolvable
 //! entry at the gateway's key-resolution path, so the gateway (G1) turns the
 //! presented key into a verified, scoped, in-budget trust token — and a change
 //! to the key's capability is reflected on the gateway's next request, with no

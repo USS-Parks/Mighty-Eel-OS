@@ -1,4 +1,4 @@
-//! R6 — signed policy-bundle distribution: the artifact a gateway/node edge
+//! Signed policy-bundle distribution: the artifact a gateway/node edge
 //! fetches and verifies with the control-plane public key **alone**, and the
 //! channel it is published on.
 //!
@@ -12,7 +12,7 @@
 //! downgrade enforcement (anti-rollback; doctrine I-3/I-4).
 //!
 //! [`BundleStore`] is the channel. [`OpenBaoBundleStore`] publishes to
-//! `kv/data/policy-bundles/<name>` — the poll path R3 established for edge
+//! `kv/data/policy-bundles/<name>` — the poll path established for edge
 //! caches; [`MemBundleStore`] is its in-memory test double.
 
 use std::collections::HashMap;
@@ -255,7 +255,7 @@ impl BundleStore for MemBundleStore {
 
 /// OpenBao KV-v2 [`BundleStore`]: signed bundles live at
 /// `<mount>/data/policy-bundles/<name>`. Auth rides the same AppRole login the
-/// R4 Transit admin uses.
+/// Transit admin uses.
 pub struct OpenBaoBundleStore {
     openbao: OpenBaoAuth,
     http: Client,

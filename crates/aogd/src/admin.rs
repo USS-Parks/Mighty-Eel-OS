@@ -1,4 +1,4 @@
-//! The VH2 admin API — the thin control surface the conformance harness drives a
+//! The admin API — the thin control surface the conformance harness drives a
 //! daemon through. Membership operations carry each peer's real URL (the wire
 //! transport reaches a peer by the address in its `BasicNode`), so they are issued
 //! against the raw openraft handle rather than the [`RaftNode`] membership wrappers

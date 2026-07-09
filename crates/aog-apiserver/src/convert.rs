@@ -1,9 +1,9 @@
-//! K10 — resource versioning + conversion.
+//! Resource versioning + conversion.
 //!
 //! The estate is served at a single **hub** api-version. A stored object at an
 //! older version is upgraded to the hub transparently **on read** by a chain of
 //! per-`(Kind, from_version)` converters — so a schema bump serves old objects
-//! without a migration or estate downtime (addendum K10). Writes are unchanged:
+//! without a migration or estate downtime. Writes are unchanged:
 //! admission still validates the estate's current stored schema.
 //!
 //! The default registry is the identity (hub = the estate `API_VERSION`, no

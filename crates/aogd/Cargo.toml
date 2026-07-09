@@ -5,7 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "aogd — the minimal Loom control-plane node daemon (VH2): a RaftNode on the aog-wire transport with a thin admin API (initialize/add-learner/change-membership/write/get/leader/healthz) for the containerized multi-node conformance harness"
+description = "aogd — the minimal Loom control-plane node daemon: a RaftNode on the aog-wire transport with a thin admin API (initialize/add-learner/change-membership/write/get/leader/healthz) for the containerized multi-node conformance harness"
 
 [[bin]]
 name = "aogd"

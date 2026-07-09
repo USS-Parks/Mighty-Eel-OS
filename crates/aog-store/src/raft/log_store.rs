@@ -1,6 +1,6 @@
-//! redb-backed Raft log storage (K3). Durable log entries keyed by index, plus
+//! redb-backed Raft log storage. Durable log entries keyed by index, plus
 //! the persisted `vote` / `committed` / `last_purged` — so a restarted node
-//! recovers its committed state (the K3 gate). Entries serialize as JSON.
+//! recovers its committed state. Entries serialize as JSON.
 
 // openraft's `StorageError` is large by design and the storage traits must
 // return it unboxed; boxing our internal helpers would just fight the API.

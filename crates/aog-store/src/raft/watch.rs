@@ -1,7 +1,7 @@
-//! K4 — watch + informer. The state machine fans out a change-event stream as
+//! Watch + informer. The state machine fans out a change-event stream as
 //! it applies mutations; an [`Informer`] keeps a prefix-scoped local cache
 //! current from that stream, and **re-lists authoritative state on lag or a
-//! fresh start** so it can never miss a final state (the K4 gate). This is the
+//! fresh start** so it can never miss a final state. This is the
 //! read path the Phase-R controllers build on.
 
 use std::collections::BTreeMap;

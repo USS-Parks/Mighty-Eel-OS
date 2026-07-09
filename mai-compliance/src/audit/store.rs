@@ -95,7 +95,7 @@ pub trait StoreSealer: Send + Sync + std::fmt::Debug {
     fn seal(&self, plaintext: &[u8]) -> Vec<u8>;
 
     /// Recover plaintext from a record produced by [`Self::seal`]. The audit
-    /// reader uses this to verify the persisted WAL from its true head (U2).
+    /// reader uses this to verify the persisted WAL from its true head.
     /// Errors when a record cannot be authenticated (wrong key or corruption) —
     /// fail closed.
     fn unseal(&self, sealed: &[u8]) -> Result<Vec<u8>, StoreError>;
@@ -275,7 +275,7 @@ impl AuditStore {
 
     /// Read and unseal the entire persisted WAL in append (id) order. `Ok(None)`
     /// when no WAL is configured; `Ok(Some(_))` (possibly empty) otherwise. Every
-    /// framing / unseal / decode failure is an error — fail-closed for the U2
+    /// framing / unseal / decode failure is an error — fail-closed for the
     /// verifier. O(total entries): the operator verify path, not the append hot
     /// path.
     pub fn read_wal(&self) -> Result<Option<Vec<AuditEntry>>, StoreError> {

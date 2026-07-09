@@ -1,13 +1,13 @@
-//! R9 — the RevocationIntent fan-out: a declarative `RevocationIntent` becomes
+//! The RevocationIntent fan-out: a declarative `RevocationIntent` becomes
 //! a signed `fabric-revocation` snapshot on the channel every gateway replica
 //! polls **and** on removable media for an air-gapped node — the bounded,
 //! provable kill (doctrine I-9), effective on every replica and offline.
 //!
-//! Complements R2's front-door indexer (the in-process apiserver kill view):
+//! Complements the front-door indexer (the in-process apiserver kill view):
 //! this controller publishes the *signed snapshot* the data-path gateway's kill
 //! switch (G9) reads and an air-gap node imports from media. `Token` and
-//! `Subject` targets fan out here; tenant-wide kill is the R3 deprovision +
-//! front-door leg, and `Ring` darkness is the R4 leg. Level-triggered and
+//! `Subject` targets fan out here; tenant-wide kill is the deprovision +
+//! front-door leg, and `Ring` darkness is the TrustRing leg. Level-triggered and
 //! idempotent — the snapshot is a pure function of the current intents, so a
 //! duplicate or dropped event cannot skew it.
 
@@ -91,7 +91,7 @@ impl RevocationController {
                 RevocationTarget::Subject(hash) => {
                     subjects.insert(hash.clone());
                 }
-                // Tenant-wide is the R3 / front-door leg; Ring is R4's.
+                // Tenant-wide is the deprovision / front-door leg; Ring is the TrustRing's.
                 RevocationTarget::Tenant(_) | RevocationTarget::Ring(_) => {}
             }
         }

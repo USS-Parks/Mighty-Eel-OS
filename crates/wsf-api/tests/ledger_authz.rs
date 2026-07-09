@@ -1,5 +1,5 @@
 //! L1/L2 gate (offline) — receipt queries are authenticated and mandatorily
-//! tenant-scoped (AF-007). A principal sees only its own tenant's receipts; a
+//! tenant-scoped. A principal sees only its own tenant's receipts; a
 //! cross-tenant identifier query returns no rows and no existence oracle. The
 //! one exception is a server-enrolled **global auditor** (L2), who may read
 //! across tenants and export the signed evidence pack (L4) — everyone else

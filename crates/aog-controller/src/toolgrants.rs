@@ -6,7 +6,7 @@
 //! the tool from the next published set and the proxy denies the tool's next
 //! call, halting it mid-run on every proxy at once.
 //!
-//! This is the tool-access sibling of R6's policy-bundle distribution: the same
+//! This is the tool-access sibling of the policy-bundle distribution: the same
 //! ML-DSA-over-canonical-payload signing, the same offline-verifiable artifact,
 //! and the same anti-rollback (a validly-signed but older set is refused, so a
 //! replay can never resurrect a revoked grant). The per-call credential itself is

@@ -1,4 +1,4 @@
-//! SHIP-03 acceptance tests for `mai_api::vault_builder::build_vault`.
+//! Acceptance tests for `mai_api::vault_builder::build_vault`.
 //!
 //! Covers the behavior matrix declared in `vault_builder.rs`. Each
 //! case constructs a `ShipProfile` programmatically (bypassing the

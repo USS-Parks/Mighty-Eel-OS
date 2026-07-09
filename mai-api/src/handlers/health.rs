@@ -154,14 +154,14 @@ pub async fn hardware_health(
     }))
 }
 
-// ─── Resource Health (formerly System Health, pre-J-13) ────────────
+// ─── Resource Health (formerly System Health) ────────────
 
 /// GET /v1/health/resources
 ///
 /// Returns disk, RAM, and CPU utilization percentages. All metrics
 /// are computed locally and never transmitted off-device.
 ///
-/// J-13 renamed this handler from `system_health` and moved it from
+/// This handler was renamed from `system_health` and moved from
 /// `/v1/health/system` to `/v1/health/resources`. The old path now
 /// serves the adapter-rollup endpoint described in
 /// [`system_health`]. The gRPC `GetSystemHealth` RPC keeps the old
@@ -192,9 +192,9 @@ pub async fn resources_health(
     }))
 }
 
-// ─── J-13: /v1/health/system adapter rollup ────────────────────────
+// ─── /v1/health/system adapter rollup ────────────────────────
 
-/// J-13 severity ordering for the rollup. `Ok` < `Degraded` < `Down`;
+/// Severity ordering for the rollup. `Ok` < `Degraded` < `Down`;
 /// the worst per-adapter verdict bubbles up to the rollup's `overall`.
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 enum Overall {
@@ -230,7 +230,7 @@ impl Overall {
 ///   stopped, never started, or its `health_check` errored
 ///
 /// An empty adapter registry returns `ok` (vacuously — no adapters
-/// means no problems). Response shape (J-13 remediation roster):
+/// means no problems). Response shape:
 ///
 /// ```json
 /// {
@@ -362,7 +362,7 @@ pub async fn system_health(
     Ok(Json(body))
 }
 
-// ─── SHIP-11: Operational Health Probes ────────────────────────────
+// ─── Operational Health Probes ────────────────────────────
 //
 // Four-state semantics, suitable for systemd `WatchdogSec` /
 // Kubernetes liveness/readiness probes / load-balancer health
@@ -374,14 +374,14 @@ pub async fn system_health(
 // |--------------------------|--------------------------------------------------------|--------------|
 // | `/v1/health/live`        | the process is running and the runtime is responsive   | n/a (always 200) |
 // | `/v1/health/ready`       | this instance can accept allowed traffic               | 503          |
-// | `/v1/health/production`  | every production invariant holds (per SHIP-02 / SHIP-11) | 503        |
+// | `/v1/health/production`  | every production invariant holds | 503        |
 //
 // `degraded` and `unsafe` are *response statuses* returned in the JSON
 // body, not separate endpoints — orchestrators can treat any non-200
 // the same way regardless of body, and humans get a richer reason
 // list when they curl the endpoint by hand.
 
-/// SHIP-11 health-probe response body.
+/// Health-probe response body.
 ///
 /// `status` is always one of `live` / `ready` / `degraded` / `unsafe`
 /// — matching the SHIP-HARDENING-PLAN §10 "Health Semantics" table.
@@ -488,12 +488,12 @@ pub async fn ready_probe(State(state): State<AppState>) -> impl IntoResponse {
 /// `503 Service Unavailable` if any do not. This is the strictest
 /// probe — orchestrators that should *only* route real-tenant traffic
 /// at a production-grade instance key off this endpoint instead of
-/// `/v1/health/ready`. The SHIP-07 `/v1/system/production-readiness`
+/// `/v1/health/ready`. The `/v1/system/production-readiness`
 /// endpoint (when it lands) is the *introspection* counterpart: it
 /// returns the full report; this probe returns a status code.
 ///
 /// Production criteria (SHIP-HARDENING-PLAN §10, intersection with
-/// SHIP-02 production guard):
+/// the production guard):
 ///
 /// 1. All [`ready_probe`] criteria, plus
 /// 2. The recent audit chain (last 64 entries) verifies, and

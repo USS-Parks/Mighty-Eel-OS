@@ -238,7 +238,7 @@ pub async fn linearizable_writes() -> Result<String, String> {
 /// create) is delivered under `histories` randomized modes — the events reordered
 /// and duplicated, and (occasionally) genuinely dropped by overflowing the watch
 /// buffer so the controller must re-list. Every history must converge to the
-/// store's one authoritative end state. Extends the R1 replay gate (three fixed
+/// store's one authoritative end state. Extends the replay gate (three fixed
 /// histories) to a reproducible fuzz.
 pub async fn idempotent_reconcile(histories: usize, seed: u64) -> Result<String, String> {
     const PREFIX: &str = "Loom/";
@@ -536,7 +536,7 @@ async fn spawn_cluster(n: u64, label: &str) -> Result<(Arc<Cluster>, Vec<Arc<Raf
 }
 
 /// The KV key every gateway/control-plane replica's kill switch polls for the
-/// signed estate revocation snapshot (the R9 online path, on the Raft store).
+/// signed estate revocation snapshot (the online path, on the Raft store).
 const REV_PATH: &str = "wsf/revocation/estate";
 
 /// A replica's kill-switch verdict on a presented token. Fail-closed (doctrine

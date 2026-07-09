@@ -303,16 +303,16 @@ impl AuditLog {
 
     /// Run a full-chain verification. Prefers the durable WAL (the full history
     /// from the true head) so tampering with an entry already evicted from the
-    /// in-memory tail is caught (audit H8/U2); absent a WAL it verifies the
+    /// in-memory tail is caught; absent a WAL it verifies the
     /// in-memory tail. Updates the stored verification status and returns a
     /// summary.
     pub fn verify_full<V: BundleVerifier>(&self, verifier: Option<&V>) -> Result<(), ChainError> {
         let cfg = self.chain.config();
         // Prefer the durable WAL: it retains the full history from the true head,
         // so tampering with an entry already evicted from the in-memory tail is
-        // detected (audit H8/U2). A WAL read/decode failure is fail-closed. Absent
+        // detected. A WAL read/decode failure is fail-closed. Absent
         // a WAL, verify the in-memory tail — from genesis while it still holds the
-        // head, else as a segment (U3: the head having been evicted, the genesis
+        // head, else as a segment (the head having been evicted, the genesis
         // head-check no longer applies and would false-positive).
         let result = if self.store.has_wal() {
             match self.store.read_wal() {
@@ -645,7 +645,7 @@ mod tests {
 
     #[test]
     fn verify_full_passes_after_head_eviction() {
-        // Audit H8/U3: once more entries than max_in_memory are recorded the head
+        // Once more entries than max_in_memory are recorded the head
         // (id 0) is evicted from the in-memory tail. A clean log must still verify;
         // the old code false-positived HeadHashNonZero because the retained tail no
         // longer began at genesis.
@@ -678,7 +678,7 @@ mod tests {
 
     #[test]
     fn verify_full_detects_tampering_with_evicted_entry() {
-        // Audit H8/U2: an entry evicted from the in-memory tail but retained in the
+        // An entry evicted from the in-memory tail but retained in the
         // WAL must still be tamper-checked. Verifying only the tail (old behavior)
         // would miss this.
         let path = std::env::temp_dir().join(format!("mai-u2-tamper-{}.jsonl", std::process::id()));
@@ -725,7 +725,7 @@ mod tests {
 
     #[test]
     fn verify_full_verifies_sealed_wal_from_head() {
-        // Audit H8/U2 with the production AEAD sealer: sealed (binary) records are
+        // With the production AEAD sealer: sealed (binary) records are
         // hex-framed on disk and unsealed by the reader, so a clean sealed WAL
         // verifies from its true head.
         use crate::audit::sealer::AeadSealer;
@@ -759,7 +759,7 @@ mod tests {
 
     #[test]
     fn verify_full_survives_restart_via_wal() {
-        // Audit H7/H8/U5: verification must survive a process restart. The
+        // Verification must survive a process restart. The
         // in-memory tail is gone after a restart, but the durable WAL is re-read
         // from its head — a clean WAL verifies, and a tamper of a persisted entry
         // is caught on the fresh instance.

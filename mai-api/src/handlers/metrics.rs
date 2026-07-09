@@ -1,4 +1,4 @@
-//! SHIP-11: Prometheus-compatible `/v1/metrics` endpoint.
+//! Prometheus-compatible `/v1/metrics` endpoint.
 //!
 //! Returns the live snapshot of [`crate::metrics::MetricsRegistry`]
 //! rendered in the Prometheus text exposition format. The endpoint is
@@ -19,7 +19,7 @@ use crate::state::AppState;
 
 /// `GET /v1/metrics`
 ///
-/// Renders the SHIP-11 metrics registry as
+/// Renders the metrics registry as
 /// `text/plain; version=0.0.4; charset=utf-8` — the Prometheus text
 /// exposition content-type. The body is deterministic given the
 /// current counter / gauge / histogram state; tests in

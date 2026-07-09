@@ -9,7 +9,7 @@
 //!
 //! The backup is intentionally a directory tree, not a tarball — that
 //! choice belongs to the site policy (some shops want tar+gpg, others
-//! want zfs send | wormhole). SHIP-09 keeps the artefact format
+//! want zfs send | wormhole). This keeps the artefact format
 //! transport-neutral.
 //!
 //! Components currently produced (per SHIP-HARDENING-PLAN §9):
@@ -27,7 +27,7 @@
 //! | model_registry       | <state_dir>/models/registry.json    | optional |
 //! | reports              | <state_dir>/reports/ tree           | optional |
 //!
-//! Restore (SHIP-10) consumes the same component IDs.
+//! Restore consumes the same component IDs.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -151,7 +151,7 @@ pub enum BackupError {
 ///
 /// The caller is responsible for loading the profile via
 /// `mai_api::load_ship_profile` and supplying any signing material.
-/// SHIP-10's restore reads everything it needs from the manifest the
+/// Restore reads everything it needs from the manifest the
 /// runner produces here.
 #[allow(clippy::needless_pass_by_value)]
 pub fn create_backup(
@@ -528,10 +528,10 @@ fn write_vault_snapshot_ref(
         backend: profile.vault.backend.clone(),
         root: profile.vault.root.clone(),
         strategy: "external-zfs",
-        notes: "Vault payloads stay encrypted at rest. SHIP-09 records the \
+        notes: "Vault payloads stay encrypted at rest. The manifest records the \
                 backend + root; the operator's site-policy ZFS replication \
-                (or equivalent) ships the actual blocks. SHIP-10 will refuse \
-                to restore if this strategy is not satisfied.",
+                (or equivalent) ships the actual blocks. A future revision will \
+                refuse to restore if this strategy is not satisfied.",
     };
     let rel = "vault/snapshot-ref.json";
     let abs = backup_dir.join(rel);

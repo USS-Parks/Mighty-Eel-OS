@@ -13,7 +13,7 @@ thiserror = { workspace = true }
 # default provider. Same version mai-vault's proven pqc-dev backend uses.
 ml-dsa = "0.0.4"
 rand = "0.8"
-# Best-effort in-memory wipe of the ML-DSA secret key + KDF seed on drop (K3).
+# Best-effort in-memory wipe of the ML-DSA secret key + KDF seed on drop.
 zeroize = "1.8"
 
 [lints]

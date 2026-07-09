@@ -1,4 +1,4 @@
-//! SHIP-09 acceptance tests for `mai-admin backup create` /
+//! Acceptance tests for `mai-admin backup create` /
 //! `backup verify` driven through the library surface.
 //!
 //! The test fixture lays out a realistic ship-state directory under a

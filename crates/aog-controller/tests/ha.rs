@@ -1,4 +1,4 @@
-//! H1 gate — a ≥3-node Loom control plane runs real openraft consensus: it elects
+//! A ≥3-node Loom control plane runs real openraft consensus: it elects
 //! a leader, replicates committed desired-state to the followers, and on **leader
 //! loss elects a new leader within SLO with zero committed-state loss**. A
 //! controller's `SharedGate` follows each node's leadership, so only the leader
@@ -7,7 +7,7 @@
 //! This is an in-process 3-node cluster over the `Cluster` direct-call network:
 //! real election/replication/commit, a real leader failure (the node is
 //! partitioned off), a real re-election. (The over-the-wire mTLS transport is
-//! deployment packaging; the split-brain-under-real-partition proof is H2/V4.)
+//! deployment packaging; the split-brain-under-real-partition proof is V4.)
 
 use std::collections::BTreeSet;
 use std::time::{Duration, Instant};
@@ -154,7 +154,7 @@ async fn a_three_node_cluster_survives_leader_loss_with_no_committed_state_loss(
     // The SharedGate followed the failover: the new leader's gate opened, so
     // controllers now act on the new leader. (Fencing the *old* partitioned
     // leader — which in classic Raft still believes it leads until it sees a
-    // higher term — is split-brain safety, proven under a real partition in H2.)
+    // higher term — is split-brain safety, proven under a real partition.)
     let new_gate = if new_leader == 2 { &gate2 } else { &gate3 };
     assert!(
         eventually(|| new_gate.is_leader(), Duration::from_secs(5)).await,

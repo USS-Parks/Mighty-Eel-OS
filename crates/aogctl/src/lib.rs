@@ -1,10 +1,10 @@
-//! `aogctl` — the Loom control-plane CLI client (K11 kernel subset).
+//! `aogctl` — the Loom control-plane CLI client (kernel subset).
 //!
 //! A thin HTTP client over `aog-apiserver`'s typed CRUD surface. Every request
-//! carries a WSF trust token in the `x-wsf-token` header (the K6 front door), so
+//! carries a WSF trust token in the `x-wsf-token` header (the front door), so
 //! the CLI earns each action exactly as any other caller does. The binary
 //! (`main.rs`) is a formatting shell over this client; the client is what the
-//! K11 gate exercises.
+//! gate exercises.
 
 use serde_json::Value;
 

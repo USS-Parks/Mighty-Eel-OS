@@ -1,4 +1,4 @@
-//! R3 gate — provision → issue → deprovision → revoked-everywhere, against a
+//! Provision → issue → deprovision → revoked-everywhere, against a
 //! **live** OpenBao (A3.2 no-mock-only closure; mock-only does not satisfy
 //! this path).
 //!
@@ -230,7 +230,7 @@ async fn settle4<A: Reconciler, B: Reconciler, C: Reconciler, D: Reconciler>(
 async fn provision_issue_deprovision_revoked_everywhere_live() {
     let Some(addr) = openbao_addr() else {
         eprintln!(
-            "SKIP provision_issue_deprovision_revoked_everywhere_live: WSF_OPENBAO_ADDR unset (R3 live gate)"
+            "SKIP provision_issue_deprovision_revoked_everywhere_live: WSF_OPENBAO_ADDR unset (live gate)"
         );
         return;
     };

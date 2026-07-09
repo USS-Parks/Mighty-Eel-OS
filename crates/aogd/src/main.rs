@@ -1,9 +1,9 @@
-//! `aogd` — the Loom control-plane node daemon (VH2).
+//! `aogd` — the Loom control-plane node daemon.
 //!
 //! Reads its identity + listen address from the environment, starts a
 //! [`Daemon`](aogd::Daemon) (a `RaftNode` on the `aog-wire` transport), and serves
 //! the combined Raft-peer + admin API until terminated. The containerized
-//! multi-node conformance harness (VH4+) runs one of these per node.
+//! multi-node conformance harness runs one of these per node.
 
 use std::net::SocketAddr;
 

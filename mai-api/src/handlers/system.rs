@@ -23,7 +23,7 @@ use crate::types::{
 use mai_core::power::TransitionTrigger;
 use mai_core::registry::ModelStatus;
 
-// ─── Production Readiness (SHIP-07 Slice B) ───────────────────────
+// ─── Production Readiness ───────────────────────
 
 /// `GET /v1/system/production-readiness`
 ///

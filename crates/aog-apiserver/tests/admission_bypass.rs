@@ -1,4 +1,4 @@
-//! K5 gate — "no write reaches aog-store bypassing admission" (the type half is
+//! "no write reaches aog-store bypassing admission" (the type half is
 //! the private node handle + read-only reader; see the `admission` module docs).
 //! Behavioral proof: a request that fails an admission stage persists **nothing**,
 //! and every admitted object bears the stamps only the admission stages apply.

@@ -16,11 +16,11 @@ use serde::{Deserialize, Serialize};
 pub struct RevocationSnapshot {
     /// Stable snapshot id.
     pub snapshot_id: String,
-    /// Monotonic publication counter (plan R1). Consumers accept a snapshot
+    /// Monotonic publication counter. Consumers accept a snapshot
     /// only if its sequence is strictly higher than the one they hold, so a
     /// replayed older snapshot — a stale "nothing revoked" view — is rejected.
     /// Emergency snapshots share the same counter (the publisher bumps it).
-    /// Serialized only when non-zero so pre-R1 signatures keep verifying.
+    /// Serialized only when non-zero so pre-sequence signatures keep verifying.
     #[serde(default, skip_serializing_if = "sequence_is_zero")]
     pub sequence: u64,
     /// Issue time (RFC3339).
@@ -39,13 +39,13 @@ pub struct RevocationSnapshot {
     /// Revoked bundle versions.
     #[serde(default)]
     pub revoked_bundle_versions: Vec<String>,
-    /// Revoked tenants — every token bound to one is revoked (plan R2).
+    /// Revoked tenants — every token bound to one is revoked.
     #[serde(default)]
     pub revoked_tenants: Vec<String>,
-    /// Revoked issuers (plan R2).
+    /// Revoked issuers.
     #[serde(default)]
     pub revoked_issuers: Vec<String>,
-    /// Revoked service identities (plan R2).
+    /// Revoked service identities.
     #[serde(default)]
     pub revoked_service_identities: Vec<String>,
     /// Whether this is an out-of-band emergency snapshot.
@@ -91,7 +91,7 @@ impl RevocationSnapshot {
         self
     }
 
-    /// Set the monotonic publication sequence (plan R1).
+    /// Set the monotonic publication sequence.
     #[must_use]
     pub fn with_sequence(mut self, sequence: u64) -> Self {
         self.sequence = sequence;
@@ -142,7 +142,7 @@ impl RevocationSnapshot {
             .any(|s| s == service_identity)
     }
 
-    /// The complete revocation predicate (plan R2): does this snapshot revoke
+    /// The complete revocation predicate: does this snapshot revoke
     /// `token` on **any** dimension — token id, subject hash, signing key,
     /// issuer, bundle version, tenant, or service identity? Returns the dimension
     /// that matched (for receipts), or `None`.
@@ -194,7 +194,7 @@ pub enum RevocationError {
     /// The signature did not verify.
     #[error("signature failed verification")]
     InvalidSignature,
-    /// The candidate snapshot does not advance the held sequence (plan R1) —
+    /// The candidate snapshot does not advance the held sequence —
     /// a rollback / replay of older revocation state was refused.
     #[error("snapshot rollback rejected: candidate sequence {candidate} <= held {current}")]
     Rollback {
@@ -205,7 +205,7 @@ pub enum RevocationError {
     },
 }
 
-/// R1: monotonic, anti-rollback revocation state for a service consumer.
+/// Monotonic, anti-rollback revocation state for a service consumer.
 ///
 /// [`advance`](Self::advance) accepts a candidate snapshot only if it
 /// (a) verifies against the trust anchor and (b) carries a strictly higher

@@ -1,6 +1,6 @@
 //! O2 gate — a `RolloutPlan` advances through availability-safe steps to `Ready`,
 //! and **each step is receipted**: every advance is an admitted status write, so
-//! the tamper-evident ledger gains one receipt per step (K9). A rollout whose
+//! the tamper-evident ledger gains one receipt per step. A rollout whose
 //! target does not exist holds `Degraded` (fail-closed) rather than pretending to
 //! roll a phantom. The availability floor itself is proven exhaustively by the
 //! pure stepper's unit tests (`rollout.rs`); here we prove the controller drives

@@ -1,15 +1,15 @@
-//! `aog-apiserver` — the Loom control-plane API server (K5–K6…).
+//! `aog-apiserver` — the Loom control-plane API server.
 //!
 //! A typed CRUD surface over the estate kinds (`aog-estate`) backed by the
 //! consensus store (`aog-store`). Two invariants this crate exists to hold:
-//! **every request is authenticated at the front door** ([`auth`], K6), and
+//! **every request is authenticated at the front door** ([`auth`]), and
 //! **every desired-state mutation traverses the admission chain — no handler can
 //! write the store directly** (enforced by type; see [`admission::Admission`],
 //! whose private `RaftNode` handle is the only writer, paired with a read-only
 //! [`reader::StoreReader`]; and by test in `tests/admission_bypass.rs`).
 //!
-//! AuthN is live at the front door (K6). Policy deny-wins (K7), envelope-seal +
-//! token attenuation (K8), and receipt binding (K9) are the remaining named
+//! AuthN is live at the front door. Policy deny-wins, envelope-seal +
+//! token attenuation, and receipt binding are the remaining named
 //! seams in the admission chain.
 
 pub mod admission;
@@ -83,7 +83,7 @@ impl AppState {
         Ok(Self::from_raft(raft, authenticator, sealer))
     }
 
-    /// Wrap an already-running Raft node in authenticated API state — the VH5b
+    /// Wrap an already-running Raft node in authenticated API state — the
     /// seam. It lets the wire-transport control-plane daemon (`aogd`) serve the
     /// authenticated CRUD surface over the very node it drives consensus on,
     /// rather than a separately bootstrapped one.
@@ -96,7 +96,7 @@ impl AppState {
         }
     }
 
-    /// Number of admitted-mutation receipts in the ledger (K9).
+    /// Number of admitted-mutation receipts in the ledger.
     #[must_use]
     pub fn receipts_len(&self) -> usize {
         self.admission.receipts_len()
@@ -119,7 +119,7 @@ impl AppState {
         self.admission.export_receipts(generated_at)
     }
 
-    /// Configure the read-path conversion registry (K10). Default is the identity
+    /// Configure the read-path conversion registry. Default is the identity
     /// (serve stored objects unchanged).
     #[must_use]
     pub fn with_conversions(mut self, conversions: ConversionRegistry) -> Self {
@@ -130,7 +130,7 @@ impl AppState {
     /// The admission choke point, for in-process controllers (Phase R). Handing
     /// this out is safe by construction: `Admission::admit` *is* the full chain
     /// (validate → mutate → commit → receipt) — there is no writable store
-    /// handle to leak (the K5 invariant).
+    /// handle to leak.
     #[must_use]
     pub fn admission(&self) -> Arc<Admission> {
         Arc::clone(&self.admission)
@@ -149,16 +149,16 @@ impl AppState {
         Arc::clone(&self.authenticator)
     }
 
-    /// A prefix-scoped estate informer (K4) — a controller's wakeup stream.
+    /// A prefix-scoped estate informer — a controller's wakeup stream.
     #[must_use]
     pub fn informer(&self, prefix: impl Into<String>) -> aog_store::raft::watch::Informer {
         self.reader.informer(prefix)
     }
 }
 
-/// The authenticated CRUD surface alone: the `/apis/**` routes wrapped by the K6
+/// The authenticated CRUD surface alone: the `/apis/**` routes wrapped by the
 /// authentication middleware, with `state` applied. Split out so a host that has
-/// its own health/liveness surface — the wire-transport daemon `aogd` (VH5b) —
+/// its own health/liveness surface — the wire-transport daemon `aogd` —
 /// can merge just the authenticated CRUD over its own node without a `/healthz`
 /// route collision.
 #[allow(clippy::needless_pass_by_value)]
@@ -182,7 +182,7 @@ pub fn api_router(state: AppState) -> Router {
 }
 
 /// Build the control-plane router over shared [`AppState`]. The `/apis/**` routes
-/// are wrapped by the K6 authentication middleware; `/healthz` and `/readyz` stay
+/// are wrapped by the authentication middleware; `/healthz` and `/readyz` stay
 /// open (unauthenticated liveness/readiness).
 pub fn router(state: AppState) -> Router {
     Router::new()

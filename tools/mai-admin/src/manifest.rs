@@ -1,4 +1,4 @@
-//! Backup manifest schema for SHIP-09.
+//! Backup manifest schema.
 //!
 //! A backup is a directory tree: `manifest.json` at the root, plus one
 //! file (or sub-tree) per component listed inside the manifest. The
@@ -8,11 +8,11 @@
 //! the manifest, recomputes every digest, and (when an anchor is
 //! configured) checks the signature against a public key file.
 //!
-//! Out of scope (SHIP-09):
-//! - Restore. SHIP-10 owns `restore plan/apply` and the recovery boot.
-//! - Tarball / cpio packaging. SHIP-09 emits a directory tree; the
+//! Out of scope:
+//! - Restore. `restore plan/apply` and the recovery boot are separate.
+//! - Tarball / cpio packaging. The tool emits a directory tree; the
 //!   operator wraps it in whatever transport their site policy requires.
-//! - Per-component cipher choice. SHIP-09 backs up data that is already
+//! - Per-component cipher choice. The tool backs up data that is already
 //!   sealed at rest (vault encryption, audit AeadSealer) or that is
 //!   not sensitive on its own (trust anchor public keys, manifest JSON).
 //!   Raw API keys never enter the backup.
@@ -40,7 +40,7 @@ pub struct BackupManifest {
     /// RFC 3339 timestamp the backup started.
     pub created_at: String,
     /// `CARGO_PKG_VERSION` of the mai-admin binary that produced the
-    /// backup. Restore (SHIP-10) refuses to apply when the live
+    /// backup. Restore refuses to apply when the live
     /// `mai-api` is older than this.
     pub mai_version: String,
     /// Git commit (short) of the producing build. Best-effort: empty
@@ -51,7 +51,7 @@ pub struct BackupManifest {
     pub profile: String,
     /// Hostname the backup was produced on. Audit only.
     pub host: String,
-    /// Migration version of the producing build. SHIP-10 will compare
+    /// Migration version of the producing build. Restore will compare
     /// this against the target node's migration version to plan
     /// upgrade / refuse downgrade.
     pub migration_version: String,
@@ -69,7 +69,7 @@ pub struct ManifestComponent {
     /// Stable identifier: `api_audit_wal`, `compliance_audit_wal`,
     /// `trust_bundle_cache`, `trust_anchors`, `config_checksums`,
     /// `auth_key_hashes`, `model_registry`, `reports`,
-    /// `vault_snapshot_ref`. SHIP-10 keys component handlers off this.
+    /// `vault_snapshot_ref`. Restore keys component handlers off this.
     pub name: String,
     /// Path inside the backup directory (relative to the backup root).
     pub path: String,
@@ -78,7 +78,7 @@ pub struct ManifestComponent {
     /// Byte size of the component file or — for tree components — the
     /// sum of every file in the tree.
     pub bytes: u64,
-    /// For WAL components: total entries replayed at backup time. SHIP-09
+    /// For WAL components: total entries replayed at backup time. The backup
     /// uses this as a fast sanity-check before recomputing the SHA3.
     /// `None` for non-WAL components.
     pub entry_count: Option<u64>,

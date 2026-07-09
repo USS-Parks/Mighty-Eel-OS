@@ -1,4 +1,4 @@
-//! K4 (audit H1): attenuation-monotonicity property suite. A deterministic,
+//! Attenuation-monotonicity property suite. A deterministic,
 //! seeded generator produces a genuine *widening* on every narrowable axis
 //! (expiry, routes, models incl. the empty-set case, roles, compliance scopes,
 //! classification, budget) and asserts each is refused; a companion control
@@ -89,7 +89,7 @@ fn randomized_widening_on_every_axis_is_rejected() {
                 "allowed_routes"
             }
             2 => {
-                // Empty child (the H1 "all models" sentinel) or a model not in the parent.
+                // Empty child (the "all models" sentinel) or a model not in the parent.
                 r.allowed_models = if rng.gen_bool(0.5) {
                     Some(vec![])
                 } else {

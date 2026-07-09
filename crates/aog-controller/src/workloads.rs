@@ -130,7 +130,7 @@ impl<P: WorkloadProbe> WorkloadController<P> {
             return Ok(Action::Done);
         };
         if workload.metadata.deletion_timestamp.is_some() {
-            return Ok(Action::Done); // teardown is the GC's job (R2)
+            return Ok(Action::Done); // teardown is the GC's job
         }
         // X2 manages the gateway kind; the other workload kinds land with the
         // scheduler + node runtime (M3b).

@@ -1,11 +1,11 @@
-//! `aog-wire` (VH1) — the over-the-wire Raft transport for the containerized Loom
+//! `aog-wire` — the over-the-wire Raft transport for the containerized Loom
 //! control plane. A [`WireNetwork`] `RaftNetworkFactory` sends openraft's
 //! `append_entries` / `vote` / `install_snapshot` RPCs as JSON over HTTP to a
 //! peer's `/raft/*` endpoints; [`router`] serves those endpoints from a node's
 //! Raft handle. This is the wire counterpart of `aog-store`'s in-process
 //! `ClusterNetwork` — the "deployment packaging" the plan exercises in Phase V.
 //!
-//! VH5b lands transport security: [`tls::NodeTls`] builds the mutually-authenticated
+//! Transport security: [`tls::NodeTls`] builds the mutually-authenticated
 //! (sender-constrained, doctrine I-3) rustls configs — a raft server that requires
 //! a CA-signed client certificate, and a client that presents its identity and
 //! pins the estate CA. [`WireNetwork::with_tls`] carries the client leg; the plain
@@ -49,8 +49,8 @@ impl WireNetwork {
         Self::default()
     }
 
-    /// A wire network whose peer connections use mutually-authenticated TLS
-    /// (VH5b): the reqwest client presents this node's identity and verifies each
+    /// A wire network whose peer connections use mutually-authenticated TLS:
+    /// the reqwest client presents this node's identity and verifies each
     /// peer's server certificate against the estate CA (`client_config`). Peer
     /// URLs in cluster membership must then be `https://`.
     ///

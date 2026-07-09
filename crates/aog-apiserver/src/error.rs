@@ -1,5 +1,5 @@
 //! Typed API errors for the Loom control-plane apiserver, each mapped to an HTTP
-//! status. The authN (`Unauthenticated`, K6) and policy (`Forbidden`, K7)
+//! status. The authN (`Unauthenticated`) and policy (`Forbidden`)
 //! variants are declared now so the error surface is stable when those admission
 //! stages land — a handler never has to grow a new arm for them.
 
@@ -41,13 +41,13 @@ pub enum ApiError {
     /// Backend / store failure.
     #[error("store: {0}")]
     Store(String),
-    /// Front-door authentication failure (K6 seam).
+    /// Front-door authentication failure.
     #[error("unauthenticated")]
     Unauthenticated,
-    /// Policy denied the mutation (K7 deny-wins seam).
+    /// Policy denied the mutation (deny-wins seam).
     #[error("forbidden: {0}")]
     Forbidden(String),
-    /// The presented token's budget is exhausted — rejected pre-admission (K6).
+    /// The presented token's budget is exhausted — rejected pre-admission.
     #[error("budget exhausted")]
     BudgetExhausted,
 }

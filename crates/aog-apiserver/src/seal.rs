@@ -1,4 +1,4 @@
-//! K8 — the mutate stage's seal + attenuate.
+//! The mutate stage's seal + attenuate.
 //!
 //! Two things admission does to a mutation before it lands, both needing
 //! control-plane key material:
@@ -128,7 +128,7 @@ fn stash(annotations: &mut BTreeMap<String, String>, field: &str, seal: &Seal) {
 }
 
 /// Build a child token narrowing `parent` to `ceiling` (and no more), then
-/// attenuate + sign it under `signer`. Pure; the seam the K8 tests inspect.
+/// attenuate + sign it under `signer`. Pure; the seam the tests inspect.
 ///
 /// # Errors
 /// [`TokenError`] if the (built-to-be-subset) child fails attenuation.

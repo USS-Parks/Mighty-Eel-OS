@@ -1,11 +1,11 @@
-//! SHIP-04: persistent API audit writer.
+//! Persistent API audit writer.
 //!
 //! [`WalAuditWriter`] implements the existing
 //! [`crate::audit::AuditWriter`] trait against an append-only,
 //! JSON-lines write-ahead log on disk. It is the production
 //! replacement for [`crate::audit::MemoryAuditWriter`].
 //!
-//! Scope (SHIP-04):
+//! Scope:
 //! - Type definitions: [`WalAuditWriter`], [`WalAuditConfig`].
 //! - JSON-lines persistence under a configurable WAL directory.
 //! - Replay-and-verify on startup via [`WalAuditWriter::open`]; the
@@ -20,16 +20,15 @@
 //!   roundtrip. Integration tests live in
 //!   `mai-api/tests/audit_wal.rs`.
 //!
-//! Out of scope (SHIP-04, per the parallel-session split for the
-//! SHIP-04 + SHIP-05 lane):
+//! Out of scope:
 //! - Wiring into `MaiServer::run()` / `server.rs`. That happens at
-//!   the SHIP-07-lite convergence step alongside the production
+//!   the convergence step alongside the production
 //!   guard's runtime checks (`PROD-AUDIT-100`).
 //! - PQC checkpoint signing. The signer is already pluggable on
-//!   [`crate::audit::AuditManager`]; SHIP-07 plugs the vault-backed
-//!   ML-DSA signer in. SHIP-04 only persists the entry bytes the
-//!   manager hands it.
-//! - Compliance audit sealer (SHIP-05). The compliance WAL lives in
+//!   [`crate::audit::AuditManager`]; the vault-backed ML-DSA signer
+//!   is plugged in later. This writer only persists the entry bytes
+//!   the manager hands it.
+//! - Compliance audit sealer. The compliance WAL lives in
 //!   `mai-compliance::audit::store` and is a separate writer.
 
 use std::path::{Path, PathBuf};
@@ -45,8 +44,7 @@ use tracing::{debug, info};
 use crate::audit::{AuditEntry, AuditWriter, verify_chain};
 
 /// Audit-chain genesis hash. Duplicated from `crate::audit` because
-/// the upstream constant is module-private and SHIP-04 is constrained
-/// not to edit `audit.rs`. The `genesis_hash_matches_audit_module`
+/// the upstream constant is module-private. The `genesis_hash_matches_audit_module`
 /// test below fails closed if the upstream value ever changes.
 const GENESIS_HASH: &str = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2";
 
@@ -383,7 +381,7 @@ pub struct ReplayOutcome {
 
 /// Read every entry from the WAL directory (oldest rotated file first
 /// through `current.jsonl`) and run the existing chain verifier. The
-/// SHIP-07 startup hook will call this before the writer is wired in,
+/// startup hook will call this before the writer is wired in,
 /// then refuse to listen if it fails.
 pub async fn replay_and_verify(config: &WalAuditConfig) -> Result<ReplayOutcome, WalAuditError> {
     let entries = read_all_entries(config).await?;
@@ -777,7 +775,7 @@ mod tests {
 
     #[tokio::test]
     async fn unused_helpers_avoid_dead_code_warnings() {
-        // The Arc::into_dyn helper is the SHIP-07 wiring path; ensure
+        // The Arc::into_dyn helper is the wiring path; ensure
         // its signature compiles by exercising it here.
         let temp = tempfile::tempdir().unwrap();
         let cfg = WalAuditConfig::for_dir(temp.path());

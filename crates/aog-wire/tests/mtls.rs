@@ -1,4 +1,4 @@
-//! VH5b-b gate — per-node mTLS on the `aog-wire` raft transport (doctrine I-3,
+//! Per-node mTLS on the `aog-wire` raft transport (doctrine I-3,
 //! sender-constrained; I-4, fail-closed). A [`NodeTls`] server built from the
 //! estate CA **requires** a CA-signed client certificate before any RPC is
 //! decoded. Three facts are asserted over a real loopback handshake:
@@ -279,7 +279,7 @@ fn with_tls_builds_a_wire_network() {
     let (client_cert, client_key) = gen_leaf(&dir, "client", &ca, CLIENT_EXT);
     let tls = NodeTls::from_der(anchor, vec![cert(&client_cert)], key(&client_key)).unwrap();
     // The mutually-authenticated client config is accepted by the reqwest-backed
-    // transport constructor (VH5b `WireNetwork::with_tls`).
+    // transport constructor (`WireNetwork::with_tls`).
     assert!(
         WireNetwork::with_tls(tls.client_config().unwrap()).is_ok(),
         "the estate mTLS client config must build a wire transport"

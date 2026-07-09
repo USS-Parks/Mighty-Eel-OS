@@ -1,4 +1,4 @@
-//! K2 gate: deterministic apply from a fixed op log; CAS rejects stale writes;
+//! Deterministic apply from a fixed op log; CAS rejects stale writes;
 //! the redb backend persists across reopen.
 
 use aog_store::{Applied, MemBackend, Op, Precondition, RedbBackend, Store, StoreError};

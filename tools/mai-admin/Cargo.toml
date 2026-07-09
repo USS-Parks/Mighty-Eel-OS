@@ -36,12 +36,12 @@ rand = "0.8"
 mai-compliance = { path = "../../mai-compliance" }
 mai-core = { path = "../../mai-core" }
 
-# SHIP-09 vendors a minimal `BackupSourceProfile` + `AuditEntry` +
+# This crate vendors a minimal `BackupSourceProfile` + `AuditEntry` +
 # `verify_chain` rather than depend on `mai-api`. Reason: the parallel
-# SHIP-07-endpoint-and-cli session is mid-edit on `mai-api/src/errors.rs`,
-# leaving mai-api un-buildable in the shared workspace. Same precedent as
-# SHIP-04 (which duplicated `GENESIS_HASH` until SHIP-05 unblocked it);
-# the duplication should be removed once SHIP-07-endpoint-and-cli lands.
+# endpoint-and-cli session is mid-edit on `mai-api/src/errors.rs`, leaving
+# mai-api un-buildable in the shared workspace. Same precedent as an earlier
+# vendoring (which duplicated `GENESIS_HASH` until a later change unblocked
+# it); the duplication should be removed once the endpoint-and-cli session lands.
 
 [dev-dependencies]
 tempfile = "3"

@@ -1,6 +1,6 @@
-//! N3 — the workload driver trait (CRI-shaped). A node runs an assigned workload
+//! The workload driver trait (CRI-shaped). A node runs an assigned workload
 //! replica through a pluggable [`WorkloadDriver`]: `start`, `inspect`, `stop`.
-//! The process/systemd driver (N4) and the optional containerd driver (N5) are
+//! The process/systemd driver and the optional containerd driver are
 //! impls behind this trait, so a workload's lifecycle is identical whichever
 //! runs it. This module ships the trait, the shared value types, and
 //! [`NoopDriver`] (a bookkeeping driver for shadow mode and tests).
@@ -105,7 +105,7 @@ impl WorkloadDriver for NoopDriver {
     }
 }
 
-/// N4 — the process driver: it runs a workload replica as a real child process.
+/// The process driver: it runs a workload replica as a real child process.
 /// This is the **air-gap appliance default** — no container runtime required. On
 /// Linux, production wraps it in a systemd unit for boot-time supervision and
 /// restart-on-failure; the lifecycle this driver provides (start / inspect /

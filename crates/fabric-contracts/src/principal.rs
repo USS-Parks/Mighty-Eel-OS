@@ -10,7 +10,7 @@
 //!
 //! # Why this type does not implement `Deserialize`
 //!
-//! The single most damaging WSF finding (AF-002) was that privileged routes
+//! The single most damaging WSF finding was that privileged routes
 //! read `tenant_id` / `subject_id` / `roles` straight from request JSON, so any
 //! caller could self-assign authority. The structural fix is a type the wire
 //! layer *cannot* manufacture: `WsfPrincipal` derives [`Serialize`] (so it can

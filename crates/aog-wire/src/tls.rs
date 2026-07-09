@@ -1,4 +1,4 @@
-//! VH5b — per-node mTLS for the `aog-wire` raft transport (doctrine I-3:
+//! Per-node mTLS for the `aog-wire` raft transport (doctrine I-3:
 //! sender-constrained). Consensus RPCs carry over mutually-authenticated TLS: a
 //! node presents its own certificate and verifies every peer's against a shared
 //! estate CA on BOTH ends. The raft server **requires** a client certificate

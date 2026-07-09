@@ -1,4 +1,4 @@
-//! K11 gate — `apply` then `get` round-trips a resource against a live apiserver;
+//! `apply` then `get` round-trips a resource against a live apiserver;
 //! an over-budget `apply` is rejected client-visibly (the 402 surfaces as a
 //! `ClientError::Status`). The server runs in-process on an ephemeral port.
 

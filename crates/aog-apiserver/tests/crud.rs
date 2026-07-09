@@ -1,4 +1,4 @@
-//! K5 CRUD surface, now behind K6 authentication: create -> get -> list ->
+//! CRUD surface, now behind authentication: create -> get -> list ->
 //! update -> delete round-trips + conflict / not-found / bad-request edges, all
 //! carrying a valid trust token.
 
@@ -29,7 +29,7 @@ async fn crud_roundtrip() {
             .is_some_and(|u| !u.is_empty())
     );
     assert!(created["metadata"]["resource_version"].as_u64().unwrap() >= 1);
-    // K8: the object is authorized by a child token scoped to this action, not
+    // The object is authorized by a child token scoped to this action, not
     // the raw parent (attenuation).
     assert!(
         created["metadata"]["token_ref"]["token_id"]

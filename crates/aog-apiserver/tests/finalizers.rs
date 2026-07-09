@@ -1,10 +1,10 @@
-//! R2 (apiserver half) — two-phase delete + finalizer semantics.
+//! Two-phase delete + finalizer semantics.
 //!
 //! Delete with finalizers = soft delete (deletion_timestamp stamped, object
 //! kept, teardown runs); removing the last finalizer completes the delete.
 //! While terminating: spec frozen, finalizers only shrink, the deletion
 //! timestamp cannot be cleared. Repeat deletes are idempotent no-ops that
-//! write no receipt (receipts stay 1:1 with mutations, the K9 gate).
+//! write no receipt (receipts stay 1:1 with mutations).
 
 mod common;
 

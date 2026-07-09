@@ -1,7 +1,7 @@
 //! Server-side cloud-credential grants (plan B1/B2).
 //!
 //! The public credential-exchange API takes a tenant-scoped `grant_id`, never a
-//! raw cloud identity (AF-004: the broker used to accept a caller-selected AWS
+//! raw cloud identity (the broker used to accept a caller-selected AWS
 //! role ARN). A [`GrantStore`] resolves `(tenant, grant_id)` to an approved
 //! cloud identity + scope; a missing or cross-tenant grant denies. Production
 //! loads signed / OpenBao-custodied mappings; dev/tests use [`StaticGrants`].

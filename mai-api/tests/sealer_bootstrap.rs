@@ -1,4 +1,4 @@
-//! SHIP-05 acceptance tests for `mai_api::sealer_builder::build_sealer`.
+//! Acceptance tests for `mai_api::sealer_builder::build_sealer`.
 //!
 //! Covers the behavior matrix in `sealer_builder.rs`. Each test
 //! constructs a `ShipProfile` programmatically (bypassing the

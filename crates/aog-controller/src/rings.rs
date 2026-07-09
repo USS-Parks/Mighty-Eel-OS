@@ -1,4 +1,4 @@
-//! R4 — the TrustRing controller: rings become per-ring OpenBao Transit keys,
+//! The TrustRing controller: rings become per-ring OpenBao Transit keys,
 //! and a ring can be **darkened** — its key disabled so every envelope sealed
 //! under it stops unsealing, and its workloads are halted.
 //!
@@ -13,7 +13,7 @@
 //!   decrypted), every `Workload` in the ring is marked `Failed` (the estate
 //!   halt; the M3b node runtime enforces eviction), the ring's status goes
 //!   `dark`/`Degraded`, and the intent is acknowledged `Ready`/propagated —
-//!   the acknowledgment the R2 indexer honestly refused to fake.
+//!   the acknowledgment the indexer honestly refused to fake.
 //!
 //! Deleting a `TrustRing` **retains** its Transit key (reclaim-policy Retain):
 //! sealed data must never become unreadable because an estate object was
@@ -95,7 +95,7 @@ impl TrustRingController {
             let status = acked.status.get_or_insert_with(Default::default);
             status.phase = Phase::Ready;
             status.propagated = true;
-            status.replicas_denied = 1; // this replica; R9 counts the estate
+            status.replicas_denied = 1; // this replica; the revocation controller counts the estate
             self.client
                 .update(ResourceObject::RevocationIntent(acked))
                 .await?;

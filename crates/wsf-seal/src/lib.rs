@@ -382,8 +382,8 @@ impl SealService {
             self.record("unseal", &envelope.envelope_id, &req.token, "deny", now);
             return Err(e);
         }
-        // E4: envelope-binding authorization, BEFORE any Transit decrypt. Closes
-        // AF-003 — a token may only unseal its own tenant's envelope, on the
+        // E4: envelope-binding authorization, BEFORE any Transit decrypt.
+        // A token may only unseal its own tenant's envelope, on the
         // right plane. Legacy (v1) unbound envelopes are denied online.
         let binding = &envelope.binding;
         if binding.envelope_version < 2 || binding.tenant_id.is_empty() {

@@ -1,4 +1,4 @@
-//! R2 — tenant teardown: deprovisioning that propagates revocation.
+//! Tenant teardown: deprovisioning that propagates revocation.
 //!
 //! A live `Tenant` is guarded with the teardown finalizer, so deleting it
 //! starts a two-phase teardown instead of dropping state on the floor. While
@@ -6,7 +6,7 @@
 //!
 //! 1. declares the kill — a `RevocationIntent` targeting the tenant, so every
 //!    token of that tenant dies at the front door the moment the indexing
-//!    controller folds it in (and, at R9, estate-wide via signed snapshots);
+//!    controller folds it in (and estate-wide via signed snapshots);
 //! 2. waits for the garbage collector to finish sweeping the tenant's scoped
 //!    objects (no dangling capability outlives its tenant);
 //! 3. releases the finalizer — which completes the two-phase delete.

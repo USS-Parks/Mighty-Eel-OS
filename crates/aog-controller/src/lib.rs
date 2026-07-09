@@ -1,26 +1,26 @@
 //! `aog-controller` — Loom's reconciliation runtime (Phase R).
 //!
-//! R1: the level-triggered controller framework — a dedup-ing [`WorkQueue`]
+//! The level-triggered controller framework — a dedup-ing [`WorkQueue`]
 //! with per-key exponential backoff and delayed requeue, and a [`Controller`]
-//! loop that observes desired state through the K4 informer and drives one
+//! loop that observes desired state through the informer and drives one
 //! [`Reconciler`] over the keys that changed, gated so only the leading
 //! replica acts ([`LeaderGate`]). The Phase-R controllers (Tenant, TrustRing,
 //! Capability, PolicyBundle, …) are reconcilers run on this runtime.
 //!
-//! R6: the [`PolicyBundleController`] signs each `PolicyBundle` and publishes it
+//! The [`PolicyBundleController`] signs each `PolicyBundle` and publishes it
 //! to the channel gateway/node edges poll ([`BundleStore`]); an edge verifies
 //! it with the control-plane public key alone and refuses a stale replay
 //! ([`EdgeBundleCache`]).
 //!
-//! R7: the [`ProviderPoolController`] folds live provider/model health
+//! The [`ProviderPoolController`] folds live provider/model health
 //! ([`HealthProbe`]) into each pool's schedulable set, so the scheduler only
 //! places on reachable endpoints.
 //!
-//! R8: the [`VirtualKeyController`] resolves each `VirtualKey` to a token minted
+//! The [`VirtualKeyController`] resolves each `VirtualKey` to a token minted
 //! from its `Capability` and writes it to the gateway's key-resolution path, so
 //! a key change is reflected at the gateway (G1) without a restart.
 //!
-//! R9: the [`RevocationController`] fans each `RevocationIntent` out to a signed
+//! The [`RevocationController`] fans each `RevocationIntent` out to a signed
 //! revocation snapshot — online (the gateway kill-switch path) and on removable
 //! media (air-gap) — so a revoked token is denied on every replica and offline.
 //!

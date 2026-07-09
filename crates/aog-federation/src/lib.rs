@@ -1,4 +1,4 @@
-//! `aog-federation` (H5) — cross-air-gap federation of Loom estates by **signed
+//! `aog-federation` — cross-air-gap federation of Loom estates by **signed
 //! removable-media snapshots**, no network. A source estate bundles the policy it
 //! wants an air-gapped peer to adopt and the revocations it must honor into a
 //! [`FederationSnapshot`], ML-DSA-signs it over its canonical payload, and writes

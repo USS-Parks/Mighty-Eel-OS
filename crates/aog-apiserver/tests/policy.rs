@@ -1,4 +1,4 @@
-//! K7 — admission policy: a mutation asserting authority the token lacks is
+//! Admission policy: a mutation asserting authority the token lacks is
 //! denied (403) with a specific reason; deny-wins holds across composed regimes;
 //! a compliant mutation is admitted; a kind with no compliance facts is a no-op.
 

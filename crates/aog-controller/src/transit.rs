@@ -1,4 +1,4 @@
-//! R4 — minimal OpenBao Transit key administration for the TrustRing
+//! Minimal OpenBao Transit key administration for the TrustRing
 //! controller: ensure a per-ring key exists, read its version, and disable it
 //! (the "ring dark" switch). Data-path transit use (encrypt/decrypt) stays on
 //! `wsf_bridge::OpenBaoAuth`; this adds only the key-lifecycle calls the M1

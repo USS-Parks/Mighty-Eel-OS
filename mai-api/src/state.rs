@@ -78,21 +78,21 @@ pub struct AppState {
     pub compliance_audit: ComplianceAuditLog,
     /// Compliance report generator façade.
     pub report_manager: Arc<ReportManager>,
-    /// SHIP-07 Slice B: selected `POST /v1/auth/exchange_token` mode.
+    /// Selected `POST /v1/auth/exchange_token` mode.
     /// Defaults to [`TrustExchangeMode::LocalDevSynthetic`] so the
     /// no-profile bring-up path keeps minting the synthetic local-dev
     /// token. Production startup swaps this to
     /// [`TrustExchangeMode::OpenBaoBridge`]; profiles that opt out
     /// entirely set it to [`TrustExchangeMode::Disabled`].
     pub trust_exchange_mode: TrustExchangeMode,
-    /// SHIP-07 Slice B: snapshot of the ship profile + runtime
+    /// Snapshot of the ship profile + runtime
     /// introspection that drove `MaiServer::run()`. `None` when the
     /// server booted without a ship profile (legacy/test path); `Some`
     /// when one was loaded. Drives `GET /v1/system/production-readiness`.
     pub ship_readiness: Option<ShipReadiness>,
-    /// SHIP-11: Prometheus-compatible metrics registry. Populated by
+    /// Prometheus-compatible metrics registry. Populated by
     /// [`crate::middleware::metrics_middleware`] for every request and
-    /// rendered at `GET /v1/metrics`. Pre-seeded with the SHIP-11
+    /// rendered at `GET /v1/metrics`. Pre-seeded with the
     /// metric families so `# TYPE` lines appear in the exposition
     /// even before the first observation.
     pub metrics_registry: Arc<MetricsRegistry>,
@@ -120,10 +120,10 @@ pub struct AppState {
     pub cancel_token: CancellationToken,
 }
 
-/// SHIP-07 Slice B: captured ship-profile + runtime introspection.
+/// Captured ship-profile + runtime introspection.
 ///
 /// `MaiServer::run()` installs this onto [`AppState`] after the
-/// SHIP-03/04/05/06 builders have run. The readiness endpoint
+/// builders have run. The readiness endpoint
 /// recomputes a fresh [`crate::production_guard::ProductionReadinessReport`]
 /// from these two fields on every request, so operators always see the
 /// latest evaluation against the runtime that actually booted.
@@ -176,7 +176,7 @@ impl AppState {
             report_manager,
             trust_exchange_mode: TrustExchangeMode::LocalDevSynthetic,
             ship_readiness: None,
-            // SHIP-11: pre-seed every metric family so dashboards see a
+            // Pre-seed every metric family so dashboards see a
             // complete `# TYPE` line set on the first scrape, even
             // before the first request is handled.
             metrics_registry: Arc::new(MetricsRegistry::with_ship_11_defaults()),
@@ -244,7 +244,7 @@ impl AppState {
         self
     }
 
-    /// SHIP-07 Slice B: install the selected token-exchange mode. The
+    /// Install the selected token-exchange mode. The
     /// `POST /v1/auth/exchange_token` handler switches on this value
     /// instead of unconditionally minting a synthetic local-dev token.
     #[must_use]
@@ -264,7 +264,7 @@ impl AppState {
         self
     }
 
-    /// SHIP-07 Slice B: install the captured ship-profile + runtime
+    /// Install the captured ship-profile + runtime
     /// introspection so `GET /v1/system/production-readiness` can
     /// recompute the report on demand.
     #[must_use]
@@ -273,10 +273,10 @@ impl AppState {
         self
     }
 
-    /// SHIP-11: override the metrics registry. Tests use this to inject
+    /// Override the metrics registry. Tests use this to inject
     /// a freshly-defaulted (empty) registry so assertions about
     /// `requests_total` start from zero instead of the pre-seeded
-    /// SHIP-11 defaults.
+    /// defaults.
     #[must_use]
     pub fn with_metrics_registry(mut self, registry: Arc<MetricsRegistry>) -> Self {
         self.metrics_registry = registry;

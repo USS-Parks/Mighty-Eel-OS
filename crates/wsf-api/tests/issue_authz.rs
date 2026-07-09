@@ -1,5 +1,5 @@
 //! A3 gate — issuance authority is derived from the authenticated principal +
-//! server-side tenant policy, never from the request body. Closes AF-002 with a
+//! server-side tenant policy, never from the request body. Verified with a
 //! live black-box test against the real WSF issue handler + live OpenBao bridge.
 //!
 //! Env-gated on `WSF_OPENBAO_ADDR` (self-bootstraps AppRole + KV + tenant). The

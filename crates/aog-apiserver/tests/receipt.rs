@@ -1,4 +1,4 @@
-//! K9 — every admitted mutation emits exactly one hash-chained receipt; a
+//! Every admitted mutation emits exactly one hash-chained receipt; a
 //! rejected mutation emits none; and the signed evidence pack verifies off-host
 //! with the public key alone (tampering breaks it).
 

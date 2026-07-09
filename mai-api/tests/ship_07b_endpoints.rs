@@ -1,4 +1,4 @@
-//! SHIP-07 Slice B acceptance tests.
+//! Acceptance tests.
 //!
 //! Drives the two new public surfaces end-to-end through axum:
 //!

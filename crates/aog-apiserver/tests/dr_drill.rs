@@ -1,4 +1,4 @@
-//! H4 gate — a full DR drill from a cold, encrypted backup succeeds by the runbook
+//! A full DR drill from a cold, encrypted backup succeeds by the runbook
 //! (`docs/LOOM-DR-RUNBOOK.md`) alone: back up a live estate envelope-sealed, lose
 //! the control plane entirely, then cold-restore its content into a fresh estate
 //! from the sealed blob on media plus the escrowed data key — no primary state.

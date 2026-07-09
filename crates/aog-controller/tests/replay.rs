@@ -1,4 +1,4 @@
-//! R1 gate — "duplicate/dropped events converge identically (replay test)".
+//! "duplicate/dropped events converge identically (replay test)".
 //!
 //! Three controllers watch the same key prefix through three delivery
 //! histories: clean, duplicated (every key force-enqueued repeatedly), and
@@ -167,7 +167,7 @@ async fn duplicate_and_dropped_events_converge_identically() {
     let duplicated = scenario("loom-r1-dup", Mode::Duplicated).await;
     let dropped = scenario("loom-r1-drop", Mode::Dropped).await;
 
-    // The R1 gate: three delivery histories, one end state.
+    // The invariant: three delivery histories, one end state.
     assert_eq!(clean, duplicated, "duplicated events diverged");
     assert_eq!(clean, dropped, "dropped events diverged");
 
@@ -352,7 +352,7 @@ async fn resync_heartbeat_reconciles_without_a_change() {
     assert!(after_first > 0);
 
     // No store change at all — the heartbeat alone re-reconciles the key
-    // (what drives time-based work like HMAC-rotation windows, R3).
+    // (what drives time-based work like HMAC-rotation windows).
     tokio::time::sleep(Duration::from_millis(5)).await;
     let stats = controller.sync(Instant::now()).await.unwrap();
     assert!(stats.processed > 0, "heartbeat re-enqueued known keys");

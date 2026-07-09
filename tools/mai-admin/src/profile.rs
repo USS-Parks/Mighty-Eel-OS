@@ -1,12 +1,12 @@
 //! Minimal subset of the ship profile schema needed by `mai-admin
 //! backup`. Vendored from `mai-api/src/ship_profile.rs`.
 //!
-//! Why not depend on mai-api directly? When SHIP-09 was authored the
-//! parallel SHIP-07-endpoint-and-cli session was mid-edit on
+//! Why not depend on mai-api directly? When this crate was authored the
+//! parallel endpoint-and-cli session was mid-edit on
 //! `mai-api/src/errors.rs`, which left the mai-api crate un-buildable
 //! in the shared workspace. Inlining the read-only subset of the
-//! profile we actually consume keeps SHIP-09 independent. The
-//! duplication should be removed once SHIP-07-endpoint-and-cli lands
+//! profile we actually consume keeps this crate independent. The
+//! duplication should be removed once the endpoint-and-cli session lands
 //! and `mai_api::ShipProfile` is reachable again — at that point
 //! `BackupSourceProfile` becomes a thin facade over the canonical
 //! type.

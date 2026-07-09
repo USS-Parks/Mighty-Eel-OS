@@ -1,4 +1,4 @@
-//! R2 — the estate client Phase-R reconcilers act through. Reads come from the
+//! The estate client Phase-R reconcilers act through. Reads come from the
 //! apiserver's read-only [`StoreReader`]; **every write goes through the
 //! admission choke point** ([`Admission::admit`], as the system principal) —
 //! a controller mutation is validated, policy-checked, sealed, CAS-guarded,

@@ -1,15 +1,15 @@
-//! `aog-noded` — the runnable Loom edge/worker node daemon (Phase V, VH3).
+//! `aog-noded` — the runnable Loom edge/worker node daemon (Phase V).
 //!
-//! VH2 made the control plane runnable (`aogd`); VH3 makes the **edge** runnable.
+//! The control plane is runnable (`aogd`); this crate makes the **edge** runnable.
 //! `aog-noded` registers its `Node` (attestation profile + capacity) with the
-//! control plane over the wire — through the VH2 admin API, reusing `aogd::Client`
+//! control plane over the wire — through the admin API, reusing `aogd::Client`
 //! — and heartbeats its liveness on an interval, so the control plane sees the edge
-//! join the estate and stay `Ready` (the N1/N2 lifecycle, now over sockets). It
+//! join the estate and stay `Ready` (the node lifecycle, now over sockets). It
 //! serves `/healthz` for the harness.
 //!
 //! Identity-verified registration (the `aog-node` `Registrar` / anchor-signed leaf)
-//! and edge admission over live OpenBao are the trust surface; like VH2 they layer
-//! on at VH5 (per-node certs + OpenBao). VH3 proves the edge joins and stays live
+//! and edge admission over live OpenBao are the trust surface; they layer
+//! on later (per-node certs + OpenBao). This crate proves the edge joins and stays live
 //! over real sockets first.
 
 use std::net::SocketAddr;
@@ -62,7 +62,7 @@ impl NodeConfig {
     /// `AOG_NODE_CONTROL_PLANE`, and `AOG_NODE_LISTEN` (a `SocketAddr`) are
     /// required; `AOG_NODE_TENANT` (default `default`), `AOG_NODE_RING` (default
     /// `1`), and `AOG_NODE_HEARTBEAT_SECS` (default `5`) are optional. Attestation
-    /// floor and capacity take conservative defaults (attested for real at VH5).
+    /// floor and capacity take conservative defaults (attested for real).
     ///
     /// # Errors
     /// [`NodedError::Config`] if a required variable is absent or unparseable.

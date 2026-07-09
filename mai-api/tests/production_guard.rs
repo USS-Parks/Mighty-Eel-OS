@@ -1,4 +1,4 @@
-//! Integration test for SHIP-02.
+//! Integration test for the production guard.
 //!
 //! Confirms the on-disk `deployment/ship/profile.toml` evaluates clean
 //! through the production guard (modulo deferred runtime checks), and

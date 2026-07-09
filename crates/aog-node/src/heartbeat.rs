@@ -1,4 +1,4 @@
-//! N2 — node heartbeat + liveness. The agent periodically reports the node's
+//! Node heartbeat + liveness. The agent periodically reports the node's
 //! reconciled free (`allocatable`) capacity and a fresh timestamp into
 //! `NodeStatus` (ready). The control-plane node controller treats a node whose
 //! heartbeat has aged past its freshness window as not-live and reschedules its

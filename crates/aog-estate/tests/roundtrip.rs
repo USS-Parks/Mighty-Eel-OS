@@ -1,4 +1,4 @@
-//! K1 gate: every kind round-trips through JSON and rejects malformed input.
+//! Every kind round-trips through JSON and rejects malformed input.
 
 use aog_estate::{
     API_VERSION, AttestationProfile, Capability, CapabilitySpec, Capacity, EstateError, Kind,

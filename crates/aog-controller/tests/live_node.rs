@@ -1,4 +1,4 @@
-//! N2 gate — "a killed node reschedules its workloads", against a **live**
+//! "a killed node reschedules its workloads", against a **live**
 //! OpenBao (A3.2). Two of three ready nodes host a 2-replica workload's replicas;
 //! one node's heartbeat goes stale; the node controller marks it down and evicts
 //! its placement; a fresh scheduler pass re-places the freed replica on the idle
@@ -244,7 +244,7 @@ fn workload() -> WorkloadSpec {
 async fn a_killed_node_reschedules_its_workload() {
     let Some(addr) = openbao_addr() else {
         eprintln!(
-            "SKIP a_killed_node_reschedules_its_workload: WSF_OPENBAO_ADDR unset (N2 live gate)"
+            "SKIP a_killed_node_reschedules_its_workload: WSF_OPENBAO_ADDR unset (live gate)"
         );
         return;
     };

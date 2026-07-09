@@ -108,14 +108,14 @@ pub enum ChainError {
     },
     /// A boundary entry that must carry a periodic signature — its `(id+1)` is a
     /// multiple of `signature_interval` — has none: the signature was stripped or
-    /// never produced. Fail closed (audit H7).
+    /// never produced. Fail closed.
     #[error("entry id={id} is a signing boundary but carries no signature")]
     SignatureMissing {
         /// Id of the boundary entry missing its signature.
         id: u64,
     },
     /// The persisted WAL could not be read or decoded for from-head
-    /// verification. Fail closed (audit H8/U2): unreadable durable history is
+    /// verification. Fail closed: unreadable durable history is
     /// treated as unverifiable, never as verified.
     #[error("persisted WAL could not be read: {0}")]
     WalRead(String),
@@ -324,7 +324,7 @@ pub fn verify_chain<V: BundleVerifier>(
 /// head. An in-memory tail whose genesis has been evicted (a log longer than
 /// `max_in_memory`) is verified through here: the head-hash assertion belongs
 /// only to a from-genesis verification and would false-positive on a legitimate
-/// tail (audit H8/U3). Verifying the evicted prefix from the WAL is U2.
+/// tail.
 pub(crate) fn verify_segment<V: BundleVerifier>(
     entries: &[AuditEntry],
     config: &ChainConfig,
@@ -350,7 +350,7 @@ pub(crate) fn verify_segment<V: BundleVerifier>(
     // Verify periodic signatures when a verifier is supplied. A boundary entry —
     // one whose `(id+1)` is a multiple of the interval, exactly the predicate the
     // signer uses in `finalize` — MUST carry a signature; a missing one is fail-
-    // closed (`SignatureMissing`), not skipped (audit H7: a stripped-signature
+    // closed (`SignatureMissing`), not skipped (a stripped-signature
     // boundary entry previously passed). Any present signature is verified.
     if let Some(v) = verifier
         && config.signature_interval > 0
@@ -382,8 +382,8 @@ pub(crate) fn verify_segment<V: BundleVerifier>(
 /// Verify a persisted WAL that may hold several chain *segments* — a daily
 /// rotation resets the chain to a fresh genesis, so the append-only WAL is a
 /// concatenation of independent from-head chains. Split at each chain head
-/// (all-zero `previous_hash`) and verify every segment from its true head
-/// (audit H8/U2), so tampering with an entry evicted from the in-memory tail is
+/// (all-zero `previous_hash`) and verify every segment from its true head,
+/// so tampering with an entry evicted from the in-memory tail is
 /// still caught.
 pub(crate) fn verify_wal<V: BundleVerifier>(
     entries: &[AuditEntry],
@@ -559,7 +559,7 @@ mod tests {
 
     #[test]
     fn verify_chain_rejects_stripped_boundary_signature() {
-        // Audit H7: a signing-boundary entry whose signature was stripped must
+        // A signing-boundary entry whose signature was stripped must
         // fail closed, not be skipped.
         use rand::rngs::OsRng;
         let mut rng = OsRng;

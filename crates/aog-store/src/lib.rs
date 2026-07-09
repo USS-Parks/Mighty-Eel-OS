@@ -1,9 +1,9 @@
-//! `aog-store` — the deterministic desired-state KV behind Loom's control plane
-//! (K2). Keys map to versioned values with a monotonic global revision and a
+//! `aog-store` — the deterministic desired-state KV behind Loom's control plane.
+//! Keys map to versioned values with a monotonic global revision and a
 //! per-key revision; writes carry an optimistic-concurrency precondition
 //! (compare-and-set). The apply path is a **pure function of the operation
 //! log** — replaying the same `Op` sequence on any [`Backend`] converges to the
-//! same state, the property the Raft wrapper (K3) depends on.
+//! same state, the property the Raft wrapper depends on.
 //!
 //! Engine decision (addendum A4): **redb** — a stable, maintained, pure-Rust
 //! embedded store (sled's 1.0 remains perpetually beta). The [`Backend`] trait
@@ -47,7 +47,7 @@ pub enum Precondition {
     Revision(Revision),
 }
 
-/// A desired-state mutation. These are what the Raft log carries (K3); applying
+/// A desired-state mutation. These are what the Raft log carries; applying
 /// a fixed sequence is deterministic.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Op {
@@ -217,7 +217,7 @@ impl<B: Backend> Store<B> {
     }
 
     /// Replace state from a snapshot dump, preserving exact versions (used by
-    /// Raft snapshot install, K3). Overwrites the listed keys and lifts the
+    /// Raft snapshot install). Overwrites the listed keys and lifts the
     /// global revision to cover them; does not delete keys absent from `entries`.
     ///
     /// # Errors

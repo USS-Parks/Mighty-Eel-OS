@@ -1,10 +1,10 @@
-//! openraft (0.9) type configuration for `aog-store` (K3).
+//! openraft (0.9) type configuration for `aog-store`.
 
 use serde::{Deserialize, Serialize};
 
 use crate::{Op, Revision};
 
-/// Control-plane node id. Single-node now (K3); multi-node at H1.
+/// Control-plane node id. Single-node now; multi-node later.
 pub type NodeId = u64;
 
 /// One replicated desired-state mutation — openraft's app data `D`.

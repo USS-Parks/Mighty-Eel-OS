@@ -2,7 +2,7 @@
 //! The scheduler controller places a 2-replica `Workload` across two ready
 //! nodes, mints a `Capability`-scoped runtime token per replica, persists each
 //! token to OpenBao, and creates each `Placement` through admission — which
-//! receipts the binding (K9). We assert the placements land on distinct nodes,
+//! receipts the binding. We assert the placements land on distinct nodes,
 //! each carries a token id, and the persisted token verifies against the anchor
 //! and carries the capability's scope.
 #![allow(clippy::print_stderr)]

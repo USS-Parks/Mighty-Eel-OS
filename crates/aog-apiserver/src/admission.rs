@@ -1,6 +1,6 @@
-//! The admission choke point (K5) — the **only** path that writes desired state.
+//! The admission choke point — the **only** path that writes desired state.
 //!
-//! Type invariant (the K5 gate, "no write reaches `aog-store` bypassing
+//! Type invariant ("no write reaches `aog-store` bypassing
 //! admission, enforced by type"): [`Admission`] privately owns the sole writable
 //! `RaftNode` handle in this crate, and [`Admission::admit`] is the only method
 //! that reaches [`RaftNode::write`]. A CRUD handler is handed an `Admission` and
@@ -8,11 +8,11 @@
 //! no handler can construct a store write that skips the chain.
 //!
 //! Chain order mirrors addendum A1.7:
-//!   1. authenticate  (K6 — the front-door `crate::auth` middleware hands `admit` an already-verified Principal)
-//!   2. validate      (structural, fail-closed + K7 policy deny-wins over HIPAA/ITAR/OCAP)
-//!   3. mutate        (metadata stamp + K8 envelope-seal flagged fields + child-token attenuation)
+//!   1. authenticate  (the front-door `crate::auth` middleware hands `admit` an already-verified Principal)
+//!   2. validate      (structural, fail-closed + policy deny-wins over HIPAA/ITAR/OCAP)
+//!   3. mutate        (metadata stamp + envelope-seal flagged fields + child-token attenuation)
 //!   4. commit        (the sole `aog-store` write, guarded by a CAS precondition)
-//!   5. receipt       (K9 — hash-chained `fabric-proof` receipt to `wsf-ledger`)
+//!   5. receipt       (hash-chained `fabric-proof` receipt to `wsf-ledger`)
 //!
 //! All five stages do real work now. The choke point is complete — every mutation
 //! traverses this one method, and each admitted one is receipted.
@@ -52,9 +52,9 @@ impl Verb {
     }
 }
 
-/// The authenticated caller, produced by the front-door authenticator (K6) from
+/// The authenticated caller, produced by the front-door authenticator from
 /// a verified WSF trust token and carried through the chain so mutate/receipt can
-/// stamp provenance and K8 can attenuate a child from the parent token.
+/// stamp provenance and can attenuate a child from the parent token.
 #[derive(Debug, Clone)]
 pub struct Principal {
     /// The token subject (`subject_hash`), or `system:apiserver`.
@@ -63,12 +63,12 @@ pub struct Principal {
     pub tenant: Option<String>,
     /// The authorizing capability reference stamped onto mutated objects.
     pub token_ref: Option<TokenRef>,
-    /// The verified trust token — carried for downstream stages (K8 attenuation).
+    /// The verified trust token — carried for downstream stages (attenuation).
     pub token: Option<TrustToken>,
 }
 
 impl Principal {
-    /// A verified caller from an authenticated WSF trust token (K6).
+    /// A verified caller from an authenticated WSF trust token.
     #[must_use]
     pub fn authenticated(token: TrustToken) -> Self {
         Self {
@@ -141,7 +141,7 @@ impl Admission {
     ///
     /// # Errors
     /// The first stage to refuse: [`ApiError::Invalid`] (structural) or
-    /// [`ApiError::Forbidden`] (K7 policy); [`ApiError::NotFound`] /
+    /// [`ApiError::Forbidden`] (policy); [`ApiError::NotFound`] /
     /// [`ApiError::Conflict`] at commit; or [`ApiError::Store`] on backend failure.
     pub async fn admit(
         &self,
@@ -149,14 +149,14 @@ impl Admission {
         principal: &Principal,
     ) -> Result<AdmissionOutcome, ApiError> {
         // Stage 1 (authenticate) is the front-door middleware (`crate::auth`):
-        // `principal` is already a verified token by the time admission runs (the
-        // K6 gate). The chain here is validate -> mutate -> commit -> receipt.
+        // `principal` is already a verified token by the time admission runs.
+        // The chain here is validate -> mutate -> commit -> receipt.
         self.validate(&req, principal)?;
         let staged = self.mutate(&req, principal).await?;
         let before_digest = staged.before_digest.clone();
         let mutated = staged.op.is_some();
         let outcome = self.commit(&req, staged).await?;
-        // Receipts are 1:1 with *mutations* (K9): an idempotent no-op (a repeat
+        // Receipts are 1:1 with *mutations*: an idempotent no-op (a repeat
         // delete of an already-terminating object) changed nothing and writes none.
         if mutated {
             self.receipt(&req, principal, before_digest.as_deref(), &outcome);
@@ -164,7 +164,7 @@ impl Admission {
         Ok(outcome)
     }
 
-    // 2. validate — structural (fail-closed) + K7 policy (deny-wins over regimes).
+    // 2. validate — structural (fail-closed) + policy (deny-wins over regimes).
     fn validate(&self, req: &AdmissionRequest, principal: &Principal) -> Result<(), ApiError> {
         if let Some(object) = &req.object {
             object.validate()?;
@@ -173,7 +173,7 @@ impl Admission {
         Ok(())
     }
 
-    // 3. mutate — stamp metadata, then finish_mutation attenuates + seals (K8).
+    // 3. mutate — stamp metadata, then finish_mutation attenuates + seals.
     async fn mutate(
         &self,
         req: &AdmissionRequest,
@@ -230,7 +230,7 @@ impl Admission {
                 stamp_update(&mut object, &current.object, principal);
                 // Finalization: removing the last finalizer from a terminating
                 // object completes its two-phase delete — the update commits as
-                // the hard delete the earlier soft delete promised (R2).
+                // the hard delete the earlier soft delete promised.
                 if terminating && object.metadata().finalizers.is_empty() {
                     return Ok(Staged {
                         op: Some(Op::Delete {
@@ -259,8 +259,8 @@ impl Admission {
                     name: req.name.clone(),
                 })?;
                 let meta = current.object.metadata();
-                // A3 (audit H3): authorize the delete against the loaded target. The
-                // K7 policy gate is skipped for deletes (validate sees object=None),
+                // A3: authorize the delete against the loaded target. The
+                // policy gate is skipped for deletes (validate sees object=None),
                 // which let any authenticated principal delete any object incl. a
                 // RevocationIntent (reversing a live kill). Run the same policy here,
                 // and bind a tenant-scoped principal to its own tenant.
@@ -274,7 +274,7 @@ impl Admission {
                     )));
                 }
                 let before_digest = digest(&current.object);
-                // Two-phase delete (R2). No finalizers: remove now. Finalizers
+                // Two-phase delete. No finalizers: remove now. Finalizers
                 // present: stamp deletion_timestamp (soft delete) and let the
                 // finalizing controllers tear down, then finalize via update.
                 if meta.finalizers.is_empty() {
@@ -317,7 +317,7 @@ impl Admission {
         }
     }
 
-    // R2: while an object is terminating, its spec is frozen and its finalizer
+    // While an object is terminating, its spec is frozen and its finalizer
     // set may only shrink — teardown converges, it is never redirected. The
     // deletion timestamp itself is carried forward by `stamp_update` (an update
     // can never resurrect a terminating object).
@@ -348,7 +348,7 @@ impl Admission {
         Ok(())
     }
 
-    // 3b. finish the mutation — K8 attenuate + seal (metadata already stamped).
+    // 3b. finish the mutation — attenuate + seal (metadata already stamped).
     fn finish_mutation(
         &self,
         object: &mut ResourceObject,
@@ -416,7 +416,7 @@ impl Admission {
         }
     }
 
-    // 5. receipt — K9: one hash-chained receipt per admitted mutation.
+    // 5. receipt — one hash-chained receipt per admitted mutation.
     fn receipt(
         &self,
         req: &AdmissionRequest,
@@ -455,7 +455,7 @@ impl Admission {
             .ingest("aog-apiserver", receipt);
     }
 
-    /// Number of receipts in the ledger — one per admitted mutation (K9).
+    /// Number of receipts in the ledger — one per admitted mutation.
     #[must_use]
     pub fn receipts_len(&self) -> usize {
         self.ledger.lock().expect("receipt ledger lock").len()
@@ -539,7 +539,7 @@ fn stamp_update(object: &mut ResourceObject, current: &ResourceObject, principal
     meta.resource_version = 0;
     // Immutable-after-create / after-delete metadata: the deletion timestamp is
     // carried forward (an update can never resurrect a terminating object) and
-    // owner references are frozen (ownership cannot be hijacked by update, R2).
+    // owner references are frozen (ownership cannot be hijacked by update).
     meta.deletion_timestamp
         .clone_from(&prior.deletion_timestamp);
     meta.owner_refs.clone_from(&prior.owner_refs);

@@ -32,22 +32,22 @@ pub mod config;
 pub mod errors;
 pub mod types;
 
-// SHIP-01: Production profile skeleton (parsing-only; runtime wiring in SHIP-02+)
+// Production profile skeleton (parsing-only; runtime wiring added later)
 pub mod ship_profile;
 
-// SHIP-02: Production readiness guard (config-only checks; runtime checks in SHIP-03+)
+// Production readiness guard (config-only checks; runtime checks added later)
 pub mod production_guard;
 
-// SHIP-03: Vault builder (selects ZfsVault / LocalDevStubVault by ship profile)
+// Vault builder (selects ZfsVault / LocalDevStubVault by ship profile)
 pub mod vault_builder;
 
-// SHIP-04: Persistent API audit WAL writer (replaces MemoryAuditWriter in production)
+// Persistent API audit WAL writer (replaces MemoryAuditWriter in production)
 pub mod audit_wal;
 
-// SHIP-05: Sealer builder (selects AeadSealer / NullSealer for compliance audit WAL)
+// Sealer builder (selects AeadSealer / NullSealer for compliance audit WAL)
 pub mod sealer_builder;
 
-// SHIP-06: Trust builder (selects bundle verifier, loads ML-DSA anchors, picks token-exchange mode)
+// Trust builder (selects bundle verifier, loads ML-DSA anchors, picks token-exchange mode)
 pub mod trust_builder;
 
 // REST API Endpoints
@@ -55,7 +55,7 @@ pub mod handlers;
 pub mod routes;
 pub mod state;
 
-// SHIP-11: Observability — metrics registry + request-path middleware.
+// Observability — metrics registry + request-path middleware.
 pub mod metrics;
 pub mod middleware;
 

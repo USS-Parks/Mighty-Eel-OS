@@ -1,4 +1,4 @@
-//! Adversarial regression suite — security remediation (AF-001 / AF-006).
+//! Adversarial regression suite — security remediation.
 //!
 //! These began (plan 0.4) as quarantined fixtures asserting the CURRENT,
 //! VULNERABLE behavior. Phase T landed the fix, so each has flipped to assert
@@ -62,8 +62,8 @@ fn narrow(child_id: &str) -> TokenRestrictions {
     }
 }
 
-// REG-AF-001-unsigned-parent — an unsigned, fabricated parent is REJECTED: the
-// signer oracle is closed because the parent is authenticated first.
+// An unsigned, fabricated parent is REJECTED: the signer oracle is closed
+// because the parent is authenticated first.
 #[test]
 fn reg_af_001_unsigned_parent_is_rejected() {
     let bridge = RustCryptoMlDsa87::generate("bridge").unwrap();
@@ -81,8 +81,7 @@ fn reg_af_001_unsigned_parent_is_rejected() {
     );
 }
 
-// REG-AF-001-wrong-key-parent — a parent signed by an attacker key (not the
-// bridge anchor) is REJECTED.
+// A parent signed by an attacker key (not the bridge anchor) is REJECTED.
 #[test]
 fn reg_af_001_wrong_key_parent_is_rejected() {
     let bridge = RustCryptoMlDsa87::generate("bridge").unwrap();
@@ -100,7 +99,7 @@ fn reg_af_001_wrong_key_parent_is_rejected() {
     );
 }
 
-// REG-AF-001-role-widening — a child cannot gain a role the parent never held.
+// A child cannot gain a role the parent never held.
 #[test]
 fn reg_af_001_role_widening_is_rejected() {
     let bridge = RustCryptoMlDsa87::generate("bridge").unwrap();
@@ -119,8 +118,8 @@ fn reg_af_001_role_widening_is_rejected() {
     );
 }
 
-// REG-AF-001-tenant-swap — the child's tenant is now STRUCTURALLY inherited from
-// the authenticated parent (the restriction schema has no tenant field), so a
+// The child's tenant is now STRUCTURALLY inherited from the authenticated
+// parent (the restriction schema has no tenant field), so a
 // cross-tenant child is impossible to express. A valid narrowing keeps the
 // parent's tenant.
 #[test]
@@ -142,8 +141,7 @@ fn reg_af_001_tenant_is_inherited_not_settable() {
     assert_eq!(child.issuer, parent.issuer);
 }
 
-// REG-AF-006-revoked-parent — a revoked parent is REJECTED before any child is
-// constructed.
+// A revoked parent is REJECTED before any child is constructed.
 #[test]
 fn reg_af_006_revoked_parent_is_rejected() {
     let bridge = RustCryptoMlDsa87::generate("bridge").unwrap();

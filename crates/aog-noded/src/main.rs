@@ -1,8 +1,8 @@
-//! `aog-noded` — the Loom edge/worker node daemon (VH3).
+//! `aog-noded` — the Loom edge/worker node daemon.
 //!
 //! Reads its identity + control-plane address from the environment, registers its
 //! `Node` with the control plane, and heartbeats on an interval while serving
-//! `/healthz`. The containerized conformance harness (VH4+) runs one per edge node.
+//! `/healthz`. The containerized conformance harness runs one per edge node.
 
 use aog_noded::{NodeAgent, NodeConfig, NodedError};
 use tracing_subscriber::EnvFilter;

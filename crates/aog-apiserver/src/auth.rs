@@ -1,7 +1,7 @@
-//! K6 — front-door WSF authentication.
+//! Front-door WSF authentication.
 //!
 //! Every API request must carry a valid, in-budget, unrevoked WSF trust token,
-//! verified **before** the admission chain runs (the K6 gate: unauth /
+//! verified **before** the admission chain runs (unauth /
 //! over-budget / revoked is rejected pre-admission). Verification is **local
 //! asymmetric crypto** — ML-DSA-87 over the token's canonical payload — so it is
 //! sub-millisecond and offline, with no OpenBao round-trip on the hot path.
@@ -12,7 +12,7 @@
 //! The token is presented as `x-wsf-token: base64(json(TrustToken))`. The
 //! verified [`Principal`] is stashed in request extensions for the handler and
 //! the admission chain (its `mutate`/`receipt` stages stamp the token as
-//! provenance; K8 attenuates a child from it).
+//! provenance and attenuate a child from it).
 
 use std::collections::HashSet;
 use std::sync::{Arc, RwLock};
@@ -34,10 +34,10 @@ use crate::error::ApiError;
 /// Header carrying the base64-encoded JSON trust token.
 pub const TOKEN_HEADER: &str = "x-wsf-token";
 
-/// The estate-driven kill view (R2): what the declarative `RevocationIntent`
+/// The estate-driven kill view: what the declarative `RevocationIntent`
 /// objects currently revoke, folded in by the revocation-indexing controller
 /// and consulted by the front door on **every** request. This is the
-/// kernel-local leg of I-9; R9 fans the same intents out to signed
+/// kernel-local leg of I-9; the same intents fan out to signed
 /// `fabric-revocation` snapshots for other replicas and air-gapped nodes.
 #[derive(Debug, Default)]
 pub struct RevocationView {
@@ -138,7 +138,7 @@ impl Authenticator {
             return Err(ApiError::Unauthenticated);
         }
 
-        // Kill switch, estate leg (R2): the live RevocationIntent view. A
+        // Kill switch, estate leg: the live RevocationIntent view. A
         // poisoned lock is uncertainty — fail closed (doctrine I-4).
         let revoked = self.live.read().map_or(true, |view| view.revokes(&token));
         if revoked {

@@ -1,4 +1,4 @@
-//! K6 gate — the front door rejects unauth / wrong-anchor / expired / revoked /
+//! The front door rejects unauth / wrong-anchor / expired / revoked /
 //! over-budget requests **pre-admission**, admits a valid token, and leaves the
 //! health probes open.
 

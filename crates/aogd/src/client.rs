@@ -1,4 +1,4 @@
-//! A thin async client for the VH2 admin API — how the conformance harness (and
+//! A thin async client for the admin API — how the conformance harness (and
 //! `aogd`'s own gate test) drive a daemon: form the cluster, write, read, and query
 //! leadership over HTTP.
 

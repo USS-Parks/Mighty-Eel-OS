@@ -1,7 +1,7 @@
-//! redb-backed Raft state machine (K3). The applied desired state is the K2
+//! redb-backed Raft state machine. The applied desired state is the
 //! [`Store`] (durable KV + revision); `last_applied_log_id` and membership are
 //! persisted alongside it, so `applied_state` recovers after a restart — the
-//! guarantee the K3 gate checks. The state sits behind an `Arc<RwLock>` so the
+//! guarantee the gate checks. The state sits behind an `Arc<RwLock>` so the
 //! committed KV is readable outside openraft (which owns the machine).
 //!
 //! An application-level rejection (a failed CAS) is returned as a `RaftResponse`
@@ -186,7 +186,7 @@ impl RedbStateMachine {
         self.data.read().await.store.range(prefix)
     }
 
-    /// Subscribe to the change-event stream (K4 watch).
+    /// Subscribe to the change-event stream (watch).
     #[must_use]
     pub fn subscribe(&self) -> broadcast::Receiver<WatchEvent> {
         self.events.subscribe()

@@ -1,4 +1,4 @@
-//! N7 — health probes. The node supervises the workloads it runs: a **liveness**
+//! Health probes. The node supervises the workloads it runs: a **liveness**
 //! probe restarts an instance the driver reports not-Running (an unhealthy
 //! replica is replaced), and a **readiness** probe gates traffic — only ready
 //! instances receive it. Both are pluggable, so an HTTP `/healthz` liveness or a

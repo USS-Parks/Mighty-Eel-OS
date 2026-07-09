@@ -1,4 +1,4 @@
-//! K8 — the mutate stage seals flagged spec fields at rest (unreadable in the
+//! The mutate stage seals flagged spec fields at rest (unreadable in the
 //! store) and authorizes the object with a child token scoped to the action; the
 //! scoped child is a strict subset of the parent.
 

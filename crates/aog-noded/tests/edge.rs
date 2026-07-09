@@ -1,9 +1,9 @@
-//! VH3 gate — edge `aog-noded` daemons register with the control plane and stay
+//! Edge `aog-noded` daemons register with the control plane and stay
 //! live. A bootstrapped `aogd` control-plane node plus three edge daemons over
 //! loopback: each edge writes its `Node` through the admin API and heartbeats, and
 //! the control plane sees all three `Ready` and fresh. Proves the edge daemon joins
 //! and holds membership over real sockets — the worker side of the containerized
-//! Phase-V estate (VH4+).
+//! Phase-V estate.
 
 use std::time::{Duration, Instant};
 

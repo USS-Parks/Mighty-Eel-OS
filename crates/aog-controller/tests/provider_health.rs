@@ -1,4 +1,4 @@
-//! R7 gate — "an unhealthy provider is removed from the schedulable set within
+//! "an unhealthy provider is removed from the schedulable set within
 //! SLO." Real HTTP end to end (no mock): a live local server stands in for the
 //! provider; the `HttpHealthProbe` issues real liveness GETs, and the
 //! controller folds the result into `ProviderPool.status.healthy`. Flipping the

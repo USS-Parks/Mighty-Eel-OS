@@ -1,4 +1,4 @@
-//! H6 gate — the Loom production guard blocks any dev fixture and a single-node
+//! The Loom production guard blocks any dev fixture and a single-node
 //! quorum in production, and passes a production-ready deployment. It reuses the
 //! base WSF dev-fixture guard (dev OpenBao root token / plaintext transport) and
 //! adds Loom's HA (>= 3 voters) and signed-bundle requirements. A no-op in dev.

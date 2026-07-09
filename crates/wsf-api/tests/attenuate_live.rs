@@ -1,4 +1,4 @@
-//! T7 live gate — issue → attenuate → verify plus the AF-001 adversarial cases,
+//! T7 live gate — issue → attenuate → verify plus the adversarial cases,
 //! black-box against the real WSF API + live OpenBao bridge.
 //!
 //! Env-gated on `WSF_OPENBAO_ADDR`. Proves the fix end-to-end over HTTP, not

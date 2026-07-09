@@ -443,7 +443,7 @@ pub struct FunctionCallResponse {
 // Model types (aligned with OpenAPI ModelObject/CapabilityInfo schemas)
 // ──────────────────────────────────────────────
 
-/// N1 FIX: Matches OpenAPI CapabilityInfo schema exactly
+/// Matches OpenAPI CapabilityInfo schema exactly
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CapabilityInfo {
     pub chat: bool,
@@ -504,7 +504,7 @@ pub struct AdapterAssignment {
 }
 
 // ──────────────────────────────────────────────
-// Health types (N2 FIX: aligned with OpenAPI HealthResponse schema)
+// Health types (aligned with OpenAPI HealthResponse schema)
 // ──────────────────────────────────────────────
 
 /// Matches OpenAPI HealthResponse schema
@@ -615,7 +615,7 @@ pub struct PowerTransitionResponse {
 }
 
 // ──────────────────────────────────────────────
-// Profile types (N4 FIX: aligned with OpenAPI ProfileObject schema)
+// Profile types (aligned with OpenAPI ProfileObject schema)
 // ──────────────────────────────────────────────
 
 /// Matches OpenAPI ProfileObject.content_safety
@@ -660,7 +660,7 @@ pub struct ProfileObject {
 }
 
 // ──────────────────────────────────────────────
-// Audit types (N3 FIX: aligned with OpenAPI AuditEntry schema)
+// Audit types (aligned with OpenAPI AuditEntry schema)
 // ──────────────────────────────────────────────
 
 /// Matches OpenAPI AuditEntry schema

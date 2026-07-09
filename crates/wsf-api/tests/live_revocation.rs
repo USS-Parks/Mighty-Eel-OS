@@ -1,4 +1,4 @@
-//! R6 live gate — end-to-end revocation across services (AF-006 → PROVEN).
+//! End-to-end revocation across services.
 //!
 //! Env-gated on `WSF_OPENBAO_ADDR` + `WSF_AWS_ENDPOINT`. Drives the full loop
 //! over live OpenBao + Moto through the real HTTP API:
@@ -10,7 +10,7 @@
 //!    share;
 //! 3. unseal AND credential exchange are both denied (403) — no restart, no
 //!    cache to clear;
-//! 4. replaying the older clean snapshot is refused (R1 anti-rollback) and
+//! 4. replaying the older clean snapshot is refused (anti-rollback) and
 //!    the denials stand.
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
@@ -256,7 +256,7 @@ fn assert_403(res: Result<impl std::fmt::Debug, ClientError>, leg: &str) {
 async fn revocation_propagates_to_seal_and_broker_end_to_end() {
     let (Some(addr), Some(aws)) = (openbao_addr(), aws_endpoint()) else {
         eprintln!(
-            "SKIP revocation_propagates_to_seal_and_broker_end_to_end: set WSF_OPENBAO_ADDR + WSF_AWS_ENDPOINT (R6 live gate)"
+            "SKIP revocation_propagates_to_seal_and_broker_end_to_end: set WSF_OPENBAO_ADDR + WSF_AWS_ENDPOINT (live gate)"
         );
         return;
     };
@@ -417,7 +417,7 @@ async fn revocation_propagates_to_seal_and_broker_end_to_end() {
         "exchange after revocation",
     );
 
-    // ---- R1 anti-rollback: replaying the old clean snapshot is refused. ----
+    // ---- anti-rollback: replaying the old clean snapshot is refused. ----
     let stale = clean_snapshot(&rev_anchor, 1);
     let err = store
         .write()
@@ -445,6 +445,6 @@ async fn revocation_propagates_to_seal_and_broker_end_to_end() {
 
     server.abort();
     eprintln!(
-        "R6 live gate PASSED against {addr} (+Moto {aws}): KV-distributed revocation denied unseal + exchange end-to-end; rollback replay refused (R1)"
+        "live gate PASSED against {addr} (+Moto {aws}): KV-distributed revocation denied unseal + exchange end-to-end; rollback replay refused"
     );
 }

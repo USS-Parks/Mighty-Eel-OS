@@ -5,7 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "aog-noded — the runnable Loom edge/worker node daemon (VH3): wraps the aog-node runtime, registers its Node with the control plane over the aogd admin API, and heartbeats; serves /healthz for the conformance harness"
+description = "aog-noded — the runnable Loom edge/worker node daemon: wraps the aog-node runtime, registers its Node with the control plane over the aogd admin API, and heartbeats; serves /healthz for the conformance harness"
 
 [[bin]]
 name = "aog-noded"

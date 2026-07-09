@@ -1,7 +1,7 @@
 //! O2 — the rollout controller: it advances a `RolloutPlan` through steps that
 //! respect the surge/unavailable budget, so a workload (or bundle / provider
 //! config) is rolled without ever dropping below its availability floor, and
-//! records each step in `status` — an admitted write, therefore a receipt (K9).
+//! records each step in `status` — an admitted write, therefore a receipt.
 //!
 //! The stepping decision is a **pure function** of the strategy and budget
 //! ([`rollout_progress`]) — no clock, no estate read — so a rollout is
@@ -14,7 +14,7 @@
 //! `PolicyBundle` / provider-config rollout rides the same stepper — the
 //! availability arithmetic is target-agnostic — and is wired when those targets
 //! carry a rollout. The physical replacement of a running replica is O1's
-//! placement plus N9's drain; O2 owns the *order and pace* and the receipt trail.
+//! placement plus the node's drain; O2 owns the *order and pace* and the receipt trail.
 
 use std::future::Future;
 use std::sync::Arc;

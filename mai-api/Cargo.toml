@@ -49,7 +49,7 @@ base64 = "0.22"
 # File watching for config hot-reload
 notify = { version = "7", features = ["macos_kqueue"] }
 
-# RFC3339 timestamps for the J-13 /v1/health/system rollup
+# RFC3339 timestamps for the /v1/health/system rollup
 chrono = { workspace = true }
 
 mai-core = { path = "../mai-core" }
@@ -57,7 +57,7 @@ mai-hil = { path = "../mai-hil" }
 mai-adapters = { path = "../mai-adapters" }
 mai-scheduler = { path = "../mai-scheduler" }
 mai-compliance = { path = "../mai-compliance" }
-# SHIP-03: ZfsVault is the production vault backend selected by vault_builder.
+# ZfsVault is the production vault backend selected by vault_builder.
 # Default features keep pure-Rust PQC; no liboqs/ZFS C deps pulled in.
 mai-vault = { path = "../mai-vault" }
 
@@ -71,9 +71,9 @@ prost-build = "0.13"
 [dev-dependencies]
 tokio-test = { workspace = true }
 mockall = { workspace = true }
-# SHIP-03: tempdir-backed vault root for vault_builder integration tests.
+# tempdir-backed vault root for vault_builder integration tests.
 tempfile = "3"
-# SHIP-06: ML-DSA-87 key generation + signing inside trust_production.rs so
+# ML-DSA-87 key generation + signing inside trust_production.rs so
 # the test bundle is verifiable by the same MlDsaBundleVerifier path the
 # production builder constructs. Version pinned to match mai-compliance.
 ml-dsa = "0.0.4"
@@ -88,7 +88,7 @@ workspace = true
 name = "lamprey-mai-api"
 path = "src/main.rs"
 
-# SHIP-07 Slice B: standalone production-readiness validator binary.
+# Standalone production-readiness validator binary.
 # Exposed as `lamprey-mai-ship-validate` so packaging can ship it
 # next to `lamprey-mai-api` under /usr/bin. Exit codes follow
 # SHIP-HARDENING-PLAN §13.

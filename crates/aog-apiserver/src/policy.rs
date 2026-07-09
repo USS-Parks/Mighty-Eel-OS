@@ -1,4 +1,4 @@
-//! K7 — admission policy: deny-wins compliance over HIPAA/ITAR/OCAP plus per-kind
+//! Admission policy: deny-wins compliance over HIPAA/ITAR/OCAP plus per-kind
 //! resource authority.
 //!
 //! A mutation is refused when the caller's token does not carry the authority the
@@ -13,7 +13,7 @@
 //!     the same engine the data-path gateway uses), so the control plane and the
 //!     data plane share one composition contract.
 //!
-//! Evaluated locally from the token the front door (K6) already verified — no
+//! Evaluated locally from the token the front door already verified — no
 //! OpenBao round-trip.
 
 use aog_estate::{Kind, ResourceObject};
@@ -128,7 +128,7 @@ fn policy_facts(object: &ResourceObject) -> PolicyFacts {
     }
 }
 
-/// The classification ceiling a resource asserts, if any. Used by K8 to scope a
+/// The classification ceiling a resource asserts, if any. Used to scope a
 /// minted child token to the action.
 pub(crate) fn classification_ceiling(object: &ResourceObject) -> Option<Classification> {
     policy_facts(object).classification_ceiling

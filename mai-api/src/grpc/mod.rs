@@ -160,8 +160,8 @@ fn role_to_str(role: ProfileRole) -> &'static str {
     }
 }
 
-/// Resolve the authenticated caller identity for a privileged gRPC request
-/// (finding AF-03). The role is derived from a verified `x-im-auth-token` API
+/// Resolve the authenticated caller identity for a privileged gRPC request.
+/// The role is derived from a verified `x-im-auth-token` API
 /// key against the shared key store — never from caller-supplied `x-im-profile`
 /// metadata. The legacy self-declared-profile path is honored only when the
 /// store explicitly enables `allow_internal_profile_header` (dev/internal),
@@ -298,7 +298,7 @@ mod tests {
 
     #[test]
     fn test_resolve_grpc_identity_rejects_caller_claimed_role() {
-        // AF-03 regression: a caller-supplied x-im-profile with no API key must
+        // Regression: a caller-supplied x-im-profile with no API key must
         // NOT confer a role when the internal-header path is off (production).
         let store = ApiKeyStore::new(); // allow_internal_profile_header = false
         let mut req = Request::new(());

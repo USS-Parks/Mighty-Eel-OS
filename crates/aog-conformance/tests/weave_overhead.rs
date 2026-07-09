@@ -79,7 +79,7 @@ fn v9_weave_overhead_slo() {
     let mut samples = Vec::with_capacity(iterations);
     for _ in 0..iterations {
         let start = Instant::now();
-        // The full per-action trust check (the K6 authenticate path, minus HTTP):
+        // The full per-action trust check (the authenticate path, minus HTTP):
         // signature/PoP verify + expiry + budget preflight. Revocation-set membership
         // is an O(1) hash lookup (empty here) — negligible next to the ML-DSA verify.
         fabric_token::verify(&token, &MlDsa87Verifier, &pubkey).expect("verify");

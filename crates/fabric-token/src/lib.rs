@@ -247,7 +247,7 @@ impl<'a> VerificationContext<'a> {
     }
 
     /// Fail closed when the token's revocation status is `unknown` (not just
-    /// `revoked`). Use where a current revocation snapshot is mandatory (R3).
+    /// `revoked`). Use where a current revocation snapshot is mandatory.
     #[must_use]
     pub fn require_fresh_revocation(mut self) -> Self {
         self.require_fresh_revocation = true;
@@ -283,7 +283,7 @@ impl<'a> VerificationContext<'a> {
     }
 
     /// Require the token to pass a **verified, current** signed revocation
-    /// snapshot (plan R3): every consumer that authenticates a token also honors
+    /// snapshot: every consumer that authenticates a token also honors
     /// revocation on every dimension. The caller verifies the snapshot signature
     /// and hands it in; `verify_in_context` then fails closed if the snapshot is
     /// expired or revokes the token. Implies [`require_fresh_revocation`].
@@ -319,8 +319,8 @@ pub fn verify_in_context(
         }
         _ => {}
     }
-    // R3: a verified signed snapshot is the fresh revocation state. Fail closed
-    // if it is expired, and deny on any revoked dimension (R2 predicate).
+    // A verified signed snapshot is the fresh revocation state. Fail closed
+    // if it is expired, and deny on any revoked dimension.
     if let Some(snapshot) = ctx.revocation {
         let snap_exp = DateTime::parse_from_rfc3339(&snapshot.expires_at)
             .map_err(|_| TokenError::BadTimestamp(snapshot.expires_at.clone()))?
@@ -426,7 +426,7 @@ impl TokenRestrictions {
 
 /// Mint a child that narrows an **authenticated** parent (plan T2/T3/T4).
 ///
-/// This closes AF-001. Unlike the old full-child signature, the caller cannot
+/// Unlike the old full-child signature, the caller cannot
 /// supply a child's identity or a forged parent:
 ///
 /// 1. **Parent authentication (T3):** the parent is verified with
@@ -456,7 +456,7 @@ pub fn attenuate(
     max_child_depth: Option<u32>,
     signer: &dyn Signer,
 ) -> Result<TrustToken, TokenError> {
-    // 1. Authenticate the parent — the AF-001 fix. No child is constructed
+    // 1. Authenticate the parent — the fix. No child is constructed
     //    until the presented parent is proven genuine and current.
     verify_in_context(parent, ctx)?;
     // T6: a legacy token may (under a migration flag) verify, but is never a
@@ -478,7 +478,7 @@ pub fn attenuate(
 /// `parent` MUST have been verified against the correct issuer key before this
 /// call (e.g. an admission front door that already ran [`verify`] /
 /// [`verify_in_context`] against the trust anchor). Passing an unauthenticated
-/// parent reintroduces AF-001 — the signer will mint a child of a forged token.
+/// parent reintroduces the vulnerability — the signer will mint a child of a forged token.
 /// Prefer [`attenuate`] wherever the issuer key is available at the call site.
 ///
 /// The server-side identity copy and complete monotonicity (T2/T4) are enforced
@@ -547,7 +547,7 @@ fn narrow_child(
     if let Some(models) = &restrictions.allowed_models {
         // Narrowing when the parent restricts: child ⊆ parent. When the parent is
         // unrestricted (empty), *any* explicit list is a narrowing. But an EMPTY
-        // child list means "unrestricted = all models" (audit H1), so against a
+        // child list means "unrestricted = all models", so against a
         // restricted parent it is a WIDENING — reject it rather than granting the
         // child every model the parent was walled off from.
         if !parent.allowed_models.is_empty()
@@ -691,7 +691,7 @@ mod attenuation_monotonicity_tests {
 
     #[test]
     fn empty_child_models_is_a_widening_against_a_restricted_parent() {
-        // Audit H1: an empty child list means "all models"; against a restricted
+        // An empty child list means "all models"; against a restricted
         // parent that is a WIDENING and must be refused.
         let parent = parent_with_models(vec!["gpt-4".into()]);
         let r = TokenRestrictions {

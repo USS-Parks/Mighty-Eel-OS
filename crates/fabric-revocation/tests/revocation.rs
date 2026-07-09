@@ -1,5 +1,5 @@
 //! fabric-revocation tests (Prompt F8): sign/verify, offline queries, tamper
-//! rejection, emergency flag, wrong-key rejection; plus the R1 monotonic
+//! rejection, emergency flag, wrong-key rejection; plus the monotonic
 //! anti-rollback store.
 
 use fabric_crypto::Signer;
@@ -93,7 +93,7 @@ fn store_advances_only_on_strictly_newer_verified_snapshots() {
             .is_some_and(|s| s.is_tenant_revoked("tenant-evil"))
     );
 
-    // R1: replaying the older, "cleaner" snapshot is refused — the revocation
+    // Replaying the older, "cleaner" snapshot is refused — the revocation
     // of tenant-evil cannot be rolled back.
     let stale = sign(
         RevocationSnapshot::new("rev_1", "a", "b").with_sequence(1),
@@ -146,7 +146,7 @@ fn store_refuses_unverified_snapshots() {
 
 #[test]
 fn pre_sequence_snapshots_still_verify() {
-    // Compatibility: a snapshot signed before the R1 `sequence` field existed
+    // Compatibility: a snapshot signed before the `sequence` field existed
     // serializes identically at sequence 0, so its signature still verifies.
     let signer = RustCryptoMlDsa87::generate("k").unwrap();
     let signed = sign(RevocationSnapshot::new("rev_old", "a", "b"), &signer).unwrap();

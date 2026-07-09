@@ -99,9 +99,9 @@ pub struct MaiServer {
     config: ServerConfig,
     config_path: Option<std::path::PathBuf>,
     adapter_config_path: Option<PathBuf>,
-    /// SHIP-07: optional ship-profile TOML path. When set (programmatically
+    /// Optional ship-profile TOML path. When set (programmatically
     /// or via the `MAI_SHIP_PROFILE` env var) the server bootstrap uses the
-    /// SHIP-03/04/05/06 builders for vault / audit / sealer / trust and
+    /// builders for vault / audit / sealer / trust and
     /// runs the production guard before binding sockets. When unset the
     /// legacy `StubVault` + `MemoryAuditWriter` defaults remain in effect
     /// for tests and local-dev bring-up.
@@ -166,7 +166,7 @@ impl MaiServer {
         self
     }
 
-    /// Attach a ship-profile TOML so SHIP-03/04/05/06 builders are used
+    /// Attach a ship-profile TOML so the builders are used
     /// during bootstrap. Equivalent to setting `MAI_SHIP_PROFILE` in the
     /// environment; an explicit setter is honoured first.
     #[must_use]
@@ -240,8 +240,8 @@ impl MaiServer {
 
         // -- Step 3: Initialize mai-core components--
 
-        // SHIP-07: resolve optional ship profile (programmatic field first,
-        // then MAI_SHIP_PROFILE env var). When present, the SHIP-03..06
+        // Resolve optional ship profile (programmatic field first,
+        // then MAI_SHIP_PROFILE env var). When present, the
         // builders drive vault / audit / sealer / trust; otherwise the
         // legacy StubVault + MemoryAuditWriter defaults are kept for
         // tests and local-dev bring-up.
@@ -422,7 +422,7 @@ impl MaiServer {
             None => state,
         };
 
-        // SHIP-07: when a ship profile is loaded, swap in the
+        // When a ship profile is loaded, swap in the
         // sealer-backed compliance audit log and the real trust
         // verifier so the demo defaults never reach handlers.
         let (state, runtime_checks) = match ship_profile.as_ref() {
@@ -436,7 +436,7 @@ impl MaiServer {
             None => (state, RuntimeChecks::default()),
         };
 
-        // SHIP-07: production guard fails closed before any socket
+        // Production guard fails closed before any socket
         // binds. Runtime-introspection results upgrade the deferred
         // `PROD-*-100/101` IDs from Deferred to Pass / Fail.
         if let Some(profile) = ship_profile.as_ref() {
@@ -722,7 +722,7 @@ fn apply_ship_profile(
         RuntimeOutcome::fail("auth key store is empty".to_string())
     };
 
-    // SHIP-17 / PROD-AUTH-101: the runtime store's
+    // PROD-AUTH-101: the runtime store's
     // `allow_internal_profile_header` flag must match the profile
     // field the static guard checked. Any divergence means the
     // X-IM-Internal-Profile bypass is live despite a profile that
@@ -754,7 +754,7 @@ fn apply_ship_profile(
         policy_modules_loaded: Some(policy_outcome),
     };
 
-    // SHIP-07 Slice B: persist the exchange mode + readiness snapshot
+    // Persist the exchange mode + readiness snapshot
     // on AppState so the profile-aware `exchange_token` handler and the
     // `/v1/system/production-readiness` endpoint have what they need.
     let readiness = ShipReadiness {
@@ -780,7 +780,7 @@ fn apply_ship_profile(
 
 /// Load authentication state from config or generate a first-boot key.
 ///
-/// Path resolution (SHIP-17, closes KNOWN-ISSUES Issue 13):
+/// Path resolution (closes KNOWN-ISSUES Issue 13):
 /// 1. If `profile` is `Some`, read `profile.auth.auth_keys_path`.
 /// 2. Otherwise, fall back to `AUTH_KEYS_CONFIG_PATH` (legacy no-profile
 ///    bring-up path, used by tests and dev runs without a ship profile).
@@ -866,7 +866,7 @@ fn load_auth_state(profile: Option<&ShipProfile>) -> Result<AuthState, ServerErr
 
     info!("First-boot admin key generated (printed to stdout, NOT logged)");
 
-    // SHIP-17: the runtime store's `allow_internal_profile_header`
+    // The runtime store's `allow_internal_profile_header`
     // flag must match the profile field the production guard checks
     // (`PROD-AUTH-002`). When a profile is present we mirror its
     // value; with no profile we keep the legacy dev default of `true`
@@ -1463,8 +1463,8 @@ refresh_interval_ms = 250
         // Legacy no-profile bring-up path: when no ship profile is
         // supplied and the default AUTH_KEYS_CONFIG_PATH does not
         // exist, load_auth_state generates a first-boot key and
-        // returns a working AuthState with the dev bypass on. SHIP-17
-        // preserves this behavior for the no-profile case so existing
+        // returns a working AuthState with the dev bypass on. This
+        // behavior is preserved for the no-profile case so existing
         // dev/test runs are unaffected.
         let auth = load_auth_state(None).expect("no-profile first-boot must not fail");
         let rt = tokio::runtime::Builder::new_current_thread()
@@ -1478,10 +1478,10 @@ refresh_interval_ms = 250
         });
     }
 
-    // ---- SHIP-17 / KNOWN-ISSUES Issue 13 regression coverage ----
+    // ---- KNOWN-ISSUES Issue 13 regression coverage ----
 
     /// Baseline production TOML with an `auth_keys_path` that points at
-    /// a definitely-non-existent location. Built so SHIP-01 parsing
+    /// a definitely-non-existent location. Built so parsing
     /// accepts it (allow_internal_profile_header = false, non-empty
     /// path) and the guard's static checks pass; only the runtime
     /// load step should fail.
@@ -1551,7 +1551,7 @@ alerts_enabled = true
 
     #[test]
     fn load_auth_state_production_missing_file_fails_closed() {
-        // SHIP-17 contract: under ProfileMode::Production, a missing
+        // Contract: under ProfileMode::Production, a missing
         // auth_keys_path is fatal. The first-boot fallback (which
         // would silently enable the X-IM-Internal-Profile bypass)
         // must not run.
@@ -1578,7 +1578,7 @@ alerts_enabled = true
 
     #[test]
     fn load_auth_state_non_production_first_boot_mirrors_profile_field() {
-        // SHIP-17 contract: under non-production mode, a missing
+        // Contract: under non-production mode, a missing
         // auth_keys_path falls through to first-boot, but the runtime
         // store's allow_internal_profile_header inherits the profile
         // field so the two can never diverge (which would defeat

@@ -278,7 +278,7 @@ async fn seal_unseal_over_http_against_live_openbao() {
     );
 
     // 4. E7 cross-tenant — a fully-cleared token from ANOTHER tenant is denied
-    //    before any Transit decrypt (AF-003). Same clearance as the sealer, so
+    //    before any Transit decrypt. Same clearance as the sealer, so
     //    only the tenant binding stops it.
     let other = token_for(&token_signer, Classification::Secret, "tenant-b");
     let cross_body = json!({ "token": other, "envelope": envelope.clone() });
@@ -291,7 +291,7 @@ async fn seal_unseal_over_http_against_live_openbao() {
     assert_eq!(
         cross_resp.status(),
         403,
-        "cross-tenant unseal must be denied (E7/AF-003)"
+        "cross-tenant unseal must be denied"
     );
 
     // Receipts: the chain verifies and records seal-allow, unseal-allow, unseal-deny.

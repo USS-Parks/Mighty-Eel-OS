@@ -1,4 +1,4 @@
-//! VH5b-a gate — `aogd` serves the authenticated `aog-apiserver` CRUD surface via
+//! `aogd` serves the authenticated `aog-apiserver` CRUD surface via
 //! the `AppState::from_raft` seam, over the same node it drives consensus on:
 //!
 //! * `/healthz` stays open (liveness),

@@ -1,7 +1,7 @@
-//! MAI operator tooling. SHIP-09 lands `backup create` / `backup
-//! verify`; SHIP-10 adds `restore plan` / `restore apply`. Library
+//! MAI operator tooling. Provides `backup create` / `backup
+//! verify` and `restore plan` / `restore apply`. Library
 //! surface area is kept narrow on purpose so the CLI binary and the
-//! SHIP-14 burn-in scripts can drive both directions without
+//! burn-in scripts can drive both directions without
 //! re-spawning the process.
 
 pub mod audit;

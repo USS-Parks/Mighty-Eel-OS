@@ -1,4 +1,4 @@
-//! SHIP-11: request-path observability middleware.
+//! Request-path observability middleware.
 //!
 //! Two thin axum middleware layers that wire every request into the
 //! [`crate::metrics::MetricsRegistry`] and into the structured-log

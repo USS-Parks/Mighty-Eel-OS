@@ -1,4 +1,4 @@
-//! R7 — the ProviderPool controller: fold each pool's live provider/model
+//! The ProviderPool controller: fold each pool's live provider/model
 //! health into its schedulable set (`status.healthy`), so the scheduler
 //! (Phase S) only ever places on a currently-reachable endpoint.
 //!
@@ -49,7 +49,7 @@ impl<P: HealthProbe> ProviderPoolController<P> {
             return Ok(Action::Done);
         };
         // Terminating: no external state to unwind (health is observed, not
-        // provisioned); R2 GC collects the estate object.
+        // provisioned); GC collects the estate object.
         if pool.metadata.deletion_timestamp.is_some() {
             return Ok(Action::Done);
         }
