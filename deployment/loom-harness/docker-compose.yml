@@ -6,6 +6,9 @@ name: loom-harness
 # self-register once it completes. This is the live estate the V4/V5/V7/V8/V10 gates
 # run on. Dev-mode OpenBao — NOT production.
 
+# The compose network is the "trusted, isolated network" case of the aogd
+# non-loopback bind guard (the 0.2 loopback containment): each cp opts in
+# explicitly via AOGD_ALLOW_INSECURE_BIND=1. Dev harness posture — NOT production.
 x-aogd: &aogd
   image: loom-harness:vh4
   command: ["/usr/local/bin/aogd"]
@@ -45,6 +48,7 @@ services:
       AOGD_DATA_DIR: "/tmp/aogd"
       AOGD_LISTEN: "0.0.0.0:4600"
       AOGD_ADVERTISE: "http://cp1:4600"
+      AOGD_ALLOW_INSECURE_BIND: "1"
     ports: ["4601:4600"]
 
   cp2:
@@ -54,6 +58,7 @@ services:
       AOGD_DATA_DIR: "/tmp/aogd"
       AOGD_LISTEN: "0.0.0.0:4600"
       AOGD_ADVERTISE: "http://cp2:4600"
+      AOGD_ALLOW_INSECURE_BIND: "1"
 
   cp3:
     <<: *aogd
@@ -62,6 +67,7 @@ services:
       AOGD_DATA_DIR: "/tmp/aogd"
       AOGD_LISTEN: "0.0.0.0:4600"
       AOGD_ADVERTISE: "http://cp3:4600"
+      AOGD_ALLOW_INSECURE_BIND: "1"
 
   cp4:
     <<: *aogd
@@ -70,6 +76,7 @@ services:
       AOGD_DATA_DIR: "/tmp/aogd"
       AOGD_LISTEN: "0.0.0.0:4600"
       AOGD_ADVERTISE: "http://cp4:4600"
+      AOGD_ALLOW_INSECURE_BIND: "1"
 
   cp5:
     <<: *aogd
@@ -78,6 +85,7 @@ services:
       AOGD_DATA_DIR: "/tmp/aogd"
       AOGD_LISTEN: "0.0.0.0:4600"
       AOGD_ADVERTISE: "http://cp5:4600"
+      AOGD_ALLOW_INSECURE_BIND: "1"
 
   cluster-init:
     image: loom-harness:vh4

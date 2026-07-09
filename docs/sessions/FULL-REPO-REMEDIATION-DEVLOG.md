@@ -1212,5 +1212,25 @@ clean; both tests green in isolation, then the full suite + aogd anchor against 
 OpenBao/Moto pair: **16/16 PASS, LIVE SUITE GREEN** (SUITE_EXIT=0 / AOGD_EXIT=0; logs:
 `test-evidence/full-repo-remediation/M6/live-gates/live-suite-run-2-green.log`,
 `aogd-anchor-run-2.log`). Committing these two test files also un-reds the CI `wsf-live` job.
-X2 leg 1 GREEN; `loom-live` (>=3-node) remains the outstanding X2 leg. Commit: pending owner
-approval.
+X2 leg 1 GREEN; committed as `4bf2046` (pushed to origin/main).
+
+### X2 (leg 2) - loom-live >=3-node estate - harness reconciled to the bind guard - GREEN 5/5
+
+CI's `loom-live` red (`cp3 unhealthy` at bringup) root-caused to the 0.2 loopback
+containment: aogd refuses the estate's non-loopback `AOGD_LISTEN=0.0.0.0:4600` without the
+documented `AOGD_ALLOW_INSECURE_BIND=1` opt-in, so every cp exited at startup and
+`up -d --wait` failed at the first reported dependency. Fix is harness config only: the
+five cp services opt in explicitly in `deployment/loom-harness/docker-compose.yml` (plus a
+why-comment); the compose network is the guard's own "trusted, isolated network" case. The
+A1 admin auth stays un-armed in this estate (pre-anchor bootstrap posture, no anchor env),
+so cluster-init and the gates run unchanged. No product code changed.
+
+STS run at `4bf2046` + the fix: image build exit 0; `up -d --wait` exit 0 (11/11 healthy
+including cp3; 5-voter cluster formed; edges self-registered); all five gates PASS in CI
+order - V5 kill-under-scale, V8 scale (100 workloads x 5 replicas), V10 revocation SLO
+(<=10s/round, worst 4s; strict p99<=3s is the in-process gate), V4 split-brain (majority
+commits, minority fences), V7 chaos+soak (5 kill/heal cycles, identical converged end
+state) - ALL_GATES_GREEN; teardown clean. Evidence:
+`test-evidence/full-repo-remediation/M6/live-gates/LOOM-SUMMARY.md` (+ `loom-gates-run.log`,
+local-only). Both X2 live legs now GREEN on this host; committing the compose fix un-reds
+the CI `loom-live` job. Commit: pending owner approval.
