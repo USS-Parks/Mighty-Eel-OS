@@ -570,7 +570,7 @@ impl AdapterManager {
     pub async fn health_reports(&self) -> Vec<HealthReport> {
         let health = self.health.read().await;
         let mut reports = Vec::new();
-        for (_, state_mutex) in health.iter() {
+        for state_mutex in health.values() {
             let state = state_mutex.lock().await;
             reports.push(state.report());
         }
