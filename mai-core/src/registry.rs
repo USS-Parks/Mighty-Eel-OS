@@ -268,6 +268,8 @@ pub struct ModelRegistry {
 pub(crate) struct ModelEntry {
     pub(crate) manifest: ModelManifest,
     pub(crate) status: ModelStatus,
+    /// TODO(basho): tracked for future vault-relative model operations; not yet read.
+    #[allow(dead_code)]
     pub(crate) vault_path: PathBuf,
     pub(crate) loaded_adapter: Option<AdapterId>,
     pub(crate) loaded_gpu: Option<String>,

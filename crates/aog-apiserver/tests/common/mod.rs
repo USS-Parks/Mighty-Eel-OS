@@ -1,6 +1,10 @@
 //! Shared harness for the aog-apiserver integration tests: an authenticated app
 //! (front door) and helpers to mint ML-DSA trust tokens and send JSON
 //! requests in-process (`tower::ServiceExt::oneshot`, no socket bound).
+
+// Shared test harness: each helper is used by a subset of the integration-test
+// binaries, so some are legitimately unused per-binary. A scoped dead_code allow
+// on the test-only common module (not shipped source) is the standard handling.
 #![allow(dead_code)]
 
 use std::path::PathBuf;

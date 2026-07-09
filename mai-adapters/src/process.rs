@@ -128,6 +128,8 @@ pub struct AdapterProcess {
     /// Pending RPC requests awaiting responses (legacy JSON-RPC).
     pending: Arc<Mutex<std::collections::HashMap<u64, PendingRequest>>>,
     /// Pending IPC requests awaiting done/error events (NDJSON protocol).
+    /// TODO(basho): staged for the NDJSON IPC path; not read until it is wired.
+    #[allow(dead_code)]
     pending_ipc: PendingIpcRequests,
     /// Child process handle.
     child: Option<Child>,

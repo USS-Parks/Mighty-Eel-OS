@@ -22,8 +22,6 @@
 //! metadata (`x-im-profile`) is honored only as an explicit dev fallback when the
 //! store has `allow_internal_profile_header` enabled (never in production).
 
-#![allow(unused_variables, dead_code)]
-
 /// Generated protobuf types from proto/mai.proto
 #[allow(
     clippy::default_trait_access,

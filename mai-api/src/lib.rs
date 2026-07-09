@@ -1,3 +1,6 @@
+// TODO(basho): retire this crate-wide allow — most hits are unused axum extractor
+// params (a `profile`/`state` a handler must accept but not use) plus a few WIP
+// items; convert to per-handler `_`-prefixes. Tracked follow-on to the Q7 gate.
 #![allow(unused_variables, dead_code, missing_docs)]
 //! # MAI API Server
 //!

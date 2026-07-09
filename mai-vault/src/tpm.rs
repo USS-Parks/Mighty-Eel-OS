@@ -52,6 +52,9 @@ const TPM_SEAL_INFO: &[u8] = b"mai-vault/tpm-seal/v1";
 /// The `seal_key` and `unseal_key` methods verify PCR consistency but
 /// do not interact with actual TPM hardware.
 pub struct TpmManager {
+    /// TODO(basho): retained for the real-TPM path; the software TPM does not
+    /// read it yet.
+    #[allow(dead_code)]
     config: TpmConfig,
     /// Simulated PCR state (hash of PCR values at seal time).
     current_pcr_state: RwLock<Vec<u8>>,
@@ -69,6 +72,8 @@ pub struct TpmManager {
 /// stored seal-time PCR snapshot.
 struct SealedKeyEntry {
     /// The full sealed envelope (nonce || AEAD ciphertext+tag).
+    /// TODO(basho): stored for the unseal path; not read back yet.
+    #[allow(dead_code)]
     sealed_blob: Vec<u8>,
     /// Key metadata.
     info: KeyInfo,

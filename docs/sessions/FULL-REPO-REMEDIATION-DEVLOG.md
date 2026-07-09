@@ -1139,3 +1139,37 @@ Five stubs/heuristics that could fake success or panic, made honest:
 Verify: fmt; `cargo clippy -p mai-core -p mai-compliance -p mai-vault --all-targets -- -D warnings
 -A clippy::pedantic` PASS; `cargo test -p mai-core -p mai-compliance -p mai-vault` PASS (636). Q6
 gate ("no stub returns fake success; no operator config panics") holds. Commit: (this change set).
+
+### Q7 - full-tree hygiene gate (L, closes Phase Q)
+
+The whole-tree gate over the Q1-Q6 work.
+
+Gates (all green):
+- `no-slop-scan.sh full` PASS (clean over the entire tracked tree; the Q2 self-test passes 4/4).
+- `cargo fmt --check` PASS.
+- doc-ref: the scanner's DOC check is clean, and Q3/Q4 closed every dangling / drifted `docs/` ref.
+- `cargo clippy --workspace --all-targets -- -D warnings -A clippy::pedantic` PASS (every crate,
+  every target).
+- `cargo test` PASS for the touched crates (mai-core / mai-adapters / mai-vault: 331).
+
+Crate-wide allows: the audit flagged `mai-hil` (closed in Q5). The same blanket
+`#![allow(unused_variables, dead_code, missing_docs)]` sat in six more crates and was hiding real
+dead code. Removed and handled honestly:
+- `mai-core`, `mai-adapters`, `mai-vault` de-blanketed; the exposed WIP dead code (telemetry windows
+  + `current_window_start`, `ModelEntry.vault_path`, adapter `next_stream_id` / `pending_ipc`, TPM
+  `config` / `sealed_blob`, `ModelEntry.verified`, `weights_path`) now carries a scoped per-item
+  `#[allow(dead_code)]` + `TODO(basho):` (not a crate-wide allow); a genuinely unused test binding
+  was dropped and the dead-in-lib `MLKEM_SS_LEN` (used only by a KEM test) scoped.
+- `mai-sdk-rs` de-blanketed of the rust lints; only the deliberate `#![allow(clippy::unused_async)]`
+  (API-shape choice) remains.
+- `aog-apiserver/tests/common/mod.rs` keeps a scoped `#![allow(dead_code)]` - test-harness helpers
+  are legitimately used by a subset of the integration binaries (test-only, not shipped source).
+
+Documented follow-on (not closed here): `mai-api` still carries the crate-wide allow - its ~23 hits
+are predominantly legitimate unused axum extractor params (a `profile`/`state` a handler must accept
+but not use); converting them to per-handler `_`-prefixes is a bounded mechanical follow-on carrying
+a `TODO(basho):` on the allow itself. Beyond the audit's mai-hil-scoped finding, left visible rather
+than force-fixed under the gate.
+
+Q7 gate ("no-slop full + doc-ref + clippy clean; crate-wide allows removed / honestly scoped") holds
+for the whole tree, with the mai-api follow-on tracked. Commit: (this change set).

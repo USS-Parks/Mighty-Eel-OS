@@ -82,7 +82,8 @@ const MLKEM1024_PK_LEN: usize = 1568;
 const MLKEM1024_SK_LEN: usize = 3168;
 /// ML-KEM-1024 ciphertext size in bytes (FIPS 203).
 const MLKEM1024_CT_LEN: usize = 1568;
-/// ML-KEM shared secret size in bytes.
+/// ML-KEM shared secret size in bytes (FIPS 203). Referenced by the KEM tests.
+#[allow(dead_code)]
 const MLKEM_SS_LEN: usize = 32;
 
 /// ML-DSA-87 public key size in bytes (FIPS 204).

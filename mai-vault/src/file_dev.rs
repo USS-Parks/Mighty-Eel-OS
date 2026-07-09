@@ -52,6 +52,8 @@ struct ModelEntry {
     expected_hash: String,
     size_bytes: u64,
     path: PathBuf,
+    /// TODO(basho): recorded but not yet enforced as a load-time gate.
+    #[allow(dead_code)]
     verified: bool,
 }
 

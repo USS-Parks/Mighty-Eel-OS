@@ -72,6 +72,8 @@ struct ModelEntry {
     /// Path within the vault dataset.
     path: PathBuf,
     /// Whether integrity has been verified since last load.
+    /// TODO(basho): recorded but not yet enforced as a load-time gate.
+    #[allow(dead_code)]
     verified: bool,
 }
 
@@ -308,6 +310,8 @@ impl ZfsVault {
     }
 
     /// Get the weights file path for a model.
+    /// TODO(basho): accessor retained for the model-load path; not yet called.
+    #[allow(dead_code)]
     fn weights_path(&self, model_id: &str) -> PathBuf {
         self.config
             .storage

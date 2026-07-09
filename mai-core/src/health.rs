@@ -250,7 +250,11 @@ impl Default for HealthConfig {
     }
 }
 
-/// Aggregated telemetry data point (local-only, never transmitted)
+/// Aggregated telemetry data point (local-only, never transmitted).
+///
+/// TODO(basho): windows are aggregated but not yet consumed by a reader
+/// (dashboard / export); the fields stay until that consumer lands.
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 struct TelemetryWindow {
     start: Instant,
@@ -274,9 +278,12 @@ pub struct HealthMonitor {
     system_health: SystemHealth,
     /// Alert rules
     alert_rules: Vec<AlertRule>,
-    /// Telemetry history (5-minute windows, 24-hour retention)
+    /// Telemetry history (5-minute windows, 24-hour retention).
+    /// TODO(basho): aggregated but not yet read by a consumer.
+    #[allow(dead_code)]
     telemetry_history: Vec<TelemetryWindow>,
-    /// Current aggregation window start
+    /// Current aggregation window start.
+    #[allow(dead_code)]
     current_window_start: Instant,
     /// Alert subscribers (callback-style, stored as channel senders in production)
     subscriber_count: usize,

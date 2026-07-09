@@ -56,6 +56,9 @@ pub struct AdapterManager {
     /// Cached capabilities per adapter.
     capabilities: Arc<RwLock<HashMap<String, AdapterCapabilities>>>,
     /// Next stream ID for streaming requests.
+    /// TODO(basho): allocated for streaming request IDs; not read until the
+    /// streaming path is wired.
+    #[allow(dead_code)]
     next_stream_id: Arc<std::sync::atomic::AtomicU64>,
 }
 

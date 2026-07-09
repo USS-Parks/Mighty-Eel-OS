@@ -934,7 +934,7 @@ mod tests {
         let req =
             SwapRequest::adapter_swap("nonexistent".to_string(), "new-adapter".to_string(), "test");
 
-        let result = mgr.execute_swap(req).await.unwrap();
+        mgr.execute_swap(req).await.unwrap();
         // The swap should complete (pause routing on nonexistent just sets health=false)
         // but drain will immediately succeed (0 in-flight) since adapter isn't tracked
         // Actual outcome depends on scheduler behavior with unknown adapter ID

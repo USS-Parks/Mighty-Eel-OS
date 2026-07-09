@@ -16,7 +16,6 @@
 //! The Qdrant instance is local-only (127.0.0.1:6334).
 
 #![forbid(unsafe_code)]
-#![allow(unused_variables, dead_code, missing_docs)]
 
 pub mod audit;
 pub mod config;

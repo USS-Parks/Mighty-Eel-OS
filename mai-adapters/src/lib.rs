@@ -1,4 +1,3 @@
-#![allow(dead_code, missing_docs)]
 //! # MAI Adapter Framework
 //!
 //! The Rust-side adapter management framework. Spawns, monitors, and

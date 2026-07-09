@@ -1,4 +1,4 @@
-#![allow(unused_variables, dead_code, missing_docs, clippy::unused_async)]
+#![allow(clippy::unused_async)]
 //! # MAI Rust SDK
 //!
 //! Typed Rust SDK for performance-critical L4 components that need direct
