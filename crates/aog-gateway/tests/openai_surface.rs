@@ -332,9 +332,11 @@ async fn openai_client_completes_chat_and_stream() {
     assert_eq!(mv["object"], "list");
     assert_eq!(mv["data"][0]["id"], "gpt-4o-mini");
 
-    // --- G5: the surface classifies + tags the route (shadow mode) ---
-    // A PHI payload is classified and tagged local_only, even though the model
-    // maps to the (mock cloud) provider — shadow mode decides + logs, never blocks.
+    // --- G5/G1: enforce (the production default) refuses PHI→cloud ---
+    // The harness maps gpt-4o-mini to a (mock) cloud provider only. A PHI payload
+    // classifies local-only; under the default enforce mode the gateway refuses the
+    // cloud dispatch outright (403 + policy headers) instead of egressing it.
+    // Shadow/report tag-don't-block semantics are the policy_modes gate's job.
     let phi = http
         .post(format!("{base}/v1/chat/completions"))
         .bearer_auth("vk_g3")
@@ -345,20 +347,26 @@ async fn openai_client_completes_chat_and_stream() {
         .send()
         .await
         .unwrap();
-    assert_eq!(phi.status(), 200);
     assert_eq!(
-        phi.headers()
-            .get("x-aog-route")
-            .and_then(|v| v.to_str().ok()),
-        Some("local_only"),
-        "PHI payload must be routed local (shadow-tagged)"
+        phi.status(),
+        403,
+        "PHI to a cloud-only target must be refused in enforce mode"
     );
     assert_eq!(
         phi.headers()
-            .get("x-aog-route-source")
+            .get("x-aog-policy")
             .and_then(|v| v.to_str().ok()),
-        Some("classified"),
+        Some("deny"),
     );
+    assert_eq!(
+        phi.headers()
+            .get("x-aog-policy-blocked")
+            .and_then(|v| v.to_str().ok()),
+        Some("true"),
+    );
+    let deny: Value = phi.json().await.unwrap();
+    assert_eq!(deny["error"]["type"], "policy_denied");
+    assert_eq!(deny["error"]["code"], "aog_enforce");
 
     // --- auth is enforced on the surface: no bearer → 401 ---
     let unauth = http
@@ -370,6 +378,6 @@ async fn openai_client_completes_chat_and_stream() {
     assert_eq!(unauth.status(), 401, "unauthenticated chat rejected");
 
     eprintln!(
-        "G3 live gate PASSED against {addr} (OpenAI-wire chat + stream + models + auth + G5 route tag)"
+        "G3 live gate PASSED against {addr} (OpenAI-wire chat + stream + models + auth + enforce PHI deny)"
     );
 }

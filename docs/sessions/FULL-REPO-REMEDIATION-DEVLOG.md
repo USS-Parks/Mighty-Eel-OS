@@ -1173,3 +1173,44 @@ than force-fixed under the gate.
 
 Q7 gate ("no-slop full + doc-ref + clippy clean; crate-wide allows removed / honestly scoped") holds
 for the whole tree, with the mai-api follow-on tracked. Commit: (this change set).
+
+### X2 (leg 1: OpenBao + Moto) - WSF Live-OpenBao Gate at the converged tip - RED
+
+Ran the canonical live suite (`deployment/live-integration/run-live-suite.sh`, fresh Dockerized
+OpenBao 2.5.4 + Moto) plus the aogd anchor test at `50399c5`: **14/16 PASS, 2 FAIL** -
+`aog-gateway::kill_switch` (kill_switch.rs:242: `Unauthorized("revocation snapshot unavailable
+(fail-closed)")` on the pre-revocation "resolves" assertion) and `aog-gateway::openai_surface`
+(openai_surface.rs:348: 403 where the shadow-mode PHI case expects 200 + `local_only`).
+
+Both are hardened-product vs unreconciled-test mismatches, not environment artifacts: GitHub CI
+fails identically at this tip (run 28991840496, `wsf-live` job, same panic line; CI aborts there
+and never reaches openai_surface - the local run surfaced the second failure), both fail in
+isolation against a fresh live pair, and neither test file changed this wave while AF-15B
+(`e284942`) and G1/G3 (`e4ac0d6`/`5fa22db`) hardened the contracts under them.
+
+X2 leg 1 stays OPEN until the tests are reconciled honestly (no `#[ignore]`, plan §0.5):
+kill_switch needs a baseline nothing-revoked snapshot before its "resolves" assertion plus a new
+absent-snapshot->deny negative control; openai_surface needs the owner's semantic call first
+(G3 route-PHI-local with 200, or deny-403 even in shadow) and then the matching assertion. The
+X2 `>=3-node harness` leg (`loom-live`) is also red in CI at this tip (`loom-harness-cp3-1`
+unhealthy) - separate record when it runs.
+
+Evidence: `test-evidence/full-repo-remediation/M6/live-gates/` (SUMMARY.md, service-versions.txt;
+raw logs local-only, `*.log` gitignored). No product or test code changed; nothing committed.
+
+### X2 (leg 1) reconciliation - the two gateway live tests fixed - gate GREEN 16/16
+
+Test code only, no product change: `kill_switch.rs` now live-asserts the AF-15B absent-snapshot
+-> deny as a negative control, then publishes a baseline nothing-revoked snapshot (seq 1; the
+revoking snapshot advances to seq 2) before the budget/revocation flow; `openai_surface.rs`
+asserts the enforce-default contract on the PHI case (403 + `policy_denied`/`aog_enforce` body +
+`x-aog-policy: deny` / `x-aog-policy-blocked: true` headers), leaving shadow/report semantics to
+the policy_modes gate. Both changes are strictly more coverage than the pre-hardening assertions.
+
+Verify: fmt no-op; `cargo clippy -p aog-gateway --tests -- -D warnings -A clippy::pedantic`
+clean; both tests green in isolation, then the full suite + aogd anchor against a fresh
+OpenBao/Moto pair: **16/16 PASS, LIVE SUITE GREEN** (SUITE_EXIT=0 / AOGD_EXIT=0; logs:
+`test-evidence/full-repo-remediation/M6/live-gates/live-suite-run-2-green.log`,
+`aogd-anchor-run-2.log`). Committing these two test files also un-reds the CI `wsf-live` job.
+X2 leg 1 GREEN; `loom-live` (>=3-node) remains the outstanding X2 leg. Commit: pending owner
+approval.

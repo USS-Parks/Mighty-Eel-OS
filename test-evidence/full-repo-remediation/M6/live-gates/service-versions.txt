@@ -1,0 +1,6 @@
+date-utc: 2026-07-09 04:49
+repo: 50399c56e9d84524061ceecf8c5783b0de6d0725 (session/AUDIT-FIX-2 == origin/main tip; clean tree)
+openbao: openbao/openbao:latest sha256:436eaf9778cad75507ff70ea26ace30dcbe15606e619ac3823495663d7f7c115 (server v2.5.4, dev mode, unsealed) @ http://127.0.0.1:8200
+moto: motoserver/moto:latest sha256:d8ae5edc2bf080e7e4c13f9bd4b29b53ac3b4427e92956318db3dbe23ec43eb7 @ http://127.0.0.1:5566
+rustc: 1.96.1 (31fca3adb 2026-06-26) / cargo 1.96.1
+host: Windows 11, Docker 29.6.1, Git Bash runner

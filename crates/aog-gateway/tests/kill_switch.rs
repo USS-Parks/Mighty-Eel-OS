@@ -10,6 +10,9 @@
 //! * **Revocation** — a valid token resolves; once a bridge-signed revocation
 //!   snapshot naming it is written to the gateway's revocation KV path, the next
 //!   `resolve_and_check` is rejected `Revoked` — the kill switch halts the next call.
+//! * **Fail-closed** — with the revocation path configured and no snapshot
+//!   present, resolution is refused outright; a baseline nothing-revoked snapshot
+//!   must be published before any call resolves.
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
 use aog_gateway::{Gateway, GatewayConfig, GatewayError};
@@ -235,6 +238,29 @@ async fn budget_exhaustion_and_revocation_halt_the_next_call() {
     .with_revocation_path(REVOCATION_PATH.to_string());
     let now = Utc::now();
 
+    // --- Negative control: absent snapshot → fail-closed deny --------------
+    // The revocation path is configured and the snapshot was destroyed above:
+    // the gateway must refuse to resolve rather than run silently unprotected.
+    match gateway.resolve_and_check("vk_bud", now).await {
+        Err(GatewayError::Unauthorized(msg)) => assert!(
+            msg.contains("revocation snapshot unavailable"),
+            "expected the fail-closed reason, got: {msg}"
+        ),
+        other => panic!("expected fail-closed deny with no snapshot, got {other:?}"),
+    }
+
+    // Publish a baseline nothing-revoked snapshot (sequence 1; the revoking
+    // snapshot below advances to 2) so the trust plane is provisioned for the
+    // rest of the flow.
+    let baseline = RevocationSnapshot::new(
+        "snap-g9-baseline",
+        now.to_rfc3339(),
+        (now + Duration::hours(1)).to_rfc3339(),
+    )
+    .with_sequence(1);
+    let signed_baseline = fabric_revocation::sign(baseline, &anchor).expect("sign baseline");
+    put_snapshot(&addr, &c, &root_token(), &signed_baseline).await;
+
     // --- Budget kill-switch: exhaustion blocks mid-session -----------------
     gateway
         .resolve_and_check("vk_bud", now)
@@ -252,7 +278,7 @@ async fn budget_exhaustion_and_revocation_halt_the_next_call() {
     }
 
     // --- Revocation kill-switch: revoke → the next call is refused ----------
-    // No snapshot yet → nothing revoked → resolves.
+    // Baseline snapshot (nothing revoked) → resolves.
     gateway
         .resolve_and_check("vk_rev", now)
         .await
@@ -263,7 +289,8 @@ async fn budget_exhaustion_and_revocation_halt_the_next_call() {
         "snap-g9",
         now.to_rfc3339(),
         (now + Duration::hours(1)).to_rfc3339(),
-    );
+    )
+    .with_sequence(2);
     snap.revoked_tokens.push("tok_rev".to_string());
     let signed = fabric_revocation::sign(snap, &anchor).expect("sign snapshot");
     put_snapshot(&addr, &c, &root_token(), &signed).await;
