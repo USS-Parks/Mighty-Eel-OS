@@ -59,8 +59,11 @@ for FILE in $FILES; do
     # CHECK 3: Bracket/brace balance for code files
     case "$FILE" in
         *.rs|*.py|*.js|*.ts|*.json|*.toml)
-            OPEN_BRACES=$(grep -c '{' "$FILE" || true)
-            CLOSE_BRACES=$(grep -c '}' "$FILE" || true)
+            # Count occurrences, not lines-containing (grep -c): code style that
+            # clusters opens mid-line and isolates closes on their own lines
+            # otherwise reads as corruption on a perfectly balanced file.
+            OPEN_BRACES=$(grep -o '{' "$FILE" | wc -l || true)
+            CLOSE_BRACES=$(grep -o '}' "$FILE" | wc -l || true)
             if [ "$OPEN_BRACES" -ne "$CLOSE_BRACES" ]; then
                 if [ "$OPEN_BRACES" -gt 0 ] || [ "$CLOSE_BRACES" -gt 0 ]; then
                     DIFF=$((OPEN_BRACES - CLOSE_BRACES))
