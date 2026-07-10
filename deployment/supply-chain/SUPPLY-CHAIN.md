@@ -101,6 +101,9 @@ target hardware before switching the default.
   `docs/`, caches (no secrets or build cruft in the context). ✓
 - Base images — `debian:bookworm-slim` (non-root) + `nginx:1.27-alpine`. ✓
 - SBOM — `sbom.sh` (syft SPDX + CycloneDX per image). Owner runs at release.
-- Signing — `sign.sh` (cosign keyless in CI / key-based owner-gated). Key is Tier-0.
+- Signing — `sign.sh` (cosign keyless in CI / key-based owner-gated). Keyless
+  verify binds the certificate to our own GitHub Actions signing workflow +
+  the GitHub OIDC issuer — an unexpected identity fails verification. Key is
+  Tier-0.
 - Phone-home — static check **clean + CI-gated**; runtime monitor owner-gated.
 - Distroless — documented option (§5); default stays the D1b-proven slim base.

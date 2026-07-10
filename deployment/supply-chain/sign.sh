@@ -17,13 +17,33 @@ if ! command -v cosign >/dev/null 2>&1; then
   exit 3
 fi
 
+# Keyless verification binds the certificate to OUR signing workflow —
+# never "any identity from any issuer". Inside GitHub Actions the exact
+# identity is derived from the run itself (GITHUB_WORKFLOW_REF, e.g.
+# `USS-Parks/im-mighty-eel-mai/.github/workflows/supply-chain.yml@refs/tags/v1.2.3`);
+# outside it, a pinned regexp for the canonical release workflow applies.
+# A signature minted by any other workflow, repo, or issuer fails verify.
+OIDC_ISSUER="${COSIGN_CERT_OIDC_ISSUER:-https://token.actions.githubusercontent.com}"
+IDENTITY_REGEXP="${COSIGN_CERT_IDENTITY_REGEXP:-^https://github\.com/USS-Parks/im-mighty-eel-mai/\.github/workflows/supply-chain\.yml@refs/(tags/v[0-9][A-Za-z0-9.+-]*|heads/main)$}"
+
+verify_keyless() {
+  img="$1"
+  if [ -n "${GITHUB_WORKFLOW_REF:-}" ]; then
+    COSIGN_EXPERIMENTAL=1 cosign verify "$img" \
+      --certificate-identity "https://github.com/${GITHUB_WORKFLOW_REF}" \
+      --certificate-oidc-issuer "$OIDC_ISSUER" >/dev/null
+  else
+    COSIGN_EXPERIMENTAL=1 cosign verify "$img" \
+      --certificate-identity-regexp "$IDENTITY_REGEXP" \
+      --certificate-oidc-issuer "$OIDC_ISSUER" >/dev/null
+  fi
+}
+
 for img in "$@"; do
   if [ -z "${COSIGN_KEY:-}" ] && [ -n "${CI:-}" ]; then
     echo "==> keyless (OIDC) sign $img"
     COSIGN_EXPERIMENTAL=1 cosign sign --yes "$img"
-    COSIGN_EXPERIMENTAL=1 cosign verify "$img" \
-      --certificate-identity-regexp '.+' \
-      --certificate-oidc-issuer-regexp '.+' >/dev/null
+    verify_keyless "$img"
   else
     : "${COSIGN_KEY:?set COSIGN_KEY to the signing key (owner-gated) or run in CI for keyless}"
     pub="${COSIGN_PUB:-${COSIGN_KEY%.key}.pub}"
