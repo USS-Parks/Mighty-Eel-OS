@@ -46,9 +46,9 @@ The five defensible points that follow are the technical proof of that sentence.
   - `GET /v1/trust/claims` (admin)  
   - `GET /v1/trust/bundle_status`  
   - `GET /v1/trust/revocation_status?claim_id=...`  
-  - `POST /v1/auth/exchange_token` (local-dev stub; production swap is handler-body-only, wire shape unchanged)  
+  - `POST /v1/auth/exchange_token` (profile-selected `TrustExchangeMode`: production mode forwards to the acquirer's OpenBao bridge, the local-dev synthetic exchange exists only under an explicitly-permissive dev profile; wire shape identical in every mode, no handler code is edited)  
 - Python SDK trust and auth namespaces wired and tested (`client.trust.*`, `client.auth.exchange_token`); 94 SDK tests plus 17 `mai-api` integration tests cover the full surface.  
-- Four deployment postures shipped: `deployment/local-dev`, `deployment/cloud-trust-core`, `deployment/local-mai-node`, `deployment/airgap-demo` \-- each carrying a `profile.toml` selecting trust mode, compliance template, air-gap state, and cloud-route permission.
+- Five deployment postures shipped: `deployment/local-dev`, `deployment/cloud-trust-core`, `deployment/local-mai-node`, `deployment/airgap-demo`, and `deployment/ship` (the customer-installable production posture, enforced by the production guard) \-- each carrying a `profile.toml` selecting trust mode, compliance template, air-gap state, and cloud-route permission.
 
 **Hard rule, enforced architecturally:** prompt, completion, embedding, PHI, ITAR/EAR-controlled, and OCAP-governed payloads do **not** move through the cloud trust system. The Trust Manifold moves identity, claims, signatures, revocation snapshots, and audit correlation IDs only. This separation is verifiable by reading the route handlers and the `mai-compliance::bundle` signing payload.
 
@@ -140,7 +140,7 @@ The five defensible points that follow are the technical proof of that sentence.
 
 These are documented gaps, not surprises:
 
-- Live OpenBao deployment. The contract, schemas, verifier, cache, correlation, and local-dev token stub all ship. The acquirer plugs an OpenBao instance into the live endpoints with a handler-body swap \-- the wire shape is unchanged.  
+- Live OpenBao deployment. The contract, schemas, verifier, cache, correlation, and local-dev token stub all ship. The acquirer plugs an OpenBao instance in through the ship profile's `[openbao]` section \-- production mode selects the OpenBao bridge exchange (`TrustExchangeMode`) with no handler edit, and the wire shape is unchanged.  
 - Production HTTPS transport for the OTA update client. Core download logic is transport-agnostic; the acquirer wires their preferred CDN.  
 - Hardware-dependent burn-in (Scout/Ranger boot timings, 72-hour stability). Documented in `docs/KNOWN-ISSUES.md` Issue \#8; `scripts/burn-in.sh` emits the deferred-criteria list per run.
 

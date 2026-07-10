@@ -59,15 +59,15 @@ This separation is enforced architecturally. The Trust Manifold's signing payloa
 
 A security architect's second question after the boundary check is usually: "what does the acquirer actually have to touch, and what guarantees survive that touch?" The answer has four surfaces.
 
-### Handler body swap: `POST /v1/auth/exchange_token`
+### Token exchange mode: `POST /v1/auth/exchange_token`
 
-MAI ships a local-dev token stub at this endpoint. In production, the acquirer swaps the handler body to call their own OpenBao-backed Trust Bridge. **The wire shape \-- request JSON, response JSON, error codes \-- does not change.** No client code moves. No SDK methods change. The SDK's `client.auth.exchange_token()` call is identical before and after the swap.
+The endpoint's behavior is selected by the deployment profile through the `TrustExchangeMode` switch (`mai-api/src/trust_builder.rs`) \-- **no handler code is edited**. A production-mode profile always selects the OpenBao bridge exchange: the acquirer points the profile's `[openbao]` section at their own OpenBao-backed Trust Bridge. The local-dev synthetic exchange exists only under a non-production profile that explicitly allows it; with no bridge configured outside production the endpoint is disabled. **The wire shape \-- request JSON, response JSON, error codes \-- is the same in every mode.** No client code moves. No SDK methods change. The SDK's `client.auth.exchange_token()` call is identical across postures.
 
-The bridge is the only component that converts an enterprise IdP identity into a Lamprey claim. Everything downstream of the endpoint \-- claim verification, trust cache storage, policy evaluation, audit correlation \-- is unaffected by which bridge implementation sits behind the handler.
+The bridge is the only component that converts an enterprise IdP identity into a Lamprey claim. Everything downstream of the endpoint \-- claim verification, trust cache storage, policy evaluation, audit correlation \-- is unaffected by which bridge implementation the profile selects.
 
 ### Deployment profile swap: `mai/deployment/`
 
-The four shipped profiles (`local-dev`, `cloud-trust-core`, `local-mai-node`, `airgap-demo`) are `profile.toml` files. Switching postures is a config change, not a code change. The profile selects trust mode, compliance template, air-gap state, and cloud-route permission. No API surface changes between profiles.
+The five shipped profiles (`local-dev`, `cloud-trust-core`, `local-mai-node`, `airgap-demo`, `ship`) are `profile.toml` files. Switching postures is a config change, not a code change. The profile selects trust mode, compliance template, air-gap state, and cloud-route permission. No API surface changes between profiles.
 
 See the deployment postures table below for the full matrix.
 
@@ -121,7 +121,7 @@ Full spec: [`TRUST-MANIFOLD.md`](http://TRUST-MANIFOLD.md), [`TRUST-BUNDLE-SPEC.
 
 ## Deployment postures (`mai/deployment/`)
 
-The four shipped profiles cover the realistic acquirer postures:
+The five shipped profiles cover the realistic acquirer postures:
 
 | Profile | Trust mode | Compliance template | Air-gap | Cloud route |
 | :---- | :---- | :---- | :---- | :---- |
@@ -129,8 +129,9 @@ The four shipped profiles cover the realistic acquirer postures:
 | `cloud-trust-core` | live OpenBao client | Standard / template-per-tenant | off | enabled |
 | `local-mai-node` | local cache \+ periodic bundle refresh | template-per-tenant | optional | conditional on claim |
 | `airgap-demo` | local cache only | Defense | on | refused |
+| `ship` | production \-- guard enforced, ML-DSA anchors on disk, bundle-on-boot, OpenBao bridge exchange | per-tenant | per-site | per-site |
 
-Each profile is a `profile.toml` plus a `README.md`. Switching profiles is a config change; no code moves.
+Each profile is a `profile.toml` plus a `README.md`. Switching profiles is a config change; no code moves. `ship` is the only profile that may be installed on a customer node \-- it is selected by `MAI_SHIP_PROFILE` under systemd, and the production guard (`mai-ship-validate`) fails closed on every demo default.
 
 ---
 
@@ -156,7 +157,7 @@ Path conventions are documented in [`SERVICE-IDENTITY.md`](http://SERVICE-IDENTI
 
 ### Step 2 \-- Wire your IdP into the Lamprey Trust Bridge
 
-The bridge is the only component that converts an enterprise IdP identity into a Lamprey claim. It signs claims with a Transit key held in OpenBao. Replace MAI's local-dev token stub by swapping the body of `POST /v1/auth/exchange_token` to call your bridge. The wire shape is unchanged, so no client code moves. See "What is swappable and what stays fixed" above for the full guarantee.
+The bridge is the only component that converts an enterprise IdP identity into a Lamprey claim. It signs claims with a Transit key held in OpenBao. Point the profile's `[openbao]` section at your bridge \-- a production-mode profile selects the OpenBao bridge exchange automatically (`TrustExchangeMode`), and the local-dev stub cannot be minted under it. The wire shape is unchanged, so no client code moves. See "What is swappable and what stays fixed" above for the full guarantee.
 
 ### Step 3 \-- Configure the local trust cache
 
@@ -223,12 +224,12 @@ Run `pytest apps/openbao-trust-demo/tests/` to confirm the local trust loop is h
 
 ## SDK touchpoints
 
-The Python SDK is the supported integration surface. All methods listed below remain unchanged across the handler-body and profile swaps described above.
+The Python SDK is the supported integration surface. All methods listed below remain unchanged across the exchange-mode and profile swaps described above.
 
 | Namespace | Methods | What it does |
 | :---- | :---- | :---- |
 | `client.trust` | `status`, `claims`, `bundle_status`, `revocation_status` | Reads the local trust cache. Metadata only \-- no content crosses. |
-| `client.auth` | `exchange_token` | Mints a short-lived session token. Handler body swaps to your bridge in production; this call is identical before and after. |
+| `client.auth` | `exchange_token` | Mints a short-lived session token. A production profile routes this to your OpenBao bridge (`TrustExchangeMode`); this call is identical in every mode. |
 | `client.compliance` | Policy: `status`, `policies`, `policies/{module}`, `policies/reload`, `policies/template`, `modules/{name}/enable`, `modules/{name}/disable` / Audit: `audit`, `audit/{id}`, `audit/verify`, `audit/integrity` / Reports: `reports`, `reports/generate`, `reports/{id}`, `reports/{id}/download`, `reports/{id}` (DELETE) | Full policy, audit, and reports surface. |
 | `client.scheduler` | `metrics`, `instance/{id}`, `anomalies`, etc. | Read-only scheduler observability. |
 | `client.models`, `client.chat`, `client.embed`, `client.stream_chat` | Inference. Trust-context-aware; the SDK forwards the active claim where the deployment is wired. |  |
