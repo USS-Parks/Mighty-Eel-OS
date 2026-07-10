@@ -182,6 +182,7 @@ impl ProductionReadinessReport {
         apply("PROD-VAULT-100", runtime.vault_opened.as_ref());
         apply("PROD-AUDIT-100", runtime.api_audit_wal_ready.as_ref());
         apply("PROD-AUDIT-101", runtime.compliance_sealer_real.as_ref());
+        apply("PROD-AUDIT-102", runtime.compliance_signer_real.as_ref());
         apply("PROD-TRUST-100", runtime.trust_bundle_verified.as_ref());
         apply("PROD-AUTH-100", runtime.auth_keys_nonempty.as_ref());
         apply(
@@ -279,6 +280,10 @@ pub struct RuntimeChecks {
     /// `PROD-AUDIT-101` — compliance audit log was built with an AEAD
     /// sealer rather than `NullSealer`.
     pub compliance_sealer_real: Option<RuntimeOutcome>,
+    /// `PROD-AUDIT-102` — compliance audit chain was built with a real ML-DSA
+    /// `ChainSigner` (vault-held key) rather than `NullSigner`, so it carries
+    /// verifiable periodic PQC checkpoints.
+    pub compliance_signer_real: Option<RuntimeOutcome>,
     /// `PROD-TRUST-100` — trust components built and (in production)
     /// [`crate::trust_builder::verify_boot_bundle`] succeeded.
     pub trust_bundle_verified: Option<RuntimeOutcome>,
@@ -661,6 +666,13 @@ fn register_audit_checks(ctx: &mut CheckContext) {
         "SHIP-05", // slop-ok: names the deferred check's ship-plan step (operator data)
         "compliance audit sealer is vault-backed AEAD (not NullSealer) at runtime",
         "wire mai-compliance AuditLog to vault AEAD sealer",
+    );
+    ctx.deferred(
+        "PROD-AUDIT-102",
+        CheckSeverity::Critical,
+        "SHIP-05", // slop-ok: names the deferred check's ship-plan step (operator data)
+        "compliance audit chain is signed by a real ML-DSA key (not NullSigner) at runtime",
+        "wire mai-compliance AuditLog to the vault-held audit chain signer",
     );
 }
 
@@ -1214,6 +1226,7 @@ alerts_enabled = true
             vault_opened: Some(RuntimeOutcome::pass("ZfsVault opened at /tmp/vault")),
             api_audit_wal_ready: Some(RuntimeOutcome::pass("WAL opened (0 entries)")),
             compliance_sealer_real: Some(RuntimeOutcome::pass("AeadSealer wired")),
+            compliance_signer_real: Some(RuntimeOutcome::pass("audit signer wired")),
             trust_bundle_verified: Some(RuntimeOutcome::pass("bundle v1 verified")),
             auth_keys_nonempty: Some(RuntimeOutcome::pass("1 key loaded")),
             auth_internal_bypass_consistent: Some(RuntimeOutcome::pass(

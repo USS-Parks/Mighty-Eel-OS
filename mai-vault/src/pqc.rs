@@ -237,6 +237,36 @@ struct DsaKeyPair {
     pub signing_key: Vec<u8>,
 }
 
+/// A signer over a fixed 32-byte digest, backed by key material held inside the
+/// implementor — the raw key bytes are never exposed to the caller. Lets the
+/// vault hand out a signing capability (e.g. for the compliance audit chain)
+/// without surrendering the master signing key.
+pub trait DigestSigner: Send + Sync + std::fmt::Debug {
+    /// Sign a 32-byte digest, returning the ML-DSA-87 signature bytes, or `None`
+    /// if the held key is unusable.
+    fn sign_digest(&self, digest: &[u8; 32]) -> Option<Vec<u8>>;
+}
+
+/// A [`DigestSigner`] backed by an ML-DSA-87 signing key. Holds the key bytes
+/// internally; its `Debug` never renders them.
+struct MasterKeyDigestSigner {
+    signing_key: Vec<u8>,
+}
+
+impl std::fmt::Debug for MasterKeyDigestSigner {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MasterKeyDigestSigner")
+            .field("signing_key", &"<redacted>")
+            .finish()
+    }
+}
+
+impl DigestSigner for MasterKeyDigestSigner {
+    fn sign_digest(&self, digest: &[u8; 32]) -> Option<Vec<u8>> {
+        dsa_backend::sign(digest, &self.signing_key).ok()
+    }
+}
+
 impl PqcEngine {
     /// Create a new PQC engine with the given configuration.
     pub fn new(config: PqcConfig) -> Self {
@@ -394,6 +424,20 @@ impl PqcEngine {
                 "Signing keypair not initialised".into(),
             )),
         }
+    }
+
+    /// A [`DigestSigner`] backed by this engine's master signing key, paired with
+    /// the public key to register with a verifier. The signer holds the key
+    /// material internally; raw secret bytes are never returned. This gives the
+    /// compliance audit chain a real signer without exporting the key across the
+    /// vault boundary. `None` until the engine is initialised.
+    pub async fn audit_chain_signer(&self) -> Option<(Vec<u8>, std::sync::Arc<dyn DigestSigner>)> {
+        let sk = self.signing_key.read().await;
+        let kp = sk.as_ref()?;
+        let signer: std::sync::Arc<dyn DigestSigner> = std::sync::Arc::new(MasterKeyDigestSigner {
+            signing_key: kp.signing_key.clone(),
+        });
+        Some((kp.public_key.clone(), signer))
     }
 
     /// List all managed per-model KEM keys.
@@ -734,6 +778,28 @@ mod tests {
         let (pk, sk) = engine.kem_generate_keypair().await.unwrap();
         assert_eq!(pk.len(), MLKEM1024_PK_LEN);
         assert_eq!(sk.len(), MLKEM1024_SK_LEN);
+    }
+
+    #[tokio::test]
+    async fn audit_chain_signer_signs_verifiably() {
+        // The vault hands out an opaque digest signer (Option A); its signature
+        // over a digest verifies under the returned public key — so the audit
+        // chain gets a real, verifiable signer without the key leaving the vault.
+        let engine = PqcEngine::new(test_pqc_config());
+        engine.initialize().await.unwrap();
+        let (pubkey, signer) = engine
+            .audit_chain_signer()
+            .await
+            .expect("signer available after initialize");
+        let digest = [7u8; 32];
+        let sig = signer.sign_digest(&digest).expect("digest signs");
+        assert!(
+            dsa_backend::verify(&digest, &sig, &pubkey).unwrap(),
+            "the audit signature verifies under the returned public key"
+        );
+        // Fail-closed before initialise: no signer is available.
+        let fresh = PqcEngine::new(test_pqc_config());
+        assert!(fresh.audit_chain_signer().await.is_none());
     }
 
     #[tokio::test]

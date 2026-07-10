@@ -199,9 +199,15 @@ fn print_help() {
 async fn evaluate_runtime(profile: &ShipProfile) -> RuntimeChecks {
     // V2/V8: initialized construction + a measured storage round-trip —
     // the same probe the server runs at boot, never a fabricated pass.
-    let vault_opened = match build_vault(profile).await {
-        Ok(vault) => mai_api::vault_builder::probe_vault(vault.as_ref()).await,
-        Err(e) => RuntimeOutcome::fail(format!("vault builder rejected profile: {e}")),
+    let (vault_opened, audit_signer_present) = match build_vault(profile).await {
+        Ok((vault, audit_signer)) => (
+            mai_api::vault_builder::probe_vault(vault.as_ref()).await,
+            audit_signer.is_some(),
+        ),
+        Err(e) => (
+            RuntimeOutcome::fail(format!("vault builder rejected profile: {e}")),
+            false,
+        ),
     };
 
     let api_audit_wal_ready =
@@ -314,11 +320,19 @@ async fn evaluate_runtime(profile: &ShipProfile) -> RuntimeChecks {
     // Once per-tenant template selection is wired, this branch will
     // exercise the configured template's load path.
     let policy_modules_loaded = RuntimeOutcome::pass("standard policy modules loaded".to_string());
+    let compliance_signer_real = if audit_signer_present {
+        RuntimeOutcome::pass(
+            "compliance audit chain wired with a vault-held ML-DSA signer".to_string(),
+        )
+    } else {
+        RuntimeOutcome::fail("compliance audit chain has no real signer (NullSigner)".to_string())
+    };
 
     RuntimeChecks {
         vault_opened: Some(vault_opened),
         api_audit_wal_ready: Some(api_audit_wal_ready),
         compliance_sealer_real: Some(compliance_sealer_real),
+        compliance_signer_real: Some(compliance_signer_real),
         trust_bundle_verified: Some(trust_bundle_verified),
         auth_keys_nonempty: Some(auth_keys_nonempty),
         auth_internal_bypass_consistent: Some(auth_internal_bypass_consistent),

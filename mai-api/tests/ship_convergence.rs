@@ -204,6 +204,7 @@ alerts_enabled = true
         vault_opened: Some(RuntimeOutcome::pass("vault opened at /var/lib/mai/vault")),
         api_audit_wal_ready: Some(RuntimeOutcome::pass("WAL replayed (0 entries)")),
         compliance_sealer_real: Some(RuntimeOutcome::pass("AEAD sealer from sealer.key")),
+        compliance_signer_real: Some(RuntimeOutcome::pass("audit signer from vault key")),
         trust_bundle_verified: Some(RuntimeOutcome::pass(
             "bundle v2026-05-23 verified against 3 anchors",
         )),

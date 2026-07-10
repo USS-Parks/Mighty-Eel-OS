@@ -27,7 +27,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use mai_core::vault::{VaultError, VaultInterface};
 use mai_vault::audit::AuditWriter as VaultAuditWriter;
-use mai_vault::pqc::PqcEngine;
+use mai_vault::pqc::{DigestSigner, PqcEngine};
 use mai_vault::{FileDevVault, VaultConfig as MaiVaultConfig, ZfsOps, ZfsVault};
 
 use crate::ship_profile::{ProfileMode, ShipProfile, VaultBackend};
@@ -76,9 +76,14 @@ pub enum VaultBuildError {
 /// `vault.dataset` is set) the live dataset's properties proven (V5) — and
 /// any initialization failure is an error, so a production boot never binds
 /// sockets over an uninitialized vault.
+/// The audit-chain signer a production vault backend yields: its public key (to
+/// register with a verifier) plus an opaque digest signer that holds the key
+/// material internally — raw secret bytes never cross the vault boundary.
+pub type VaultAuditSigner = (Vec<u8>, Arc<dyn DigestSigner>);
+
 pub async fn build_vault(
     profile: &ShipProfile,
-) -> Result<Box<dyn VaultInterface>, VaultBuildError> {
+) -> Result<(Box<dyn VaultInterface>, Option<VaultAuditSigner>), VaultBuildError> {
     let root = profile.vault.root.as_path();
     if root.as_os_str().is_empty() {
         return Err(VaultBuildError::EmptyRoot);
@@ -99,7 +104,7 @@ pub async fn build_vault(
             } else if !profile.vault.allow_stub {
                 Err(VaultBuildError::StubNotAllowed)
             } else {
-                Ok(Box::new(LocalDevStubVault))
+                Ok((Box::new(LocalDevStubVault), None))
             }
         }
         VaultBackend::FileDev => {
@@ -111,7 +116,10 @@ pub async fn build_vault(
                     backend: VaultBackend::FileDev,
                 });
             }
-            Ok(Box::new(FileDevVault::new(zfs_config_from_root(root))))
+            Ok((
+                Box::new(FileDevVault::new(zfs_config_from_root(root))),
+                None,
+            ))
         }
         VaultBackend::Zfs => {
             if is_production && !root.exists() {
@@ -146,6 +154,10 @@ pub async fn build_vault(
             // V5: when the profile names the backing dataset, wire real ZFS
             // ops so initialization proves the dataset (encryption, keys,
             // mountpoint) instead of trusting a directory.
+            // Capture the audit-chain signer from the engine's master key before
+            // `pqc` is moved into the vault, so the compliance audit log can sign
+            // with a real key (its public key registers with the trust verifier).
+            let audit_signer = pqc.audit_chain_signer().await;
             let mut vault = ZfsVault::with_engines(cfg, pqc, audit);
             if profile.vault.dataset.is_some() {
                 vault = vault.with_zfs(ZfsOps::system());
@@ -157,7 +169,7 @@ pub async fn build_vault(
                 .initialize()
                 .await
                 .map_err(|e| VaultBuildError::InitFailed(e.to_string()))?;
-            Ok(Box::new(vault))
+            Ok((Box::new(vault), audit_signer))
         }
     }
 }

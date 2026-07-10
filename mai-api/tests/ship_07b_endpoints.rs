@@ -179,6 +179,7 @@ fn all_pass_runtime() -> RuntimeChecks {
         vault_opened: Some(RuntimeOutcome::pass("vault opened (test)")),
         api_audit_wal_ready: Some(RuntimeOutcome::pass("WAL opened (test)")),
         compliance_sealer_real: Some(RuntimeOutcome::pass("AEAD sealer (test)")),
+        compliance_signer_real: Some(RuntimeOutcome::pass("audit signer (test)")),
         trust_bundle_verified: Some(RuntimeOutcome::pass("bundle v-test verified")),
         auth_keys_nonempty: Some(RuntimeOutcome::pass("1 key loaded (test)")),
         auth_internal_bypass_consistent: Some(RuntimeOutcome::pass(

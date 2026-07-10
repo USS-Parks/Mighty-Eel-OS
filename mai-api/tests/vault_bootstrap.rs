@@ -129,7 +129,7 @@ async fn probe_measures_the_storage_round_trip() {
     // initialized vault round-trips the probe payload…
     let temp = tempfile::tempdir().unwrap();
     let p = baseline(ProfileMode::LocalDev, temp.path().to_path_buf());
-    let vault = build_vault(&p).await.expect("zfs-backend build");
+    let (vault, _) = build_vault(&p).await.expect("zfs-backend build");
     let outcome = probe_vault(vault.as_ref()).await;
     assert!(
         outcome.passed,
@@ -142,7 +142,7 @@ async fn probe_measures_the_storage_round_trip() {
     let mut p2 = baseline(ProfileMode::LocalDev, temp.path().to_path_buf());
     p2.vault.backend = VaultBackend::Stub;
     p2.vault.allow_stub = true;
-    let stub = build_vault(&p2).await.expect("stub build");
+    let (stub, _) = build_vault(&p2).await.expect("stub build");
     let outcome = probe_vault(stub.as_ref()).await;
     assert!(
         !outcome.passed,
@@ -234,7 +234,7 @@ async fn file_dev_backend_is_accepted() {
     std::fs::create_dir_all(&root).unwrap();
     let mut p = baseline(ProfileMode::LocalDev, root);
     p.vault.backend = VaultBackend::FileDev;
-    let vault = build_vault(&p)
+    let (vault, _) = build_vault(&p)
         .await
         .expect("file-dev must be accepted in local-dev mode");
     assert!(
@@ -249,7 +249,7 @@ async fn local_dev_stub_responds_as_vault_interface() {
     let mut p = baseline(ProfileMode::LocalDev, temp.path().to_path_buf());
     p.vault.backend = VaultBackend::Stub;
     p.vault.allow_stub = true;
-    let vault = build_vault(&p).await.expect("build must succeed");
+    let (vault, _) = build_vault(&p).await.expect("build must succeed");
     let res = vault.load_model_weights("does-not-exist").await;
     assert!(res.is_err(), "stub must report model-not-found");
 }

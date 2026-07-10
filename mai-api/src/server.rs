@@ -38,7 +38,8 @@ use crate::sealer_builder::build_sealer;
 use crate::ship_profile::{ProfileMode, ShipProfile, load_ship_profile};
 use crate::state::{AppState, ShipReadiness};
 use crate::trust_builder::{
-    TrustComponents, TrustExchangeMode, build_trust_components, verify_boot_bundle,
+    TrustComponents, TrustExchangeMode, build_trust_components_with_audit_anchor,
+    verify_boot_bundle,
 };
 use crate::vault_builder::build_vault;
 
@@ -256,10 +257,12 @@ impl MaiServer {
         // builder returns an *initialized* vault or an error — a failed
         // initialization aborts run() here, before any socket binds.
         let mut vault_probe: Option<RuntimeOutcome> = None;
+        let mut audit_signer: Option<crate::vault_builder::VaultAuditSigner> = None;
         let vault_box: Box<dyn VaultInterface> = if let Some(profile) = ship_profile.as_ref() {
-            let vault = build_vault(profile).await.map_err(|e| {
+            let (vault, signer) = build_vault(profile).await.map_err(|e| {
                 ServerError::Init(format!("vault builder rejected ship profile: {e}"))
             })?;
+            audit_signer = signer;
             // V8: measure the vault before certifying it — a storage
             // round-trip, never an unconditional pass.
             vault_probe = Some(crate::vault_builder::probe_vault(vault.as_ref()).await);
@@ -432,6 +435,7 @@ impl MaiServer {
                 auth_key_count,
                 auth_bypass_runtime,
                 vault_probe,
+                audit_signer,
             )?,
             None => (state, RuntimeChecks::default()),
         };
@@ -569,6 +573,18 @@ impl MaiServer {
     }
 }
 
+/// Adapts a vault [`DigestSigner`](mai_vault::pqc::DigestSigner) to the
+/// compliance `ChainSigner` the audit log expects — the vault holds the key;
+/// this only forwards the 32-byte digest to be signed.
+#[derive(Debug)]
+struct VaultChainSigner(Arc<dyn mai_vault::pqc::DigestSigner>);
+
+impl mai_compliance::audit::ChainSigner for VaultChainSigner {
+    fn sign(&self, payload_hash: &[u8; 32]) -> Option<Vec<u8>> {
+        self.0.sign_digest(payload_hash)
+    }
+}
+
 /// Build the sealer-backed compliance audit log and trust components,
 /// install them onto `state`, and collect the runtime-introspection
 /// results used by the production guard.
@@ -582,20 +598,41 @@ fn apply_ship_profile(
     auth_key_count: usize,
     auth_bypass_runtime: bool,
     vault_probe: Option<RuntimeOutcome>,
+    audit_signer: Option<crate::vault_builder::VaultAuditSigner>,
 ) -> Result<(AppState, RuntimeChecks), ServerError> {
     let is_production = matches!(profile.profile.mode, ProfileMode::Production);
 
-    // Sealer + compliance audit log.
+    // Split the vault-provided audit signer: its public key registers with the
+    // trust verifier so `verify` checks the audit signatures; the opaque signer
+    // signs the chain. `None` on a dev/stub backend, where the audit log stays
+    // NullSigner (the production guard refuses that in production).
+    let (audit_pubkey, audit_chain_signer) = match audit_signer {
+        Some((pk, signer)) => (Some(pk), Some(signer)),
+        None => (None, None),
+    };
+    let compliance_signer_real = audit_chain_signer.is_some();
+
+    // Sealer + compliance audit log — signed by the vault-held key in production
+    // so the periodic PQC checkpoints make the chain tamper-evident.
     let sealer = build_sealer(profile)
         .map_err(|e| ServerError::Init(format!("sealer builder rejected ship profile: {e}")))?;
-    let compliance_audit = ComplianceAuditLog::builder().sealer(sealer).build();
+    let mut audit_builder = ComplianceAuditLog::builder().sealer(sealer);
+    if let Some(signer) = audit_chain_signer {
+        audit_builder = audit_builder
+            .signer(Arc::new(VaultChainSigner(signer)))
+            .chain_config(mai_compliance::audit::ChainConfig {
+                signature_interval: mai_compliance::audit::DEFAULT_SIGNATURE_INTERVAL,
+                signing_key_id: crate::trust_builder::AUDIT_CHAIN_KEY_ID.to_string(),
+            });
+    }
+    let compliance_audit = audit_builder.build();
 
-    // Trust components: bundle verifier + token-exchange mode.
+    // Trust components: bundle verifier (incl. the audit-chain anchor) + mode.
     let TrustComponents {
         bundle_verifier,
         exchange_mode,
         anchor_ids,
-    } = build_trust_components(profile)
+    } = build_trust_components_with_audit_anchor(profile, audit_pubkey.as_deref())
         .map_err(|e| ServerError::Init(format!("trust builder rejected ship profile: {e}")))?;
     info!(
         anchors = anchor_ids.len(),
@@ -752,10 +789,25 @@ fn apply_ship_profile(
     // standard template loaded inside AppState::new succeeded.
     let policy_outcome = RuntimeOutcome::pass("standard policy modules loaded".to_string());
 
+    // PROD-AUDIT-102: a real ML-DSA chain signer must be wired in production so
+    // the audit chain carries verifiable periodic checkpoints (not NullSigner).
+    let signer_outcome = if compliance_signer_real {
+        RuntimeOutcome::pass(
+            "compliance audit chain wired with a vault-held ML-DSA signer".to_string(),
+        )
+    } else {
+        RuntimeOutcome::fail(
+            "compliance audit chain has no real signer (NullSigner); periodic PQC \
+             checkpoints would be absent"
+                .to_string(),
+        )
+    };
+
     let runtime = RuntimeChecks {
         vault_opened: Some(vault_outcome),
         api_audit_wal_ready: Some(wal_outcome),
         compliance_sealer_real: Some(sealer_outcome),
+        compliance_signer_real: Some(signer_outcome),
         trust_bundle_verified: Some(trust_outcome),
         auth_keys_nonempty: Some(auth_outcome),
         auth_internal_bypass_consistent: Some(auth_bypass_outcome),

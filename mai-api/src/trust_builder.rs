@@ -302,7 +302,23 @@ pub enum TrustBuildError {
 /// [`AnchorsDirMissing`]: TrustBuildError::AnchorsDirMissing
 /// [`NoAnchorsFound`]: TrustBuildError::NoAnchorsFound
 /// [`AnchorLengthInvalid`]: TrustBuildError::AnchorLengthInvalid
+/// Key id under which the compliance audit-chain signing key is registered as a
+/// trust anchor, so `verify` checks the periodic ML-DSA audit signatures.
+pub const AUDIT_CHAIN_KEY_ID: &str = "mai-audit-chain";
+
+/// Build trust components without registering an audit-chain anchor (the common
+/// path for tests and the ship validator).
 pub fn build_trust_components(profile: &ShipProfile) -> Result<TrustComponents, TrustBuildError> {
+    build_trust_components_with_audit_anchor(profile, None)
+}
+
+/// Build trust components, additionally registering `audit_chain_pubkey` (when
+/// present) as the [`AUDIT_CHAIN_KEY_ID`] anchor so `verify` checks the
+/// compliance audit chain's periodic signatures.
+pub fn build_trust_components_with_audit_anchor(
+    profile: &ShipProfile,
+    audit_chain_pubkey: Option<&[u8]>,
+) -> Result<TrustComponents, TrustBuildError> {
     let is_production = matches!(profile.profile.mode, ProfileMode::Production);
 
     if is_production {
@@ -334,7 +350,15 @@ pub fn build_trust_components(profile: &ShipProfile) -> Result<TrustComponents, 
                 (Arc::new(AcceptAllBundleVerifier), Vec::new())
             }
             TrustVerifier::MlDsa => {
-                let (verifier, ids) = load_anchors(&profile.trust.anchors_dir, is_production)?;
+                let (mut verifier, mut ids) =
+                    load_anchors(&profile.trust.anchors_dir, is_production)?;
+                // Register the compliance audit-chain public key so `verify`
+                // checks the periodic signatures the vault-held key produces.
+                if let Some(pubkey) = audit_chain_pubkey {
+                    verifier =
+                        verifier.with_anchor(AUDIT_CHAIN_KEY_ID.to_string(), pubkey.to_vec());
+                    ids.push(AUDIT_CHAIN_KEY_ID.to_string());
+                }
                 (Arc::new(verifier), ids)
             }
         };
