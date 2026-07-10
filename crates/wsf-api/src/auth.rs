@@ -72,9 +72,21 @@ impl WorkloadCredential {
             Audience::Aog => "aog",
             Audience::Mai => "mai",
         };
+        // The principal `kind` is inside the preimage: it decides issuance-mode
+        // gating downstream, so a flipped kind on an otherwise-valid credential
+        // must invalidate the signature rather than being silently trusted.
+        let kind_tag = match self.kind {
+            IdentityKind::Human => "human",
+            IdentityKind::Workload => "workload",
+            IdentityKind::Session => "session",
+            IdentityKind::Task => "task",
+        };
         for part in [
-            b"wsf-workload-credential/v1".as_slice(),
+            // v2: `kind` joined the preimage; the tag bump keeps a v1 signature
+            // from ever being read against the v2 field layout.
+            b"wsf-workload-credential/v2".as_slice(),
             self.principal_id.as_bytes(),
+            kind_tag.as_bytes(),
             self.tenant_id.as_bytes(),
             self.subject_hash.as_bytes(),
             self.service_identity.as_deref().unwrap_or("").as_bytes(),
@@ -362,5 +374,76 @@ mod signing {
         let sig = signer.sign(&cred.signing_bytes()).expect("sign credential");
         cred.signature_b64 = base64::engine::general_purpose::STANDARD.encode(sig);
         cred
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use fabric_crypto::providers::{MlDsa87Verifier, RustCryptoMlDsa87};
+    use fabric_crypto::{Signer, Verifier};
+
+    fn auth_headers(cred: &WorkloadCredential) -> HeaderMap {
+        let json = serde_json::to_vec(cred).unwrap();
+        let b64 = base64::engine::general_purpose::STANDARD.encode(json);
+        let mut h = HeaderMap::new();
+        h.insert(
+            axum::http::header::AUTHORIZATION,
+            format!("Workload {b64}").parse().unwrap(),
+        );
+        h
+    }
+
+    #[test]
+    fn flipping_kind_invalidates_the_signature() {
+        // The credential's `kind` gates issuance mode downstream. A caller who
+        // flips it on an otherwise-valid, authority-signed credential must be
+        // rejected as untrusted — `kind` is inside the signed preimage.
+        let signer = RustCryptoMlDsa87::generate("authority").unwrap();
+        let verifier: Box<dyn Verifier> = Box::new(MlDsa87Verifier);
+        let authenticator =
+            WorkloadAuthenticator::new(verifier, signer.public_key().to_vec(), Audience::Wsf);
+
+        let cred = mint_credential(
+            &signer,
+            "spiffe://wsf/workload/a",
+            "tenant-a",
+            "hmac:subj",
+            None,
+            Audience::Wsf,
+            "2099-01-01T00:00:00Z",
+        );
+        // Baseline: the untampered credential authenticates.
+        let principal = authenticator.authenticate(&auth_headers(&cred)).unwrap();
+        assert_eq!(principal.kind, IdentityKind::Workload);
+
+        // Flip the kind (Workload -> Human) without re-signing: the signature is
+        // now over the wrong preimage and the credential is refused 401.
+        let mut forged = cred;
+        forged.kind = IdentityKind::Human;
+        let err = authenticator
+            .authenticate(&auth_headers(&forged))
+            .unwrap_err();
+        assert_eq!(err, AuthError::UntrustedCredential);
+        assert_eq!(err.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[test]
+    fn kind_participates_in_the_preimage() {
+        // Two credentials identical but for `kind` must not share a signing
+        // preimage — otherwise a signature could be replayed across kinds.
+        let mut a = WorkloadCredential {
+            principal_id: "p".into(),
+            kind: IdentityKind::Workload,
+            tenant_id: "t".into(),
+            subject_hash: String::new(),
+            service_identity: None,
+            audience: Audience::Wsf,
+            expires_at: "2099-01-01T00:00:00Z".into(),
+            signature_b64: String::new(),
+        };
+        let workload_bytes = a.signing_bytes();
+        a.kind = IdentityKind::Task;
+        assert_ne!(workload_bytes, a.signing_bytes());
     }
 }
