@@ -1286,4 +1286,103 @@ got a bounded retry (cluster-init's post() precedent). v4-split-brain deliberate
 untouched: its minority-partition write must fail, so a blanket retry there would be
 wrong. Verify: bash -n on all four scripts; fmt no-op; `cargo clippy -p aog-conformance
 --all-targets -- -D warnings -A clippy::pedantic` clean; `cargo test -p aog-conformance
---lib` green (3 passed, 5 ignored opt-ins). Commit: (this change set).
+--lib` green (3 passed, 5 ignored opt-ins). Commit: `803e85e`. At this tip MAI CI + Lamprey
++ SHIP validation are all green (both X2 live legs CI-confirmed).
+
+## X4 / X5 - independent revalidation (re-scan + red-team)
+
+Ran X4 (independent re-scan) and X5 (buyer/operator red-team) at `803e85e` as a seven-agent
+delegated-reviewer fan-out (5 X4 attack-surface slices + 2 X5 red-teams), distrust-the-claim
+mandate, read-only; every reachable High re-verified line-by-line against source. Full
+deliverable at the top-level `X4-X5-REVALIDATION-REPORT.md` (copy under
+`test-evidence/full-repo-remediation/M6/X4-X5-revalidation/REPORT.md`).
+
+Verdict: CONDITIONAL - not a FINAL go. The ship/production posture is genuinely hardened and
+the large majority of original attacks are closed with landed controls (most with real tests).
+But the pass surfaced ONE reachable High an unauthenticated client can hit in a normal
+deployment - H9: aog-gateway `/v1/status` (auth-exempt) holds the receipts mutex across an
+O(n) `verify_chain` over an unbounded ledger, contending the completion hot-path; the prior D1
+disposition mis-traced it to mai-api's bounded health probes. Verified directly from source.
+
+Other High-class gaps (verified, not remote-reachable by themselves): header-trusted admin
+fail-open when run without a ship profile (R2, default-of-omission); production compliance
+audit chain on NullSigner - no PQC checkpoints, forgeable by a sealer-key holder (R3); model
+package signature bound to the vault's ephemeral boot key not a distribution anchor (R4); vault
+readiness certifies "sealed master key" via a config flag with `first_boot` sealing unwired
+(R5 - confidentiality half is the known TPM/ZFS deferral); tenant-spoofed create, A3 covered
+delete only (R6); Ring3Cache offline revocation ignores 5/7 dimensions, latent/unwired (R7);
+streaming budget bypass (R8). X5 docs gate FAILs (dev-posture steering + shipped `dashboard-dev`
+token); attack re-run 8 OPEN (4 = the known hardware/multi-node deferral lane, matching prior
+honest deferrals). No product/test code changed - audit is an independent record; the report's
+recommendation section lists the host-fixable close-out set (R1-R8 + docs + CI Layer-3) ahead of
+the unchanged owner/hardware lane.
+
+## R8 - streaming budget metering (X4/X5 close-out, M7)
+
+Closed the streaming budget bypass (finding R8/D8, invariant A8): both SSE branches returned
+without `meter::record`/`record_spend`, so a budgeted virtual key could stream past its cap
+forever. New `StreamMeter` guard (aog-gateway meter.rs) rides each SSE generator: every frame
+is observed (provider-reported usage merged per-field - Anthropic splits input onto
+message_start and output onto message_delta - plus a delta-chars fallback so a usage-silent
+provider still meters), and settlement (receipt + `record_spend` keyed by the attenuation
+lineage, T5) runs exactly once in Drop - terminal frame, provider error, or client disconnect
+alike, so an early hang-up cannot dodge the meter. Files:
+`crates/aog-gateway/src/{meter.rs,surface_openai.rs,surface_anthropic.rs}`,
+`tests/metering.rs`. Verify: fmt clean; clippy -D warnings clean; `cargo test -p aog-gateway`
+68 passed; R8 live gate vs Dockerized OpenBao dev (`openbao/openbao:latest` at
+127.0.0.1:8200): tight-cap key streams one SSE call to completion, next call refused **402**
+("R8 live gate PASSED"); G7 live gate still green; workspace 2273 passed / 0 failed. Evidence:
+`test-evidence/full-repo-remediation/M7/R8/EVIDENCE.md`. Commit: `72d89e7`.
+
+## R5 - vault seal readiness honesty (X4/X5 close-out, M7)
+
+Closed the seal-readiness theater (finding R5, invariant A5): PROD-VAULT-004 certified "sealed
+master key" off a config flag, `first_boot()` sealing was never on the boot path, and the
+key-store KEK (root of restart recovery) was a plaintext `kek.bin`. Now: `PqcEngine` takes a
+TPM seal provider; `build_vault`'s ZFS arm (and `first_boot`) wire it before `initialize()`,
+which materializes the KEK at boot as a sealed envelope (`kek.sealed`) - fresh KEKs sealed at
+birth, legacy plaintext migrated in and deleted, seal/unseal failure a hard error with no
+plaintext fallback. `TpmManager::unseal_key` is now stateless (AEAD tag under the PCR-derived
+key is the binding), so a sealed KEK from a prior boot unseals after restart - real TPM 2.0
+semantics. New runtime check **PROD-VAULT-101** (deferred-Critical) measures the seal at boot
+and in `mai-ship-validate`: provider available + envelope present + unseals under the CURRENT
+PCR state + no plaintext residue; a no-seal backend fails readiness closed while the -004 flag
+alone no longer certifies anything. Real-TPM hardware binding stays on the owner lane; the
+same probe binds to it when that lands. Files: `mai-vault/src/{pqc.rs,tpm.rs,init.rs}`,
+`mai-api/src/{vault_builder.rs,production_guard.rs,server.rs}`,
+`mai-api/src/bin/mai_ship_validate.rs`, two mai-api test fixtures. Verify: fmt clean; clippy
+-D warnings clean; `cargo test -p mai-vault -p mai-api` 453 passed (incl. sealed-KEK
+create/migrate/restart, PCR-drift refusal, no-seal-backend fail-closed, readiness-block
+tests); workspace 2273 passed / 0 failed; audit + deny + gitleaks(diff) + detect-secrets +
+no-slop(all) + verify-tree(13 files) all clean. Evidence:
+`test-evidence/full-repo-remediation/M7/R5/EVIDENCE.md`. Commit: `b0def50`.
+
+## R4 - model-package distribution anchor (X4/X5 close-out, M7)
+
+Closed the supply-chain authenticity gap (finding R4, invariant A4): package verification was
+bound to the vault's own per-boot ephemeral ML-DSA key (`ZfsVault::verify_signature` ->
+`pqc.verify_package`), the manifest's `security.public_key_fingerprint` was parsed but never
+consulted, and no distribution anchor was loaded anywhere. Now: `PqcEngine` pins a
+model-distribution trust anchor (`set_distribution_anchor`, raw ML-DSA-87 public key) with a
+fail-closed `require_distribution_anchor` posture; `verify_model_package` verifies against the
+anchor only - required-but-absent is a hard refusal, never a self-key fallback, while the
+self-key `verify_package` stays confined to the audit chain. `ZfsVault::verify_signature`
+routes packages through that policy and exposes `distribution_fingerprint()` via a defaulted
+`VaultInterface` method (every stub/mock keeps legacy behavior untouched);
+`verify_package` (mai-core) consults the manifest fingerprint against the anchor fingerprint
+and refuses a mismatch even when signatures verify. `build_vault`'s ZFS arm pins the anchor
+from `<trust.anchors_dir>/mai-model-distribution.pub` (reserved id, same anchor convention as
+the Lamprey bundle machinery); production without the file = installs refused until the anchor
+is installed. Files: `mai-vault/src/{pqc.rs,zfs.rs}`, `mai-vault/Cargo.toml`,
+`mai-vault/tests/distribution_anchor.rs` (new), `mai-core/src/vault.rs`,
+`mai-core/src/models/verify.rs`, `mai-api/src/vault_builder.rs`. (Roster listed
+`models/registry.rs` + `init.rs`; the real seam was the trait default in `vault.rs` - the
+install boundary needed no change since the refusals fold into `verified`.) Verify: fmt clean;
+clippy -D warnings clean; new gate suite 5/5 with real ML-DSA keys through the real vault
+(anchor-signed installs; self-key-signed refused; foreign-key refused; fingerprint mismatch
+refused with valid signatures; required-without-anchor fails closed); focused crates 660
+passed; workspace 2278 passed / 0 failed (first run hit the MSVC LNK1318 PDB flake, re-run
+at -j 4); audit + deny + gitleaks(diff) + detect-secrets +
+no-slop(full) + verify-tree(8 files) all clean. Evidence:
+`test-evidence/full-repo-remediation/M7/R4/EVIDENCE.md`. Commit: `2e50ecd`. Phase R of the
+close-out roster is fully landed on main with this commit (R1-R8 all closed).
