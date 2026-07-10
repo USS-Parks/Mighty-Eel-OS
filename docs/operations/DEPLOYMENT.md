@@ -1,10 +1,23 @@
 ﻿# MAI Deployment Guide
 
+> **PRODUCTION DEPLOYMENTS: do not deploy from the Quick Start below.**
+> The Quick Start launches the **developer posture** — no ship profile,
+> no production guard, demo-safe defaults. A customer or regulated
+> install must follow the **ship posture**: install the package, review
+> `/etc/mai/profile.toml`, run `mai-ship-validate`, and start `mai-api`
+> under systemd (which sets `MAI_SHIP_PROFILE` so the guard engages).
+> Start at [`../../deployment/ship/README.md`](../../deployment/ship/README.md)
+> and [`SHIP-PROFILE.md`](SHIP-PROFILE.md).
+
 Operator-facing guide for launching, validating, and running the MAI API
 server. For build prerequisites and developer workflows, see
 [`BUILD.md`](../BUILD.md).
 
-## Quick Start
+## Quick Start (developer posture — not production)
+
+This launch is for development and evaluation on a workstation you
+control. It does **not** engage the production guard (see the banner
+above for the production path).
 
 ```bash
 # From the repo root
