@@ -1421,3 +1421,64 @@ no-slop(full) + verify-tree(13 files) all clean; integrity subagent SAFE TO STAG
 `test-evidence/full-repo-remediation/M7/PHASE-M/EVIDENCE.md`. Commits: `76fb564` (M1),
 `c15631c` (M4), `30073bb` (M3), `b8e4a6d` (M2/M5), `8773e3d` (M6) - all pushed to main.
 Milestone M7-M closed; roster remaining: Phases D, C, T, Z.
+
+## Phases D + C + T - docs safe-install, CI Layer-3, assertion backfill (X4/X5 close-out)
+
+Ran D1->D5, C1->C6, T1->T4 STS (2026-07-10), closing milestones M7-D, M7-C, M7-T; Phase Z
+(cold verify + revalidation + go/no-go) remains, gated on these commits landing. **D1**: the
+stock install ran the dashboard on the local-dev default token - postinstall now generates a
+64-hex CSPRNG token into `/etc/mai/dashboard.env` (root:mai 0640, survives upgrades), the
+dashboard unit hard-requires it (EnvironmentFile without `-`), both ship profiles declare it
+(`dashboard.admin_token_file`), and a new deferred runtime check **PROD-DASH-100**
+(`probe_dashboard_admin_token`, populated by the validator's `--state-dir` pass AND server
+boot) fails production readiness closed on a missing/empty/default token - never echoing the
+value. **D2**: the dead `MAI_PROFILE` var removed from all four units + operator docs
+(`MAI_SHIP_PROFILE` is the real selector); found and fixed a real defect in passing -
+`mai-adapter-manager.service` ran `mai-api` with ONLY the dead var, so the guard never engaged
+on that process; the ship README's example now engages the guard and says a workstation launch
+fails closed by design. **D3**: DEPLOYMENT.md gets a production banner; its Quick Start is
+marked developer-posture with the ship path up top. **D4**: buyer/acquisition docs list the
+`ship` profile in the posture matrix and the stale "swap the exchange_token handler body"
+instruction is replaced with the real `TrustExchangeMode` mechanism (production auto-selects
+the OpenBao bridge; no handler edit); DEMO-SUITE audited, no change needed. **D5**:
+verify-only - R2 already made "profile header disabled by default" true in code
+(`unwrap_or(false)` under `[settings]`); doc == code, no edit. **C1**: new
+`compose-trust-validation` CI job runs `validate_profile.py` against the real compositions
+(wsf-ha as production, appliance + shadow as demo) + the validator's pytest; validator scope
+gaps closed (trust core detected via container_name / server-only env markers / entrypoint
+tokens; EVERY host-published trust-core port gated, not just 8200); the shadow lead artifact
+brought up to the demo bar it now gates (injected `.env` secrets - the baked `root` token is
+gone - and `shadow` compose-profile gating). **C2**: `sbom-sign` gated `needs: [phone-home]`.
+**C3**: `gpu-bundle` no longer runs under `always()` - every executed gate must succeed
+(gpu-package may be explicitly skipped); the readiness check dropped `continue-on-error`;
+regression pins added so the only soft step in the release lane is the advisory bench compare.
+**C4**: gitleaks stops blanket-allowing `deployment/*-staging/` (narrowed to untracked local
+runtime artifacts; stale moved-file entries fixed; `.secrets.baseline` allowlisted as
+hashes-of-findings) - negative control PROVEN: a planted realistic-shaped staging secret is
+caught (AWS's documentation example keys are ruleset-ignored; the control uses realistic
+shapes); `no-phone-home.sh` now scans `mai-*/src`, covers `islandmountain.ai`, and carries an
+exact-host exclusion (with rationale) for the one sanctioned OTA update default. **C5**:
+`sign.sh` keyless verify binds the GitHub Actions workflow identity (exact
+`GITHUB_WORKFLOW_REF` in CI; pinned canonical-workflow regexp outside) + the GitHub OIDC
+issuer - any-identity/any-issuer is gone. **C6**: the no-slop DOC check now flags a bare
+`<name>.md` cited on a comment line outside test code (in code it is data); self-test grows
+three cases; both real danglers it surfaced fixed (`apps/openbao-trust-demo/config.toml` dead
+plan cite -> tracked docs; `mai-hil/src/lib.rs` dead CONVENTIONS cite reworded). **T1**:
+`aogd/tests/admin_auth.rs` - `/admin/write` 401 bare / **403 naming aog-admin** for an
+authenticated non-admin / 503-not-auth for an admin on the unformed node / read-only leader
+stays open. **T2**: `cross_tenant_delete_is_denied` (aog-apiserver crud) - tenant-mallory's
+DELETE of tenant-loom's RevocationIntent (a kill-reversal) refused 403, object intact, owner's
+own delete proceeds. **T3**: `completions_legacy.rs` live gate - legacy `/v1/completions`
+authenticated, routed, policy-gated in PARITY with chat for a PHI prompt, metered
+(1 call / 45 cents, chain verifies), and no upstream request carries the raw span. **T4**:
+`tenant_isolation.rs` live gate - `/v1/usage` + `/v1/roi` scoped to the calling tenant
+(2x45 vs 1x45 cents, zero cross-tenant leakage). Files: 45 modified + 3 new test files - full
+inventory in the per-phase evidence. Verify: fmt + clippy (-D warnings) clean on every touched
+crate; focused suites green (mai-api 370; aogd admin_auth 1; aog-apiserver crud 7;
+packaging/ship12 170 pytest; appliance validator 75; gpu_release 75); live gates green in
+isolation against Dockerized OpenBao :18200 (AF-10 + AF-17 PASSED live); workspace (OpenBao
+env unset) 2297 passed / 0 failed / 8 ignored; cargo audit + deny + ruff + detect-secrets +
+gitleaks(full-tree: 0) + no-slop(full) all clean; forbidden-terms PASS. Evidence:
+`test-evidence/full-repo-remediation/M7/PHASE-D/EVIDENCE.md`, `PHASE-C/EVIDENCE.md`,
+`PHASE-T/EVIDENCE.md`. Commits: pending Basho's approval of the commit plan (commit and push
+are separately gated for these phases); SHAs to be recorded here once landed.
