@@ -10,6 +10,7 @@ import traceback
 from typing import Any
 
 from adapters.base import (
+    MAX_PROMPT_CHARS,
     AdapterBase,
     AdapterError,
 )
@@ -27,6 +28,17 @@ from adapters.runner_loading import (
 )
 
 logger = logging.getLogger("mai.adapters.runner")
+
+# Maximum stdin frame the runner will buffer for one request line. asyncio's
+# default StreamReader limit is 64 KiB, well below the advertised
+# MAX_PROMPT_CHARS (200 K chars) — a legitimate large prompt overran it and
+# crashed the worker. This is aligned to the Rust orchestrator's 8 MiB frame
+# cap so the runner is no longer the tighter bound, and it comfortably exceeds
+# MAX_PROMPT_CHARS even at 4 bytes/char UTF-8 plus JSON envelope
+# (200 K * 4 = 800 KiB << 8 MiB). A frame beyond this is rejected with a
+# bounded error rather than terminating the worker.
+MAX_FRAME_BYTES = 8 * 1024 * 1024
+assert MAX_FRAME_BYTES > MAX_PROMPT_CHARS * 4, "frame cap must hold a max prompt"
 
 logging.basicConfig(
     stream=sys.stderr,
@@ -55,7 +67,7 @@ class AdapterRunner:
         self._start_time_ms = now_ms()
 
         loop = asyncio.get_event_loop()
-        self._reader = asyncio.StreamReader()
+        self._reader = asyncio.StreamReader(limit=MAX_FRAME_BYTES)
         protocol = asyncio.StreamReaderProtocol(self._reader)
         await loop.connect_read_pipe(lambda: protocol, sys.stdin)
 
@@ -102,6 +114,18 @@ class AdapterRunner:
 
             except json.JSONDecodeError as e:
                 logger.error(f"Invalid JSON on stdin: {e}")
+                continue
+            except ValueError:
+                # readline() raises ValueError when a frame exceeds
+                # MAX_FRAME_BYTES before a newline; it has already cleared the
+                # oversize data from the buffer, so the worker survives — log a
+                # bounded error and keep serving instead of terminating.
+                # (JSONDecodeError above is a ValueError subclass and is handled
+                # separately, so this only catches the frame-overrun case.)
+                logger.error(
+                    f"stdin frame exceeded the {MAX_FRAME_BYTES}-byte cap; "
+                    "frame rejected, worker continuing"
+                )
                 continue
             except asyncio.CancelledError:
                 break

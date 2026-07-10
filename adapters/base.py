@@ -47,6 +47,14 @@ from adapters.types import (
 
 logger = logging.getLogger("mai.adapters.base")
 
+# The largest prompt (in characters) an adapter accepts. The IPC runner sizes
+# its stdin frame limit off this so a prompt within the cap round-trips instead
+# of overrunning the reader; see adapters/runner.py MAX_FRAME_BYTES.
+MAX_PROMPT_CHARS = 200_000
+# Largest per-text length and total payload for an embeddings request.
+MAX_EMBED_TEXT_CHARS = 50_000
+MAX_EMBED_TOTAL_CHARS = 200_000
+
 
 def _validate_stop_sequence(item: Any) -> None:
     if not isinstance(item, str):
@@ -60,7 +68,7 @@ def _validated_embed_text_chars(text: Any) -> int:
         raise ValidationError("texts must be strings")
     if not text.strip():
         raise ValidationError("texts must not include empty strings")
-    if len(text) > 50_000:
+    if len(text) > MAX_EMBED_TEXT_CHARS:
         raise ValidationError("text too large")
     return len(text)
 
@@ -100,7 +108,7 @@ class AdapterBase(ABC):
             raise ValidationError("prompt must be a string")
         if not prompt.strip():
             raise ValidationError("prompt must not be empty")
-        if len(prompt) > 200_000:
+        if len(prompt) > MAX_PROMPT_CHARS:
             raise ValidationError("prompt too large")
 
     def _validate_stop_sequences(self, stop_sequences: list[Any]) -> None:
@@ -157,7 +165,7 @@ class AdapterBase(ABC):
         total_chars = 0
         for text in texts:
             total_chars += _validated_embed_text_chars(text)
-        if total_chars > 200_000:
+        if total_chars > MAX_EMBED_TOTAL_CHARS:
             raise ValidationError("texts payload too large")
 
     def set_config(
@@ -269,6 +277,9 @@ def list_adapters() -> dict[str, type[AdapterBase]]:
 
 
 __all__ = [
+    "MAX_EMBED_TEXT_CHARS",
+    "MAX_EMBED_TOTAL_CHARS",
+    "MAX_PROMPT_CHARS",
     "AdapterBase",
     "AdapterCapabilities",
     "AdapterError",
