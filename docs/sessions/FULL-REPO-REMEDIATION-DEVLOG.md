@@ -1480,5 +1480,10 @@ isolation against Dockerized OpenBao :18200 (AF-10 + AF-17 PASSED live); workspa
 env unset) 2297 passed / 0 failed / 8 ignored; cargo audit + deny + ruff + detect-secrets +
 gitleaks(full-tree: 0) + no-slop(full) all clean; forbidden-terms PASS. Evidence:
 `test-evidence/full-repo-remediation/M7/PHASE-D/EVIDENCE.md`, `PHASE-C/EVIDENCE.md`,
-`PHASE-T/EVIDENCE.md`. Commits: pending Basho's approval of the commit plan (commit and push
-are separately gated for these phases); SHAs to be recorded here once landed.
+`PHASE-T/EVIDENCE.md`. Commits (approved + pushed to `origin/main` 2026-07-10, `e7977ac`->
+`e277320`): `8daf950` (D1+D2), `8f05202` (D3), `33c9666` (D4), `9513859` (C1), `657f8e4` (C2),
+`57e80c1` (C3), `cee8a7e` (C4), `390f360` (C5), `c4f913c` (C6), `4a55591` (T1-T4), `e277320`
+(this evidence + DEVLOG entry). The no-slop PROV gate blocked the first T1-T4 commit on `AF-10`/
+`AF-17` finding-IDs left in the test log strings; scrubbed from source (they live in the
+evidence/DEVLOG only) and both live gates re-run green before committing. Milestones M7-D, M7-C,
+M7-T closed; roster remaining: Phase Z (revalidation + go/no-go).
