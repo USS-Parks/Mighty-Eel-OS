@@ -31,6 +31,9 @@ jobs:
   sbom-sign:
     name: Build · SBOM · Sign · Verify
     runs-on: ubuntu-latest
+    # A phone-home violation must block publish + sign + attest — an image
+    # that calls home is not shippable no matter how well it is signed.
+    needs: [phone-home]
     if: github.event_name != 'pull_request'
     permissions:
       contents: read
