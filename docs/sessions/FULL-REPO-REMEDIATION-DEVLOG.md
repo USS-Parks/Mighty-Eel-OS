@@ -1386,3 +1386,36 @@ at -j 4); audit + deny + gitleaks(diff) + detect-secrets +
 no-slop(full) + verify-tree(8 files) all clean. Evidence:
 `test-evidence/full-repo-remediation/M7/R4/EVIDENCE.md`. Commit: `2e50ecd`. Phase R of the
 close-out roster is fully landed on main with this commit (R1-R8 all closed).
+
+## Phase M - medium trust-plane + adapter hardening (X4/X5 close-out, M7-M)
+
+Ran M1->M6 STS, closing the six mediums (X4-A F2/F3/F4/F5/F6 + X4-E). **M1** (X4-A F2): bound
+the credential `kind` into `WorkloadCredential::signing_bytes` (domain tag v1->v2), so a
+flipped kind on an authority-signed credential is refused 401 instead of dodging issuance-mode
+gating. **M2** (X4-A F3): the tenant-deprovision revocation snapshot now carries a monotonic
+timestamp-derived sequence (was seq-0, rejected as a rollback) and revokes the tenant on the
+tenant dimension (not just enumerated token ids); snapshot construction extracted to a pure
+`build_deprovision_snapshot`. **M3** (X4-A F4): the Azure/GCP brokers took a caller-named cloud
+identity while AWS resolved a server-side `GrantScope` - added `AzureGrantScope`/`GcpGrantScope`
+typed scopes, changed `acquire_token`/`generate_access_token` to require them, and gave
+`CloudGrant` a `GrantCloud` target with `to_azure_scope()`/`to_gcp_scope()` so the tenant-scoped
+grant_id -> scope indirection covers all three clouds (AWS path untouched). **M4** (X4-A F5):
+seal/unseal now bind the presented token's tenant to the authenticated principal via a shared
+`enforce_token_tenant` (exchange refactored onto it); a cross-tenant token is refused 403 at the
+handler. **M5** (X4-A F6): hand-written `Debug` on `TenantRecord` (wsf-tenants) and
+`TenantAttributes` (wsf-bridge) redacts `subject_hmac_key`. **M6** (X4-E): the adapter runner
+read stdin with asyncio's default 64 KiB limit while base.py advertised 200 K-char prompts - a
+mid-range prompt crashed the worker; now `StreamReader(limit=8 MiB)` (aligned to the orchestrator
+frame cap) with the prompt caps hoisted to named constants, and the request loop catches the
+overrun `ValueError` and continues instead of terminating. Files:
+`crates/wsf-api/src/{auth.rs,lib.rs,grants.rs}`, `crates/wsf-tenants/src/lib.rs`,
+`crates/wsf-bridge/src/openbao.rs`, `crates/wsf-broker/src/{lib.rs,azure.rs,gcp.rs}`,
+`crates/wsf-broker/tests/{live_azure.rs,live_gcp.rs}`, `adapters/{runner.py,base.py}`,
+`adapters/tests/test_runner_frame_limit.py` (new). No dependency/lockfile change. Verify: ruff
+clean; 33 pytest (frame-limit + IPC) passed; fmt + clippy -D warnings clean; focused crates 87
+passed; live gates green in isolation against OpenBao+Moto (live_api + live_tenants = 2;
+live_azure + live_gcp + live_localstack = 3); workspace 2286 passed / 0 failed (live tests
+self-skipping - see evidence for the shared-OpenBao live-contention and disk-full LNK1201 host
+artifacts, both diagnosed off the change set); audit + deny + gitleaks(diff) + detect-secrets +
+no-slop(full) + verify-tree(13 files) all clean; integrity subagent SAFE TO STAGE. Evidence:
+`test-evidence/full-repo-remediation/M7/PHASE-M/EVIDENCE.md`. Commit: (pending approval).
