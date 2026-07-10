@@ -16,7 +16,7 @@ use fabric_crypto::providers::RustCryptoMlDsa87;
 use reqwest::{Client, Method};
 use serde_json::{Value, json};
 use wsf_bridge::{OpenBaoAuth, OpenBaoConfig};
-use wsf_broker::{GcpBroker, GcpBrokerConfig};
+use wsf_broker::{GcpBroker, GcpBrokerConfig, GcpGrantScope};
 
 const ROLE: &str = "wsf-gcp-test";
 const BEARER_PATH: &str = "kv/data/broker/gcp-bearer";
@@ -226,17 +226,13 @@ async fn gcp_broker_mints_scoped_token() {
     let verifier = fabric_crypto::providers::MlDsa87Verifier;
     let token = signed_token(&signer);
     let now = Utc::now();
-    let scopes = vec!["https://www.googleapis.com/auth/cloud-platform".to_string()];
+    let grant = GcpGrantScope::new(
+        "sa@proj.iam.gserviceaccount.com",
+        &["https://www.googleapis.com/auth/cloud-platform"],
+    );
 
     let creds = broker
-        .generate_access_token(
-            &token,
-            &verifier,
-            signer.public_key(),
-            "sa@proj.iam.gserviceaccount.com",
-            &scopes,
-            now,
-        )
+        .generate_access_token(&token, &verifier, signer.public_key(), &grant, now)
         .await
         .expect("mint gcp token");
     assert!(creds.access_token.starts_with("ya29.mock-"));
@@ -247,16 +243,9 @@ async fn gcp_broker_mints_scoped_token() {
     );
 
     // Empty scope → the mock rejects → broker surfaces an STS error.
-    let empty: Vec<String> = vec![];
+    let empty = GcpGrantScope::new("sa@proj.iam.gserviceaccount.com", &[]);
     let err = broker
-        .generate_access_token(
-            &token,
-            &verifier,
-            signer.public_key(),
-            "sa@proj.iam.gserviceaccount.com",
-            &empty,
-            now,
-        )
+        .generate_access_token(&token, &verifier, signer.public_key(), &empty, now)
         .await
         .unwrap_err();
     assert!(
@@ -267,14 +256,7 @@ async fn gcp_broker_mints_scoped_token() {
     // Wrong key → refused before any GCP/OpenBao call.
     let wrong = RustCryptoMlDsa87::generate("wrong").unwrap();
     let denied = broker
-        .generate_access_token(
-            &token,
-            &verifier,
-            wrong.public_key(),
-            "sa@proj.iam.gserviceaccount.com",
-            &scopes,
-            now,
-        )
+        .generate_access_token(&token, &verifier, wrong.public_key(), &grant, now)
         .await
         .unwrap_err();
     assert!(matches!(denied, wsf_broker::BrokerError::TokenRejected(_)));

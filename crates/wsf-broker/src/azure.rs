@@ -19,7 +19,7 @@ use percent_encoding::{AsciiSet, NON_ALPHANUMERIC, utf8_percent_encode};
 use wsf_bridge::OpenBaoAuth;
 
 use crate::error::BrokerError;
-use crate::verify_token;
+use crate::{AzureGrantScope, verify_token};
 
 const FORM: &AsciiSet = &NON_ALPHANUMERIC
     .remove(b'-')
@@ -123,6 +123,10 @@ impl AzureBroker {
     /// Exchange a verified trust token for a scoped Azure AD access token. The
     /// returned `expires_at` never outlives the trust token.
     ///
+    /// `grant` is the **server-resolved** scope (parity with the AWS broker's
+    /// [`GrantScope`](crate::GrantScope)): the caller presents a tenant-scoped
+    /// `grant_id` that resolves to this, never a raw Azure scope.
+    ///
     /// # Errors
     /// [`BrokerError::TokenRejected`] / [`BrokerError::TokenExpired`] (before any
     /// Azure call), [`BrokerError::OpenBao`] / [`BrokerError::RootCredential`] if
@@ -132,7 +136,7 @@ impl AzureBroker {
         token: &fabric_contracts::TrustToken,
         verifier: &dyn fabric_crypto::Verifier,
         public_key: &[u8],
-        scope: &str,
+        grant: &AzureGrantScope,
         now: DateTime<Utc>,
     ) -> Result<AzureCredentials, BrokerError> {
         // 1. Fail closed on trust.
@@ -163,7 +167,7 @@ impl AzureBroker {
             .http
             .post(&url)
             .header("Content-Type", "application/x-www-form-urlencoded")
-            .body(token_form_body(client_id, client_secret, scope))
+            .body(token_form_body(client_id, client_secret, &grant.scope))
             .send()
             .await?;
         let status = resp.status();

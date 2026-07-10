@@ -19,7 +19,7 @@ use fabric_revocation::MonotonicRevocationStore;
 use wsf_bridge::OpenBaoAuth;
 
 use crate::error::BrokerError;
-use crate::{clamp_duration, verify_token};
+use crate::{GcpGrantScope, clamp_duration, verify_token};
 
 /// Static configuration for the GCP broker.
 #[derive(Debug, Clone)]
@@ -109,9 +109,13 @@ impl GcpBroker {
         self
     }
 
-    /// Exchange a verified trust token for a scoped GCP access token on
-    /// `service_account`. `scopes` are the OAuth scopes the downstream token is
-    /// granted; the lifetime tracks the trust token's remaining TTL.
+    /// Exchange a verified trust token for a scoped GCP access token.
+    ///
+    /// `grant` is the **server-resolved** scope (parity with the AWS broker's
+    /// [`GrantScope`](crate::GrantScope)): the target service account and the
+    /// downstream OAuth scopes are server-side truth resolved from a
+    /// tenant-scoped `grant_id`, never named by the caller. The lifetime tracks
+    /// the trust token's remaining TTL.
     ///
     /// # Errors
     /// [`BrokerError::TokenRejected`] / [`BrokerError::TokenExpired`] (before any
@@ -122,8 +126,7 @@ impl GcpBroker {
         token: &fabric_contracts::TrustToken,
         verifier: &dyn fabric_crypto::Verifier,
         public_key: &[u8],
-        service_account: &str,
-        scopes: &[String],
+        grant: &GcpGrantScope,
         now: DateTime<Utc>,
     ) -> Result<GcpCredentials, BrokerError> {
         // 1. Fail closed on trust.
@@ -150,14 +153,15 @@ impl GcpBroker {
 
         // 4. generateAccessToken.
         let url = format!(
-            "{}/v1/projects/-/serviceAccounts/{service_account}:generateAccessToken",
-            self.config.endpoint.trim_end_matches('/')
+            "{}/v1/projects/-/serviceAccounts/{}:generateAccessToken",
+            self.config.endpoint.trim_end_matches('/'),
+            grant.service_account
         );
         let resp = self
             .http
             .post(&url)
             .bearer_auth(bearer)
-            .json(&access_token_body(scopes, lifetime))
+            .json(&access_token_body(&grant.scopes, lifetime))
             .send()
             .await?;
         let status = resp.status();

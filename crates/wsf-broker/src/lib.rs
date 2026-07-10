@@ -22,6 +22,7 @@ mod sts;
 pub use azure::{AzureBroker, AzureBrokerConfig, AzureCredentials};
 pub use error::BrokerError;
 pub use gcp::{GcpBroker, GcpBrokerConfig, GcpCredentials};
+// `AzureGrantScope` / `GcpGrantScope` are defined below alongside `GrantScope`.
 pub use sts::{RootCredentials, TemporaryCredentials};
 
 use std::sync::{Arc, RwLock};
@@ -97,6 +98,49 @@ impl GrantScope {
             region: None,
             external_id: None,
             max_ttl_secs: None,
+        }
+    }
+}
+
+/// Server-side Azure scope for one credential exchange (parity with
+/// [`GrantScope`]). The OAuth scope is server-side truth resolved from an
+/// approved grant — the caller never names it; it presents a tenant-scoped
+/// `grant_id` that a [`GrantStore`](../wsf_api/grants) maps to this.
+#[derive(Debug, Clone)]
+pub struct AzureGrantScope {
+    /// The approved Azure AD OAuth scope (e.g. `https://storage.azure.com/.default`).
+    pub scope: String,
+}
+
+impl AzureGrantScope {
+    /// A scope resolved from an approved grant.
+    #[must_use]
+    pub fn new(scope: impl Into<String>) -> Self {
+        Self {
+            scope: scope.into(),
+        }
+    }
+}
+
+/// Server-side GCP scope for one credential exchange (parity with
+/// [`GrantScope`]). Both the target service account and the OAuth scopes are
+/// server-side truth resolved from an approved grant — the caller never names
+/// either; it presents a tenant-scoped `grant_id`.
+#[derive(Debug, Clone)]
+pub struct GcpGrantScope {
+    /// The approved service account to impersonate.
+    pub service_account: String,
+    /// The approved downstream OAuth scopes.
+    pub scopes: Vec<String>,
+}
+
+impl GcpGrantScope {
+    /// A scope resolved from an approved grant.
+    #[must_use]
+    pub fn new(service_account: impl Into<String>, scopes: &[&str]) -> Self {
+        Self {
+            service_account: service_account.into(),
+            scopes: scopes.iter().map(ToString::to_string).collect(),
         }
     }
 }

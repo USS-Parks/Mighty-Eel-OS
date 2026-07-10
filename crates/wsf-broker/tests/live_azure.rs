@@ -16,7 +16,7 @@ use fabric_crypto::providers::RustCryptoMlDsa87;
 use reqwest::{Client, Method};
 use serde_json::{Value, json};
 use wsf_bridge::{OpenBaoAuth, OpenBaoConfig};
-use wsf_broker::{AzureBroker, AzureBrokerConfig};
+use wsf_broker::{AzureBroker, AzureBrokerConfig, AzureGrantScope};
 
 const ROLE: &str = "wsf-azure-test";
 const CREDS_PATH: &str = "kv/data/broker/azure";
@@ -214,7 +214,13 @@ async fn azure_broker_caps_ttl_to_token() {
     let now = Utc::now();
 
     let creds = broker
-        .acquire_token(&token, &verifier, signer.public_key(), SCOPE, now)
+        .acquire_token(
+            &token,
+            &verifier,
+            signer.public_key(),
+            &AzureGrantScope::new(SCOPE),
+            now,
+        )
         .await
         .expect("acquire azure token");
     assert!(!creds.access_token.is_empty());
@@ -232,7 +238,13 @@ async fn azure_broker_caps_ttl_to_token() {
     // Wrong key → refused before any Azure/OpenBao call.
     let wrong = RustCryptoMlDsa87::generate("wrong").unwrap();
     let denied = broker
-        .acquire_token(&token, &verifier, wrong.public_key(), SCOPE, now)
+        .acquire_token(
+            &token,
+            &verifier,
+            wrong.public_key(),
+            &AzureGrantScope::new(SCOPE),
+            now,
+        )
         .await
         .unwrap_err();
     assert!(matches!(denied, wsf_broker::BrokerError::TokenRejected(_)));

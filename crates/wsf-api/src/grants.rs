@@ -8,6 +8,30 @@
 
 use std::collections::HashMap;
 
+/// The non-AWS cloud a grant may target. AWS uses the [`CloudGrant`] role
+/// fields directly (the shipped exchange path); Azure and GCP carry their
+/// server-resolved identity here so the Azure/GCP brokers get the same
+/// grant-resolved scope AWS does — the caller still names only a `grant_id`,
+/// never a raw Azure scope or GCP service account.
+#[derive(Debug, Clone, Default)]
+pub enum GrantCloud {
+    /// AWS STS: the identity is the [`CloudGrant`] `role_arn` + `allowed_actions`.
+    #[default]
+    Aws,
+    /// Azure AD: the approved OAuth scope.
+    Azure {
+        /// The approved Azure AD OAuth scope.
+        scope: String,
+    },
+    /// GCP IAM Credentials: the approved service account + OAuth scopes.
+    Gcp {
+        /// The approved service account to impersonate.
+        service_account: String,
+        /// The approved downstream OAuth scopes.
+        scopes: Vec<String>,
+    },
+}
+
 /// An approved cloud-credential grant. Every field is server-side truth — the
 /// caller never submits any of it (plan B1/B3).
 #[derive(Debug, Clone)]
@@ -28,6 +52,8 @@ pub struct CloudGrant {
     pub region: Option<String>,
     /// Optional maximum credential TTL (seconds) for this grant.
     pub max_ttl_secs: Option<u64>,
+    /// Which cloud this grant targets. Defaults to AWS (the role fields above).
+    pub cloud: GrantCloud,
 }
 
 impl CloudGrant {
@@ -41,6 +67,33 @@ impl CloudGrant {
             region: self.region.clone(),
             external_id: self.external_id.clone(),
             max_ttl_secs: self.max_ttl_secs.and_then(|v| i64::try_from(v).ok()),
+        }
+    }
+
+    /// The Azure broker scope this grant resolves to, or `None` if the grant is
+    /// not an Azure grant. The same tenant-scoped `grant_id` → server-side
+    /// scope indirection AWS uses.
+    #[must_use]
+    pub fn to_azure_scope(&self) -> Option<wsf_broker::AzureGrantScope> {
+        match &self.cloud {
+            GrantCloud::Azure { scope } => Some(wsf_broker::AzureGrantScope::new(scope.clone())),
+            _ => None,
+        }
+    }
+
+    /// The GCP broker scope this grant resolves to, or `None` if the grant is
+    /// not a GCP grant.
+    #[must_use]
+    pub fn to_gcp_scope(&self) -> Option<wsf_broker::GcpGrantScope> {
+        match &self.cloud {
+            GrantCloud::Gcp {
+                service_account,
+                scopes,
+            } => Some(wsf_broker::GcpGrantScope {
+                service_account: service_account.clone(),
+                scopes: scopes.clone(),
+            }),
+            _ => None,
         }
     }
 }
@@ -89,6 +142,7 @@ impl StaticGrants {
             external_id: None,
             region: None,
             max_ttl_secs: None,
+            cloud: GrantCloud::Aws,
         })
     }
 }
@@ -129,6 +183,7 @@ mod tests {
             external_id: Some("wsf-ext-9".to_string()),
             region: Some("eu-central-1".to_string()),
             max_ttl_secs: Some(1200),
+            cloud: GrantCloud::Aws,
         };
         let scope = grant.to_scope();
         assert_eq!(scope.role_arn, "arn:aws:iam::111:role/x");
@@ -136,6 +191,9 @@ mod tests {
         assert_eq!(scope.external_id.as_deref(), Some("wsf-ext-9"));
         assert_eq!(scope.region.as_deref(), Some("eu-central-1"));
         assert_eq!(scope.max_ttl_secs, Some(1200));
+        // An AWS grant resolves to no Azure/GCP scope.
+        assert!(grant.to_azure_scope().is_none());
+        assert!(grant.to_gcp_scope().is_none());
 
         // The dev grant approves a bounded read-only action set — no "*".
         let dev = StaticGrants::single_dev("t", "g", "arn:aws:iam::1:role/y")
@@ -143,5 +201,45 @@ mod tests {
             .unwrap();
         assert!(!dev.allowed_actions.is_empty());
         assert!(dev.allowed_actions.iter().all(|a| a != "*"));
+    }
+
+    #[test]
+    fn azure_and_gcp_grants_resolve_to_broker_scopes() {
+        // An Azure/GCP grant resolves — server-side, from a tenant-scoped
+        // grant_id — to the broker's scope type. The caller never names the
+        // Azure scope or GCP service account; it names the grant_id.
+        let azure = CloudGrant {
+            tenant_id: "t-a".to_string(),
+            grant_id: "az-blob".to_string(),
+            role_arn: String::new(),
+            allowed_actions: vec![],
+            external_id: None,
+            region: None,
+            max_ttl_secs: None,
+            cloud: GrantCloud::Azure {
+                scope: "https://storage.azure.com/.default".to_string(),
+            },
+        };
+        let az = azure.to_azure_scope().expect("azure grant resolves");
+        assert_eq!(az.scope, "https://storage.azure.com/.default");
+        assert!(azure.to_gcp_scope().is_none());
+
+        let gcp = CloudGrant {
+            tenant_id: "t-a".to_string(),
+            grant_id: "gcp-storage".to_string(),
+            role_arn: String::new(),
+            allowed_actions: vec![],
+            external_id: None,
+            region: None,
+            max_ttl_secs: None,
+            cloud: GrantCloud::Gcp {
+                service_account: "sa@proj.iam.gserviceaccount.com".to_string(),
+                scopes: vec!["https://www.googleapis.com/auth/devstorage.read_only".to_string()],
+            },
+        };
+        let g = gcp.to_gcp_scope().expect("gcp grant resolves");
+        assert_eq!(g.service_account, "sa@proj.iam.gserviceaccount.com");
+        assert_eq!(g.scopes.len(), 1);
+        assert!(gcp.to_azure_scope().is_none());
     }
 }
