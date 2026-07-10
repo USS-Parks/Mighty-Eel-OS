@@ -50,7 +50,11 @@ pub struct TenantSpec {
 
 /// The stored tenant record — the bridge reads the shared fields; the admin also
 /// tracks the per-tenant subject-HMAC key + rotation timestamps.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+///
+/// `Debug` is hand-written to redact `subject_hmac_key`: the derived form would
+/// print the raw key, so a stray `{:?}` in a log line would leak per-tenant
+/// keying material.
+#[derive(Clone, Serialize, Deserialize)]
 pub struct TenantRecord {
     /// Stable tenant id.
     pub tenant_id: String,
@@ -71,6 +75,21 @@ pub struct TenantRecord {
     pub provisioned_at: String,
     /// Subject-HMAC key last rotated (RFC3339).
     pub hmac_rotated_at: String,
+}
+
+impl std::fmt::Debug for TenantRecord {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TenantRecord")
+            .field("tenant_id", &self.tenant_id)
+            .field("display_name", &self.display_name)
+            .field("compliance_scopes", &self.compliance_scopes)
+            .field("default_allowed_routes", &self.default_allowed_routes)
+            .field("max_data_classification", &self.max_data_classification)
+            .field("subject_hmac_key", &"<redacted>")
+            .field("provisioned_at", &self.provisioned_at)
+            .field("hmac_rotated_at", &self.hmac_rotated_at)
+            .finish()
+    }
 }
 
 /// Admin configuration (KV path prefixes + rotation window).
@@ -220,14 +239,10 @@ impl TenantAdmin {
                 &format!("{}/{tenant_id}", self.config.tenant_metadata_prefix),
             )
             .await?;
-        // 2. Sign a (long-lived) revocation snapshot.
-        let mut snap = RevocationSnapshot::new(
-            format!("deprovision-{tenant_id}-{}", now.timestamp()),
-            now.to_rfc3339(),
-            (now + Duration::days(3650)).to_rfc3339(),
-        );
-        snap.revoked_tokens = revoke_tokens;
-        snap.revoked_subjects = revoke_subjects;
+        // 2. Sign a (long-lived) revocation snapshot (see
+        //    [`build_deprovision_snapshot`] for the sequence + tenant-dimension
+        //    contract).
+        let snap = build_deprovision_snapshot(tenant_id, revoke_tokens, revoke_subjects, now);
         let signed = fabric_revocation::sign(snap, self.signer.as_ref())?;
         // 3. Persist for propagation.
         let value =
@@ -255,6 +270,39 @@ impl TenantAdmin {
             .await?;
         Ok(())
     }
+}
+
+/// Build the (unsigned) revocation snapshot a tenant deprovision emits.
+///
+/// Two properties the old inline construction missed:
+/// * **Monotonic sequence** — derived from the deprovision timestamp (ms since
+///   epoch). A seq-0 snapshot is rejected as a non-advancing rollback the
+///   moment a consumer already holds any snapshot; a wall-clock sequence always
+///   advances, so the deprovision takes effect. (ponytail: a per-store
+///   persistent counter is the upgrade path if a non-wall-clock global ordering
+///   across all revocation publishers is ever required.)
+/// * **Tenant dimension** — the tenant id is pushed into `revoked_tenants`, so
+///   every token bound to the tenant is refused offline, not only the token ids
+///   the caller happened to enumerate.
+#[must_use]
+pub fn build_deprovision_snapshot(
+    tenant_id: &str,
+    revoke_tokens: Vec<String>,
+    revoke_subjects: Vec<String>,
+    now: DateTime<Utc>,
+) -> RevocationSnapshot {
+    #[allow(clippy::cast_sign_loss)] // ms since epoch is positive
+    let sequence = now.timestamp_millis() as u64;
+    let mut snap = RevocationSnapshot::new(
+        format!("deprovision-{tenant_id}-{}", now.timestamp()),
+        now.to_rfc3339(),
+        (now + Duration::days(3650)).to_rfc3339(),
+    )
+    .with_sequence(sequence);
+    snap.revoked_tokens = revoke_tokens;
+    snap.revoked_subjects = revoke_subjects;
+    snap.revoked_tenants.push(tenant_id.to_string());
+    snap
 }
 
 fn parse_record(data: &serde_json::Value) -> Result<TenantRecord, TenantError> {
@@ -299,6 +347,57 @@ mod tests {
     #[test]
     fn random_key_is_32_bytes_hex() {
         assert_eq!(random_hmac_key().len(), 64);
+    }
+
+    #[test]
+    fn deprovision_snapshot_advances_sequence_and_revokes_the_tenant() {
+        // The deprovision snapshot carries a non-zero, monotonic sequence (so a
+        // consumer does not reject it as a rollback) and revokes the tenant on
+        // the *tenant* dimension (so tokens the caller did not enumerate are
+        // still refused).
+        let t0 = DateTime::parse_from_rfc3339("2026-07-10T00:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        let snap = build_deprovision_snapshot(
+            "t-gone",
+            vec!["tok-1".to_string()],
+            vec!["subj-1".to_string()],
+            t0,
+        );
+        assert!(
+            snap.sequence > 0,
+            "sequence must advance past the seq-0 baseline"
+        );
+        assert!(
+            snap.is_tenant_revoked("t-gone"),
+            "tenant dimension is revoked"
+        );
+        assert!(!snap.is_tenant_revoked("t-other"), "only the named tenant");
+        assert!(
+            snap.is_token_revoked("tok-1"),
+            "enumerated tokens still revoked"
+        );
+
+        // A later deprovision yields a strictly higher sequence — monotonic.
+        let t1 = t0 + Duration::milliseconds(5);
+        let later = build_deprovision_snapshot("t-gone", vec![], vec![], t1);
+        assert!(
+            later.sequence > snap.sequence,
+            "a later snapshot advances the sequence"
+        );
+    }
+
+    #[test]
+    fn debug_redacts_the_subject_hmac_key() {
+        // A stray `{:?}` on a TenantRecord must never render the per-tenant
+        // HMAC key bytes.
+        let mut r = record("2026-07-01T00:00:00Z");
+        r.subject_hmac_key = "deadbeefkeymaterial".to_string();
+        let dbg = format!("{r:?}");
+        assert!(!dbg.contains("deadbeefkeymaterial"), "key must not appear");
+        assert!(dbg.contains("<redacted>"));
+        // Non-secret fields still render for diagnostics.
+        assert!(dbg.contains("tenant_id"));
     }
 
     #[test]

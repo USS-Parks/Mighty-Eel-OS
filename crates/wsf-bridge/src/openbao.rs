@@ -68,7 +68,11 @@ impl OpenBaoConfig {
 
 /// Tenant attributes read from OpenBao KV — the authorization envelope a token
 /// is bounded by (compliance scopes, route ceiling, classification ceiling).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+///
+/// `Debug` is hand-written to redact `subject_hmac_key`: the derived form would
+/// print the raw per-tenant key, so a stray `{:?}` in a log line would leak
+/// keying material.
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TenantAttributes {
     /// Stable tenant id.
     pub tenant_id: String,
@@ -88,6 +92,22 @@ pub struct TenantAttributes {
     /// Optional for backwards compatibility.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub subject_hmac_key: Option<String>,
+}
+
+impl std::fmt::Debug for TenantAttributes {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TenantAttributes")
+            .field("tenant_id", &self.tenant_id)
+            .field("display_name", &self.display_name)
+            .field("compliance_scopes", &self.compliance_scopes)
+            .field("default_allowed_routes", &self.default_allowed_routes)
+            .field("max_data_classification", &self.max_data_classification)
+            .field(
+                "subject_hmac_key",
+                &self.subject_hmac_key.as_ref().map(|_| "<redacted>"),
+            )
+            .finish()
+    }
 }
 
 /// Failures from the focused OpenBao client.
@@ -436,5 +456,37 @@ impl OpenBaoAuth {
                 .is_some_and(|sealed| !sealed),
             Err(_) => false,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::TenantAttributes;
+
+    #[test]
+    fn debug_redacts_the_subject_hmac_key() {
+        // A stray `{:?}` on TenantAttributes must never render the per-tenant
+        // HMAC key bytes.
+        let attrs = TenantAttributes {
+            tenant_id: "t-a".to_string(),
+            display_name: "Tenant A".to_string(),
+            compliance_scopes: vec!["hipaa".to_string()],
+            default_allowed_routes: vec!["local_only".to_string()],
+            max_data_classification: "restricted".to_string(),
+            subject_hmac_key: Some("deadbeefkeymaterial".to_string()),
+        };
+        let dbg = format!("{attrs:?}");
+        assert!(!dbg.contains("deadbeefkeymaterial"), "key must not appear");
+        assert!(dbg.contains("<redacted>"));
+        assert!(dbg.contains("t-a"), "non-secret fields still render");
+
+        // A None key renders as None, never a leak.
+        let none = TenantAttributes {
+            subject_hmac_key: None,
+            ..attrs
+        };
+        let dbg_none = format!("{none:?}");
+        assert!(dbg_none.contains("None"));
+        assert!(!dbg_none.contains("<redacted>"));
     }
 }
