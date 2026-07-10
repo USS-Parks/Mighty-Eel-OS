@@ -5,7 +5,7 @@
 mod common;
 
 use axum::http::StatusCode;
-use common::{BASE, authed_app, bundle, send};
+use common::{BASE, anchor, app_anchored, authed_app, bundle, header_for, mint, mint_with, send};
 
 #[tokio::test]
 async fn crud_roundtrip() {
@@ -92,6 +92,64 @@ async fn create_binds_object_to_the_principal_tenant() {
     assert_eq!(
         created["metadata"]["tenant"], "tenant-loom",
         "object tenant must be the principal's, not the spoofed value: {created}"
+    );
+}
+
+#[tokio::test]
+async fn cross_tenant_delete_is_denied() {
+    // A tenant-scoped principal may not delete another tenant's object. The
+    // sharpest instance is a RevocationIntent: deleting someone else's intent
+    // would reverse a live kill. tenant-loom creates the intent;
+    // tenant-mallory's delete is refused and changes nothing; the owner's own
+    // delete still proceeds (the denial is the tenant binding, not a blanket
+    // delete refusal).
+    let signer = anchor();
+    let app = app_anchored("aog-apiserver-xtenant-delete", &signer, None).await;
+    let owner = header_for(&mint(&signer)); // tenant-loom
+    let intruder = header_for(&mint_with(&signer, |t| {
+        t.token_id = "tok-mallory".to_owned();
+        t.tenant_id = "tenant-mallory".to_owned();
+        t.subject_hash = "hmac:mallory".to_owned();
+    }));
+
+    let intent = serde_json::json!({
+        "api_version": "aog.islandmountain.io/v1",
+        "kind": "RevocationIntent",
+        "metadata": { "name": "kill-tok-x" },
+        "spec": {
+            "target": { "target": "token", "id": "tok-x" },
+            "reason": "compromised",
+        },
+    });
+    let (status, created) = send(
+        &app,
+        "POST",
+        &format!("{BASE}/RevocationIntent"),
+        Some(owner.as_str()),
+        Some(intent),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "create body: {created}");
+
+    let url = format!("{BASE}/RevocationIntent/kill-tok-x");
+
+    // The cross-tenant delete (kill-reversal) is refused with 403...
+    let (status, body) = send(&app, "DELETE", &url, Some(intruder.as_str()), None).await;
+    assert_eq!(
+        status,
+        StatusCode::FORBIDDEN,
+        "a cross-tenant delete must be denied: {body}"
+    );
+
+    // ...and changed nothing: the intent is still live for its owner.
+    let (status, body) = send(&app, "GET", &url, Some(owner.as_str()), None).await;
+    assert_eq!(status, StatusCode::OK, "the kill intent survived: {body}");
+
+    // The owning tenant's delete proceeds.
+    let (status, body) = send(&app, "DELETE", &url, Some(owner.as_str()), None).await;
+    assert!(
+        status.is_success(),
+        "the owner's delete must proceed, got {status}: {body}"
     );
 }
 
