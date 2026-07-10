@@ -74,6 +74,28 @@ async fn crud_roundtrip() {
 }
 
 #[tokio::test]
+async fn create_binds_object_to_the_principal_tenant() {
+    // A create body cannot smuggle a foreign metadata.tenant: the server stamps
+    // the authenticated principal's tenant (tenant-loom), overwriting the spoof.
+    let (app, tok) = authed_app("aog-apiserver-tenant-bind").await;
+    let mut body = bundle("spoof", 1);
+    body["metadata"]["tenant"] = serde_json::json!("attacker-tenant");
+    let (status, created) = send(
+        &app,
+        "POST",
+        &format!("{BASE}/PolicyBundle"),
+        Some(tok.as_str()),
+        Some(body),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "create body: {created}");
+    assert_eq!(
+        created["metadata"]["tenant"], "tenant-loom",
+        "object tenant must be the principal's, not the spoofed value: {created}"
+    );
+}
+
+#[tokio::test]
 async fn duplicate_create_conflicts() {
     let (app, tok) = authed_app("aog-apiserver-k5-conflict").await;
     let t = Some(tok.as_str());

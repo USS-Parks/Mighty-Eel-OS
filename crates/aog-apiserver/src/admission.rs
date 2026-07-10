@@ -526,6 +526,13 @@ fn stamp_create(object: &mut ResourceObject, principal: &Principal) {
     // a terminating state in.
     meta.deletion_timestamp = None;
     meta.token_ref.clone_from(&principal.token_ref);
+    // Bind a tenant-scoped principal's object to its own tenant — a create body
+    // cannot smuggle a different metadata.tenant (the delete path enforces the
+    // same binding). A global (untenanted) principal may still create for any
+    // tenant.
+    if let Some(pt) = principal.tenant.as_ref() {
+        meta.tenant = Some(pt.clone());
+    }
 }
 
 /// Carry immutable identity (`uid`, `created_at`) forward on update and bump
