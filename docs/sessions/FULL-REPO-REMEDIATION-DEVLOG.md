@@ -1418,4 +1418,6 @@ live_azure + live_gcp + live_localstack = 3); workspace 2286 passed / 0 failed (
 self-skipping - see evidence for the shared-OpenBao live-contention and disk-full LNK1201 host
 artifacts, both diagnosed off the change set); audit + deny + gitleaks(diff) + detect-secrets +
 no-slop(full) + verify-tree(13 files) all clean; integrity subagent SAFE TO STAGE. Evidence:
-`test-evidence/full-repo-remediation/M7/PHASE-M/EVIDENCE.md`. Commit: (pending approval).
+`test-evidence/full-repo-remediation/M7/PHASE-M/EVIDENCE.md`. Commits: `76fb564` (M1),
+`c15631c` (M4), `30073bb` (M3), `b8e4a6d` (M2/M5), `8773e3d` (M6) - all pushed to main.
+Milestone M7-M closed; roster remaining: Phases D, C, T, Z.

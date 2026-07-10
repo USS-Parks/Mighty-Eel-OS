@@ -176,6 +176,15 @@ Two `cargo test --workspace` artifacts were diagnosed to the host, not this chan
 - M5: `{:?}` on either struct renders `<redacted>`, never the key bytes.
 - M6: an oversize frame raises and the reader recovers — the worker keeps serving.
 
-## Commit
+## Commits
 
-Pending Basho's approval (roster §0.3). SHA(s) to be recorded here after commit.
+Approved by Basho; pushed to `origin/main` (branch `session/AUDIT-FIX-2`, base `57161aa`):
+
+- `76fb564` — remediation(M1): bind the credential kind into the signing preimage
+- `c15631c` — remediation(M4): bind seal/unseal to the authenticated principal's tenant
+- `30073bb` — remediation(M3): route the Azure/GCP brokers through server-resolved grant scopes
+- `b8e4a6d` — remediation(M2,M5): complete the deprovision snapshot and redact HMAC-key Debug
+- `8773e3d` — remediation(M6): bound the adapter IPC frame
+
+(M2 and M5 share `crates/wsf-tenants/src/lib.rs`; non-interactive staging cannot split one
+file's hunks across two commits, so they land together.)
