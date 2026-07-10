@@ -267,6 +267,26 @@ fn b64_decode(s: &str) -> Result<Vec<u8>, ApiError> {
         .map_err(|e| ApiError::new(StatusCode::BAD_REQUEST, format!("bad base64: {e}")))
 }
 
+/// A privileged token-carrying call must present a WSF-plane principal whose
+/// tenant matches the token's — no cross-tenant use of a token on this plane.
+/// The seal, unseal, and exchange handlers all funnel through this so the
+/// tenant binding is enforced identically (403 on mismatch).
+fn enforce_token_tenant(principal: &WsfPrincipal, token: &TrustToken) -> Result<(), ApiError> {
+    if !principal.is_for(Audience::Wsf) {
+        return Err(ApiError::new(
+            StatusCode::FORBIDDEN,
+            "principal is not authenticated for the WSF plane",
+        ));
+    }
+    if token.tenant_id != principal.tenant_id {
+        return Err(ApiError::new(
+            StatusCode::FORBIDDEN,
+            "token tenant does not match the authenticated principal",
+        ));
+    }
+    Ok(())
+}
+
 /// Authorize a requested budget against the tenant ceiling (plan A3): every
 /// counter must be at or below the ceiling; an omitted request is granted the
 /// ceiling exactly (never unlimited). Spent counters are always reset to zero.
@@ -553,8 +573,13 @@ fn map_attenuate_error(e: fabric_token::TokenError) -> ApiError {
 
 async fn seal(
     State(s): State<AppState>,
+    Extension(principal): Extension<WsfPrincipal>,
     Json(req): Json<SealReq>,
 ) -> Result<Json<SealResp>, ApiError> {
+    // Bind the presented token to the authenticated principal's tenant (parity
+    // with `exchange`): the seal plane must not let a principal seal under a
+    // token minted for a different tenant.
+    enforce_token_tenant(&principal, &req.token)?;
     let plaintext = b64_decode(&req.plaintext_b64)?;
     let before = s.seal.receipts_snapshot().len();
     let result = s
@@ -576,8 +601,12 @@ async fn seal(
 
 async fn unseal(
     State(s): State<AppState>,
+    Extension(principal): Extension<WsfPrincipal>,
     Json(req): Json<UnsealReq>,
 ) -> Result<Json<UnsealResp>, ApiError> {
+    // Same tenant binding as `seal`: a principal may only unseal with a token
+    // belonging to its own tenant.
+    enforce_token_tenant(&principal, &req.token)?;
     let before = s.seal.receipts_snapshot().len();
     let result = s
         .seal
@@ -604,19 +633,9 @@ async fn exchange(
     // B1/B2: the cloud identity is resolved server-side from a tenant-scoped
     // grant — the caller never names a role ARN. A grant is scoped to the
     // authenticated principal's tenant, and the presented token must belong to
-    // that same tenant (no cross-tenant brokering).
-    if !principal.is_for(Audience::Wsf) {
-        return Err(ApiError::new(
-            StatusCode::FORBIDDEN,
-            "principal is not authenticated for the WSF plane",
-        ));
-    }
-    if req.token.tenant_id != principal.tenant_id {
-        return Err(ApiError::new(
-            StatusCode::FORBIDDEN,
-            "token tenant does not match the authenticated principal",
-        ));
-    }
+    // that same tenant (no cross-tenant brokering) — the same binding seal and
+    // unseal enforce.
+    enforce_token_tenant(&principal, &req.token)?;
     let grant = s
         .grants
         .grant_for(&principal.tenant_id, &req.grant_id)
@@ -824,5 +843,95 @@ mod issue_authz_tests {
                 "must reject smuggled authority: {smuggle}"
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod tenant_binding_tests {
+    use super::*;
+    use fabric_contracts::{
+        Attenuation, AuthStrength, AuthenticatedFacts, Classification, IdentityKind,
+        RevocationStatus, Signature,
+    };
+
+    fn principal(tenant: &str) -> WsfPrincipal {
+        WsfPrincipal::establish(
+            AuthenticatedFacts {
+                principal_id: "p".into(),
+                kind: IdentityKind::Workload,
+                tenant_id: tenant.into(),
+                subject_hash: String::new(),
+                service_identity: None,
+                auth_strength: AuthStrength::WorkloadToken,
+                audience: Audience::Wsf,
+            },
+            "corr-1".to_string(),
+            "2026-07-10T00:00:00Z".to_string(),
+        )
+    }
+
+    fn token(tenant: &str) -> TrustToken {
+        TrustToken {
+            token_id: "t".into(),
+            issued_at: "2026-07-10T00:00:00Z".into(),
+            expires_at: "2099-01-01T00:00:00Z".into(),
+            issuer: "wsf-bridge".into(),
+            trust_bundle_version: "2026.07".into(),
+            tenant_id: tenant.into(),
+            subject_id: None,
+            subject_hash: "h".into(),
+            service_identity: None,
+            identity_id: None,
+            roles: vec![],
+            compliance_scopes: vec![],
+            allowed_routes: vec![],
+            allowed_models: vec![],
+            max_data_classification: Classification::Restricted,
+            country: None,
+            person_type: None,
+            offline_mode: false,
+            revocation_status: RevocationStatus::Valid,
+            budget: None,
+            attenuation: Attenuation::default(),
+            signature: Signature {
+                alg: String::new(),
+                key_id: String::new(),
+                value: String::new(),
+            },
+        }
+    }
+
+    #[test]
+    fn seal_unseal_refuse_a_cross_tenant_token() {
+        // The seal/unseal/exchange handlers all route through
+        // `enforce_token_tenant`; a token minted for another tenant is refused
+        // 403 at the handler, never sealed/unsealed under the caller's identity.
+        let alice = principal("tenant-a");
+        // Same tenant: allowed.
+        assert!(enforce_token_tenant(&alice, &token("tenant-a")).is_ok());
+        // Cross-tenant token: 403.
+        let err = enforce_token_tenant(&alice, &token("tenant-b")).unwrap_err();
+        assert_eq!(err.status, StatusCode::FORBIDDEN);
+    }
+
+    #[test]
+    fn a_non_wsf_principal_is_refused() {
+        // A principal authenticated for a different plane (AOG) is refused on
+        // the WSF seal/unseal/exchange handlers even with a matching tenant.
+        let aog_principal = WsfPrincipal::establish(
+            AuthenticatedFacts {
+                principal_id: "p".into(),
+                kind: IdentityKind::Workload,
+                tenant_id: "tenant-a".into(),
+                subject_hash: String::new(),
+                service_identity: None,
+                auth_strength: AuthStrength::WorkloadToken,
+                audience: Audience::Aog,
+            },
+            "corr-1".to_string(),
+            "2026-07-10T00:00:00Z".to_string(),
+        );
+        let err = enforce_token_tenant(&aog_principal, &token("tenant-a")).unwrap_err();
+        assert_eq!(err.status, StatusCode::FORBIDDEN);
     }
 }
