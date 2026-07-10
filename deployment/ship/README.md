@@ -5,9 +5,9 @@ sold or installed on a node delivered to a regulated end-user. Use it
 on every appliance the operator does not personally re-image between
 debugging sessions.
 
-When `MAI_PROFILE=ship` is active, the production guard rejects
-every demo-safe default before the API server is allowed to
-listen. Parsing landed in SHIP-01; the runtime guard, vault
+When a ship profile is loaded (`MAI_SHIP_PROFILE` pointing at the
+profile TOML), the production guard rejects every demo-safe default
+before the API server is allowed to listen. Parsing landed in SHIP-01; the runtime guard, vault
 wiring, audit WAL, trust components, packaging, backup/restore,
 observability, CI enforcement, GPU release workflow, 72-hour
 burn-in, and operator docs and runbooks all landed across
@@ -39,17 +39,23 @@ the single gate (SHIP-07-endpoint-and-cli).
 
 ## How to use this profile
 
+`MAI_SHIP_PROFILE` is the variable the server reads; it engages the
+production guard. `--config` alone does **not**.
+
 ```bash
 # Bash
-MAI_PROFILE=ship cargo run -p mai-api -- --config deployment/ship/profile.toml
+MAI_SHIP_PROFILE=deployment/ship/profile.toml cargo run -p mai-api -- --config deployment/ship/profile.toml
 
 # PowerShell
-$env:MAI_PROFILE = "ship"; cargo run -p mai-api -- --config deployment/ship/profile.toml
+$env:MAI_SHIP_PROFILE = "deployment/ship/profile.toml"; cargo run -p mai-api -- --config deployment/ship/profile.toml
 ```
 
-The above invocation is the developer-side dry-run path. On a real
-installed node the operator points at `/etc/mai/profile.toml` and
-`mai-api` runs under systemd (SHIP-08).
+On a developer workstation this launch is expected to **fail closed**:
+the guard demands the real vault, audit WAL, trust anchors, and key
+store at the paths the profile names (`/var/lib/mai`, `/etc/mai`).
+That refusal is the guard working, not a bug. On a real installed node
+the operator points at `/etc/mai/profile.toml` and `mai-api` runs
+under systemd (SHIP-08), which sets `MAI_SHIP_PROFILE` in the unit.
 
 ## What this profile is NOT
 

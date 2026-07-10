@@ -90,6 +90,7 @@ fn baseline(mode: ProfileMode, anchors_dir: PathBuf, bundle_cache_dir: PathBuf) 
         dashboard: DashboardConfig {
             enabled: true,
             allow_default_admin_token: false,
+            admin_token_file: None,
         },
         network: NetworkConfig {
             bind_address: "127.0.0.1".into(),

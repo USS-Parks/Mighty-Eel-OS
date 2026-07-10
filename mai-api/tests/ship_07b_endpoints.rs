@@ -186,6 +186,7 @@ fn all_pass_runtime() -> RuntimeChecks {
         auth_internal_bypass_consistent: Some(RuntimeOutcome::pass(
             "runtime bypass matches profile field (test)",
         )),
+        dashboard_admin_token_set: Some(RuntimeOutcome::pass("dashboard admin token set (test)")),
         policy_modules_loaded: Some(RuntimeOutcome::pass("standard template (test)")),
     }
 }

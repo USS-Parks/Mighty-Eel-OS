@@ -817,6 +817,10 @@ fn apply_ship_profile(
         )
     };
 
+    // PROD-DASH-100: measured off the profile-declared EnvironmentFile so
+    // an enabled dashboard cannot be running on the local-dev default token.
+    let dashboard_token_outcome = crate::production_guard::probe_dashboard_admin_token(profile);
+
     let runtime = RuntimeChecks {
         vault_opened: Some(vault_outcome),
         master_key_sealed: Some(seal_outcome),
@@ -826,6 +830,7 @@ fn apply_ship_profile(
         trust_bundle_verified: Some(trust_outcome),
         auth_keys_nonempty: Some(auth_outcome),
         auth_internal_bypass_consistent: Some(auth_bypass_outcome),
+        dashboard_admin_token_set: Some(dashboard_token_outcome),
         policy_modules_loaded: Some(policy_outcome),
     };
 

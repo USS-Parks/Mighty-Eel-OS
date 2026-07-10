@@ -320,6 +320,10 @@ async fn evaluate_runtime(profile: &ShipProfile) -> RuntimeChecks {
         )
     };
 
+    // The dashboard admin token is measured off the profile-declared
+    // EnvironmentFile — never certified by the PROD-DASH-001 config flag.
+    let dashboard_admin_token_set = mai_api::production_guard::probe_dashboard_admin_token(profile);
+
     // Policy template loads infallibly via PolicyManager::from_template.
     // Once per-tenant template selection is wired, this branch will
     // exercise the configured template's load path.
@@ -341,6 +345,7 @@ async fn evaluate_runtime(profile: &ShipProfile) -> RuntimeChecks {
         trust_bundle_verified: Some(trust_bundle_verified),
         auth_keys_nonempty: Some(auth_keys_nonempty),
         auth_internal_bypass_consistent: Some(auth_internal_bypass_consistent),
+        dashboard_admin_token_set: Some(dashboard_admin_token_set),
         policy_modules_loaded: Some(policy_modules_loaded),
     }
 }

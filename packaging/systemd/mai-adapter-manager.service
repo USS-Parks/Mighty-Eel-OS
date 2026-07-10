@@ -9,7 +9,7 @@ Type=simple
 User=mai
 Group=mai
 WorkingDirectory=/var/lib/mai
-Environment=MAI_PROFILE=ship
+Environment=MAI_SHIP_PROFILE=/etc/mai/profile.toml
 Environment=MAI_ADAPTERS_DIR=/usr/lib/mai/adapters
 Environment=MAI_STATE_DIR=/var/lib/mai
 ExecStart=/usr/bin/mai-api --config /etc/mai/profile.toml --role adapter-manager

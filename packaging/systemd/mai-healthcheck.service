@@ -9,7 +9,6 @@ Type=oneshot
 User=mai
 Group=mai
 WorkingDirectory=/var/lib/mai
-Environment=MAI_PROFILE=ship
 Environment=MAI_API_URL=http://127.0.0.1:8420
 ExecStart=/usr/lib/mai/scripts/mai-healthcheck.sh
 StandardOutput=journal

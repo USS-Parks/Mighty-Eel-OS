@@ -68,6 +68,7 @@ fn baseline(mode: ProfileMode, root: PathBuf) -> ShipProfile {
         dashboard: DashboardConfig {
             enabled: true,
             allow_default_admin_token: false,
+            admin_token_file: None,
         },
         network: NetworkConfig {
             bind_address: "127.0.0.1".into(),

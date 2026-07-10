@@ -190,6 +190,7 @@ impl ProductionReadinessReport {
             "PROD-AUTH-101",
             runtime.auth_internal_bypass_consistent.as_ref(),
         );
+        apply("PROD-DASH-100", runtime.dashboard_admin_token_set.as_ref());
         apply("PROD-POLICY-001", runtime.policy_modules_loaded.as_ref());
     }
 
@@ -302,6 +303,11 @@ pub struct RuntimeChecks {
     /// silently enables the X-IM-Internal-Profile bypass even though
     /// the profile declared it disabled.
     pub auth_internal_bypass_consistent: Option<RuntimeOutcome>,
+    /// `PROD-DASH-100` — the dashboard's declared admin-token file
+    /// exists and holds a non-empty, non-default
+    /// `MAI_DASHBOARD_ADMIN_TOKEN`, so an enabled dashboard cannot be
+    /// running on the built-in local-dev default.
+    pub dashboard_admin_token_set: Option<RuntimeOutcome>,
     /// `PROD-POLICY-001` — compliance policy modules loaded and the
     /// composer template built successfully.
     pub policy_modules_loaded: Option<RuntimeOutcome>,
@@ -331,6 +337,62 @@ impl RuntimeOutcome {
             passed: false,
             detail: detail.into(),
         }
+    }
+}
+
+/// Measure the dashboard admin-token posture for `PROD-DASH-100`.
+///
+/// Reads the profile-declared `dashboard.admin_token_file` (the
+/// systemd `EnvironmentFile` written at package install) and fails
+/// when an enabled dashboard would fall back to the built-in
+/// local-dev default token. The token value itself is never echoed
+/// into the outcome detail.
+pub fn probe_dashboard_admin_token(profile: &ShipProfile) -> RuntimeOutcome {
+    const ENV_KEY: &str = "MAI_DASHBOARD_ADMIN_TOKEN";
+    const DEFAULT_TOKEN: &str = "dashboard-dev";
+
+    if !profile.dashboard.enabled {
+        return RuntimeOutcome::pass("dashboard disabled; no admin token required");
+    }
+    let Some(path) = profile.dashboard.admin_token_file.as_ref() else {
+        return RuntimeOutcome::fail(
+            "dashboard.enabled = true but dashboard.admin_token_file is not declared; \
+             the dashboard would fall back to the built-in default token",
+        );
+    };
+    let contents = match std::fs::read_to_string(path) {
+        Ok(c) => c,
+        Err(e) => {
+            return RuntimeOutcome::fail(format!(
+                "dashboard admin-token file {} unreadable: {e}",
+                path.display()
+            ));
+        }
+    };
+    let token = contents.lines().find_map(|line| {
+        line.trim_start()
+            .strip_prefix(ENV_KEY)
+            .and_then(|rest| rest.trim_start().strip_prefix('='))
+            .map(|v| v.trim().trim_matches('"').trim_matches('\''))
+    });
+    match token {
+        None => RuntimeOutcome::fail(format!(
+            "dashboard admin-token file {} does not set {ENV_KEY}",
+            path.display()
+        )),
+        Some("") => RuntimeOutcome::fail(format!(
+            "dashboard admin-token file {} sets an empty {ENV_KEY}",
+            path.display()
+        )),
+        Some(DEFAULT_TOKEN) => RuntimeOutcome::fail(format!(
+            "dashboard admin-token file {} holds the local-dev default token; \
+             generate a real secret (the package postinstall does this)",
+            path.display()
+        )),
+        Some(_) => RuntimeOutcome::pass(format!(
+            "dashboard admin token set from {} (non-default)",
+            path.display()
+        )),
     }
 }
 
@@ -865,6 +927,18 @@ fn register_dashboard_checks(ctx: &mut CheckContext) {
             }
         },
     );
+    // PROD-DASH-001 rejects the config flag; this check measures the
+    // install: the token file the dashboard unit loads must exist and
+    // must not hold the built-in local-dev default.
+    ctx.deferred(
+        "PROD-DASH-100",
+        CheckSeverity::Critical,
+        "SHIP-08", // slop-ok: names the deferred check's ship-plan step (operator data)
+        "dashboard admin-token file exists and holds a non-default token \
+         (measured at boot / --state-dir, not config-asserted)",
+        "run the package postinstall (or write dashboard.admin_token_file yourself) \
+         so MAI_DASHBOARD_ADMIN_TOKEN is a generated secret, never the local-dev default",
+    );
 }
 
 fn register_network_checks(ctx: &mut CheckContext) {
@@ -962,6 +1036,7 @@ require_nonempty_key_store = true
 [dashboard]
 enabled = true
 allow_default_admin_token = false
+admin_token_file = "/etc/mai/dashboard.env"
 
 [network]
 bind_address = "127.0.0.1"
@@ -1057,6 +1132,7 @@ alerts_enabled = true
         "PROD-AUTH-100",
         "PROD-AUTH-101",
         "PROD-DASH-001",
+        "PROD-DASH-100",
         "PROD-NET-001",
         "PROD-NET-002",
         "PROD-POLICY-001",
@@ -1256,6 +1332,9 @@ alerts_enabled = true
             auth_internal_bypass_consistent: Some(RuntimeOutcome::pass(
                 "runtime bypass = false, profile field = false: consistent",
             )),
+            dashboard_admin_token_set: Some(RuntimeOutcome::pass(
+                "dashboard admin token set from /etc/mai/dashboard.env (non-default)",
+            )),
             policy_modules_loaded: Some(RuntimeOutcome::pass("Standard template loaded")),
         }
     }
@@ -1273,6 +1352,7 @@ alerts_enabled = true
             "PROD-TRUST-100",
             "PROD-AUTH-100",
             "PROD-AUTH-101",
+            "PROD-DASH-100",
             "PROD-POLICY-001",
         ] {
             let c = report.find(id).expect("check present");
@@ -1322,6 +1402,7 @@ alerts_enabled = true
             "PROD-TRUST-100",
             "PROD-AUTH-100",
             "PROD-AUTH-101",
+            "PROD-DASH-100",
             "PROD-POLICY-001",
         ] {
             assert_eq!(
@@ -1357,6 +1438,122 @@ alerts_enabled = true
         assert!(
             !report.is_ship_ready(),
             "an unsealed master key must block production readiness"
+        );
+    }
+
+    #[test]
+    fn default_dashboard_token_blocks_ship_ready() {
+        // Guard-level fail-closed: the token file is measured, never
+        // certified by the PROD-DASH-001 config flag alone.
+        let profile = parse_ship_profile(baseline_toml()).expect("baseline parses");
+        let runtime = RuntimeChecks {
+            dashboard_admin_token_set: Some(RuntimeOutcome::fail(
+                "dashboard admin-token file /etc/mai/dashboard.env holds the local-dev default token",
+            )),
+            ..all_passing_runtime()
+        };
+        let report = ProductionReadinessReport::evaluate_with_runtime(&profile, &runtime);
+        assert_eq!(
+            report.find("PROD-DASH-001").unwrap().status,
+            CheckStatus::Pass,
+            "the config flag alone still passes — and does not certify the token"
+        );
+        let c = report.find("PROD-DASH-100").expect("check present");
+        assert_eq!(c.status, CheckStatus::Fail);
+        assert!(c.message.contains("default token"));
+        assert!(
+            !report.is_ship_ready(),
+            "a default dashboard token must block production readiness"
+        );
+    }
+
+    // ----- probe_dashboard_admin_token -------------------------
+
+    fn baseline_profile() -> ShipProfile {
+        parse_ship_profile(baseline_toml()).expect("baseline parses")
+    }
+
+    fn write_token_file(dir: &tempfile::TempDir, contents: &str) -> std::path::PathBuf {
+        let path = dir.path().join("dashboard.env");
+        std::fs::write(&path, contents).expect("write token file");
+        path
+    }
+
+    #[test]
+    fn token_probe_passes_when_dashboard_disabled() {
+        let mut profile = baseline_profile();
+        profile.dashboard.enabled = false;
+        profile.dashboard.admin_token_file = None;
+        let outcome = probe_dashboard_admin_token(&profile);
+        assert!(outcome.passed, "{}", outcome.detail);
+    }
+
+    #[test]
+    fn token_probe_fails_when_no_file_declared() {
+        let mut profile = baseline_profile();
+        profile.dashboard.admin_token_file = None;
+        let outcome = probe_dashboard_admin_token(&profile);
+        assert!(!outcome.passed);
+        assert!(outcome.detail.contains("admin_token_file is not declared"));
+    }
+
+    #[test]
+    fn token_probe_fails_when_file_missing() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let mut profile = baseline_profile();
+        profile.dashboard.admin_token_file = Some(dir.path().join("missing.env"));
+        let outcome = probe_dashboard_admin_token(&profile);
+        assert!(!outcome.passed);
+        assert!(outcome.detail.contains("unreadable"));
+    }
+
+    #[test]
+    fn token_probe_fails_on_default_token() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = write_token_file(&dir, "MAI_DASHBOARD_ADMIN_TOKEN=dashboard-dev\n");
+        let mut profile = baseline_profile();
+        profile.dashboard.admin_token_file = Some(path);
+        let outcome = probe_dashboard_admin_token(&profile);
+        assert!(!outcome.passed);
+        assert!(outcome.detail.contains("local-dev default token"));
+        assert!(
+            !outcome.detail.contains("dashboard-dev"),
+            "the probe must not echo token values"
+        );
+    }
+
+    #[test]
+    fn token_probe_fails_on_empty_or_absent_key() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let mut profile = baseline_profile();
+
+        let empty = write_token_file(&dir, "MAI_DASHBOARD_ADMIN_TOKEN=\n");
+        profile.dashboard.admin_token_file = Some(empty);
+        let outcome = probe_dashboard_admin_token(&profile);
+        assert!(!outcome.passed);
+        assert!(outcome.detail.contains("empty"));
+
+        let unrelated = write_token_file(&dir, "SOME_OTHER_VAR=1\n");
+        profile.dashboard.admin_token_file = Some(unrelated);
+        let outcome = probe_dashboard_admin_token(&profile);
+        assert!(!outcome.passed);
+        assert!(outcome.detail.contains("does not set"));
+    }
+
+    #[test]
+    fn token_probe_passes_on_generated_token() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = write_token_file(
+            &dir,
+            "# generated at package install\nMAI_DASHBOARD_ADMIN_TOKEN=\"a3f8c9d2e5b7410689ab\"\n",
+        );
+        let mut profile = baseline_profile();
+        profile.dashboard.admin_token_file = Some(path);
+        let outcome = probe_dashboard_admin_token(&profile);
+        assert!(outcome.passed, "{}", outcome.detail);
+        assert!(
+            !outcome.detail.contains("a3f8c9d2"),
+            "the probe must not echo token values"
         );
     }
 

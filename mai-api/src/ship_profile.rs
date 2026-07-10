@@ -170,6 +170,12 @@ pub struct DashboardConfig {
     pub enabled: bool,
     #[serde(default)]
     pub allow_default_admin_token: bool,
+    /// systemd `EnvironmentFile` holding `MAI_DASHBOARD_ADMIN_TOKEN`,
+    /// generated at package install. When the dashboard is enabled in
+    /// production, the runtime guard (`PROD-DASH-100`) reads this file
+    /// and refuses the built-in default token.
+    #[serde(default)]
+    pub admin_token_file: Option<PathBuf>,
 }
 
 /// `[network]` section.

@@ -92,6 +92,21 @@ def test_postinstall_does_not_auto_start_services() -> None:
     assert "systemctl enable" not in code, "postinstall must not auto-enable services"
 
 
+def test_postinstall_generates_dashboard_token() -> None:
+    """The dashboard admin token is generated at install so no
+    deployment ever runs on the built-in local-dev default. The
+    generation must be idempotent (an existing token survives
+    upgrades), sourced from urandom, and locked down to root:mai."""
+    body = _read("postinstall.sh")
+    assert "/etc/mai/dashboard.env" in body, "postinstall must write the dashboard EnvironmentFile"
+    assert "MAI_DASHBOARD_ADMIN_TOKEN" in body
+    assert "/dev/urandom" in body, "token must come from a CSPRNG source"
+    fn_start = body.index("generate_dashboard_env()")
+    fn_body = body[fn_start : body.index("\n}", fn_start)]
+    assert '-f "${env_file}"' in fn_body, "generation must be guarded so an existing token survives upgrades"
+    assert "chmod 0640" in fn_body, "token file must not be world-readable"
+
+
 def test_preremove_disables_services() -> None:
     body = _read("preremove.sh")
     assert "systemctl stop" in body

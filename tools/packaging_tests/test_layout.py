@@ -28,6 +28,7 @@ REQUIRED_LAYOUT = [
     "/usr/lib/mai/compliance-dashboard",
     "/etc/mai/auth_keys.toml",
     "/etc/mai/profile.toml",
+    "/etc/mai/dashboard.env",
     "/etc/mai/policies",
     "/etc/mai/trust-anchors",
     "/var/lib/mai/vault",

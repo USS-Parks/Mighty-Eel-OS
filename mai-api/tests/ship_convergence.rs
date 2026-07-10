@@ -92,6 +92,7 @@ fn local_dev_profile(state_dir: PathBuf) -> ShipProfile {
         dashboard: DashboardConfig {
             enabled: true,
             allow_default_admin_token: true,
+            admin_token_file: None,
         },
         network: NetworkConfig {
             bind_address: "127.0.0.1".into(),
@@ -214,6 +215,9 @@ alerts_enabled = true
         auth_keys_nonempty: Some(RuntimeOutcome::pass("4 key(s) loaded")),
         auth_internal_bypass_consistent: Some(RuntimeOutcome::pass(
             "runtime bypass = false, profile field = false: consistent",
+        )),
+        dashboard_admin_token_set: Some(RuntimeOutcome::pass(
+            "dashboard admin token set from /etc/mai/dashboard.env (non-default)",
         )),
         policy_modules_loaded: Some(RuntimeOutcome::pass("Standard template loaded")),
     };

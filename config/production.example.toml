@@ -77,6 +77,9 @@ require_nonempty_key_store    = true
 enabled                   = true
 # [contract] the dashboard-dev default token is rejected.
 allow_default_admin_token = false
+# [contract] the admin token is generated at install and measured at
+# runtime (PROD-DASH-100); a missing, empty, or default token fails.
+admin_token_file          = "/etc/mai/dashboard.env"
 
 [network]
 # Loopback only — TLS terminates at the reverse proxy.

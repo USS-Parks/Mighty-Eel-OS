@@ -22,12 +22,17 @@ customer-facing posture introduced by the hardening lane — see
 
 ## Applying a profile
 
+> **Non-production launch.** The command below runs a demo posture and
+> does not engage the production guard. For a customer node, follow
+> [`ship/README.md`](ship/README.md) — the guard engages only when
+> `MAI_SHIP_PROFILE` points at the profile TOML.
+
 ```bash
 # Bash
-MAI_PROFILE=airgap-demo cargo run -p mai-api -- --config deployment/airgap-demo/profile.toml
+cargo run -p mai-api -- --config deployment/airgap-demo/profile.toml
 
 # PowerShell
-$env:MAI_PROFILE = "airgap-demo"; cargo run -p mai-api -- --config deployment/airgap-demo/profile.toml
+cargo run -p mai-api -- --config deployment/airgap-demo/profile.toml
 ```
 
 The server reads `profile.toml`, wires the trust cache, bundle verifier,

@@ -161,6 +161,18 @@ def test_dashboard_depends_on_api() -> None:
     assert "mai-api.service" in requires
 
 
+def test_dashboard_hard_requires_generated_token_file() -> None:
+    """The dashboard must load its admin token from the EnvironmentFile
+    the postinstall generates — and refuse to start without it (no "-"
+    prefix), never falling back to the built-in local-dev default."""
+    parser = _read_unit("mai-dashboard.service")
+    env_file = parser.get("Service", "EnvironmentFile", fallback=None)
+    assert env_file == "/etc/mai/dashboard.env", (
+        f"mai-dashboard.service EnvironmentFile = {env_file!r}; must hard-require "
+        "/etc/mai/dashboard.env (an optional '-' prefix would fail open)"
+    )
+
+
 def test_no_unit_listens_on_wildcard() -> None:
     for unit in SERVICE_UNITS:
         text = (UNIT_DIR / unit).read_text(encoding="utf-8")
