@@ -42,7 +42,8 @@
 //! and decrypts the trailing AEAD payload.
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use aes_gcm::aead::{Aead, KeyInit};
 use aes_gcm::{Aes256Gcm, Nonce};
@@ -54,7 +55,7 @@ use sha3::Sha3_256;
 use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
 
-use mai_core::vault::{KeyInfo, KeyLevel, PqcProvider, VaultError};
+use mai_core::vault::{KeyInfo, KeyLevel, PqcProvider, TpmProvider, VaultError};
 
 use crate::config::PqcConfig;
 
@@ -97,6 +98,16 @@ const MLDSA87_SIG_LEN: usize = 4627;
 const AES_NONCE_LEN: usize = 12;
 /// AES-256-GCM key length.
 const AES_KEY_LEN: usize = 32;
+
+/// Seal identifier for the key-store KEK (the vault's master key-encryption
+/// key) when a TPM seal provider is wired.
+pub const KEK_KEY_ID: &str = "vault-master-kek";
+/// Legacy plaintext KEK file — the dev/no-seal form, migrated away from when a
+/// seal provider is present.
+const KEK_PLAINTEXT_FILE: &str = "kek.bin";
+/// Sealed KEK envelope file — the only at-rest KEK form once a seal provider
+/// is wired.
+const KEK_SEALED_FILE: &str = "kek.sealed";
 
 // ---------------------------------------------------------------------------
 // Feature-gated KEM backend
@@ -219,6 +230,11 @@ pub struct PqcEngine {
     /// Loaded from / created in the key store on first use, so model keys —
     /// and therefore encrypted models — survive a restart.
     kek: RwLock<Option<[u8; 32]>>,
+    /// TPM seal provider for the KEK. When wired, the KEK lives on disk
+    /// only as a sealed envelope (`kek.sealed`) and loading it requires a
+    /// successful unseal — PCR drift or an unavailable TPM fails closed. When
+    /// absent (dev / stub posture), the legacy plaintext `kek.bin` is used.
+    seal: RwLock<Option<Arc<dyn TpmProvider>>>,
 }
 
 /// An ML-KEM keypair (encapsulation).
@@ -276,7 +292,17 @@ impl PqcEngine {
             model_keys: RwLock::new(HashMap::new()),
             signing_key: RwLock::new(None),
             kek: RwLock::new(None),
+            seal: RwLock::new(None),
         }
+    }
+
+    /// Wire a TPM seal provider for the key-store KEK. Must be set before
+    /// [`initialize`](Self::initialize) (or the first key operation) so the
+    /// KEK is created — or migrated from the legacy plaintext file — in sealed
+    /// form. Once set, a KEK that cannot be sealed or unsealed is a hard
+    /// error: the engine fails closed rather than falling back to plaintext.
+    pub async fn set_seal_provider(&self, provider: Arc<dyn TpmProvider>) {
+        *self.seal.write().await = Some(provider);
     }
 
     /// Directory holding persisted model keys.
@@ -288,13 +314,14 @@ impl PqcEngine {
         self.model_keys_dir().join(format!("{key_id}.json"))
     }
 
-    /// The key-store KEK, loaded from `<key_store>/kek.bin` or created there on
-    /// first use (plan V9). This is the root of restart recovery: the same KEK
-    /// unwraps the persisted model secrets after a reboot.
+    /// The key-store KEK — the root of restart recovery (plan V9): the same
+    /// KEK unwraps the persisted model secrets after a reboot.
     ///
-    /// In production the key store lives on the encrypted ZFS dataset (V4/V5)
-    /// and the KEK should additionally be TPM-sealed; in dev/no-TPM it is a
-    /// plaintext file on that (still-encrypted) dataset.
+    /// With a seal provider wired, the KEK lives on disk only as the
+    /// sealed envelope `kek.sealed` (a legacy plaintext `kek.bin` is migrated
+    /// into it and removed), and a failed seal or unseal is a hard error.
+    /// Without one (dev / stub posture), the legacy plaintext `kek.bin` on
+    /// the (still-encrypted) dataset is used, as before.
     async fn kek(&self) -> Result<[u8; 32], VaultError> {
         if let Some(k) = *self.kek.read().await {
             return Ok(k);
@@ -303,24 +330,79 @@ impl PqcEngine {
         if let Some(k) = *slot {
             return Ok(k);
         }
-        let path = self.config.key_store_path.join("kek.bin");
-        let kek = if path.exists() {
+        let seal = self.seal.read().await.clone();
+        let kek = match seal {
+            Some(tpm) => self.load_or_create_sealed_kek(tpm.as_ref()).await?,
+            None => self.load_or_create_plaintext_kek()?,
+        };
+        *slot = Some(kek);
+        Ok(kek)
+    }
+
+    /// Sealed-KEK path: unseal `kek.sealed` through the provider, or
+    /// migrate a legacy plaintext `kek.bin` into a sealed envelope (deleting
+    /// the plaintext), or generate a fresh KEK sealed-at-birth. The plaintext
+    /// form never persists once a seal provider is wired; any seal/unseal
+    /// failure (TPM unavailable, PCR drift, tampered envelope) fails closed.
+    async fn load_or_create_sealed_kek(
+        &self,
+        tpm: &dyn TpmProvider,
+    ) -> Result<[u8; 32], VaultError> {
+        let sealed_path = self.config.key_store_path.join(KEK_SEALED_FILE);
+        let plain_path = self.config.key_store_path.join(KEK_PLAINTEXT_FILE);
+        if sealed_path.exists() {
+            let envelope =
+                std::fs::read(&sealed_path).map_err(|e| VaultError::IoError(e.to_string()))?;
+            let bytes = tpm.unseal_key(&envelope, KEK_KEY_ID).await?;
+            let arr: [u8; 32] = bytes
+                .as_slice()
+                .try_into()
+                .map_err(|_| VaultError::PqcError("unsealed KEK is not 32 bytes".into()))?;
+            return Ok(arr);
+        }
+        let kek: [u8; 32] = if plain_path.exists() {
+            // Migrate the legacy plaintext KEK: same value (so existing
+            // wrapped model keys stay decryptable), now sealed at rest.
+            let bytes =
+                std::fs::read(&plain_path).map_err(|e| VaultError::IoError(e.to_string()))?;
+            bytes
+                .as_slice()
+                .try_into()
+                .map_err(|_| VaultError::PqcError("kek.bin is not 32 bytes".into()))?
+        } else {
+            let mut k = [0u8; 32];
+            rand::thread_rng().fill_bytes(&mut k);
+            k
+        };
+        let envelope = tpm.seal_key(&kek, KEK_KEY_ID).await?;
+        std::fs::create_dir_all(&self.config.key_store_path)
+            .map_err(|e| VaultError::IoError(e.to_string()))?;
+        std::fs::write(&sealed_path, &envelope).map_err(|e| VaultError::IoError(e.to_string()))?;
+        if plain_path.exists() {
+            std::fs::remove_file(&plain_path).map_err(|e| VaultError::IoError(e.to_string()))?;
+            info!("legacy plaintext KEK migrated into a TPM-sealed envelope");
+        }
+        Ok(kek)
+    }
+
+    /// Legacy plaintext-KEK path (dev / no seal provider): unchanged behavior.
+    fn load_or_create_plaintext_kek(&self) -> Result<[u8; 32], VaultError> {
+        let path = self.config.key_store_path.join(KEK_PLAINTEXT_FILE);
+        if path.exists() {
             let bytes = std::fs::read(&path).map_err(|e| VaultError::IoError(e.to_string()))?;
             let arr: [u8; 32] = bytes
                 .as_slice()
                 .try_into()
                 .map_err(|_| VaultError::PqcError("kek.bin is not 32 bytes".into()))?;
-            arr
+            Ok(arr)
         } else {
             let mut k = [0u8; 32];
             rand::thread_rng().fill_bytes(&mut k);
             std::fs::create_dir_all(&self.config.key_store_path)
                 .map_err(|e| VaultError::IoError(e.to_string()))?;
             std::fs::write(&path, k).map_err(|e| VaultError::IoError(e.to_string()))?;
-            k
-        };
-        *slot = Some(kek);
-        Ok(kek)
+            Ok(k)
+        }
     }
 
     /// Wrap a model secret under the KEK and write it to the key store.
@@ -406,11 +488,18 @@ impl PqcEngine {
             "Initialising PQC engine"
         );
         let (pub_key, sign_key) = dsa_backend::keypair()?;
-        let mut sk = self.signing_key.write().await;
-        *sk = Some(DsaKeyPair {
-            public_key: pub_key,
-            signing_key: sign_key,
-        });
+        {
+            let mut sk = self.signing_key.write().await;
+            *sk = Some(DsaKeyPair {
+                public_key: pub_key,
+                signing_key: sign_key,
+            });
+        }
+        // Materialize the key-store KEK at boot, not lazily at the first
+        // model install — so a wired seal provider seals it (or fails closed)
+        // on the boot path, and readiness can runtime-probe the sealed
+        // envelope immediately.
+        self.kek().await?;
         info!("PQC engine initialised with ML-DSA-87 signing keypair");
         Ok(())
     }
@@ -513,6 +602,54 @@ impl PqcEngine {
             .expect("HKDF expansion of 32 bytes from SHA3-256 cannot fail");
         okm
     }
+}
+
+/// Runtime seal assertion for the vault master KEK: proves — by
+/// measurement, never by config flag — that the key store's KEK is sealed.
+///
+/// Passes only when ALL of: the seal provider reports available, the sealed
+/// envelope `kek.sealed` exists, it unseals under the **current** PCR state to
+/// a well-formed 32-byte KEK, and no plaintext `kek.bin` lingers beside it.
+/// Whether the provider is hardware-backed is the hardware-lane deferral; this
+/// probe asserts what the configured provider actually protects on this host.
+///
+/// Returns `Ok(detail)` on a proven seal, `Err(reason)` otherwise — the caller
+/// maps these onto the production-readiness runtime check.
+pub async fn probe_sealed_master_key(
+    key_store_path: &Path,
+    tpm: &dyn TpmProvider,
+) -> Result<String, String> {
+    if !tpm.is_available().await {
+        return Err("TPM seal provider unavailable — the master KEK cannot be sealed".to_string());
+    }
+    let sealed_path = key_store_path.join(KEK_SEALED_FILE);
+    let plain_path = key_store_path.join(KEK_PLAINTEXT_FILE);
+    if !sealed_path.exists() {
+        return Err(format!(
+            "no sealed master KEK at {} — the vault booted without sealing its master key",
+            sealed_path.display()
+        ));
+    }
+    if plain_path.exists() {
+        return Err(format!(
+            "plaintext KEK {} persists beside the sealed envelope — sealing is not the \
+             at-rest form of the master key",
+            plain_path.display()
+        ));
+    }
+    let envelope = std::fs::read(&sealed_path)
+        .map_err(|e| format!("sealed KEK {} unreadable: {e}", sealed_path.display()))?;
+    let bytes = tpm.unseal_key(&envelope, KEK_KEY_ID).await.map_err(|e| {
+        format!("sealed master KEK does not unseal under the current PCR state: {e}")
+    })?;
+    if bytes.len() != 32 {
+        return Err("sealed master KEK unseals to malformed key material".to_string());
+    }
+    Ok(
+        "master KEK sealed: kek.sealed unseals under the current PCR state; no plaintext KEK \
+         on disk"
+            .to_string(),
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -996,5 +1133,174 @@ mod tests {
             .unwrap();
         let result = engine.decrypt_model_weights("model-b", &ct_a).await;
         assert!(result.is_err());
+    }
+
+    // ---- sealed master KEK ------------------------------------------------
+
+    use crate::config::TpmConfig;
+    use crate::tpm::TpmManager;
+
+    fn seal_tpm() -> Arc<TpmManager> {
+        Arc::new(TpmManager::new(TpmConfig {
+            device_path: "/dev/tpmrm0".into(),
+            required: false,
+            pcr_indices: vec![0, 7],
+        }))
+    }
+
+    /// A seal backend that is simply not there — the "no-seal backend" case.
+    #[derive(Debug)]
+    struct NoSealBackend;
+
+    #[async_trait]
+    impl TpmProvider for NoSealBackend {
+        async fn is_available(&self) -> bool {
+            false
+        }
+        async fn seal_key(&self, _: &[u8], _: &str) -> Result<Vec<u8>, VaultError> {
+            Err(VaultError::TpmUnavailable)
+        }
+        async fn unseal_key(&self, _: &[u8], _: &str) -> Result<Vec<u8>, VaultError> {
+            Err(VaultError::TpmUnavailable)
+        }
+        async fn get_attestation(&self) -> Result<Vec<u8>, VaultError> {
+            Err(VaultError::TpmUnavailable)
+        }
+        async fn list_sealed_keys(&self) -> Result<Vec<KeyInfo>, VaultError> {
+            Err(VaultError::TpmUnavailable)
+        }
+        async fn remove_sealed_key(&self, _: &str) -> Result<(), VaultError> {
+            Err(VaultError::TpmUnavailable)
+        }
+    }
+
+    #[tokio::test]
+    async fn sealed_kek_created_at_boot_and_survives_restart() {
+        // With a seal provider wired, initialize() materializes the KEK as a
+        // sealed envelope only — no plaintext form — and a later boot (fresh
+        // engine, fresh TpmManager, same store) unseals it and decrypts
+        // weights sealed before the restart.
+        let cfg = test_pqc_config();
+        let ciphertext = {
+            let engine = PqcEngine::new(cfg.clone());
+            engine.set_seal_provider(seal_tpm()).await;
+            engine.initialize().await.unwrap();
+            assert!(
+                cfg.key_store_path.join("kek.sealed").exists(),
+                "boot seals the KEK on the boot path"
+            );
+            assert!(
+                !cfg.key_store_path.join("kek.bin").exists(),
+                "no plaintext KEK is ever written when a seal provider is wired"
+            );
+            engine
+                .encrypt_model_weights("sealed-model", b"sealed weights")
+                .await
+                .unwrap()
+        };
+
+        let reborn = PqcEngine::new(cfg.clone());
+        reborn.set_seal_provider(seal_tpm()).await;
+        let recovered = reborn
+            .decrypt_model_weights("sealed-model", &ciphertext)
+            .await
+            .expect("a fresh boot unseals the KEK and recovers the model key");
+        assert_eq!(recovered, b"sealed weights");
+    }
+
+    #[tokio::test]
+    async fn legacy_plaintext_kek_migrates_into_sealed_envelope() {
+        // A store initialized in the plaintext posture migrates: same KEK
+        // value (old wrapped model keys stay decryptable), sealed at rest,
+        // plaintext removed.
+        let cfg = test_pqc_config();
+        let ciphertext = {
+            let plain = PqcEngine::new(cfg.clone());
+            plain
+                .encrypt_model_weights("migrate-model", b"pre-seal weights")
+                .await
+                .unwrap()
+        };
+        assert!(cfg.key_store_path.join("kek.bin").exists());
+
+        let sealed = PqcEngine::new(cfg.clone());
+        sealed.set_seal_provider(seal_tpm()).await;
+        sealed.initialize().await.unwrap();
+        assert!(
+            cfg.key_store_path.join("kek.sealed").exists(),
+            "migration seals the KEK"
+        );
+        assert!(
+            !cfg.key_store_path.join("kek.bin").exists(),
+            "migration removes the plaintext KEK"
+        );
+        let recovered = sealed
+            .decrypt_model_weights("migrate-model", &ciphertext)
+            .await
+            .expect("the migrated KEK still unwraps pre-migration model keys");
+        assert_eq!(recovered, b"pre-seal weights");
+    }
+
+    #[tokio::test]
+    async fn probe_asserts_the_measured_seal_state() {
+        let cfg = test_pqc_config();
+        let tpm = seal_tpm();
+
+        // No sealed envelope yet: the probe refuses.
+        let err = probe_sealed_master_key(&cfg.key_store_path, tpm.as_ref())
+            .await
+            .unwrap_err();
+        assert!(err.contains("no sealed master KEK"), "got: {err}");
+
+        // Boot with sealing wired: the probe passes on measurement.
+        let engine = PqcEngine::new(cfg.clone());
+        engine.set_seal_provider(tpm.clone()).await;
+        engine.initialize().await.unwrap();
+        let detail = probe_sealed_master_key(&cfg.key_store_path, tpm.as_ref())
+            .await
+            .expect("sealed store probes clean");
+        assert!(detail.contains("unseals under the current PCR state"));
+
+        // Plaintext residue beside the envelope: fail closed.
+        std::fs::write(cfg.key_store_path.join("kek.bin"), [0u8; 32]).unwrap();
+        let err = probe_sealed_master_key(&cfg.key_store_path, tpm.as_ref())
+            .await
+            .unwrap_err();
+        assert!(err.contains("plaintext KEK"), "got: {err}");
+        std::fs::remove_file(cfg.key_store_path.join("kek.bin")).unwrap();
+
+        // PCR drift (firmware change): the envelope no longer unseals — the
+        // probe reports the runtime truth instead of a config flag.
+        tpm.simulate_pcr_change().await;
+        let err = probe_sealed_master_key(&cfg.key_store_path, tpm.as_ref())
+            .await
+            .unwrap_err();
+        assert!(
+            err.contains("does not unseal under the current PCR state"),
+            "got: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn no_seal_backend_fails_closed() {
+        // On a no-seal backend, both the boot path and the probe
+        // refuse — never a silent plaintext fallback.
+        let cfg = test_pqc_config();
+        let engine = PqcEngine::new(cfg.clone());
+        engine.set_seal_provider(Arc::new(NoSealBackend)).await;
+        let err = engine.initialize().await.unwrap_err();
+        assert!(
+            matches!(err, VaultError::TpmUnavailable),
+            "boot fails closed without a seal backend, got {err:?}"
+        );
+        assert!(
+            !cfg.key_store_path.join("kek.bin").exists(),
+            "fail-closed boot must not fall back to a plaintext KEK"
+        );
+
+        let err = probe_sealed_master_key(&cfg.key_store_path, &NoSealBackend)
+            .await
+            .unwrap_err();
+        assert!(err.contains("unavailable"), "got: {err}");
     }
 }

@@ -3,7 +3,9 @@
 //! Orchestrates the cold-start sequence required to bring an empty vault into
 //! a usable state:
 //!
-//! 1. Generate the master ML-DSA-87 signing keypair in [`PqcEngine`].
+//! 1. Generate the master ML-DSA-87 signing keypair in [`PqcEngine`] — with
+//!    the TPM wired as the engine's seal provider first, so the key-store KEK
+//!    materializes as a TPM-sealed envelope, never a plaintext file.
 //! 2. Seal the ML-DSA signing key to the TPM via [`TpmManager`] so it is
 //!    only recoverable when the boot chain is intact.
 //! 3. Create / verify the vault storage tree under [`StorageConfig::mount_point`]
@@ -86,7 +88,11 @@ pub async fn first_boot(
     let start = Instant::now();
     info!("first-boot sequence begin");
 
-    // 1. Generate PQC master signing keypair.
+    // 1. Generate PQC master signing keypair — with the TPM wired as the
+    //    engine's seal provider first, so the key-store KEK materializes
+    //    as a TPM-sealed envelope on this boot path, never a plaintext file.
+    //    A backend that cannot seal fails the boot here, closed.
+    pqc.set_seal_provider(tpm.clone()).await;
     pqc.initialize().await?;
     let signing_public_key = pqc.signing_public_key().await?;
 

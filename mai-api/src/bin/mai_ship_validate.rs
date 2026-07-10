@@ -210,6 +210,10 @@ async fn evaluate_runtime(profile: &ShipProfile) -> RuntimeChecks {
         ),
     };
 
+    // The master-KEK seal is measured, not read off the config flag — the
+    // sealed envelope must exist and unseal under the current PCR state.
+    let master_key_sealed = mai_api::vault_builder::probe_master_key_seal(profile).await;
+
     let api_audit_wal_ready =
         match WalAuditWriter::open(WalAuditConfig::for_dir(&profile.audit.wal_dir)).await {
             Ok(_) => {
@@ -330,6 +334,7 @@ async fn evaluate_runtime(profile: &ShipProfile) -> RuntimeChecks {
 
     RuntimeChecks {
         vault_opened: Some(vault_opened),
+        master_key_sealed: Some(master_key_sealed),
         api_audit_wal_ready: Some(api_audit_wal_ready),
         compliance_sealer_real: Some(compliance_sealer_real),
         compliance_signer_real: Some(compliance_signer_real),

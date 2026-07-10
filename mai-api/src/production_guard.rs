@@ -180,6 +180,7 @@ impl ProductionReadinessReport {
             }
         };
         apply("PROD-VAULT-100", runtime.vault_opened.as_ref());
+        apply("PROD-VAULT-101", runtime.master_key_sealed.as_ref());
         apply("PROD-AUDIT-100", runtime.api_audit_wal_ready.as_ref());
         apply("PROD-AUDIT-101", runtime.compliance_sealer_real.as_ref());
         apply("PROD-AUDIT-102", runtime.compliance_signer_real.as_ref());
@@ -274,6 +275,11 @@ pub struct RuntimeChecks {
     /// `PROD-VAULT-100` — vault built without error and the configured
     /// `vault.root` is reachable.
     pub vault_opened: Option<RuntimeOutcome>,
+    /// `PROD-VAULT-101` — the master KEK's sealed envelope exists, unseals
+    /// under the current PCR state through the wired seal provider, and no
+    /// plaintext KEK persists (a runtime measurement, replacing the
+    /// config-flag certification of the seal).
+    pub master_key_sealed: Option<RuntimeOutcome>,
     /// `PROD-AUDIT-100` — [`crate::audit_wal::WalAuditWriter::open`]
     /// returned and the chain replay verified.
     pub api_audit_wal_ready: Option<RuntimeOutcome>,
@@ -553,6 +559,20 @@ fn register_vault_checks(ctx: &mut CheckContext) {
         "SHIP-03", // slop-ok: names the deferred check's ship-plan step (operator data)
         "vault opens, sealed master key loads, root directory is writable",
         "ensure /var/lib/mai/vault is initialized; see docs/compliance/SECURITY-PRODUCTION.md",
+    );
+    // The seal property is owned by a runtime measurement, not the
+    // PROD-VAULT-004 config flag — the probe proves the sealed KEK envelope
+    // exists, unseals under the current PCR state, and has no plaintext
+    // residue. Whether the seal provider is hardware-backed is the
+    // hardware-lane deferral; what it protects on this host is measured.
+    ctx.deferred(
+        "PROD-VAULT-101",
+        CheckSeverity::Critical,
+        "SHIP-03", // slop-ok: names the deferred check's ship-plan step (operator data)
+        "master KEK is sealed and the envelope unseals under the current PCR state \
+         (runtime-proven, not config-asserted)",
+        "boot the vault with its TPM seal provider so the master KEK is sealed; \
+         see docs/compliance/SECURITY-PRODUCTION.md",
     );
 }
 
@@ -1012,6 +1032,7 @@ alerts_enabled = true
         "PROD-VAULT-004",
         "PROD-VAULT-005",
         "PROD-VAULT-100",
+        "PROD-VAULT-101",
         "PROD-AUDIT-001",
         "PROD-AUDIT-002",
         "PROD-AUDIT-003",
@@ -1224,6 +1245,9 @@ alerts_enabled = true
     fn all_passing_runtime() -> RuntimeChecks {
         RuntimeChecks {
             vault_opened: Some(RuntimeOutcome::pass("ZfsVault opened at /tmp/vault")),
+            master_key_sealed: Some(RuntimeOutcome::pass(
+                "master KEK sealed: kek.sealed unseals under the current PCR state",
+            )),
             api_audit_wal_ready: Some(RuntimeOutcome::pass("WAL opened (0 entries)")),
             compliance_sealer_real: Some(RuntimeOutcome::pass("AeadSealer wired")),
             compliance_signer_real: Some(RuntimeOutcome::pass("audit signer wired")),
@@ -1243,6 +1267,7 @@ alerts_enabled = true
         let report = ProductionReadinessReport::evaluate_with_runtime(&profile, &runtime);
         for id in [
             "PROD-VAULT-100",
+            "PROD-VAULT-101",
             "PROD-AUDIT-100",
             "PROD-AUDIT-101",
             "PROD-TRUST-100",
@@ -1291,6 +1316,7 @@ alerts_enabled = true
             CheckStatus::Pass
         );
         for id in [
+            "PROD-VAULT-101",
             "PROD-AUDIT-100",
             "PROD-AUDIT-101",
             "PROD-TRUST-100",
@@ -1304,6 +1330,34 @@ alerts_enabled = true
                 "{id} should stay Deferred when runtime field is None"
             );
         }
+    }
+
+    #[test]
+    fn unsealed_master_key_blocks_ship_ready() {
+        // Guard-level fail-closed: a no-seal backend (probe FAIL) flips
+        // PROD-VAULT-101 to Fail and blocks readiness — even though the
+        // PROD-VAULT-004 config flag still passes. The seal is proven by
+        // measurement, never certified by configuration.
+        let profile = parse_ship_profile(baseline_toml()).expect("baseline parses");
+        let runtime = RuntimeChecks {
+            master_key_sealed: Some(RuntimeOutcome::fail(
+                "no sealed master KEK — the vault booted without sealing its master key",
+            )),
+            ..all_passing_runtime()
+        };
+        let report = ProductionReadinessReport::evaluate_with_runtime(&profile, &runtime);
+        assert_eq!(
+            report.find("PROD-VAULT-004").unwrap().status,
+            CheckStatus::Pass,
+            "the config flag alone still passes — and no longer certifies the seal"
+        );
+        let c = report.find("PROD-VAULT-101").expect("check present");
+        assert_eq!(c.status, CheckStatus::Fail);
+        assert!(c.message.contains("no sealed master KEK"));
+        assert!(
+            !report.is_ship_ready(),
+            "an unsealed master key must block production readiness"
+        );
     }
 
     #[test]
@@ -1330,6 +1384,7 @@ alerts_enabled = true
         let report = ProductionReadinessReport::evaluate_with_runtime(&profile, &runtime);
         for id in [
             "PROD-VAULT-100",
+            "PROD-VAULT-101",
             "PROD-AUDIT-100",
             "PROD-AUDIT-101",
             "PROD-TRUST-100",

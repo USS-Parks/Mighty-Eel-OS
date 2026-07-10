@@ -202,6 +202,9 @@ alerts_enabled = true
 
     let runtime = RuntimeChecks {
         vault_opened: Some(RuntimeOutcome::pass("vault opened at /var/lib/mai/vault")),
+        master_key_sealed: Some(RuntimeOutcome::pass(
+            "master KEK sealed: kek.sealed unseals under the current PCR state",
+        )),
         api_audit_wal_ready: Some(RuntimeOutcome::pass("WAL replayed (0 entries)")),
         compliance_sealer_real: Some(RuntimeOutcome::pass("AEAD sealer from sealer.key")),
         compliance_signer_real: Some(RuntimeOutcome::pass("audit signer from vault key")),

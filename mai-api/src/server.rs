@@ -257,6 +257,7 @@ impl MaiServer {
         // builder returns an *initialized* vault or an error — a failed
         // initialization aborts run() here, before any socket binds.
         let mut vault_probe: Option<RuntimeOutcome> = None;
+        let mut seal_probe: Option<RuntimeOutcome> = None;
         let mut audit_signer: Option<crate::vault_builder::VaultAuditSigner> = None;
         let vault_box: Box<dyn VaultInterface> = if let Some(profile) = ship_profile.as_ref() {
             let (vault, signer) = build_vault(profile).await.map_err(|e| {
@@ -266,6 +267,9 @@ impl MaiServer {
             // V8: measure the vault before certifying it — a storage
             // round-trip, never an unconditional pass.
             vault_probe = Some(crate::vault_builder::probe_vault(vault.as_ref()).await);
+            // Measure the master-KEK seal the same way — the sealed
+            // envelope must exist and unseal under the current PCR state.
+            seal_probe = Some(crate::vault_builder::probe_master_key_seal(profile).await);
             vault
         } else {
             Box::new(StubVault)
@@ -435,6 +439,7 @@ impl MaiServer {
                 auth_key_count,
                 auth_bypass_runtime,
                 vault_probe,
+                seal_probe,
                 audit_signer,
             )?,
             None => (state, RuntimeChecks::default()),
@@ -598,6 +603,7 @@ fn apply_ship_profile(
     auth_key_count: usize,
     auth_bypass_runtime: bool,
     vault_probe: Option<RuntimeOutcome>,
+    seal_probe: Option<RuntimeOutcome>,
     audit_signer: Option<crate::vault_builder::VaultAuditSigner>,
 ) -> Result<(AppState, RuntimeChecks), ServerError> {
     let is_production = matches!(profile.profile.mode, ProfileMode::Production);
@@ -758,6 +764,14 @@ fn apply_ship_profile(
         RuntimeOutcome::fail("vault readiness probe did not run (fail closed)".to_string())
     });
 
+    // Like the vault outcome, the master-KEK seal is MEASURED (sealed
+    // envelope present + unseals under the current PCR state, probed in
+    // `MaiServer::run`) — never inferred from the profile's config flag. A
+    // missing probe fails closed.
+    let seal_outcome = seal_probe.unwrap_or_else(|| {
+        RuntimeOutcome::fail("master-key seal probe did not run (fail closed)".to_string())
+    });
+
     let wal_outcome =
         RuntimeOutcome::pass(format!("WAL opened at {}", profile.audit.wal_dir.display()));
 
@@ -805,6 +819,7 @@ fn apply_ship_profile(
 
     let runtime = RuntimeChecks {
         vault_opened: Some(vault_outcome),
+        master_key_sealed: Some(seal_outcome),
         api_audit_wal_ready: Some(wal_outcome),
         compliance_sealer_real: Some(sealer_outcome),
         compliance_signer_real: Some(signer_outcome),

@@ -214,14 +214,11 @@ impl TpmProvider for TpmManager {
             return Err(VaultError::TpmUnavailable);
         }
 
-        // Look up the entry only to authorize that this key_id is known.
-        // The actual ciphertext binding is enforced by AEAD authentication.
-        let keys = self.sealed_keys.read().await;
-        if !keys.contains_key(key_id) {
-            return Err(VaultError::TpmError(format!("Key not found: {key_id}")));
-        }
-        drop(keys);
-
+        // Unseal is deliberately stateless: a real TPM 2.0 unseals any
+        // blob whose PCR policy matches, with no per-process memory of what
+        // was sealed — that is what lets a sealed master KEK written by a
+        // prior boot unseal after a restart. The binding is the AEAD tag
+        // under the PCR-derived key, not a bookkeeping map lookup.
         let current_pcr = self.current_pcr_state.read().await.clone();
         let key_data = Self::unseal_with_pcr(sealed_blob, &current_pcr).map_err(|e| {
             if matches!(e, VaultError::TpmPcrMismatch) {

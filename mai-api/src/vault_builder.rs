@@ -28,6 +28,7 @@ use async_trait::async_trait;
 use mai_core::vault::{VaultError, VaultInterface};
 use mai_vault::audit::AuditWriter as VaultAuditWriter;
 use mai_vault::pqc::{DigestSigner, PqcEngine};
+use mai_vault::tpm::TpmManager;
 use mai_vault::{FileDevVault, VaultConfig as MaiVaultConfig, ZfsOps, ZfsVault};
 
 use crate::ship_profile::{ProfileMode, ShipProfile, VaultBackend};
@@ -135,7 +136,12 @@ pub async fn build_vault(
             // V2: engines are constructed and initialized here — the old
             // path handed out a bare `ZfsVault::new` with no PQC, no audit
             // writer, and nothing awaited.
+            // The TPM seal provider is wired BEFORE initialize, so the
+            // key-store KEK materializes as a sealed envelope on this boot
+            // path (or the boot fails closed) — never a plaintext kek.bin.
             let pqc = Arc::new(PqcEngine::new(cfg.pqc.clone()));
+            pqc.set_seal_provider(Arc::new(TpmManager::new(cfg.tpm.clone())))
+                .await;
             pqc.initialize()
                 .await
                 .map_err(|e| VaultBuildError::InitFailed(format!("pqc: {e}")))?;
@@ -196,6 +202,32 @@ pub async fn probe_vault(vault: &dyn VaultInterface) -> crate::production_guard:
         ),
         Ok(_) => RuntimeOutcome::fail("vault probe read back different bytes".to_string()),
         Err(e) => RuntimeOutcome::fail(format!("vault load probe failed: {e}")),
+    }
+}
+
+/// Runtime seal probe for the vault master KEK — the measurement behind
+/// `PROD-VAULT-101`. Reconstructs the key-store path + TPM provider the
+/// builder wires and asks [`mai_vault::pqc::probe_sealed_master_key`] to prove
+/// the sealed envelope exists, unseals under the **current** PCR state, and
+/// has no plaintext residue. A backend with no seal path (stub / file-dev)
+/// fails closed: those never carry a sealed master key.
+pub async fn probe_master_key_seal(
+    profile: &ShipProfile,
+) -> crate::production_guard::RuntimeOutcome {
+    use crate::production_guard::RuntimeOutcome;
+    match profile.vault.backend {
+        VaultBackend::Zfs => {
+            let cfg = zfs_config_from_root(profile.vault.root.as_path());
+            let tpm = TpmManager::new(cfg.tpm.clone());
+            match mai_vault::pqc::probe_sealed_master_key(&cfg.pqc.key_store_path, &tpm).await {
+                Ok(detail) => RuntimeOutcome::pass(detail),
+                Err(reason) => RuntimeOutcome::fail(reason),
+            }
+        }
+        VaultBackend::Stub | VaultBackend::FileDev => RuntimeOutcome::fail(format!(
+            "vault backend {:?} has no seal path — the master key is not sealed",
+            profile.vault.backend
+        )),
     }
 }
 

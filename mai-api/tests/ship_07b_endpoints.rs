@@ -177,6 +177,7 @@ alerts_enabled = true
 fn all_pass_runtime() -> RuntimeChecks {
     RuntimeChecks {
         vault_opened: Some(RuntimeOutcome::pass("vault opened (test)")),
+        master_key_sealed: Some(RuntimeOutcome::pass("master KEK sealed (test)")),
         api_audit_wal_ready: Some(RuntimeOutcome::pass("WAL opened (test)")),
         compliance_sealer_real: Some(RuntimeOutcome::pass("AEAD sealer (test)")),
         compliance_signer_real: Some(RuntimeOutcome::pass("audit signer (test)")),
