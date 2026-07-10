@@ -174,11 +174,12 @@ impl Ring3Cache {
             return (false, "token expired".to_string());
         }
         if let Some(snap) = &self.revocation {
-            if snap.is_token_revoked(&token.token_id) {
-                return (false, "token revoked by cached snapshot".to_string());
-            }
-            if snap.is_subject_revoked(&token.subject_hash) {
-                return (false, "subject revoked by cached snapshot".to_string());
+            // The complete predicate — token id, subject, signing key, issuer,
+            // bundle version, tenant, and service identity — so an offline
+            // appliance honors a key-compromise or tenant-deprovision revocation,
+            // not just token/subject (the same check every other consumer uses).
+            if let Some(dim) = snap.revokes(token) {
+                return (false, format!("revoked ({dim}) by cached snapshot"));
             }
         }
         (true, "ok".to_string())
@@ -376,6 +377,25 @@ mod tests {
 
         let d = cache.decide(&tok, Utc::now());
         assert!(!d.token_valid);
+        assert!(d.effective_routes.is_empty());
+        assert!(d.reason.contains("revoked"));
+    }
+
+    #[test]
+    fn revoked_signing_key_denied_offline() {
+        // The dimension the old two-check code ignored: a compromised signing
+        // key revoked in the snapshot must deny the token offline.
+        let signer = RustCryptoMlDsa87::generate("anchor").unwrap();
+        let mut cache = Ring3Cache::new(signer.public_key().to_vec(), TTL);
+        let tok = token(&signer, vec![Route::CloudAllowed]);
+        let mut snap =
+            RevocationSnapshot::new("s1", "2026-07-03T00:00:00Z", "2027-01-01T00:00:00Z");
+        snap.revoked_signing_keys.push(tok.signature.key_id.clone());
+        let snap = fabric_revocation::sign(snap, &signer).unwrap();
+        cache.refresh(snap, now_secs()).unwrap();
+
+        let d = cache.decide(&tok, Utc::now());
+        assert!(!d.token_valid, "a revoked signing key must deny offline");
         assert!(d.effective_routes.is_empty());
         assert!(d.reason.contains("revoked"));
     }

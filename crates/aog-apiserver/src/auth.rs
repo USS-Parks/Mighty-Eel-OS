@@ -130,10 +130,11 @@ impl Authenticator {
             return Err(ApiError::Unauthenticated);
         }
 
-        // Kill switch, snapshot leg: a revoked token or subject halts the next call.
+        // Kill switch, snapshot leg: any revocation dimension (token, subject,
+        // signing key, issuer, bundle version, tenant, service identity) halts
+        // the next call — matching the gateway's complete predicate.
         if let Some(snap) = &self.revocation
-            && (snap.is_token_revoked(&token.token_id)
-                || snap.is_subject_revoked(&token.subject_hash))
+            && snap.revokes(&token).is_some()
         {
             return Err(ApiError::Unauthenticated);
         }
