@@ -173,9 +173,10 @@ async fn chat_completions(
 
     let mut tokenized_spans = 0u32;
     let resp = if body.get("stream").and_then(Value::as_bool).unwrap_or(false) {
-        // Fail-closed: the streaming path does not yet tokenize egress or
-        // meter/receipt per chunk. Until it does, refuse a stream that would send
-        // un-tokenized sensitive spans to a cloud provider rather than leak them.
+        // Fail-closed: the streaming path does not tokenize egress per chunk, so
+        // refuse a stream that would send un-tokenized sensitive spans to a cloud
+        // provider rather than leak them. (Metering/receipts DO cover streams:
+        // the StreamMeter below settles when the SSE generator drops.)
         let spans =
             crate::tokenize::egress(state.detector.as_ref(), target_cloud, &neutral.messages)
                 .span_count();
@@ -192,7 +193,28 @@ async fn chat_completions(
             (StatusCode::BAD_REQUEST, Json(err)).into_response()
         } else {
             match provider.stream(&neutral).await {
-                Ok(chunks) => chat_sse(inbound_model, chunks),
+                // Metering + receipt + budget decrement for the STREAMED path:
+                // the guard rides the SSE generator and settles on drop —
+                // clean [DONE], provider error, or client disconnect alike — so
+                // a streamed call accrues spend exactly like a non-stream call.
+                Ok(chunks) => chat_sse(
+                    inbound_model.clone(),
+                    chunks,
+                    crate::meter::StreamMeter {
+                        receipts: state.receipts.clone(),
+                        prices: state.prices.clone(),
+                        gateway: state.gateway.clone(),
+                        ctx,
+                        provider: provider_name.clone(),
+                        model: inbound_model,
+                        route: decision.clone(),
+                        allowed_cloud: policy_decision.allowed_cloud,
+                        workflow_id: workflow_id.clone(),
+                        input_estimate: crate::route::estimate_tokens(None, &query),
+                        reported: crate::provider::Usage::default(),
+                        delta_chars: 0,
+                    },
+                ),
                 Err(e) => provider_http(&e).into_response(),
             }
         }
@@ -379,11 +401,14 @@ fn chunk_json(id: &str, ts: i64, model: &str, delta: &Value, finish: Option<&str
 
 /// Re-emit a neutral [`ChunkStream`] as OpenAI `chat.completion.chunk` SSE frames,
 /// opening with a role delta and closing with a `finish_reason:"stop"` frame then
-/// the literal `data: [DONE]` an OpenAI client waits for.
-fn chat_sse(model: String, mut chunks: ChunkStream) -> Response {
+/// the literal `data: [DONE]` an OpenAI client waits for. The `meter` guard
+/// observes every frame and settles (receipt + budget decrement) when the
+/// generator drops, however the stream ends.
+fn chat_sse(model: String, mut chunks: ChunkStream, meter: crate::meter::StreamMeter) -> Response {
     let id = new_id("chatcmpl-");
     let ts = created();
     let stream = async_stream::stream! {
+        let mut meter = meter;
         yield Ok::<Event, std::convert::Infallible>(
             Event::default().data(chunk_json(&id, ts, &model, &json!({ "role": "assistant" }), None)),
         );
@@ -391,6 +416,7 @@ fn chat_sse(model: String, mut chunks: ChunkStream) -> Response {
         while let Some(frame) = chunks.next().await {
             match frame {
                 Ok(c) => {
+                    meter.observe(&c);
                     if !c.delta.is_empty() {
                         yield Ok(Event::default()
                             .data(chunk_json(&id, ts, &model, &json!({ "content": c.delta }), None)));
@@ -559,7 +585,62 @@ async fn embeddings() -> Response {
 
 #[cfg(test)]
 mod tests {
-    use super::status_json;
+    use std::sync::{Arc, Mutex};
+
+    use fabric_contracts::Budget;
+    use fabric_token::spend::{LocalSpendLedger, SpendLedger};
+
+    use super::{chat_sse, status_json};
+    use crate::budget_exhausted;
+    use crate::meter::ReceiptLedger;
+    use crate::meter::testkit::{delta, stream_meter, usage_frame};
+    use crate::provider::{ChunkStream, StreamChunk};
+
+    #[tokio::test]
+    async fn streamed_chat_is_metered_and_accrues_spend() {
+        // End-to-end at the surface: a streamed chat completion is receipted
+        // and decrements the budget when the SSE generator completes — so a
+        // budgeted key crossing its cap on the stream path is refused (402) at
+        // the next pre-flight resolve, same as the non-stream path.
+        let receipts = Arc::new(Mutex::new(ReceiptLedger::new()));
+        let spend = Arc::new(LocalSpendLedger::default());
+        let chunks: ChunkStream = Box::pin(futures::stream::iter(vec![
+            Ok(delta("hel")),
+            Ok(delta("lo")),
+            Ok(usage_frame(1000, 500)),
+            Ok(StreamChunk {
+                delta: String::new(),
+                done: true,
+                usage: None,
+            }),
+        ]));
+
+        let resp = chat_sse(
+            "gpt-4o-mini".to_string(),
+            chunks,
+            stream_meter(&receipts, &spend),
+        );
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let text = String::from_utf8(body.to_vec()).unwrap();
+        assert!(text.contains("hel"), "delta frames stream through");
+        assert!(text.contains("data: [DONE]"), "stream closes with [DONE]");
+
+        // The stream settled: one receipt carrying the provider-reported usage…
+        let led = receipts.lock().unwrap();
+        assert_eq!(led.receipts().len(), 1, "streamed call is receipted");
+        assert_eq!(led.receipts()[0].input_tokens, 1000);
+        assert_eq!(led.receipts()[0].output_tokens, 500);
+        // …and 1500 tokens accrued against the lineage key: a 1500-token cap is
+        // now exhausted, so the pre-flight predicate refuses the key.
+        let mut b = Budget {
+            token_cap: 1500,
+            ..Default::default()
+        };
+        spend.fold("tok-stream", &mut b);
+        assert!(budget_exhausted(&b), "streamed spend crossed the cap");
+    }
 
     #[test]
     fn status_json_shape() {

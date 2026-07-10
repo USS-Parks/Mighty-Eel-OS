@@ -1,10 +1,12 @@
 //! G7 gate — **cost-per-task aggregation across a multi-call chain** + the
-//! **receipt chain verifies**.
+//! **receipt chain verifies** — and the stream-budget gate — **a streamed call accrues
+//! spend, and a budgeted key crossing its cap on the stream path is refused**.
 //!
 //! Env-gated on `WSF_OPENBAO_ADDR`. Seeds an in-budget virtual key, stands a mock
 //! upstream that reports fixed usage, sends a multi-call chain tagged with an
 //! `x-aog-workflow` task id, then reads `/v1/usage` and asserts the aggregated
-//! cost + a verified receipt chain.
+//! cost + a verified receipt chain. The stream-budget leg seeds a tight-cap key, streams one
+//! SSE call to completion, and asserts the next call is refused `402`.
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
 use std::sync::Arc;
@@ -135,10 +137,10 @@ async fn provision(c: &Client, addr: &str, tok: &str) -> (String, String) {
     (role_id, secret_id)
 }
 
-fn in_budget_token(signer: &RustCryptoMlDsa87) -> TrustToken {
+fn in_budget_token(signer: &RustCryptoMlDsa87, token_id: &str, token_cap: u64) -> TrustToken {
     let now = Utc::now();
     let t = TrustToken {
-        token_id: "tok_g7".to_string(),
+        token_id: token_id.to_string(),
         issued_at: now.to_rfc3339(),
         expires_at: (now + Duration::minutes(15)).to_rfc3339(),
         issuer: "wsf-trust-bridge".to_string(),
@@ -158,7 +160,7 @@ fn in_budget_token(signer: &RustCryptoMlDsa87) -> TrustToken {
         offline_mode: false,
         revocation_status: RevocationStatus::Valid,
         budget: Some(Budget {
-            token_cap: 100_000_000,
+            token_cap,
             tokens_spent: 0,
             ..Default::default()
         }),
@@ -230,7 +232,7 @@ async fn cost_per_task_aggregates_and_chain_verifies() {
         .put_kv_data(
             &vault_token,
             &key_path("vk_g7"),
-            json!({ "token": in_budget_token(&anchor) }),
+            json!({ "token": in_budget_token(&anchor, "tok_g7", 100_000_000) }),
         )
         .await
         .expect("seed key");
@@ -302,5 +304,120 @@ async fn cost_per_task_aggregates_and_chain_verifies() {
 
     eprintln!(
         "G7 live gate PASSED against {addr} (cost-per-task aggregation across a multi-call chain; receipt chain verifies)"
+    );
+}
+
+/// SSE upstream for the stream-budget leg: two content deltas, a terminal usage frame
+/// (1000 in + 500 out — the shape `stream_options.include_usage` yields), then
+/// `[DONE]`.
+async fn upstream_sse(Json(_body): Json<Value>) -> Response {
+    let body = concat!(
+        "data: {\"choices\":[{\"delta\":{\"content\":\"str\"}}]}\n\n",
+        "data: {\"choices\":[{\"delta\":{\"content\":\"eam\"}}]}\n\n",
+        "data: {\"usage\":{\"prompt_tokens\":1000,\"completion_tokens\":500},\"choices\":[]}\n\n",
+        "data: [DONE]\n\n",
+    );
+    (
+        [(axum::http::header::CONTENT_TYPE, "text/event-stream")],
+        body,
+    )
+        .into_response()
+}
+
+#[tokio::test]
+async fn streamed_call_accrues_spend_and_cap_refuses_next_call() {
+    let Some(addr) = openbao_addr() else {
+        eprintln!(
+            "SKIP streamed_call_accrues_spend_and_cap_refuses_next_call: WSF_OPENBAO_ADDR unset (stream-budget live gate)"
+        );
+        return;
+    };
+
+    let c = Client::new();
+    let (role_id, secret_id) = provision(&c, &addr, &root_token()).await;
+
+    let anchor = RustCryptoMlDsa87::generate("aog-r8-anchor").unwrap();
+    let openbao = OpenBaoAuth::new(OpenBaoConfig::new(&addr, role_id, secret_id)).unwrap();
+    let vault_token = openbao.login().await.expect("login");
+    // Cap below one streamed call's usage (1000 + 500): the first stream passes
+    // pre-flight (nothing spent yet), settles 1500 at stream end, and every call
+    // after that must be refused 402 on the folded spend.
+    openbao
+        .put_kv_data(
+            &vault_token,
+            &key_path("vk_r8s"),
+            json!({ "token": in_budget_token(&anchor, "tok_r8s", 1_400) }),
+        )
+        .await
+        .expect("seed key");
+
+    let upstream_base =
+        spawn(Router::new().route("/v1/chat/completions", post(upstream_sse))).await;
+    let mut registry = Registry::new();
+    registry.register(Arc::new(OpenAiProvider::new(
+        "openai",
+        upstream_base,
+        "unused",
+    )));
+    let gateway = Arc::new(Gateway::new(
+        openbao,
+        GatewayConfig {
+            token_public_key: anchor.public_key().to_vec(),
+            virtual_key_kv_prefix: KV_PREFIX.to_string(),
+        },
+    ));
+    let models = ModelMap::new().route("gpt-4o-mini", Target::new("openai", "upstream-x"));
+    let state = AppState::new(gateway, Arc::new(registry), Arc::new(models));
+
+    let base = spawn(aog_gateway::surface_openai::router(state)).await;
+    let http = Client::builder()
+        .timeout(StdDuration::from_secs(10))
+        .build()
+        .unwrap();
+
+    // First call: admitted (budget untouched) and streamed to completion.
+    let r = http
+        .post(format!("{base}/v1/chat/completions"))
+        .bearer_auth("vk_r8s")
+        .json(&json!({
+            "model": "gpt-4o-mini",
+            "stream": true,
+            "messages": [{"role": "user", "content": "stream me"}]
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(r.status(), 200, "first streamed call is admitted");
+    let body = r.text().await.unwrap();
+    assert!(body.contains("str"), "deltas streamed through");
+    assert!(body.contains("[DONE]"), "stream ran to completion");
+
+    // Settlement fires when the server drops the SSE generator; give that drop
+    // a short bounded window, then require the refusal. (An extra 200 during
+    // the window only accrues more spend — convergence is monotone.)
+    let mut refused = false;
+    for _ in 0..50 {
+        let r2 = http
+            .post(format!("{base}/v1/chat/completions"))
+            .bearer_auth("vk_r8s")
+            .json(&json!({
+                "model": "gpt-4o-mini",
+                "messages": [{"role": "user", "content": "again"}]
+            }))
+            .send()
+            .await
+            .unwrap();
+        if r2.status() == 402 {
+            refused = true;
+            break;
+        }
+        tokio::time::sleep(StdDuration::from_millis(100)).await;
+    }
+    assert!(
+        refused,
+        "a budgeted key crossing its cap on the STREAM path is refused 402 pre-flight (the stream-budget gate)"
+    );
+    eprintln!(
+        "stream-budget live gate PASSED against {addr} (streamed call accrued spend; cap crossed → next call 402)"
     );
 }

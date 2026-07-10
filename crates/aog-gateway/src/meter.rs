@@ -7,12 +7,14 @@
 //! off-host; the receipts carry the spend, provider, token counts, and — for a
 //! **local** model — a weights digest (cloud is named by provider+model).
 //!
-//! Streaming note: receipts are recorded on the **non-stream** completion path,
-//! where the provider's real `Usage` is in hand. Metering the streamed path from
-//! its terminal usage frame is a follow-on; every non-stream call is metered.
+//! Streaming note: the non-stream path records from the provider's real `Usage`;
+//! the streamed path settles through [`StreamMeter`] when the SSE generator
+//! drops — terminal frame, provider error, or client disconnect alike — using
+//! provider-reported usage frames when they arrive and a ~4-chars/token
+//! estimate when they don't. Every call is metered.
 
 use std::collections::HashMap;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use axum::http::HeaderMap;
 use chrono::Utc;
@@ -21,7 +23,7 @@ use serde::Serialize;
 use sha2::{Digest, Sha256};
 
 use crate::ResolvedContext;
-use crate::provider::Usage;
+use crate::provider::{StreamChunk, Usage};
 use crate::route::{GatewayRoute, route_header};
 
 /// A per-model price (cents per 1000 tokens, input / output).
@@ -343,9 +345,227 @@ pub fn record(ledger: &Mutex<ReceiptLedger>, prices: &PriceBook, c: &Completion)
     guard.append(receipt)
 }
 
+/// Accounting guard for one **streamed** completion: the SSE
+/// generator owns it, feeds every frame through [`observe`](Self::observe), and
+/// settlement — receipt (G7) + budget decrement (G9) — happens exactly once in
+/// `Drop`. Keying settlement to the guard's drop (not a terminal frame) means a
+/// client that disconnects mid-stream, a provider that errors mid-stream, and a
+/// clean `[DONE]` all meter alike: an early hang-up cannot dodge the budget.
+///
+/// Construct it literally (like [`Completion`]) in the surface handler with the
+/// accumulators zeroed.
+pub struct StreamMeter {
+    pub receipts: Arc<Mutex<ReceiptLedger>>,
+    pub prices: Arc<PriceBook>,
+    pub gateway: Arc<crate::Gateway>,
+    pub ctx: ResolvedContext,
+    pub provider: String,
+    pub model: String,
+    pub route: GatewayRoute,
+    pub allowed_cloud: bool,
+    pub workflow_id: Option<String>,
+    /// ~4-chars/token estimate of the request text — the input-side fallback
+    /// when the provider never reports usage on the stream.
+    pub input_estimate: u32,
+    /// Provider-reported usage, folded per-field across frames (reports are
+    /// cumulative; Anthropic splits input onto `message_start` and output onto
+    /// `message_delta`, OpenAI reports both on one terminal usage frame).
+    pub reported: Usage,
+    /// Accumulated delta text length — the output-side fallback (~4 chars/token)
+    /// for a provider that streams text but never a usage frame.
+    pub delta_chars: usize,
+}
+
+impl StreamMeter {
+    /// Fold one stream frame into the running account.
+    pub fn observe(&mut self, chunk: &StreamChunk) {
+        if let Some(u) = chunk.usage {
+            self.reported.input_tokens = self.reported.input_tokens.max(u.input_tokens);
+            self.reported.output_tokens = self.reported.output_tokens.max(u.output_tokens);
+        }
+        self.delta_chars += chunk.delta.len();
+    }
+}
+
+impl Drop for StreamMeter {
+    /// Settle the streamed call, however the stream ended: append the receipt
+    /// and accrue spend against the token's attenuation lineage (T5), exactly
+    /// as the non-stream path does. Provider-reported usage wins; a
+    /// usage-silent stream falls back to the request-text estimate (input) and
+    /// ~4 chars/token of streamed deltas (output) rather than metering zero.
+    fn drop(&mut self) {
+        let usage = Usage {
+            input_tokens: if self.reported.input_tokens > 0 {
+                self.reported.input_tokens
+            } else {
+                self.input_estimate
+            },
+            output_tokens: if self.reported.output_tokens > 0 {
+                self.reported.output_tokens
+            } else {
+                u32::try_from(self.delta_chars / 4).unwrap_or(u32::MAX)
+            },
+        };
+        record(
+            &self.receipts,
+            &self.prices,
+            &Completion {
+                ctx: &self.ctx,
+                provider: &self.provider,
+                model: &self.model,
+                route: &self.route,
+                allowed_cloud: self.allowed_cloud,
+                usage,
+                workflow_id: self.workflow_id.clone(),
+                // The stream path refuses a cloud dispatch that would need span
+                // tokenization, so a streamed receipt never carries spans.
+                tokenized_spans: 0,
+            },
+        );
+        self.gateway.record_spend(
+            fabric_token::lineage_key(&self.ctx.token),
+            u64::from(usage.input_tokens) + u64::from(usage.output_tokens),
+            self.prices.cost(
+                &self.provider,
+                &self.model,
+                usage.input_tokens,
+                usage.output_tokens,
+            ),
+            0,
+        );
+    }
+}
+
+/// Shared fixtures for the streamed-metering tests here and in the surface
+/// modules — compiled only for this crate's own test builds.
+#[cfg(test)]
+pub(crate) mod testkit {
+    use std::sync::{Arc, Mutex};
+
+    use fabric_contracts::{
+        Attenuation, Budget, Classification, RevocationStatus, Route, Signature, TrustToken,
+    };
+    use fabric_token::spend::LocalSpendLedger;
+    use wsf_bridge::{OpenBaoAuth, OpenBaoConfig};
+
+    use super::{PriceBook, ReceiptLedger, StreamMeter};
+    use crate::provider::{StreamChunk, Usage};
+    use crate::route::{GatewayRoute, RouteSource};
+    use crate::{Gateway, GatewayConfig, ResolvedContext};
+
+    pub(crate) fn budgeted_token(id: &str) -> TrustToken {
+        TrustToken {
+            token_id: id.to_string(),
+            issued_at: "2026-07-03T00:00:00Z".into(),
+            expires_at: "2099-01-01T00:00:00Z".into(),
+            issuer: "wsf-bridge".into(),
+            trust_bundle_version: "2026.07.v2".into(),
+            tenant_id: "tenant-a".into(),
+            subject_id: None,
+            subject_hash: "hmac:abc".into(),
+            service_identity: None,
+            identity_id: None,
+            roles: vec![],
+            compliance_scopes: vec![],
+            allowed_routes: vec![],
+            allowed_models: vec![],
+            max_data_classification: Classification::Restricted,
+            country: None,
+            person_type: None,
+            offline_mode: false,
+            revocation_status: RevocationStatus::Valid,
+            budget: Some(Budget {
+                token_cap: 20,
+                ..Default::default()
+            }),
+            attenuation: Attenuation::default(),
+            signature: Signature {
+                alg: String::new(),
+                key_id: String::new(),
+                value: String::new(),
+            },
+        }
+    }
+
+    pub(crate) fn test_route() -> GatewayRoute {
+        GatewayRoute {
+            route: Route::CloudAllowed,
+            classification: "public".into(),
+            reason: "test".into(),
+            source: RouteSource::Classified,
+            denied: false,
+        }
+    }
+
+    /// A gateway that never reaches OpenBao (nothing resolves in these tests);
+    /// only its spend ledger is exercised, via the injected handle.
+    pub(crate) fn offline_gateway(spend: Arc<LocalSpendLedger>) -> Arc<Gateway> {
+        Arc::new(
+            Gateway::new(
+                OpenBaoAuth::new(OpenBaoConfig::new("http://127.0.0.1:1", "r", "s"))
+                    .expect("offline openbao client builds"),
+                GatewayConfig {
+                    token_public_key: vec![],
+                    virtual_key_kv_prefix: "kv/data/aog/virtual-keys".into(),
+                },
+            )
+            .with_spend_ledger(spend),
+        )
+    }
+
+    /// A [`StreamMeter`] over fresh ledgers: lineage key `tok-stream`, provider
+    /// `openai`, model `gpt-4o-mini`, input estimate 25.
+    pub(crate) fn stream_meter(
+        receipts: &Arc<Mutex<ReceiptLedger>>,
+        spend: &Arc<LocalSpendLedger>,
+    ) -> StreamMeter {
+        StreamMeter {
+            receipts: receipts.clone(),
+            prices: Arc::new(PriceBook::baseline()),
+            gateway: offline_gateway(spend.clone()),
+            ctx: ResolvedContext {
+                token: budgeted_token("tok-stream"),
+                tenant_id: "tenant-a".into(),
+            },
+            provider: "openai".into(),
+            model: "gpt-4o-mini".into(),
+            route: test_route(),
+            allowed_cloud: true,
+            workflow_id: Some("task-s".into()),
+            input_estimate: 25,
+            reported: Usage::default(),
+            delta_chars: 0,
+        }
+    }
+
+    pub(crate) fn delta(text: &str) -> StreamChunk {
+        StreamChunk {
+            delta: text.to_string(),
+            done: false,
+            usage: None,
+        }
+    }
+
+    pub(crate) fn usage_frame(input: u32, output: u32) -> StreamChunk {
+        StreamChunk {
+            delta: String::new(),
+            done: false,
+            usage: Some(Usage {
+                input_tokens: input,
+                output_tokens: output,
+            }),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use super::testkit::{delta, stream_meter, usage_frame};
     use super::*;
+    use fabric_contracts::Budget;
+    use fabric_token::spend::{LocalSpendLedger, SpendLedger};
+
+    use crate::budget_exhausted;
 
     fn receipt(wf: &str, provider: &str, spend: u64) -> GatewayReceipt {
         GatewayReceipt {
@@ -487,5 +707,77 @@ mod tests {
         // local weights digest is recorded; cloud has none.
         assert!(local_weights_digest("local", "llama3").is_some());
         assert!(local_weights_digest("openai", "gpt-4o-mini").is_none());
+    }
+
+    #[test]
+    fn stream_meter_settles_on_drop_without_a_terminal_frame() {
+        // A client that hangs up mid-stream (no terminal frame, no usage
+        // frame) is still receipted and budget-decremented when the SSE
+        // generator drops — an early disconnect cannot dodge the meter. With a
+        // usage-silent provider the fallbacks apply: the request-text input
+        // estimate + ~4 chars/token of streamed deltas.
+        let receipts = Arc::new(Mutex::new(ReceiptLedger::new()));
+        let spend = Arc::new(LocalSpendLedger::default());
+        let mut meter = stream_meter(&receipts, &spend);
+        meter.observe(&delta("hell"));
+        meter.observe(&delta("o wo"));
+        drop(meter); // simulated disconnect: the stream never finished
+
+        let led = receipts.lock().unwrap();
+        assert_eq!(led.receipts().len(), 1, "the aborted stream is receipted");
+        let r = &led.receipts()[0];
+        assert_eq!(
+            r.input_tokens, 25,
+            "input falls back to the request estimate"
+        );
+        assert_eq!(r.output_tokens, 2, "output falls back to delta chars / 4");
+        assert!(led.verify(), "receipt chain verifies");
+
+        // 27 tokens accrued against the lineage key: the 20-token cap is now
+        // exhausted, so the next pre-flight resolve refuses this key.
+        let mut b = Budget {
+            token_cap: 20,
+            ..Default::default()
+        };
+        spend.fold("tok-stream", &mut b);
+        assert!(
+            budget_exhausted(&b),
+            "streamed spend crosses the cap → pre-flight refuses"
+        );
+    }
+
+    #[test]
+    fn stream_meter_prefers_reported_usage_and_merges_split_frames() {
+        // Provider-reported usage wins over the estimates, including when input
+        // and output arrive on different frames (the Anthropic shape:
+        // message_start carries input, message_delta carries output).
+        let receipts = Arc::new(Mutex::new(ReceiptLedger::new()));
+        let spend = Arc::new(LocalSpendLedger::default());
+        let mut meter = stream_meter(&receipts, &spend);
+        meter.observe(&usage_frame(1000, 0));
+        meter.observe(&delta("ok"));
+        meter.observe(&usage_frame(0, 500));
+        drop(meter);
+
+        let led = receipts.lock().unwrap();
+        let r = &led.receipts()[0];
+        assert_eq!(
+            r.input_tokens, 1000,
+            "reported input wins over the estimate"
+        );
+        assert_eq!(
+            r.output_tokens, 500,
+            "reported output wins over delta chars"
+        );
+        // gpt-4o-mini baseline: 1000×15/1k + 500×60/1k = 45 cents.
+        assert_eq!(r.spend_cents, 45);
+
+        // The full reported 1500 tokens accrued against the lineage key.
+        let mut b = Budget {
+            token_cap: 1500,
+            ..Default::default()
+        };
+        spend.fold("tok-stream", &mut b);
+        assert!(budget_exhausted(&b), "1500/1500 is exhausted");
     }
 }
