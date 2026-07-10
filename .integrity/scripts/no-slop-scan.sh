@@ -8,7 +8,10 @@
 #   DEBT  untracked debt        — bare TODO/FIXME/XXX/HACK (must be TODO(owner): …)
 #   UNFIN unfinished shipped code — todo!()/unimplemented!() outside tests
 #   STUB  confessions in comments — leading "// Stub: …" / "# Placeholder: …", "for now,"
-#   DOC   dangling references    — docs/<name>.md cited but absent from the tree
+#   DOC   dangling references    — a cited .md absent from the tree: docs/<name>.md
+#                                anywhere, or a bare <name>.md on a comment line
+#                                (a bare name in executing code is data — fixture
+#                                paths, generated names — not a citation)
 #
 # Usage:
 #   no-slop-scan.sh staged   # default — ADDED lines of staged files   (pre-commit; fast)
@@ -69,7 +72,16 @@ scan_full() {
   git grep -nE  "$UNFIN" -- "${SPECS[@]}" "${NOTEST[@]}" 2>/dev/null | grep -v 'slop-ok:' | sed 's/^/UNFIN  /' >>"$VIOL" || true
   git grep -niE "$STUB"  -- "${SPECS[@]}" "${NOTEST[@]}" 2>/dev/null | grep -v 'slop-ok:' | sed 's/^/STUB   /' >>"$VIOL" || true
   local tracked; tracked="$(git ls-files)"
-  git grep -hoIE 'docs/[A-Za-z0-9._/-]+\.md' -- "${SPECS[@]}" 2>/dev/null | sort -u | while IFS= read -r ref; do
+  # docs/-prefixed citations count anywhere; BARE <name>.md citations count
+  # only on comment lines outside test code — in code a bare name is data
+  # (fixture paths, generated names), in a test comment it names a fixture,
+  # but in a source comment it is a citation and must resolve.
+  {
+    git grep -hoIE 'docs/[A-Za-z0-9._/-]+\.md' -- "${SPECS[@]}" 2>/dev/null
+    git grep -hIE '^[[:space:]]*(//+!?|#+|\*|--|<!--)' -- "${SPECS[@]}" "${NOTEST[@]}" 2>/dev/null \
+      | grep -v 'slop-ok:' \
+      | grep -oE '\b[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*\.md\b'
+  } | sort -u | while IFS= read -r ref; do
     [ -z "$ref" ] && continue
     b="$(basename "$ref")"
     printf '%s\n' "$tracked" | grep -q "/${b}$\|^${b}$" \

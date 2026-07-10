@@ -35,5 +35,15 @@ expect "$(run)" 0 "K3/SHIP-09 in docs/ is exempt"
 rm -f docs/note.rs; mkdir -p src; printf 'fn f() {} // SHIP-09 // slop-ok: intentional\n' > src/lib.rs
 expect "$(run)" 0 "slop-ok annotation is honored"
 
+# 5. A bare .md citation on a COMMENT line that resolves nowhere is flagged
+#    (DOC); the same name as a code string literal is data and passes; and a
+#    comment citation to a file that exists passes.
+rm -f src/lib.rs; printf '// see MISSING-PLAN.md for details\nfn f() {}\n' > src/lib.rs
+expect "$(run)" 1 "dangling bare .md citation in a comment is flagged"
+printf 'fn f() { let _p = "MISSING-PLAN.md"; }\n' > src/lib.rs
+expect "$(run)" 0 "bare .md as a code string literal is data, not a citation"
+printf '// see PRESENT.md for details\nfn f() {}\n' > src/lib.rs; printf 'hello\n' > PRESENT.md
+expect "$(run)" 0 "bare .md comment citation to a tracked file passes"
+
 echo "no-slop-scan.test: ${pass} passed, ${fail} failed"
 [ "$fail" -eq 0 ]

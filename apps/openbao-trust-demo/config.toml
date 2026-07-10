@@ -1,8 +1,8 @@
 # OpenBao-Backed Local Trust Demo
 #
 # Demonstrates the cloud-OpenBao-Core -> Lamprey-Trust-Bridge ->
-# Local-Trust-Cache ring described in docs/TRUST-MANIFOLD.md and
-# BUILD-EXECUTION-PLAN-V2-UPDATED.md §777.
+# Local-Trust-Cache ring described in docs/compliance/TRUST-MANIFOLD.md
+# and docs/operations/OPENBAO-INTEGRATION.md.
 #
 # Pipeline:
 #   1. user authenticates through the (simulated) cloud trust bridge

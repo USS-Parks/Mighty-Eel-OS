@@ -1,7 +1,8 @@
 #![doc = "Island Mountain MAI - Hardware Interface Layer (HIL)"]
 // unsafe_code is explicitly denied in trait modules.
 // Driver implementations (mai-hil/src/drivers/) are permitted to use unsafe
-// where direct hardware/FFI access is required per CONVENTIONS.md.
+// where direct hardware/FFI access requires it; each unsafe block carries
+// its own safety comment.
 
 pub mod drivers;
 pub mod traits;
