@@ -82,6 +82,12 @@ pub enum VaultBuildError {
 /// material internally — raw secret bytes never cross the vault boundary.
 pub type VaultAuditSigner = (Vec<u8>, Arc<dyn DigestSigner>);
 
+/// Reserved anchor id for the model-distribution signing key. Model packages
+/// verify against `<trust.anchors_dir>/mai-model-distribution.pub` (raw
+/// 2592-byte ML-DSA-87 public key — the same on-disk convention as every
+/// other trust anchor).
+pub const MODEL_DISTRIBUTION_ANCHOR_ID: &str = "mai-model-distribution";
+
 pub async fn build_vault(
     profile: &ShipProfile,
 ) -> Result<(Box<dyn VaultInterface>, Option<VaultAuditSigner>), VaultBuildError> {
@@ -142,6 +148,31 @@ pub async fn build_vault(
             let pqc = Arc::new(PqcEngine::new(cfg.pqc.clone()));
             pqc.set_seal_provider(Arc::new(TpmManager::new(cfg.tpm.clone())))
                 .await;
+            // Supply-chain origin control: pin the model-distribution trust
+            // anchor so packages verify against the distribution key, never
+            // the appliance's own boot key. In production a missing anchor
+            // leaves package verification fail-closed (installs refused until
+            // the anchor is installed); local-dev keeps the self-key posture.
+            let anchor_path = profile
+                .trust
+                .anchors_dir
+                .join(format!("{MODEL_DISTRIBUTION_ANCHOR_ID}.pub"));
+            if anchor_path.is_file() {
+                let anchor = std::fs::read(&anchor_path).map_err(|e| {
+                    VaultBuildError::InitFailed(format!(
+                        "distribution anchor {}: {e}",
+                        anchor_path.display()
+                    ))
+                })?;
+                pqc.set_distribution_anchor(anchor).await.map_err(|e| {
+                    VaultBuildError::InitFailed(format!(
+                        "distribution anchor {}: {e}",
+                        anchor_path.display()
+                    ))
+                })?;
+            } else if is_production {
+                pqc.require_distribution_anchor();
+            }
             pqc.initialize()
                 .await
                 .map_err(|e| VaultBuildError::InitFailed(format!("pqc: {e}")))?;

@@ -44,6 +44,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use aes_gcm::aead::{Aead, KeyInit};
 use aes_gcm::{Aes256Gcm, Nonce};
@@ -51,6 +52,7 @@ use async_trait::async_trait;
 use hkdf::Hkdf;
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use sha3::Sha3_256;
 use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
@@ -235,6 +237,15 @@ pub struct PqcEngine {
     /// successful unseal — PCR drift or an unavailable TPM fails closed. When
     /// absent (dev / stub posture), the legacy plaintext `kek.bin` is used.
     seal: RwLock<Option<Arc<dyn TpmProvider>>>,
+    /// Pinned model-distribution trust anchor: the ML-DSA-87 public key that
+    /// signs shipped model packages. When pinned, package verification binds
+    /// to THIS key — the appliance's own per-boot signing key can no longer
+    /// authenticate a package (supply-chain origin control).
+    distribution_anchor: RwLock<Option<Vec<u8>>>,
+    /// Fail-closed switch for package verification when no distribution
+    /// anchor is pinned (the production posture): refuse rather than fall
+    /// back to the self-key.
+    distribution_required: AtomicBool,
 }
 
 /// An ML-KEM keypair (encapsulation).
@@ -293,7 +304,68 @@ impl PqcEngine {
             signing_key: RwLock::new(None),
             kek: RwLock::new(None),
             seal: RwLock::new(None),
+            distribution_anchor: RwLock::new(None),
+            distribution_required: AtomicBool::new(false),
         }
+    }
+
+    /// Pin the model-distribution trust anchor: the raw ML-DSA-87 public key
+    /// that signs shipped model packages (weights + manifest). Once pinned,
+    /// [`verify_model_package`](Self::verify_model_package) verifies against
+    /// this key only — never the appliance self-key.
+    pub async fn set_distribution_anchor(&self, public_key: Vec<u8>) -> Result<(), VaultError> {
+        if public_key.len() != MLDSA87_PK_LEN {
+            return Err(VaultError::PqcError(format!(
+                "distribution anchor has {} bytes; expected a raw {MLDSA87_PK_LEN}-byte \
+                 ML-DSA-87 public key",
+                public_key.len()
+            )));
+        }
+        *self.distribution_anchor.write().await = Some(public_key);
+        Ok(())
+    }
+
+    /// Require a pinned distribution anchor for package verification — the
+    /// production posture. With the flag set and no anchor pinned,
+    /// [`verify_model_package`](Self::verify_model_package) refuses (fail
+    /// closed) instead of falling back to the appliance self-key.
+    pub fn require_distribution_anchor(&self) {
+        self.distribution_required.store(true, Ordering::Relaxed);
+    }
+
+    /// Fingerprint of the pinned distribution anchor — `sha256:<hex>` over the
+    /// raw public key, the format a package manifest declares in
+    /// `security.public_key_fingerprint`. `None` when no anchor is pinned.
+    pub async fn distribution_anchor_fingerprint(&self) -> Option<String> {
+        self.distribution_anchor.read().await.as_ref().map(|pk| {
+            let hex: String = Sha256::digest(pk)
+                .iter()
+                .map(|b| format!("{b:02x}"))
+                .collect();
+            format!("sha256:{hex}")
+        })
+    }
+
+    /// Verify a model package's signature under the supply-chain policy:
+    /// a pinned distribution anchor binds verification to the distribution
+    /// key; the required flag with no anchor refuses (fail closed); with
+    /// neither (dev posture) the legacy self-key check applies.
+    pub async fn verify_model_package(
+        &self,
+        data: &[u8],
+        signature: &[u8],
+    ) -> Result<bool, VaultError> {
+        if let Some(pk) = self.distribution_anchor.read().await.as_ref() {
+            return dsa_backend::verify(data, signature, pk);
+        }
+        if self.distribution_required.load(Ordering::Relaxed) {
+            return Err(VaultError::PqcError(
+                "no model-distribution trust anchor pinned; refusing package verification \
+                 (install the distribution anchor into trust.anchors_dir)"
+                    .into(),
+            ));
+        }
+        self.verify_package(data, signature).await
     }
 
     /// Wire a TPM seal provider for the key-store KEK. Must be set before

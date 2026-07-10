@@ -47,6 +47,9 @@ chacha20poly1305 = "0.10"
 # from KEM shared secrets and PCR state.
 hkdf = "0.12"
 sha3 = "0.10"
+# SHA-256 for the distribution-anchor fingerprint (`sha256:<hex>`, the format
+# a package manifest's security.public_key_fingerprint declares).
+sha2 = "0.10"
 
 # OS CSPRNG.
 rand = "0.8"

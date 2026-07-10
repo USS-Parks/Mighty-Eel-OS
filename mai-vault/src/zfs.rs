@@ -558,7 +558,17 @@ impl VaultInterface for ZfsVault {
             sig_bytes = signature.len(),
             "Vault delegating signature verification to PqcProvider"
         );
-        pqc.verify_package(data, signature).await
+        // Supply-chain policy: a pinned distribution anchor (or the required
+        // flag) binds package verification to the distribution key — the
+        // appliance self-key stays confined to the audit chain and dev use.
+        pqc.verify_model_package(data, signature).await
+    }
+
+    async fn distribution_fingerprint(&self) -> Option<String> {
+        match &self.pqc {
+            Some(pqc) => pqc.distribution_anchor_fingerprint().await,
+            None => None,
+        }
     }
 }
 

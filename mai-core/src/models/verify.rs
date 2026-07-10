@@ -107,12 +107,36 @@ pub async fn verify_package(
         }
     }
 
+    // Supply-chain fingerprint consult: when the vault pins a distribution
+    // anchor, the manifest's declared signing-key fingerprint must name that
+    // anchor — a package declaring a different key than the one it verifies
+    // under is refused. With no anchor pinned (dev/legacy posture), the field
+    // carries no enforceable contract and is not checked.
+    let fingerprint_ok = match vault.distribution_fingerprint().await {
+        Some(anchor_fp) => {
+            let declared = pkg.manifest.security.public_key_fingerprint.trim();
+            if declared.eq_ignore_ascii_case(anchor_fp.trim()) {
+                messages.push(
+                    "manifest public_key_fingerprint matches the distribution anchor".to_string(),
+                );
+                true
+            } else {
+                messages.push(format!(
+                    "manifest public_key_fingerprint {declared:?} does not match the pinned \
+                     distribution anchor {anchor_fp:?}"
+                ));
+                false
+            }
+        }
+        None => true,
+    };
+
     // A present-but-invalid manifest signature (or a manifest not bound to the
     // signed weights) is a hard failure. A legacy package with no manifest
     // signature does not fail here (back-compat); a strict caller enforces
     // `manifest_authenticated` at the install boundary.
     let manifest_ok = !matches!(manifest_auth, ManifestAuth::Failed(_));
-    let verified = sig_valid && hash_valid && compatible && manifest_ok;
+    let verified = sig_valid && hash_valid && compatible && manifest_ok && fingerprint_ok;
 
     if verified {
         info!(
@@ -127,6 +151,7 @@ pub async fn verify_package(
             hash = hash_valid,
             compat = compatible,
             manifest_ok,
+            fingerprint_ok,
             "Package verification failed"
         );
     }

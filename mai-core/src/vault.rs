@@ -213,6 +213,15 @@ pub trait VaultInterface: Send + Sync {
 
     /// Verify PQC signature on a model package.
     async fn verify_signature(&self, data: &[u8], signature: &[u8]) -> Result<bool, VaultError>;
+
+    /// Fingerprint (`sha256:<hex>` over the raw public key) of the pinned
+    /// model-distribution trust anchor this vault verifies packages against,
+    /// when one is pinned. `None` means no anchor is pinned (dev/legacy
+    /// posture: the appliance self-key verifies packages and the manifest's
+    /// `security.public_key_fingerprint` carries no enforceable contract).
+    async fn distribution_fingerprint(&self) -> Option<String> {
+        None
+    }
 }
 
 // ============================================================================
