@@ -93,13 +93,15 @@ jobs:
       - name: cargo build --release
         run: cargo build --workspace --release
 
-      - name: Smoke check release binary
+      - name: Readiness check (hard gate)
         # BRAND-01 renamed the mai-api crate's default binary from
         # `mai-api` to `lamprey-mai-api`. HF-1 sync.
+        # A readiness FAIL fails the build — the release lane never
+        # blesses a binary the validator rejects. The report still
+        # uploads on failure (next step runs always()).
         run: |
           ./target/release/lamprey-mai-api --version
           ./target/release/lamprey-mai-api validate --profile "${GPU_RELEASE_PROFILE}" --json > readiness-report.json
-        continue-on-error: true
 
       - name: Upload readiness report
         uses: actions/upload-artifact@v4
@@ -209,7 +211,17 @@ jobs:
     runs-on: [self-hosted, gpu, mai-release]
     timeout-minutes: 15
     needs: [gpu-build, gpu-integration, gpu-benchmarks, gpu-package]
-    if: always() && needs.gpu-build.result == 'success'
+    # Every executed gate must have PASSED before a bundle is signed —
+    # a failed integration, benchmark, or package run never gets blessed.
+    # gpu-package alone may be 'skipped' (the explicit skip_package
+    # dispatch input for iteration runs); !cancelled() keeps this
+    # condition evaluated in that case without resurrecting failures.
+    if: >-
+      ${{ !cancelled() &&
+          needs.gpu-build.result == 'success' &&
+          needs.gpu-integration.result == 'success' &&
+          needs.gpu-benchmarks.result == 'success' &&
+          (needs.gpu-package.result == 'success' || needs.gpu-package.result == 'skipped') }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4

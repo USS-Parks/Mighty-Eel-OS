@@ -170,3 +170,33 @@ def test_correct_env_paths(workflow_yaml: dict) -> None:
     env = workflow_yaml.get("env", {})
     assert env.get("GPU_RELEASE_PROFILE") == "deployment/ship/profile.toml"
     assert env.get("GPU_RELEASE_THRESHOLDS") == "config/gpu-release-thresholds.toml"
+
+
+def test_bundle_never_blessed_on_failed_gates(workflow_yaml: dict) -> None:
+    # A failed integration / benchmark / package run must block the signed
+    # bundle. `always()` would resurrect failures; the condition instead
+    # requires success from every executed gate (gpu-package alone may be
+    # 'skipped' via the explicit skip_package dispatch input).
+    cond = workflow_yaml["jobs"]["gpu-bundle"].get("if", "")
+    assert "always()" not in cond, "gpu-bundle must not run via always()"
+    for dep in ("gpu-build", "gpu-integration", "gpu-benchmarks"):
+        assert f"needs.{dep}.result == 'success'" in cond, (
+            f"gpu-bundle must require {dep} success, got: {cond}"
+        )
+    assert "needs.gpu-package.result == 'success'" in cond
+    assert "needs.gpu-package.result == 'skipped'" in cond
+
+
+def test_readiness_check_is_a_hard_gate(workflow_yaml: dict) -> None:
+    # The only continue-on-error allowed in the release lane is the
+    # advisory benchmark comparison; the readiness/validate step (and
+    # everything else) must fail the build when it fails.
+    soft_steps = [
+        f"{job_name}:{step.get('name', '?')}"
+        for job_name, job in workflow_yaml["jobs"].items()
+        for step in job.get("steps", [])
+        if step.get("continue-on-error")
+    ]
+    assert soft_steps == ["gpu-benchmarks:Compare with previous run (advisory)"], (
+        f"unexpected soft steps in the release lane: {soft_steps}"
+    )
