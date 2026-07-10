@@ -14,6 +14,10 @@ name: SHIP Validation
 #   - package-build-validate: run scripts/build-package.sh --validate-only
 #     so the systemd / debian / install layout stays consistent with the
 #     SHIP-08 plan.
+#   - compose-trust-validation: run deployment/appliance/validate_profile.py
+#     against the shipped compositions (wsf-ha as production, appliance +
+#     shadow as demo) so a dev-token or host-published trust core cannot be
+#     reintroduced.
 #   - mypy-strict-sdk: enforce mypy --strict on mai-sdk-python/src/ with
 #     no continue-on-error. Adapter strict-cleanup is grandfathered via
 #     pyproject overrides (SHIP-16 closes them).
@@ -123,6 +127,30 @@ jobs:
       - name: Run SHIP-12 static tests
         run: pytest tools/ship12_tests/ -v
 
+  compose-trust-validation:
+    name: Compose Trust-Plane Validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install validator dependencies
+        run: pip install pyyaml pytest
+      # The production topology must satisfy the production rules; the two
+      # demo artifacts must satisfy the demo rules (gated, injected secrets,
+      # loopback-only). deployment/loom-harness is the multi-node TEST
+      # estate — never shipped, never claimed production; its posture is
+      # exercised by its own live gate, not this job.
+      - name: Validate wsf-ha as production
+        run: python deployment/appliance/validate_profile.py --profile production deployment/wsf-ha/docker-compose.yml
+      - name: Validate appliance demo as demo
+        run: python deployment/appliance/validate_profile.py --profile demo deployment/appliance/docker-compose.yml
+      - name: Validate shadow lead artifact as demo
+        run: python deployment/appliance/validate_profile.py --profile demo deployment/shadow/docker-compose.yml
+      - name: Run validator regression tests
+        run: pytest deployment/appliance/tests/ -v
+
   mypy-strict-sdk:
     name: mypy --strict (SDK)
     runs-on: ubuntu-latest
@@ -145,7 +173,7 @@ jobs:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 90
-    needs: [forbidden-term-scan, ship-validator, mai-admin-backup, package-build-validate, mypy-strict-sdk]
+    needs: [forbidden-term-scan, ship-validator, mai-admin-backup, package-build-validate, compose-trust-validation, mypy-strict-sdk]
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable

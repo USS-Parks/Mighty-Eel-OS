@@ -9,17 +9,20 @@ request is classified (PHI / PII / secrets), routed (what could stay local),
 metered (what it costs), and receipted (a verifiable audit chain) — then passed
 straight through to OpenAI, unchanged.
 
-## 1. Set your key
+## 1. Set your key + demo secrets
 
 ```bash
-echo "OPENAI_API_KEY=sk-..." > deployment/shadow/.env
+cd deployment/shadow
+cp .env.example .env
+# edit .env: set OPENAI_API_KEY, and give the two demo trust-plane
+# secrets any random values (e.g. openssl rand -hex 16). They stay on
+# this machine — they exist so nothing is baked into the compose file.
 ```
 
 ## 2. Bring it up
 
 ```bash
-cd deployment/shadow
-docker compose up --build
+docker compose --profile shadow up --build
 ```
 
 The first build compiles the services in release (~10–30 min).
@@ -60,4 +63,4 @@ Nothing here blocks a request — shadow mode only **decides + logs**. Flip
 
 Only your existing OpenAI calls. OpenBao is local (dev mode), the gateway adds
 no telemetry / phone-home, and the console is served locally. Tear down with
-`docker compose down -v`.
+`docker compose --profile shadow down -v`.

@@ -5,20 +5,28 @@ name: aog-wsf-shadow
 # blocked, no data egress beyond the OpenAI calls they already make. Reuses the
 # appliance images; drops the reserved data stores + the mock model.
 #
-#   1. echo "OPENAI_API_KEY=sk-..." > deployment/shadow/.env
-#   2. cd deployment/shadow && docker compose up --build
+#   1. cp .env.example .env   # then set OPENAI_API_KEY + the two demo secrets
+#   2. cd deployment/shadow && docker compose --profile shadow up --build
 #   3. point your OpenAI client at http://localhost:8080/v1 with key `vk_demo`
 #   4. watch cost + routing + risk on the console (http://localhost:8088)
 #
-# Dev-mode OpenBao (root token, no principal auth) — a demo, not production. Host
-# ports are loopback-bound (127.0.0.1): reachable only from this machine.
+# Dev-mode OpenBao (no principal auth) — a demo, not production. The demo root
+# token and AppRole secret are INJECTED from .env (never baked in this file),
+# the stack is gated behind the `shadow` compose profile, and host ports are
+# loopback-bound (127.0.0.1): reachable only from this machine. Validate with:
+#   python ../appliance/validate_profile.py --profile demo docker-compose.yml
 
 services:
   openbao:
     # AS-001: third-party image digest-pinned (resolved 2026-07-07).
     image: openbao/openbao@sha256:6150c4a6b62067db6141c8da7a6a6b5763f4f47c315343d0c848b40fecdfd452
+    profiles: ["shadow"]
     cap_add: [IPC_LOCK]
-    command: server -dev -dev-root-token-id=root -dev-listen-address=0.0.0.0:8200
+    command:
+      - server
+      - -dev
+      - -dev-root-token-id=${OPENBAO_DEV_ROOT_TOKEN:?set OPENBAO_DEV_ROOT_TOKEN in deployment/shadow/.env}
+      - -dev-listen-address=0.0.0.0:8200
     healthcheck:
       test: ["CMD", "bao", "status", "-address=http://127.0.0.1:8200"]
       interval: 3s
@@ -30,13 +38,14 @@ services:
       context: ../..
       dockerfile: deployment/appliance/Dockerfile
     image: islandmountain/aog-wsf-appliance:latest
+    profiles: ["shadow"]
     user: "0:0"
     command: ["/usr/local/bin/wsf-seed"]
     environment:
       WSF_OPENBAO_ADDR: http://openbao:8200
-      WSF_OPENBAO_TOKEN: root
+      WSF_OPENBAO_TOKEN: ${OPENBAO_DEV_ROOT_TOKEN:?set OPENBAO_DEV_ROOT_TOKEN in deployment/shadow/.env}
       WSF_OPENBAO_ROLE_ID: appliance
-      WSF_OPENBAO_SECRET_ID: appliance-secret
+      WSF_OPENBAO_SECRET_ID: ${WSF_OPENBAO_SECRET_ID:?set WSF_OPENBAO_SECRET_ID in deployment/shadow/.env}
       WSF_SEED_OUT: /seed/appliance.env
     volumes: ["seed-data:/seed"]
     depends_on:
@@ -45,6 +54,7 @@ services:
 
   wsf-api:
     image: islandmountain/aog-wsf-appliance:latest
+    profiles: ["shadow"]
     command: ["sh", "-c", "set -a && . /seed/appliance.env && exec /usr/local/bin/wsf-api serve"]
     environment:
       WSF_LISTEN: 0.0.0.0:8300
@@ -57,6 +67,7 @@ services:
   # receipt) their real traffic without ever blocking it.
   aog-gateway:
     image: islandmountain/aog-wsf-appliance:latest
+    profiles: ["shadow"]
     command: ["sh", "-c", "set -a && . /seed/appliance.env && exec /usr/local/bin/aog-gateway serve"]
     environment:
       AOG_LISTEN: 0.0.0.0:8080
@@ -73,6 +84,7 @@ services:
       context: ../..
       dockerfile: deployment/appliance/Dockerfile.console
     image: islandmountain/aog-wsf-console:latest
+    profiles: ["shadow"]
     ports: ["127.0.0.1:8088:80"]
     depends_on: [wsf-api, aog-gateway]
 

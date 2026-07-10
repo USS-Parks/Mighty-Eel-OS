@@ -25,6 +25,7 @@ REQUIRED_JOBS = {
     "ship-validator",
     "mai-admin-backup",
     "package-build-validate",
+    "compose-trust-validation",
     "mypy-strict-sdk",
     "nightly-integration",
 }
@@ -145,6 +146,23 @@ def test_package_build_job_validates_only(workflow_yaml: dict) -> None:
     assert "build-package.sh --validate-only" in step_text
     assert "tools/packaging_tests" in step_text
     assert "tools/ship12_tests" in step_text
+
+
+def test_compose_trust_job_validates_shipped_compositions(workflow_yaml: dict) -> None:
+    job = workflow_yaml["jobs"]["compose-trust-validation"]
+    step_text = "\n".join(step.get("run", "") for step in job["steps"])
+    assert "--profile production deployment/wsf-ha/docker-compose.yml" in step_text, (
+        "wsf-ha must be validated under the production rules"
+    )
+    assert "--profile demo deployment/appliance/docker-compose.yml" in step_text, (
+        "the appliance demo must be validated under the demo rules"
+    )
+    assert "--profile demo deployment/shadow/docker-compose.yml" in step_text, (
+        "the shadow lead artifact must be validated under the demo rules"
+    )
+    assert "deployment/appliance/tests" in step_text, (
+        "the validator's own regression tests must run in CI"
+    )
 
 
 def test_nightly_job_gated_on_schedule(workflow_yaml: dict) -> None:

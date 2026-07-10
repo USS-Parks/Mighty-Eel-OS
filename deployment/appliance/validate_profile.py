@@ -5,11 +5,17 @@ defects. Two profiles:
 
 - ``production``: a composition claimed to be production-grade must expose no
   dev-mode trust core, no known/literal root credential, no un-injected secret,
-  and must not publish the trust port to the host at all.
+  and must not publish ANY trust-core port to the host (API, cluster, or
+  remapped).
 - ``demo``: a demo composition may run a dev-mode trust core, but it must be
   gated behind an explicit compose profile, inject its root token from the
-  environment (never a baked literal), and may only bind the trust port to the
-  loopback interface.
+  environment (never a baked literal), and may only bind trust-core ports to
+  the loopback interface.
+
+A trust core is recognized by its image name, service/container name,
+server-only environment keys (``BAO_LOCAL_CONFIG`` etc.), or a ``bao`` /
+``vault`` launch token in the entrypoint or command — an unmarked retagged
+image does not evade the check.
 
 The validator reports the exact unsafe construct (service + evidence) and exits
 non-zero when any violation is found. Mapped audit finding: AF-12 (appliance
@@ -26,8 +32,16 @@ from typing import Any
 
 import yaml
 
-TRUST_PORT = 8200
 TRUST_IMAGE_MARKERS = ("openbao", "vault")
+# Environment keys only a trust-core SERVER sets (clients carry *_ADDR
+# instead). Lets the validator catch a core whose image name hides the
+# marker (custom registry, retagged build).
+TRUST_SERVER_ENV_MARKERS = (
+    "BAO_LOCAL_CONFIG",
+    "VAULT_LOCAL_CONFIG",
+    "BAO_DEV_ROOT_TOKEN_ID",
+    "VAULT_DEV_ROOT_TOKEN_ID",
+)
 LOOPBACK_HOSTS = ("127.0.0.1", "::1", "localhost")
 # Literal root-credential values that must never appear in any composition.
 BANNED_LITERAL_VALUES = frozenset(
@@ -98,27 +112,36 @@ def _is_trust_core(name: str, service: dict[str, Any]) -> bool:
     image = str(service.get("image", "")).lower()
     if any(marker in image for marker in TRUST_IMAGE_MARKERS):
         return True
-    if name.lower() in TRUST_IMAGE_MARKERS:
+    names = (name, str(service.get("container_name", "")))
+    if any(n.lower() in TRUST_IMAGE_MARKERS for n in names if n):
         return True
-    tokens = _as_token_list(service.get("command"))
-    return any(tok in ("bao", "vault") or tok.endswith("/bao") for tok in tokens)
+    env_keys = {key.upper() for key, _ in _as_env_pairs(service.get("environment"))}
+    if env_keys.intersection(TRUST_SERVER_ENV_MARKERS):
+        return True
+    tokens = _launch_tokens(service)
+    return any(
+        tok in ("bao", "vault") or tok.endswith(("/bao", "/vault")) for tok in tokens
+    )
 
 
-def _publishes_trust_port(port_str: str) -> tuple[bool, str] | None:
-    """Return (is_loopback, host_ip) when this mapping host-publishes the trust port."""
+def _launch_tokens(service: dict[str, Any]) -> list[str]:
+    """Every token the container launches with: entrypoint + command."""
+    return _as_token_list(service.get("entrypoint")) + _as_token_list(service.get("command"))
+
+
+def _host_published(port_str: str) -> tuple[bool, str, str] | None:
+    """Return (is_loopback, host_ip, target) when this mapping publishes to the host."""
     parts = port_str.split(":")
     if len(parts) < 2:
         return None  # container-internal only; not host-published
     target = parts[-1].split("/")[0]
-    if target != str(TRUST_PORT):
-        return None
     host_ip = parts[0] if len(parts) >= 3 else ""
-    return (host_ip in LOOPBACK_HOSTS, host_ip or "all-interfaces")
+    return (host_ip in LOOPBACK_HOSTS, host_ip or "all-interfaces", target)
 
 
 def _check_trust_core(name: str, svc: dict[str, Any], profile: str) -> list[Violation]:
     out: list[Violation] = []
-    tokens = _as_token_list(svc.get("command"))
+    tokens = _launch_tokens(svc)
     dev_flags = [t for t in tokens if t == "-dev" or t.startswith("-dev-")]
     if profile == "production" and dev_flags:
         out.append(Violation("dev-mode", name, f"trust core runs dev mode: {dev_flags}"))
@@ -132,19 +155,22 @@ def _check_trust_core(name: str, svc: dict[str, Any], profile: str) -> list[Viol
             if value.lower() in BANNED_LITERAL_VALUES:
                 out.append(Violation("weak-token", name, f"known-weak root token: {value!r}"))
 
+    # Any host-published port on a trust core is an exposure — the API port,
+    # the cluster port, or a remapped one. Production: none at all. Demo:
+    # loopback only.
     for port_str in _as_ports(svc.get("ports")):
-        published = _publishes_trust_port(port_str)
+        published = _host_published(port_str)
         if published is None:
             continue
-        is_loopback, host_ip = published
+        is_loopback, host_ip, target = published
         if profile == "production":
             out.append(Violation("host-published-trust", name,
-                                  f"trust port {TRUST_PORT} host-published {port_str!r}; "
-                                  "production trust core must not be host-exposed"))
+                                  f"trust-core port {target} host-published {port_str!r}; "
+                                  "production trust core must not be host-exposed on any port"))
         elif not is_loopback:
             out.append(Violation("trust-exposed-nonloopback", name,
-                                  f"demo trust port on non-loopback '{host_ip}' {port_str!r}; "
-                                  "bind 127.0.0.1 only"))
+                                  f"demo trust-core port {target} on non-loopback '{host_ip}' "
+                                  f"{port_str!r}; bind 127.0.0.1 only"))
 
     if profile == "demo" and not (svc.get("profiles") or []):
         out.append(Violation("demo-not-gated", name,
