@@ -255,10 +255,16 @@ impl HashChainManager {
         let mut cursor = self.cursor.lock().expect("chain cursor poisoned");
         draft.id = cursor.next_id;
         draft.previous_hash = cursor.previous_hash;
+        // Finalize the id-derived correlation BEFORE hashing/signing so the
+        // signature and the chain link both cover the entry's final canonical
+        // bytes. Setting `lamprey_decision_id` after the signature (as the caller
+        // once did) changed `content_hash()` and made every boundary signature
+        // fail to verify.
+        draft.correlation.lamprey_decision_id = format!("dec_{}", draft.id);
         // Periodic signing: every Nth entry (excluding the head if
         // interval > 1). `signature_interval == 0` disables. The
         // signer is handed the BLAKE3 of the canonical bytes so the
-        // signing primitive operates over a fixed 32-byte digest
+        // signing primitive operates over a fixed 32-byte digest.
         draft.signature = if self.config.signature_interval > 0
             && (draft.id + 1).is_multiple_of(self.config.signature_interval)
         {

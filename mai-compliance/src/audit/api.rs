@@ -234,22 +234,11 @@ impl AuditLog {
             signature: None,
         };
 
-        let mut entry = self.chain.finalize(draft);
-        // Now that the chain has assigned the id, fill it into the
-        // correlation block and re-link the chain (the prior hash
-        // and signature already reflect the entry's canonical bytes
-        // including the empty `lamprey_decision_id`; we re-finalize
-        // by overwriting the id and recomputing). The cleanest
-        // contract is: the `lamprey_decision_id` is the entry
-        // id formatted as `"dec_<id>"`. Setting it after finalize
-        // changes the content hash, so we must use this id as the
-        // chain link going forward.
-        entry.correlation.lamprey_decision_id = format!("dec_{}", entry.id);
-        // Re-record the (updated) content hash as the cursor's
-        // previous_hash so the next append links to the *visible*
-        // entry rather than the placeholder shape. We do this by
-        // restoring the chain cursor from the updated entry.
-        self.chain.restore_from(&entry);
+        // `finalize` assigns the id, fills the id-derived `lamprey_decision_id`
+        // into the correlation block, and signs/links over the entry's final
+        // canonical bytes — so the stored entry, its chain link, and any boundary
+        // signature all agree (no sign-before-mutate divergence).
+        let entry = self.chain.finalize(draft);
 
         let id = self.store.append(entry.clone())?;
         debug_assert_eq!(id, entry.id);
@@ -499,6 +488,39 @@ mod tests {
             credential_event_id: Some("cred_evt_777".into()),
             timestamp_unix_nanos: 1_700_000_000_000_000_000,
         }
+    }
+
+    #[test]
+    fn record_signs_over_the_final_entry_and_verifies() {
+        // Regression: `record` once set `lamprey_decision_id` AFTER the chain
+        // signed the entry, so every boundary signature covered a stale hash and
+        // failed to verify. `finalize` now sets the id-derived field before
+        // signing, so a real-signer chain built via `record` verifies end-to-end.
+        use crate::audit::chain::MlDsaChainSigner;
+        use rand::rngs::OsRng;
+        let (signer, pk_bytes) = MlDsaChainSigner::generate(&mut OsRng);
+        let key_id = "audit-record-key";
+        let log = AuditLog::builder()
+            .signer(Arc::new(signer))
+            .chain_config(ChainConfig {
+                signature_interval: 1,
+                signing_key_id: key_id.to_string(),
+            })
+            .build();
+        let bundle = sample_bundle();
+        let dec = sample_decision(true, Destination::Local);
+        let (a, _) = log.record(record_input(&bundle, &dec)).unwrap();
+        let (b, _) = log.record(record_input(&bundle, &dec)).unwrap();
+        assert!(
+            a.signature.is_some() && b.signature.is_some(),
+            "interval=1 signs every entry"
+        );
+        assert_eq!(a.correlation.lamprey_decision_id, "dec_0");
+        assert_eq!(b.correlation.lamprey_decision_id, "dec_1");
+
+        let verifier = MlDsaBundleVerifier::new().with_anchor(key_id.to_string(), pk_bytes);
+        log.verify_full(Some(&verifier))
+            .expect("a record-built, real-signer chain must verify end-to-end");
     }
 
     #[test]
