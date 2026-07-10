@@ -36,14 +36,19 @@ paths = [
     '''^target/''',
     '''(^|/)target/''',
 
+    # The detect-secrets baseline itself: every entry is a `hashed_secret`
+    # (SHA-1 of the flagged bytes), maintained by `detect-secrets scan
+    # --all-files`. Hashes of findings are not the findings.
+    '''(^|/)\.secrets\.baseline$''',
+
     # Evidence reports embed the OUTPUT of `detect-secrets scan`, which
     # itself prints `hashed_secret` fields for every entropy hit it
     # finds. Those are SHA-1 hashes of test fixtures and build-artifact
     # bytes, not secrets in their own right; gitleaks matches them as
     # generic-api-keys because the JSON is regular hex. The original
-    # scan output is the authoritative source.
-    '''^docs/LOCAL-GITDOCTOR-(REPORT|EVIDENCE)\.(md|json)$''',
-    '''(^|/)docs/LOCAL-GITDOCTOR-(REPORT|EVIDENCE)\.(md|json)$''',
+    # scan output is the authoritative source. (The undated reports live
+    # at docs/, the dated ones under docs/scans/ — cover both.)
+    '''(^|/)docs/(scans/)?LOCAL-GITDOCTOR-(REPORT|EVIDENCE)\.(md|json)$''',
 
     # Captured stdout from RC1-prep first-boot rehearsals. The
     # `Key: im-...` line is the printed admin key from a TEST bundle;
@@ -54,15 +59,15 @@ paths = [
     '''^test-evidence/''',
     '''(^|/)test-evidence/''',
 
-    # IGD-01: deployment/*-staging/ holds untracked local connection
-    # files with real-shaped credentials (Vault service tokens,
-    # signing keys, etc.) for staging-only use. .gitignore prevents
-    # commit; this entry prevents `gitleaks detect --no-git` from
-    # repeatedly flagging the untracked file on every CI run. Narrow
-    # path-level allowlist only — it cannot silence secrets elsewhere
-    # in the tree.
-    '''^deployment/[^/]*-staging/''',
-    '''(^|/)deployment/[^/]*-staging/''',
+    # IGD-01: deployment/*-staging/ holds UNTRACKED local runtime
+    # artifacts with real credentials (TLS keys, the sealer key, audit
+    # logs, minted bundles). Only those subpaths are allowlisted so
+    # `gitleaks detect --no-git` does not re-flag the local files on
+    # every run. The TRACKED staging config (profiles, auth-key
+    # fixtures, scripts) stays IN scan scope — a committed staging
+    # secret must be caught, never blanket-silenced.
+    '''(^|/)deployment/[^/]*-staging/(openbao-tls|openbao-audit|state)/''',
+    '''(^|/)deployment/[^/]*-staging/bundle\.json$''',
 
     # Contract protocol docs (contracts/*.md) show example wire-shape JSON with
     # illustrative token_id / key values — documentation, not credentials.
@@ -71,10 +76,10 @@ paths = [
 
     # Dated gitdoctor evidence dumps (same class as the undated ones above): the
     # embedded strings are detect-secrets hashes of fixtures, not live secrets.
-    '''(^|/)docs/LOCAL-GITDOCTOR-(REPORT|EVIDENCE)[-0-9]*\.(md|json)$''',
+    '''(^|/)docs/(scans/)?LOCAL-GITDOCTOR-(REPORT|EVIDENCE)[-0-9]*\.(md|json)$''',
 
-    # Planning doc carrying an example token in prose.
-    '''(^|/)docs/THREE-LAYER-MANIFOLD-PLAN\.md$''',
+    # Planning doc carrying an example token in prose (moved under docs/sessions/).
+    '''(^|/)docs/(sessions/)?THREE-LAYER-MANIFOLD-PLAN\.md$''',
 
     # Named test fixtures: example claim/anchor tokens inside #[test] blocks.
     '''(^|/)crates/aogd/tests/live_openbao_anchor\.rs$''',
