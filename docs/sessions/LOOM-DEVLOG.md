@@ -2033,3 +2033,215 @@ N replicas reconcile M workloads within SLO.
 the live estate — honest per A5. **Remaining for full Summit-Conformance:** run the four
 new live scripts on a Docker-capable host (Docker Hub egress is policy-blocked here), and
 the **V11 D9 RC suite** (the aggregate release-candidate run).
+
+---
+
+## Phase X completion + Summit close (this session — native Windows dev box, Docker-capable)
+
+**Session/environment note.** Native Windows host (no CoWork sync layer; the truncation
+failure mode does not apply — staged-write hygiene kept anyway). Docker 29.6.1 with real
+Docker Hub egress — the blocker that deferred the live gates in the prior session is gone.
+Per the repo Branch & Worktree Authority rule, no new branch/worktree: work continues on
+the current checkout (`session/AUDIT-FIX-2`, equal to `origin/main` `f83bf9e` at session
+start). STS approval: the whole M3 Summit addendum. Remaining frontier at session start:
+X3, X4, X5, the four live harness gates (v5/v7/v8/v10) + the V7 data-plane leg, V11.
+
+### Pre-X3 — live-suite hygiene (unblocks every later live gate) — DONE
+Two pre-existing defects in `aog-controller`'s live tests surfaced on this host's fresh
+OpenBao and would have poisoned every phase-close suite run this session:
+- **`live_deploy.rs` cross-test interference.** Both tests named their workload `gw`, so
+  their replica runtime-token KV paths collided in the shared OpenBao; parallel runs
+  deleted each other's tokens mid-assertion (shifting victims across runs). Fix: unique
+  names (`gw-pack`, `gw-scale`) → disjoint token paths.
+- **`live_revocation.rs` fail-closed regression.** The close-out hardened the gateway to
+  fail closed when the revocation path holds no verifiable snapshot; this R9-era test
+  deletes the path for anchor hygiene and then expected the pre-revocation resolve to
+  succeed — deterministically red on any virgin OpenBao. Fix: publish a signed
+  nothing-revoked baseline snapshot under the run anchor before the first resolve (the
+  real estate's bootstrap, and the gateway kill-switch test's own convention).
+- **Verify:** aog-controller suite green twice consecutively in parallel mode against a
+  virgin OpenBao (84 passed / 24 suites); previously flaked nearly every run.
+  **Commit:** `95e866a`.
+
+### X3 — toolproxy + meter as managed Workloads — DONE
+The Workload controller's gateway-only kind gate is deleted: every declared `Workload`
+kind now gets health/readiness + placement reflection uniformly (the logic was never
+kind-specific; the scheduler + node runtime that motivated the gate landed with M3b).
+Metering deliberately gets **no kind of its own**: A1.5 fixes the kinds at
+gateway/agent/toolproxy/inference and the meter ships inside the gateway process, so the
+gateway workload carries it — the metering proof is receipt-chain continuity, not a
+synthetic service.
+- **Files:** `crates/aog-controller/{src/workloads.rs, Cargo.toml,
+  tests/managed_toolproxy.rs (new)}`.
+- **Live gate (real OpenBao + real gateway + real toolproxy):** a metered chat (meter
+  receipt 1) and a brokered `echo.say` tool call (tool receipt 1) complete before
+  management; both services are declared `Workload`s (kinds Gateway and Toolproxy), bound
+  by `Placement`s, and reconciled to `Ready` by **one** `WorkloadController` probing their
+  live `/healthz`; the same chat and the same tool call succeed afterward, and **both
+  receipt chains verify unbroken** (2 receipts each, post-cutover heads advanced, full
+  verify green) — tool calls + metering continue across the cutover ✓.
+- **Verify:** fmt clean; clippy `-p aog-controller --all-targets --no-deps -D warnings`
+  clean; crate suite **84 passed / 24 suites, twice consecutively** vs live OpenBao;
+  `cargo check --workspace` clean. **Gate:** tool calls + metering continue across
+  cutover; receipts unbroken ✓. **Commit:** `e50fe80`.
+
+**Session relocated to its own worktree (Basho's instruction, mid-session).** Branch
+`session/LOOM-6` at `mai-worktrees/mai-LOOM-6`, carrying `95e866a` + `e50fe80`;
+`session/AUDIT-FIX-2` returned to its found state (`f83bf9e` = `origin/main`, clean tree)
+via a single-file restore + `reset --keep` (no history destroyed — the commits live on
+`session/LOOM-6`). Merge target: **main, once every gate is green** (Basho's instruction);
+push remains separately gated.
+
+### X4 — shadow-then-cutover mode ladder — DONE
+`ModeGatedDriver` in `aog-node`: the shadow → report-only → enforce ladder over the
+actuation seam, reusing the estate's `PolicyMode` (the G6 enum). Every lifecycle consumer
+(probes, drain, attestation-eviction, node loop) drives the workload-driver trait, so
+gating that one seam gates the whole runtime. Shadow journals actions against coherent
+`NoopDriver` bookkeeping and never touches the real runtime; report-only surfaces the
+journal as the operator divergence report (`report()`); enforce delegates to the real
+driver. Stepping a rung = constructing the next gate over the **same** real driver.
+Documented distinction: the data-path ladder's non-blocking modes are development-only,
+but the orchestration ladder is a production **migration procedure** — shadow is safe by
+construction (it never disrupts), which is the whole point of the cutover.
+- **Files:** `crates/aog-node/{src/driver.rs, tests/mode_ladder.rs (new)}`.
+- **Gate test (real `ProcessDriver`, real child processes):** a hand-managed replica
+  stays running through shadow and report-only replays of the same desired actions
+  (stop legacy / start replacement) — **shadow never disrupts** ✓; report-only names
+  exactly the would-have actions; enforce actually retires and replaces the process;
+  the recorded intent is byte-identical on every rung — **identical estate differs
+  across modes** ✓. `probes::keep_live` composes with the shadow rung (its restart is
+  journaled, not actuated).
+- **Verify:** fmt clean; clippy `-p aog-node --all-targets --no-deps -D warnings` clean;
+  `cargo test -p aog-node` **34 passed / 4 suites**. **Commit:** `6c66586`.
+
+### X5 — Compose parity + decommission — DONE
+One artifact set, two packagings. The `loom-harness` image and its two binaries stand
+the same 5+5 estate up under docker compose (existing) and under **real k3s**
+(`deployment/loom-harness/k3s/loom.yaml`, new) with **no config fork**: `cluster-init.sh`
+is parameterized by a peer-address template (`LOOM_CP_ADDR_TEMPLATE`) that defaults to
+the compose service names and is overridden to the StatefulSet's stable DNS names, so one
+script forms the voter set on either substrate. k3s/k0s is an optional packaging of the
+estate for cluster customers; the control plane is the trust plane regardless. The README
+documents both run paths and **retires the hand-managed loose-process path** — operating
+an estate means picking a packaging, not shell history (the daemons stay plain binaries;
+the appliance runs them under systemd through the same env contract).
+- **Files:** `deployment/loom-harness/{k3s/loom.yaml (new),
+  gates/parity-compose-k3s.sh (new), cluster-init.sh, README.md}`.
+- **Gate (`parity-compose-k3s.sh`, run green end to end on this host):** both legs form
+  the 5-voter control plane, elect a leader, and self-register all five edges into the
+  replicated estate, from the one image imported into each substrate's containerd — same
+  binaries, no config fork ✓. Two latent bugs the run surfaced and fixed: a literal `}`
+  inside a POSIX `${:-}` default broke the address template; the edge-registration check
+  grepped the node name where the store returns the record's bytes under `"value"`.
+- **Commit:** `5717e67` (`4 files, +396/-15`).
+
+**M3a/M3b/M3c/Phase-X all landed. Phase X migration complete** (X1–X2 prior sessions;
+X3/X4/X5 this session).
+
+### Phase V — the live gates, run green on the containerized estate (this host)
+The blocker the prior session recorded — Docker Hub egress policy-blocked, so the
+containerized 5+5 estate could not be built — **is gone on this native-Windows host**
+(Docker 29.6.1, real egress). The `loom-harness:vh4` image built; the estate formed; the
+A3.2 live gate scripts ran green:
+- **V4 — split-brain (real partition).** `v4-split-brain.sh`: partition `{cp1,cp2}` off
+  the network → the majority elected cp3 and **committed**, the isolated minority **served
+  no commit** (fenced), and all five reconverged to leader 3 post-heal. **PASS.**
+- **V8 — scale (bar 6).** `v8-scale.sh`: 100 `Workload`s ingested round-robin, **all 100
+  present on all 5 CP replicas**. **PASS.**
+- **V5 — kill-switch-under-scale (bar 7).** `v5-kill-switch-under-scale.sh`: under
+  100-object scale a published revocation **reached every replica within the 3 s SLO**.
+  **PASS.**
+- **V10 — revocation-to-denial SLO ("the kill number").** `v10-revocation-slo.sh`: 5
+  rounds, the kill **reached all 5 replicas in ≤1 s each** (« the padded 10 s live SLO;
+  the strict p99 ≤ 3 s is the in-process gate at p99 ≈ 0.37 s). **PASS.**
+- **V7 — chaos + soak (control-plane leg).** `v7-chaos-soak.sh` at **8** kill/heal rounds:
+  a leader re-emerged and the killed node caught up every round; all replicas converged to
+  the identical rollout end state. **PASS.**
+- **V7 — data-plane leg (bars 4/5), live OpenBao.** `live_node` (a killed node reschedules
+  its workload), `live_scheduler` (binds replicas with scoped tokens), `live_maintenance`
+  — **3 passed** against live OpenBao. This is the leg the prior session had to defer for
+  want of OpenBao.
+
+**Conformance bars 3/4/5 flipped pending → asserted (commit `7211a22`).** With both legs
+of each bar now proven (in-process openraft + the live companions above), the suite asserts
+every A1.12 bar in-process at modest scale, each detail naming its live companion — the same
+pattern bars 6/7 already used. New `split_brain_safety` bar (isolate a minority on a real
+5-voter cluster; majority commits, minority fences, reconverges with the write intact);
+`chaos_soak` un-gated so `run()` asserts bars 4/5. **`is_summit_ready()` now returns true:
+8 bars asserted, 0 pending.** `cargo test -p aog-conformance --lib` 3 passed / 5 ignored
+(the aggressive-profile + 10⁴ heavy lanes); clippy `-D warnings` clean.
+
+### V11 — the D9 robustness-conformance suite — DONE
+The Doctrine §D9 gate: one adversarial test per zero-trust invariant I-1..I-9, each
+injecting the realized D2 threat against the **real** primitive and asserting the invariant
+holds fail-closed, plus the three red-team suites. New
+`crates/aog-conformance/tests/robustness_conformance.rs` (11 tests):
+- **RC-1 (I-1):** a credential admitted past its TTL is denied at the edge.
+- **RC-2 (I-2):** a sealed context class carries only ciphertext on the wire; the wrong data
+  key cannot open it.
+- **RC-3 (I-3):** a tampered signature and a foreign-issuer token are both inert at local
+  verification — coasting impossible.
+- **RC-4 (I-4):** past hard-TTL, a cloud request narrows to local-only (fail-static).
+- **RC-5 (I-5):** a rewritten receipt link breaks `verify_chain`.
+- **RC-6 (I-6):** a side-effecting tool call with a denying approval gate never executes
+  (the executor is proven un-run via an `AtomicBool`).
+- **RC-7 (I-7):** a rogue-key-signed revocation snapshot fails closed against the estate
+  anchor; the estate's own signature verifies (real control, not blanket-deny).
+- **RC-8 (I-8):** an air-gapped edge forces every cloud route to local-only.
+- **RC-9/RC-KILL (I-9):** a snapshot naming a token denies it; a replica past its freshness
+  window fails closed rather than coasting on a stale snapshot.
+- **RC-LEAK:** every exfil path denied — direct (sealed bytes are ciphertext) and via a
+  hijacked tool's output (the always-on egress scanner redacts a smuggled AWS key).
+- **RC-DEPUTY:** attenuation refuses to widen a child beyond the parent's routes — the
+  fabric's own minting authority cannot be turned against custody.
+- **Scope:** invariant-level in-process proofs on real crypto/trust primitives; the
+  estate-scale fan-out legs are the live V4/V5/V10 gates above.
+- **Verify:** `cargo test -p aog-conformance --test robustness_conformance` **11 passed**;
+  full crate **14 passed / 6 ignored**; clippy `-D warnings` clean. **Commit:** `d630945`.
+
+---
+
+## A5 — Summit completion assessment (2026-07-11)
+
+The addendum's A5 says Loom is done when the Phase-V conformance suite is green,
+kill-switch-under-scale and attested-scheduling breach pass on a real multi-node estate, DR
+restores from cold backup by runbook, the estate runs a full air-gap topology with
+federation over media, and every A2 Tier-0/Tier-1 failure mode has a passing test proving it
+cannot occur silently. Status:
+
+| A5 criterion | Status | Evidence |
+|---|---|---|
+| Phase-V conformance suite green | **MET** | `is_summit_ready()` true — 8 A1.12 bars asserted, 0 pending |
+| Kill-switch-under-scale on a real estate | **MET** | V5 live on the 5-CP Docker estate (100-object scale, all 5 replicas within SLO) |
+| Attested-scheduling breach | **MET** | V6 PASS — a Ring-3 workload stays `Pending`, never force-placed under pressure/preemption/race |
+| DR restores from cold backup by runbook | **MET (prior)** | H4 — encrypted envelope backup + tested restore drill in `docs/` |
+| Air-gap topology + federation over media | **MET (prior)** | H5 — a policy + a revocation cross an air gap on signed media and apply, no network |
+| Every Tier-0/Tier-1 failure mode has a passing test | **MET** | V11 RC suite (I-1..I-9 + RC-KILL/LEAK/DEPUTY) + the live V4/V5/V7/V10 gates |
+
+Every Tier-0 harm in A2 has a passing test proving it cannot occur silently: kill-switch-
+under-scale (V5 live + RC-KILL), split-brain allow (V4 live + `split_brain_safety`),
+double-spend (X1 shared lease ledger), non-idempotent reconcile (V2 fuzz, 10⁴), and the
+sovereignty breach (V6 attested placement). **Loom clears the Summit bar** — "Kubernetes-
+grade, woven" is now a gated, evidenced claim, not a slogan.
+
+**What changed this session vs the prior close.** The prior session recorded the Phase-V
+control-plane bars green in-process but had to leave the containerized live legs and the D9
+RC suite unrun because Docker Hub egress was policy-blocked in that sandbox. On this
+Docker-capable host all five live gates (V4/V5/V7/V8/V10) ran green on the real 5+5 estate,
+the V7 data-plane leg ran green against live OpenBao, bars 3/4/5 flipped pending→asserted,
+and the V11 RC suite landed green — closing exactly the gaps the prior session flagged as
+remaining. Phase X migration (X3/X4/X5) also completed, including the Compose↔k3s parity
+proof and the retirement of the hand-managed path.
+
+**Verify environment (full-workspace gate).** `cargo fmt --check` and
+`cargo clippy --workspace --all-targets -D warnings` clean. `cargo test --workspace` green —
+**2310 passed / 8 ignored / 236 suites** — with **both live services up**: OpenBao (`:8200`)
+and Moto STS (`:5566`). Note: `wsf-api`'s
+`broker_grant` live gate skip-guards only on `WSF_OPENBAO_ADDR`, so it hard-fails 502 rather
+than skipping when Moto is absent; it passes with Moto up. Pre-existing `wsf-api` test-
+hygiene (out of this session's scope), flagged not fixed.
+
+**Session commits (`session/LOOM-6`, off `origin/main` `f83bf9e`):** `95e866a` (live-suite
+hygiene) · `e50fe80` (X3) · `6c66586` (X4) · `5717e67` (X5) · `7211a22` (bars 3/4/5) ·
+`d630945` (V11). Merges to `main` on green gates per Basho's instruction; push remains
+separately gated.
