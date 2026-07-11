@@ -283,10 +283,12 @@ async fn packs_replicas_beyond_node_count() {
     let signer: Arc<dyn Signer> = anchor.clone();
 
     seed_capability(&client).await;
-    // Two nodes, room for two workloads each; three replicas must pack.
+    // Two nodes, room for two workloads each; three replicas must pack. The
+    // workload name is unique to this test: replica token paths in the shared
+    // live OpenBao derive from it, and the sibling test must never race them.
     ready_node(&client, "node-a", 2).await;
     ready_node(&client, "node-b", 2).await;
-    let mut wl = Resource::new("gw", workload_spec(3));
+    let mut wl = Resource::new("gw-pack", workload_spec(3));
     wl.metadata.tenant = Some(TENANT.to_owned());
     client
         .ensure_created(ResourceObject::Workload(wl))
@@ -302,7 +304,7 @@ async fn packs_replicas_beyond_node_count() {
     );
     settle(&mut controller).await;
 
-    let placements = placements_of(&client, "gw").await;
+    let placements = placements_of(&client, "gw-pack").await;
     assert_eq!(
         placements.len(),
         3,
@@ -348,9 +350,11 @@ async fn scale_down_removes_the_dropped_replicas_token() {
     let signer: Arc<dyn Signer> = anchor.clone();
 
     seed_capability(&client).await;
+    // Unique workload name: its replica token paths in the shared live OpenBao
+    // must never collide with the sibling test's.
     ready_node(&client, "node-a", 4).await;
     ready_node(&client, "node-b", 4).await;
-    let mut wl = Resource::new("gw", workload_spec(2));
+    let mut wl = Resource::new("gw-scale", workload_spec(2));
     wl.metadata.tenant = Some(TENANT.to_owned());
     client
         .ensure_created(ResourceObject::Workload(wl))
@@ -366,35 +370,36 @@ async fn scale_down_removes_the_dropped_replicas_token() {
     );
     settle(&mut controller).await;
     assert_eq!(
-        placements_of(&client, "gw").await.len(),
+        placements_of(&client, "gw-scale").await.len(),
         2,
         "two replicas bound"
     );
 
-    // The highest ordinal (gw-r1) is the one scale-down will drop; capture its
-    // token path and confirm a token lives there now.
+    // The highest ordinal (gw-scale-r1) is the one scale-down will drop; capture
+    // its token path and confirm a token lives there now.
     let vault = openbao.login().await.unwrap();
-    let dropped_path = format!("{PREFIX}/gw-r1");
+    let dropped_path = format!("{PREFIX}/gw-scale-r1");
     let before = openbao.get_kv_data(&vault, &dropped_path).await.unwrap();
     assert!(
         before.get("token").is_some(),
-        "gw-r1 token is live before scale-down"
+        "gw-scale-r1 token is live before scale-down"
     );
 
     // Scale to one replica and let the controller converge.
-    let Some(ResourceObject::Workload(mut wl)) = client.get(Kind::Workload, "gw").await.unwrap()
+    let Some(ResourceObject::Workload(mut wl)) =
+        client.get(Kind::Workload, "gw-scale").await.unwrap()
     else {
-        panic!("workload gw missing");
+        panic!("workload gw-scale missing");
     };
     wl.spec.replicas = 1;
     client.update(ResourceObject::Workload(wl)).await.unwrap();
     settle(&mut controller).await;
 
-    // Exactly the ordinal-0 replica survives; gw-r1 is gone from the estate…
-    let survivors = placements_of(&client, "gw").await;
+    // Exactly the ordinal-0 replica survives; gw-scale-r1 is gone from the estate…
+    let survivors = placements_of(&client, "gw-scale").await;
     assert_eq!(survivors.len(), 1, "scaled down to one replica");
     assert_eq!(
-        survivors[0].metadata.name, "gw-r0",
+        survivors[0].metadata.name, "gw-scale-r0",
         "the lowest ordinal survives"
     );
     // …and its runtime token is gone from OpenBao — a read no longer yields one.

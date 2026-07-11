@@ -196,6 +196,30 @@ async fn an_intent_denies_a_token_on_every_replica_and_over_media() {
 
     let anchor = Arc::new(RustCryptoMlDsa87::generate("loom-r9-anchor").unwrap());
     let signer: Arc<dyn Signer> = anchor.clone();
+    // Provision the kill switch the way a real estate does: a signed,
+    // nothing-revoked baseline snapshot under this run's anchor. The gateway
+    // fails closed when the configured path holds no verifiable snapshot, so
+    // the pre-revocation resolve below requires this baseline to exist.
+    let now = Utc::now();
+    let baseline = fabric_revocation::sign(
+        RevocationSnapshot::new(
+            "snap-r9-baseline",
+            now.to_rfc3339(),
+            (now + chrono::Duration::hours(1)).to_rfc3339(),
+        ),
+        anchor.as_ref(),
+    )
+    .expect("sign baseline snapshot");
+    bao(
+        &http,
+        &addr,
+        &root_token(),
+        Method::POST,
+        REV_PATH,
+        Some(json!({ "data": { "snapshot": baseline } })),
+    )
+    .await;
+
     let state = AppState::bootstrap(
         1,
         fresh_dir("loom-r9-live"),
