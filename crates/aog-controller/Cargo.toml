@@ -29,8 +29,11 @@ wsf-tenants = { path = "../wsf-tenants" }
 
 [dev-dependencies]
 aog-gateway = { path = "../aog-gateway" }
+aog-toolproxy = { path = "../aog-toolproxy" }
+async-trait = { workspace = true }
 axum = { workspace = true }
 base64 = "0.22"
+mai-agent = { path = "../../mai-agent" }
 wsf-seal = { path = "../wsf-seal" }
 
 [lints]

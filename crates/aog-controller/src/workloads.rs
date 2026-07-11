@@ -1,16 +1,18 @@
-//! X2 — the Workload controller: brings `aog-gateway` under Loom as a managed
-//! `Workload`. In the M3a kernel it reconciles a gateway workload's **health
-//! and readiness** into status and reflects the placements bound to it, so the
-//! estate carries the gateway as a first-class managed object — with no change
-//! to the gateway's data-path API (an existing OpenAI/Anthropic client is
-//! unaffected: management touches the estate, never the request path).
+//! The Workload controller: brings the estate's declared workloads under Loom
+//! management. It reconciles a workload's **health and readiness** into status
+//! and reflects the placements bound to it, so each service is a first-class
+//! managed object — with no change to its data-path API (an existing client of
+//! the gateway or a tool caller brokered by the toolproxy is unaffected:
+//! management touches the estate, never the request path). Every declared
+//! [`WorkloadKind`] is reconciled uniformly; metering has no kind of its own —
+//! it rides inside the gateway process, so the gateway workload carries it.
 //!
 //! Scope honesty: attested **placement** is the scheduler's (Phase S) — this
 //! controller *reflects* the `Placement`s bound to a workload but never mints
 //! them; and the node runtime that actually starts/stops the process and runs
-//! the live health probe is Phase N. In M3a the gateway runs alongside the
-//! kernel and this controller observes it through a [`WorkloadProbe`]; M3b's
-//! node agent supplies the authoritative probe.
+//! the live health probe is Phase N. A workload co-running with the control
+//! plane is observed through a [`WorkloadProbe`]; the node agent supplies the
+//! authoritative probe where one hosts the workload.
 
 use std::collections::HashMap;
 use std::future::Future;
@@ -19,7 +21,7 @@ use std::time::Duration;
 
 use reqwest::Client;
 
-use aog_estate::{Kind, Phase, ResourceObject, Workload, WorkloadKind, WorkloadStatus};
+use aog_estate::{Kind, Phase, ResourceObject, Workload, WorkloadStatus};
 
 use crate::objects::{EstateClient, parse_key};
 use crate::runtime::{Action, ReconcileError, Reconciler};
@@ -83,9 +85,9 @@ impl WorkloadProbe for HttpWorkloadProbe {
     }
 }
 
-/// Brings gateway `Workload`s under management: reconciles health/readiness and
-/// reflects their placements. Run it on a `"Workload/"` informer with a resync
-/// heartbeat (so readiness is re-checked on a cadence).
+/// Brings declared `Workload`s under management: reconciles health/readiness and
+/// reflects their placements, uniformly across kinds. Run it on a `"Workload/"`
+/// informer with a resync heartbeat (so readiness is re-checked on a cadence).
 pub struct WorkloadController<P: WorkloadProbe> {
     client: EstateClient,
     probe: Arc<P>,
@@ -131,11 +133,6 @@ impl<P: WorkloadProbe> WorkloadController<P> {
         };
         if workload.metadata.deletion_timestamp.is_some() {
             return Ok(Action::Done); // teardown is the GC's job
-        }
-        // X2 manages the gateway kind; the other workload kinds land with the
-        // scheduler + node runtime (M3b).
-        if workload.spec.workload_kind != WorkloadKind::Gateway {
-            return Ok(Action::Done);
         }
 
         let placements = self.placements(name).await?;
