@@ -154,6 +154,73 @@ async fn cross_tenant_delete_is_denied() {
 }
 
 #[tokio::test]
+async fn cross_tenant_update_is_denied_and_tenant_is_frozen() {
+    // The update verb binds tenant the same way create and delete do: a
+    // tenant-scoped principal may not overwrite another tenant's object, and an
+    // update body cannot reassign an object to a foreign tenant.
+    let signer = anchor();
+    let app = app_anchored("aog-apiserver-xtenant-update", &signer, None).await;
+    let owner = header_for(&mint(&signer)); // tenant-loom
+    let intruder = header_for(&mint_with(&signer, |t| {
+        t.token_id = "tok-mallory".to_owned();
+        t.tenant_id = "tenant-mallory".to_owned();
+        t.subject_hash = "hmac:mallory".to_owned();
+    }));
+
+    // tenant-loom owns the bundle.
+    let (status, created) = send(
+        &app,
+        "POST",
+        &format!("{BASE}/PolicyBundle"),
+        Some(owner.as_str()),
+        Some(bundle("xtenant", 1)),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "create body: {created}");
+
+    let url = format!("{BASE}/PolicyBundle/xtenant");
+
+    // A cross-tenant update is refused with 403...
+    let (status, body) = send(
+        &app,
+        "PUT",
+        &url,
+        Some(intruder.as_str()),
+        Some(bundle("xtenant", 99)),
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::FORBIDDEN,
+        "a cross-tenant update must be denied: {body}"
+    );
+
+    // ...and changed nothing: the owner still sees version 1.
+    let (status, got) = send(&app, "GET", &url, Some(owner.as_str()), None).await;
+    assert_eq!(status, StatusCode::OK, "the object survived: {got}");
+    assert_eq!(
+        got["spec"]["version"], 1,
+        "the spec must be untouched: {got}"
+    );
+
+    // The owner's own update proceeds, but a body smuggling a foreign tenant is
+    // neutralized: the object keeps tenant-loom.
+    let mut spoof = bundle("xtenant", 2);
+    spoof["metadata"]["tenant"] = serde_json::json!("tenant-mallory");
+    let (status, updated) = send(&app, "PUT", &url, Some(owner.as_str()), Some(spoof)).await;
+    assert_eq!(
+        status,
+        StatusCode::OK,
+        "the owner's update must proceed: {updated}"
+    );
+    assert_eq!(updated["spec"]["version"], 2);
+    assert_eq!(
+        updated["metadata"]["tenant"], "tenant-loom",
+        "an update body must not reassign the object's tenant: {updated}"
+    );
+}
+
+#[tokio::test]
 async fn duplicate_create_conflicts() {
     let (app, tok) = authed_app("aog-apiserver-k5-conflict").await;
     let t = Some(tok.as_str());

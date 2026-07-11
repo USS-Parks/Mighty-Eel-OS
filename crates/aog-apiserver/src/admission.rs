@@ -204,6 +204,19 @@ impl Admission {
                     kind: req.kind.to_string(),
                     name: req.name.clone(),
                 })?;
+                // A tenant-scoped principal may not overwrite an object owned by
+                // another tenant; a global principal is unrestricted (mirror the
+                // delete guard).
+                if let (Some(pt), Some(ot)) = (
+                    principal.tenant.as_ref(),
+                    current.object.metadata().tenant.as_ref(),
+                ) && pt != ot
+                {
+                    return Err(ApiError::Forbidden(format!(
+                        "principal tenant {pt} may not update {}/{} owned by tenant {ot}",
+                        req.kind, req.name
+                    )));
+                }
                 let mut object = req
                     .object
                     .clone()
@@ -550,6 +563,9 @@ fn stamp_update(object: &mut ResourceObject, current: &ResourceObject, principal
     meta.deletion_timestamp
         .clone_from(&prior.deletion_timestamp);
     meta.owner_refs.clone_from(&prior.owner_refs);
+    // Tenant is fixed at create; carry it forward so an update body cannot
+    // reassign the object to another tenant.
+    meta.tenant.clone_from(&prior.tenant);
     meta.token_ref = principal
         .token_ref
         .clone()
