@@ -2,12 +2,16 @@
 //! replica through a pluggable [`WorkloadDriver`]: `start`, `inspect`, `stop`.
 //! The process/systemd driver and the optional containerd driver are
 //! impls behind this trait, so a workload's lifecycle is identical whichever
-//! runs it. This module ships the trait, the shared value types, and
-//! [`NoopDriver`] (a bookkeeping driver for shadow mode and tests).
+//! runs it. This module ships the trait, the shared value types,
+//! [`NoopDriver`] (a bookkeeping driver for shadow mode and tests), and
+//! [`ModeGatedDriver`] — the shadow → report-only → enforce cutover ladder
+//! over the actuation seam.
 
 use std::collections::HashMap;
 use std::process::{Child, Command, Stdio};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
+
+use aog_estate::PolicyMode;
 
 /// What the node needs to run one workload replica (projected from its estate
 /// `Workload` + `Placement`).
@@ -172,6 +176,126 @@ impl WorkloadDriver for ProcessDriver {
             let _ = child.wait(); // reap the zombie
         }
         Ok(())
+    }
+}
+
+/// One lifecycle action that reached the actuation seam — journaled by
+/// [`ModeGatedDriver`] whether or not the mode let it act.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DriverAction {
+    /// A start of the named replica was requested.
+    Start(String),
+    /// A stop of the named replica was requested.
+    Stop(String),
+}
+
+/// The shadow-then-cutover ladder over the actuation seam, mirroring the
+/// gateway's policy-mode ladder ([`PolicyMode`]): every consumer of the driver
+/// trait (probes, drain, attestation-eviction, the node loop) routes lifecycle
+/// actions through `start`/`stop`, so gating this one seam gates the whole
+/// runtime.
+///
+/// * [`PolicyMode::Shadow`] — observe/reconcile, **never act**: actions are
+///   journaled and tracked against an internal bookkeeping driver so the
+///   reconcile logic sees coherent lifecycle state, but the real runtime is
+///   never touched. A shadow rung cannot disrupt a hand-managed estate.
+/// * [`PolicyMode::ReportOnly`] — as Shadow, and the journal is the operator's
+///   divergence report ([`Self::report`]): what Loom *would have done*.
+/// * [`PolicyMode::Enforce`] — actions reach the real driver.
+///
+/// Unlike the data-path ladder (where the non-blocking modes are
+/// development-only, because not blocking a classified egress is unsafe), the
+/// orchestration ladder is a **production migration procedure**: shadow is safe
+/// by construction — it never disrupts — so a live estate steps
+/// shadow → report-only → enforce during cutover. Stepping a rung is
+/// constructing the next [`ModeGatedDriver`] over the **same** real driver.
+pub struct ModeGatedDriver<D: WorkloadDriver> {
+    real: Arc<D>,
+    mode: PolicyMode,
+    /// Coherent lifecycle bookkeeping for the non-acting rungs, so reconcile
+    /// logic driving this seam observes the states it expects.
+    shadow: NoopDriver,
+    journal: Mutex<Vec<DriverAction>>,
+}
+
+impl<D: WorkloadDriver> ModeGatedDriver<D> {
+    /// Gate `real` behind `mode`. The same `real` instance threads through
+    /// successive rungs of the ladder.
+    #[must_use]
+    pub fn new(real: Arc<D>, mode: PolicyMode) -> Self {
+        Self {
+            real,
+            mode,
+            shadow: NoopDriver::default(),
+            journal: Mutex::new(Vec::new()),
+        }
+    }
+
+    /// The rung this driver is on.
+    #[must_use]
+    pub fn mode(&self) -> PolicyMode {
+        self.mode
+    }
+
+    /// Every action that reached the seam on this rung, in order.
+    #[must_use]
+    pub fn journal(&self) -> Vec<DriverAction> {
+        self.journal.lock().expect("journal lock").clone()
+    }
+
+    /// The operator-facing divergence report: on the report-only rung, the
+    /// actions Loom would have taken. Empty on the other rungs — shadow
+    /// observes silently, and enforce actually acts (its record is the
+    /// receipts, not a would-have report).
+    #[must_use]
+    pub fn report(&self) -> Vec<DriverAction> {
+        match self.mode {
+            PolicyMode::ReportOnly => self.journal(),
+            PolicyMode::Shadow | PolicyMode::Enforce => Vec::new(),
+        }
+    }
+
+    fn acts(&self) -> bool {
+        matches!(self.mode, PolicyMode::Enforce)
+    }
+}
+
+impl<D: WorkloadDriver> WorkloadDriver for ModeGatedDriver<D> {
+    fn name(&self) -> &'static str {
+        // The ladder is transparent: parity assertions see the real runtime.
+        self.real.name()
+    }
+
+    fn start(&self, run: &WorkloadRun) -> Result<WorkloadHandle, DriverError> {
+        self.journal
+            .lock()
+            .expect("journal lock")
+            .push(DriverAction::Start(run.name.clone()));
+        if self.acts() {
+            self.real.start(run)
+        } else {
+            self.shadow.start(run)
+        }
+    }
+
+    fn inspect(&self, handle: &WorkloadHandle) -> Result<WorkloadState, DriverError> {
+        if self.acts() {
+            self.real.inspect(handle)
+        } else {
+            self.shadow.inspect(handle)
+        }
+    }
+
+    fn stop(&self, handle: &WorkloadHandle) -> Result<(), DriverError> {
+        self.journal
+            .lock()
+            .expect("journal lock")
+            .push(DriverAction::Stop(handle.name.clone()));
+        if self.acts() {
+            self.real.stop(handle)
+        } else {
+            self.shadow.stop(handle)
+        }
     }
 }
 
