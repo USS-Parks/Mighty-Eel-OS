@@ -2061,7 +2061,7 @@ OpenBao and would have poisoned every phase-close suite run this session:
   real estate's bootstrap, and the gateway kill-switch test's own convention).
 - **Verify:** aog-controller suite green twice consecutively in parallel mode against a
   virgin OpenBao (84 passed / 24 suites); previously flaked nearly every run.
-  **Commit:** `95e866a`.
+  **Commit:** `144d1fc`.
 
 ### X3 — toolproxy + meter as managed Workloads — DONE
 The Workload controller's gateway-only kind gate is deleted: every declared `Workload`
@@ -2083,10 +2083,10 @@ synthetic service.
 - **Verify:** fmt clean; clippy `-p aog-controller --all-targets --no-deps -D warnings`
   clean; crate suite **84 passed / 24 suites, twice consecutively** vs live OpenBao;
   `cargo check --workspace` clean. **Gate:** tool calls + metering continue across
-  cutover; receipts unbroken ✓. **Commit:** `e50fe80`.
+  cutover; receipts unbroken ✓. **Commit:** `00ea722`.
 
 **Session relocated to its own worktree (Basho's instruction, mid-session).** Branch
-`session/LOOM-6` at `mai-worktrees/mai-LOOM-6`, carrying `95e866a` + `e50fe80`;
+`session/LOOM-6` at `mai-worktrees/mai-LOOM-6`, carrying `144d1fc` + `00ea722`;
 `session/AUDIT-FIX-2` returned to its found state (`f83bf9e` = `origin/main`, clean tree)
 via a single-file restore + `reset --keep` (no history destroyed — the commits live on
 `session/LOOM-6`). Merge target: **main, once every gate is green** (Basho's instruction);
@@ -2112,7 +2112,7 @@ construction (it never disrupts), which is the whole point of the cutover.
   across modes** ✓. `probes::keep_live` composes with the shadow rung (its restart is
   journaled, not actuated).
 - **Verify:** fmt clean; clippy `-p aog-node --all-targets --no-deps -D warnings` clean;
-  `cargo test -p aog-node` **34 passed / 4 suites**. **Commit:** `6c66586`.
+  `cargo test -p aog-node` **34 passed / 4 suites**. **Commit:** `9fc17df`.
 
 ### X5 — Compose parity + decommission — DONE
 One artifact set, two packagings. The `loom-harness` image and its two binaries stand
@@ -2133,7 +2133,7 @@ the appliance runs them under systemd through the same env contract).
   binaries, no config fork ✓. Two latent bugs the run surfaced and fixed: a literal `}`
   inside a POSIX `${:-}` default broke the address template; the edge-registration check
   grepped the node name where the store returns the record's bytes under `"value"`.
-- **Commit:** `5717e67` (`4 files, +396/-15`).
+- **Commit:** `a4ee8b8` (`4 files, +396/-15`).
 
 **M3a/M3b/M3c/Phase-X all landed. Phase X migration complete** (X1–X2 prior sessions;
 X3/X4/X5 this session).
@@ -2162,7 +2162,7 @@ A3.2 live gate scripts ran green:
   — **3 passed** against live OpenBao. This is the leg the prior session had to defer for
   want of OpenBao.
 
-**Conformance bars 3/4/5 flipped pending → asserted (commit `7211a22`).** With both legs
+**Conformance bars 3/4/5 flipped pending → asserted (commit `18534f8`).** With both legs
 of each bar now proven (in-process openraft + the live companions above), the suite asserts
 every A1.12 bar in-process at modest scale, each detail naming its live companion — the same
 pattern bars 6/7 already used. New `split_brain_safety` bar (isolate a minority on a real
@@ -2197,7 +2197,7 @@ holds fail-closed, plus the three red-team suites. New
 - **Scope:** invariant-level in-process proofs on real crypto/trust primitives; the
   estate-scale fan-out legs are the live V4/V5/V10 gates above.
 - **Verify:** `cargo test -p aog-conformance --test robustness_conformance` **11 passed**;
-  full crate **14 passed / 6 ignored**; clippy `-D warnings` clean. **Commit:** `d630945`.
+  full crate **14 passed / 6 ignored**; clippy `-D warnings` clean. **Commit:** `c59b531`.
 
 ---
 
@@ -2241,7 +2241,10 @@ and Moto STS (`:5566`). Note: `wsf-api`'s
 than skipping when Moto is absent; it passes with Moto up. Pre-existing `wsf-api` test-
 hygiene (out of this session's scope), flagged not fixed.
 
-**Session commits (`session/LOOM-6`, off `origin/main` `f83bf9e`):** `95e866a` (live-suite
-hygiene) · `e50fe80` (X3) · `6c66586` (X4) · `5717e67` (X5) · `7211a22` (bars 3/4/5) ·
-`d630945` (V11). Merges to `main` on green gates per Basho's instruction; push remains
-separately gated.
+**Session commits (`session/LOOM-6`, rebased onto `origin/main` `c564515`):** `144d1fc`
+(live-suite hygiene) · `00ea722` (X3) · `9fc17df` (X4) · `a4ee8b8` (X5) · `18534f8` (bars
+3/4/5) · `c59b531` (V11) · the close-out. Rebased (from base `f83bf9e`) after the concurrent
+AUDIT-FIX-2 session advanced `origin/main` by one commit (`c564515`, R9 tenant-bind on the
+admission update verb) — the integration is conflict-free and re-verified green post-rebase
+(aog-apiserver 38, aog-controller 84/24 live, aog-conformance 14/6). Merged to `main` per
+Basho's instruction; **not pushed** (separately gated).
