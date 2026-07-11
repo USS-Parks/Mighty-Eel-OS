@@ -1,10 +1,22 @@
 #!/bin/sh
-# VH5 — form the 5-voter Loom control-plane cluster over the wire, from cp1:
-# initialize cp1 as the sole voter, add cp2..cp5 as learners at their peer URLs,
-# then promote all five to voters. The edges self-register once this completes.
+# Form the 5-voter Loom control-plane cluster over the wire, from cp 1:
+# initialize it as the sole voter, add the other four as learners at their peer
+# URLs, then promote all five to voters. The edges self-register once this
+# completes.
 set -eu
 
-CP1="http://cp1:4600"
+# Peer address template: {id} is the 1-based voter id, {ordinal} is id-1.
+# Defaults to the compose network's service names; the k3s packaging overrides
+# it with the StatefulSet's stable DNS names. One script, either substrate —
+# the daemons and their configuration surface never fork. (The default is
+# assigned outside the ${...:-...} expansion: a literal } inside the default
+# would terminate the expansion in POSIX sh.)
+ADDR_TEMPLATE="${LOOM_CP_ADDR_TEMPLATE:-}"
+[ -n "$ADDR_TEMPLATE" ] || ADDR_TEMPLATE='http://cp{id}:4600'
+addr_of() {
+  echo "$ADDR_TEMPLATE" | sed "s/{id}/$1/g; s/{ordinal}/$(($1 - 1))/g"
+}
+CP1="$(addr_of 1)"
 
 post() { # path json — retry with backoff; a transient hiccup must not abort formation
   n=0
@@ -30,12 +42,12 @@ until curl -sf "$CP1/healthz" >/dev/null 2>&1; do
   sleep 1
 done
 
-echo "initializing cp1 as the sole initial voter"
-post /admin/initialize '{"members":[{"id":1,"addr":"http://cp1:4600"}]}'
+echo "initializing cp 1 as the sole initial voter"
+post /admin/initialize "{\"members\":[{\"id\":1,\"addr\":\"$(addr_of 1)\"}]}"
 
 for n in 2 3 4 5; do
-  echo "adding cp$n as a learner over the wire"
-  post /admin/add-learner "{\"id\":$n,\"addr\":\"http://cp$n:4600\"}"
+  echo "adding cp $n as a learner over the wire"
+  post /admin/add-learner "{\"id\":$n,\"addr\":\"$(addr_of "$n")\"}"
 done
 
 echo "promoting cp1..cp5 to voters"

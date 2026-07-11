@@ -1,0 +1,197 @@
+# Loom estate — k3s packaging. The SAME artifact set as the compose packaging
+# (`../docker-compose.yml`): one `loom-harness` image, two binaries (`aogd`,
+# `aog-noded`), the same environment contract, the same cluster-init script
+# (mounted from a ConfigMap created from `../cluster-init.sh` — see
+# `../gates/parity-compose-k3s.sh`). Only the orchestrator differs; nothing
+# about the daemons or their configuration forks.
+#
+# k3s/k0s is an optional packaging of the estate for cluster customers — the
+# Loom control plane is the trust plane regardless of the substrate beneath it.
+#
+# Dev-harness posture (dev-mode OpenBao, unauthenticated admin API, explicit
+# AOGD_ALLOW_INSECURE_BIND opt-in on the pod network) — NOT production.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: loom
+---
+# Dev-mode OpenBao, mirroring the compose service.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: openbao
+  namespace: loom
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: openbao }
+  template:
+    metadata:
+      labels: { app: openbao }
+    spec:
+      containers:
+        - name: openbao
+          # Same digest the compose packaging pins (AS-001).
+          image: openbao/openbao@sha256:6150c4a6b62067db6141c8da7a6a6b5763f4f47c315343d0c848b40fecdfd452
+          args:
+            [
+              "server",
+              "-dev",
+              "-dev-root-token-id=root",
+              "-dev-listen-address=0.0.0.0:8200",
+            ]
+          securityContext:
+            capabilities:
+              add: ["IPC_LOCK"]
+          ports:
+            - containerPort: 8200
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: openbao
+  namespace: loom
+spec:
+  selector: { app: openbao }
+  ports:
+    - port: 8200
+      targetPort: 8200
+---
+# Headless service: stable per-voter DNS (cp-0.cp ... cp-4.cp), the k3s
+# equivalent of the compose network's cp1..cp5 service names.
+apiVersion: v1
+kind: Service
+metadata:
+  name: cp
+  namespace: loom
+spec:
+  clusterIP: None
+  selector: { app: aogd }
+  ports:
+    - port: 4600
+      targetPort: 4600
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: cp
+  namespace: loom
+spec:
+  serviceName: cp
+  replicas: 5
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels: { app: aogd }
+  template:
+    metadata:
+      labels: { app: aogd }
+    spec:
+      containers:
+        - name: aogd
+          image: loom-harness:vh4
+          imagePullPolicy: Never # imported into the k3s containerd from the one artifact set
+          # The compose packaging assigns AOGD_NODE_ID / AOGD_ADVERTISE per
+          # service; here the identical values derive from the pod's stable
+          # ordinal + DNS name. Packaging glue only — the env contract the
+          # daemon reads is byte-for-byte the compose one.
+          command: ["sh", "-c"]
+          args:
+            - |
+              H="${HOSTNAME:-$(cat /proc/sys/kernel/hostname)}"
+              export AOGD_NODE_ID="$(( ${H##*-} + 1 ))"
+              export AOGD_ADVERTISE="http://${H}.cp:4600"
+              exec /usr/local/bin/aogd
+          env:
+            - name: AOGD_DATA_DIR
+              value: /tmp/aogd
+            - name: AOGD_LISTEN
+              value: 0.0.0.0:4600
+            - name: AOGD_ALLOW_INSECURE_BIND
+              value: "1"
+          ports:
+            - containerPort: 4600
+          readinessProbe:
+            httpGet: { path: /healthz, port: 4600 }
+            periodSeconds: 2
+            timeoutSeconds: 2
+            failureThreshold: 40
+---
+# Forms the 5-voter cluster — the same script the compose packaging runs,
+# pointed at the StatefulSet's DNS names via the address template.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: cluster-init
+  namespace: loom
+spec:
+  backoffLimit: 4
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: cluster-init
+          image: loom-harness:vh4
+          imagePullPolicy: Never
+          command: ["sh", "-c", "tr -d '\\r' < /init/cluster-init.sh | sh"]
+          env:
+            - name: LOOM_CP_ADDR_TEMPLATE
+              value: http://cp-{ordinal}.cp:4600
+          volumeMounts:
+            - name: init
+              mountPath: /init
+      volumes:
+        - name: init
+          configMap:
+            name: cluster-init
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: edge
+  namespace: loom
+spec:
+  clusterIP: None
+  selector: { app: aog-noded }
+  ports:
+    - port: 5600
+      targetPort: 5600
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: edge
+  namespace: loom
+spec:
+  serviceName: edge
+  replicas: 5
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels: { app: aog-noded }
+  template:
+    metadata:
+      labels: { app: aog-noded }
+    spec:
+      containers:
+        - name: aog-noded
+          image: loom-harness:vh4
+          imagePullPolicy: Never
+          command: ["/usr/local/bin/aog-noded"]
+          env:
+            # The compose packaging names edges edge1..edge5; here the stable
+            # pod name (edge-0..edge-4) is the node name. Same env contract.
+            - name: AOG_NODE_NAME
+              valueFrom:
+                fieldRef: { fieldPath: metadata.name }
+            - name: AOG_NODE_CONTROL_PLANE
+              value: http://cp-0.cp:4600
+            - name: AOG_NODE_LISTEN
+              value: 0.0.0.0:5600
+            - name: AOG_NODE_HEARTBEAT_SECS
+              value: "2"
+          ports:
+            - containerPort: 5600
+          readinessProbe:
+            httpGet: { path: /healthz, port: 5600 }
+            periodSeconds: 2
+            timeoutSeconds: 2
+            failureThreshold: 40
