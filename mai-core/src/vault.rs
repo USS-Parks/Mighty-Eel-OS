@@ -860,28 +860,3 @@ pub trait VectorStore: Send + Sync {
     /// Restore Qdrant data from a vault backup.
     async fn restore_from_vault(&self, backup_id: &str) -> Result<(), VaultError>;
 }
-
-// ============================================================================
-// Composite Trait
-// ============================================================================
-
-/// Convenience super-trait combining all vault capabilities.
-///
-/// Implementations that provide all L2 services implement this.
-/// Individual traits can also be used independently for testing.
-pub trait FullVault:
-    VaultInterface + ModelStorage + PqcProvider + TpmProvider + ProfileStore + AuditStore + VectorStore
-{
-}
-
-/// Blanket implementation: anything implementing all sub-traits is a FullVault.
-impl<T> FullVault for T where
-    T: VaultInterface
-        + ModelStorage
-        + PqcProvider
-        + TpmProvider
-        + ProfileStore
-        + AuditStore
-        + VectorStore
-{
-}

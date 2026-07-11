@@ -21,7 +21,6 @@
 pub mod classifier;
 pub mod cost;
 pub mod entities;
-pub mod fallback;
 pub mod pipeline;
 pub mod router;
 pub mod rules;
@@ -31,7 +30,6 @@ pub use classifier::{
 };
 pub use cost::{BudgetCheck, BudgetConfig, BudgetError, BudgetTracker};
 pub use entities::{EntityDictionary, EntityKind, EntityMatch, EntityScanner};
-pub use fallback::{Engine, FallbackChain, FallbackOutcome, FallbackReason};
 pub use pipeline::{Pipeline, PipelineError, PipelineResult, PipelineRuleHit, StageMetrics};
 pub use router::{
     CloudProvider, DefaultRouter, RouteRequest, Router, RouterConfig, RouterError, RoutingDecision,

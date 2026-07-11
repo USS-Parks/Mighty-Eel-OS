@@ -49,7 +49,7 @@ pub use sentinel::{
 // L2 vault types and traits
 pub use vault::{AuditStore, ModelStorage, PqcProvider, ProfileStore, TpmProvider, VectorStore};
 pub use vault::{
-    CollectionConfig, ComplianceReport, DistanceMetric, EmbeddingPoint, FamilyProfile, FullVault,
+    CollectionConfig, ComplianceReport, DistanceMetric, EmbeddingPoint, FamilyProfile,
     IntegrityResult, KeyInfo, KeyLevel, ProfileChangeEvent, ProfilePermissions, ProfileRole,
     SearchResult, SnapshotInfo, StorageInfo, VaultAuditAction, VaultAuditEntry, VaultAuditStatus,
     VaultError, VaultInterface,

@@ -8,64 +8,8 @@
 
 #![deny(unsafe_code)]
 
-use std::pin::Pin;
-use std::sync::Arc;
-
-use async_trait::async_trait;
-use futures::Stream;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-
-// ─── Core Trait ───────────────────────────────────────────────────────────────
-
-/// Core trait all backend adapters must implement.
-/// Works identically for GPU-era and QM-era backends.
-///
-/// # Trust Model
-/// Adapters are untrusted capsules. They run in isolated OS processes with
-/// cgroups limits. The `hil_handle` is the ONLY path to hardware resources.
-#[async_trait]
-pub trait InferenceAdapter: Send + Sync {
-    /// Initialize adapter with configuration and HIL access handle.
-    /// Called once per adapter lifecycle. Blocks until backend is ready.
-    /// Returns an opaque handle string identifying this adapter instance.
-    async fn initialize(
-        &mut self,
-        config: AdapterConfig,
-        hil_handle: Arc<dyn HILHandle>,
-    ) -> Result<AdapterHandle, AdapterError>;
-
-    /// Generate tokens for a single prompt. Returns async stream of tokens.
-    /// Backpressure managed via channel capacity in the FFI bridge.
-    fn generate(
-        &self,
-        prompt: String,
-        params: GenerationParams,
-    ) -> Pin<Box<dyn Stream<Item = Result<Token, AdapterError>> + Send + '_>>;
-
-    /// Generate tokens for multiple prompts concurrently.
-    /// Backends without native batching parallelize internally.
-    async fn generate_batch(
-        &self,
-        prompts: Vec<String>,
-        params: GenerationParams,
-    ) -> Result<Vec<GenerationResult>, AdapterError>;
-
-    /// Compute embeddings for a batch of texts.
-    /// Backends without native embedding support MUST return
-    /// `AdapterError::UnsupportedOperation`.
-    async fn embed(&self, texts: Vec<String>) -> Result<Vec<Embedding>, AdapterError>;
-
-    /// Check adapter health. Should be lightweight and fast (<100ms).
-    async fn health_check(&self) -> HealthStatus;
-
-    /// Return static capabilities of this adapter.
-    /// These are logical capabilities only — no hardware details.
-    fn capabilities(&self) -> AdapterCapabilities;
-
-    /// Gracefully shutdown backend and release resources via HIL.
-    async fn shutdown(&mut self) -> Result<(), AdapterError>;
-}
 
 // ─── Configuration ────────────────────────────────────────────────────────────
 
@@ -226,50 +170,6 @@ impl AdapterError {
                 | AdapterError::RateLimited
         )
     }
-}
-
-// ─── HIL Handle ───────────────────────────────────────────────────────────────
-
-/// HIL handle provided to adapters for resource requests.
-/// This is the ONLY interface an adapter has to hardware resources.
-#[async_trait]
-pub trait HILHandle: Send + Sync {
-    /// Request VRAM allocation. Returns handle on success.
-    async fn request_memory(&self, bytes: usize) -> Result<MemoryAllocation, AdapterError>;
-
-    /// Release a previously allocated memory region.
-    async fn release_memory(&self, allocation: MemoryAllocation) -> Result<(), AdapterError>;
-
-    /// Request secure model weight loading from vault.
-    async fn secure_load_model(&self, model_id: &str) -> Result<ModelLoadHandle, AdapterError>;
-
-    /// Report current thermal state of assigned compute.
-    async fn thermal_state(&self) -> ThermalState;
-
-    /// Report telemetry metrics to the kernel.
-    async fn report_metrics(&self, metrics: AdapterMetrics) -> Result<(), AdapterError>;
-}
-
-/// Opaque memory allocation handle.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MemoryAllocation {
-    pub handle: u64,
-    pub size_bytes: usize,
-}
-
-/// Opaque model load handle.
-#[derive(Debug, Clone)]
-pub struct ModelLoadHandle {
-    pub model_id: String,
-    pub ready: bool,
-}
-
-/// Thermal state of assigned compute resources.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum ThermalState {
-    Normal,
-    Warning,
-    Throttled,
 }
 
 /// Telemetry metrics an adapter reports per request or interval.
