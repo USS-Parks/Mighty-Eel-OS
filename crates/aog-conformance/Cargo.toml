@@ -19,6 +19,14 @@ tokio = { workspace = true }
 [dev-dependencies]
 fabric-token = { path = "../fabric-token" }
 fabric-contracts = { path = "../fabric-contracts" }
+fabric-envelope = { path = "../fabric-envelope" }
+fabric-cache = { path = "../fabric-cache" }
+fabric-proof = { path = "../fabric-proof" }
+aog-node = { path = "../aog-node" }
+aog-toolproxy = { path = "../aog-toolproxy" }
+mai-agent = { path = "../../mai-agent" }
+async-trait = { workspace = true }
+hex = "0.4"
 
 [lints]
 workspace = true
