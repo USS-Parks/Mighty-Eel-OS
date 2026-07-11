@@ -19,7 +19,6 @@ hex = "0.4"
 [dev-dependencies]
 wsf-bridge = { path = "../wsf-bridge" }
 wsf-seal = { path = "../wsf-seal" }
-fabric-token = { path = "../fabric-token" }
 tokio = { workspace = true }
 chrono = { workspace = true }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }

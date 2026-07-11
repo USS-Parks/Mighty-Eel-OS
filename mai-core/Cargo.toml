@@ -18,10 +18,7 @@ tracing = { workspace = true }
 uuid = { workspace = true }
 blake3 = "1.5"
 
-mai-hil = { path = "../mai-hil" }
-
 [dev-dependencies]
-tokio-test = { workspace = true }
 mockall = { workspace = true }
 
 [lints]

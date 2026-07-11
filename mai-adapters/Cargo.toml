@@ -23,7 +23,6 @@ mai-core = { path = "../mai-core" }
 mai-hil = { path = "../mai-hil" }
 
 [dev-dependencies]
-tokio-test = { workspace = true }
 mockall = { workspace = true }
 
 [features]

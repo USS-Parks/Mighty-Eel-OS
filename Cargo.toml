@@ -106,7 +106,6 @@ blake3 = "1.5"
 dashmap = "6"
 
 # Testing
-tokio-test = "0.4"
 mockall = "0.13"
 
 [workspace.lints.rust]

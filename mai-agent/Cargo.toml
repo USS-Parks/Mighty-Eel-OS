@@ -12,7 +12,6 @@ mai-core = { path = "../mai-core" }
 
 # Async
 tokio = { workspace = true }
-async-trait = { workspace = true }
 
 # Serialization
 serde = { workspace = true }
@@ -32,9 +31,6 @@ blake3 = { workspace = true }
 
 # Time
 chrono = { workspace = true }
-
-[dev-dependencies]
-tokio-test = { workspace = true }
 
 [lints]
 workspace = true

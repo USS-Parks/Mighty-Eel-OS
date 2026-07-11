@@ -14,16 +14,8 @@ description = "L2 vault implementation: ZFS storage, PQC encryption, TPM, profil
 #  * `pqc-prod`  — REMOVED (SOV-0.2b). Used the now-archived `pqcrypto-*` liboqs
 #                  crates; nothing selected it. Re-add later behind a new feature
 #                  using the maintained `oqs` crate if ITAR/FIPS requires it.
-#  * `tpm-hardware` — enable real TPM 2.0 via `tss-esapi` (Linux only).
-#                    Default off; the software TPM uses XChaCha20-Poly1305
-#                    sealed with a PCR-derived key.
-#  * `zfs-storage` — enable native ZFS dataset operations via the `zfs` CLI
-#                   (Linux only). Default off; the fallback is an encrypted
-#                   file-tree under the configured mount point.
 default = ["pqc-dev"]
 pqc-dev = ["dep:ml-kem", "dep:ml-dsa", "dep:rand_core"]
-tpm-hardware = ["dep:tss-esapi"]
-zfs-storage = []
 
 [dependencies]
 # Workspace shared
@@ -59,15 +51,10 @@ ml-kem = { version = "0.2", optional = true }
 ml-dsa = { version = "0.0.4", optional = true }
 rand_core = { version = "0.6", optional = true, features = ["getrandom"] }
 
-# Hardware TPM (Linux only, optional).
-[target.'cfg(target_os = "linux")'.dependencies]
-tss-esapi = { version = "7", optional = true }
-
 [dependencies.chrono]
 workspace = true
 
 [dev-dependencies]
-tokio-test = { workspace = true }
 tempfile = "3"
 
 [lints]
