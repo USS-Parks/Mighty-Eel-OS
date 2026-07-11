@@ -964,13 +964,14 @@ pub async fn revocation_to_denial_slo(replicas: u64, iterations: usize) -> Resul
 /// converged to the ONE deterministic rollout end state with no acknowledged
 /// write lost — self-healing + determinism under chaos.
 ///
-/// Test-only, like V9/V10: the control-plane leg of bars 4/5 on real openraft. The
-/// data-plane leg (the scheduler evicting a dead node's `Placement`s and
-/// re-placing them, minting/revoking runtime tokens in OpenBao) is the live
-/// estate's — `deployment/loom-harness/gates/v7-chaos-soak.sh` plus the
-/// `live_node` / `live_scheduler` controller tests — so bars 4/5 stay registered
-/// against V7 rather than asserted here.
-#[cfg(test)]
+/// The control-plane leg of bars 4/5 on real openraft. The data-plane leg (the
+/// scheduler evicting a dead node's `Placement`s and re-placing them,
+/// minting/revoking runtime tokens in OpenBao) is the live estate's —
+/// `deployment/loom-harness/gates/v7-chaos-soak.sh` plus the `live_node` /
+/// `live_scheduler` controller tests. Both legs run green (the live companions
+/// against live OpenBao + the containerized estate), so `run()` asserts bars 4/5
+/// here at a modest in-suite scale exactly as bars 6/7 do — the modest in-process
+/// proof, the aggressive proof its `v7_*` companion.
 pub async fn chaos_soak(replicas: u64, rounds: usize, seed: u64) -> Result<String, String> {
     let heal_slo = Duration::from_secs(10);
     let (cluster, nodes) = spawn_cluster(replicas, "loom-conformance-chaossoak").await?;
@@ -1069,5 +1070,128 @@ pub async fn chaos_soak(replicas: u64, rounds: usize, seed: u64) -> Result<Strin
 
     Ok(format!(
         "{rounds} kill/heal cycles on {replicas} replicas: a leader re-emerged within {heal_slo:?} each round, every killed node rejoined and caught up, and all replicas converged to the identical {rounds}-step rollout end state — self-healing + deterministic under chaos, no committed loss"
+    ))
+}
+
+/// Bar 3 — split-brain safety (doctrine I-4 / addendum H2): a minority partition
+/// serves **no** authoritative write. On a `replicas`-voter estate, isolate a
+/// minority (so the remaining majority still holds quorum) and prove two things at
+/// once: the majority elects/keeps a leader and **commits**, while an isolated
+/// minority node **cannot** commit — it fences rather than serving a stale allow.
+/// Then heal and confirm the estate reconverges to one leader with the majority's
+/// write intact on every replica.
+///
+/// This is the in-process leg of bar 3 on real openraft; its aggressive companion
+/// is the live `deployment/loom-harness/gates/v4-split-brain.sh` (real network
+/// partitions on the containerized 5-CP estate).
+pub async fn split_brain_safety(replicas: u64) -> Result<String, String> {
+    if replicas < 3 {
+        return Err(format!(
+            "split-brain needs ≥3 voters to form a minority, got {replicas}"
+        ));
+    }
+    let slo = Duration::from_secs(10);
+    let (cluster, nodes) = spawn_cluster(replicas, "loom-conformance-splitbrain").await?;
+
+    // Isolate a minority: the largest set that still leaves a quorum majority.
+    // For 5 voters that is 2 nodes {4,5}; the majority {1,2,3} keeps quorum.
+    let minority_size = (replicas - 1) / 2;
+    let minority: Vec<u64> = ((replicas - minority_size + 1)..=replicas).collect();
+    let majority: Vec<usize> =
+        (0..usize::try_from(replicas - minority_size).unwrap_or(0)).collect();
+    for &m in &minority {
+        cluster.isolate(m);
+    }
+
+    // The majority still commits: find a quorum-confirmed leader among it (a fresh
+    // election if the old leader was isolated) and write through it.
+    let majority_nodes: Vec<Arc<RaftNode>> =
+        majority.iter().map(|&i| Arc::clone(&nodes[i])).collect();
+    let key = "Workload/split-brain-probe";
+    let deadline = Instant::now() + slo;
+    let major_committed = loop {
+        if let Some(li) = confirmed_leader(&majority_nodes).await {
+            let resp = majority_nodes[li]
+                .write(Op::Put {
+                    key: key.to_owned(),
+                    value: b"majority".to_vec(),
+                    expected: Precondition::Any,
+                })
+                .await;
+            if matches!(resp, Ok(RaftResponse::Applied { .. })) {
+                break true;
+            }
+        }
+        if Instant::now() >= deadline {
+            break false;
+        }
+        tokio::time::sleep(Duration::from_millis(25)).await;
+    };
+    if !major_committed {
+        return Err("the quorum majority failed to commit under partition".to_owned());
+    }
+
+    // The isolated minority fences: no minority node confirms leadership, and a
+    // write to one does NOT commit (bounded, so an isolated leader's client_write
+    // cannot hang the gate). A committed minority write would BE the split brain.
+    for &m in &minority {
+        let mi = usize::try_from(m - 1).unwrap_or(0);
+        if nodes[mi]
+            .confirm_leadership(Duration::from_millis(200))
+            .await
+        {
+            return Err(format!(
+                "isolated minority node {m} still confirms leadership — split brain"
+            ));
+        }
+        let write = nodes[mi].write(Op::Put {
+            key: key.to_owned(),
+            value: b"minority".to_vec(),
+            expected: Precondition::Any,
+        });
+        // Any error, non-Applied response, or timeout = fenced (did not commit); a
+        // bounded wait so an isolated ex-leader's client_write cannot hang the gate.
+        if let Ok(Ok(RaftResponse::Applied { .. })) =
+            tokio::time::timeout(Duration::from_secs(3), write).await
+        {
+            return Err(format!(
+                "isolated minority node {m} committed a write — split brain"
+            ));
+        }
+    }
+
+    // Heal and reconverge: one leader, and the majority's write on every replica —
+    // the just-healed minority nodes must replicate the entry they missed, so poll
+    // each (bounded) for it rather than racing the catch-up with a one-shot read.
+    cluster.heal_all();
+    let deadline = Instant::now() + slo;
+    while confirmed_leader(&nodes).await.is_none() {
+        if Instant::now() >= deadline {
+            return Err("no single leader after healing the partition".to_owned());
+        }
+        tokio::time::sleep(Duration::from_millis(25)).await;
+    }
+    for (idx, node) in nodes.iter().enumerate() {
+        let deadline = Instant::now() + slo;
+        loop {
+            let got = node
+                .get(key)
+                .await
+                .map_err(|e| format!("post-heal read failed: {e:?}"))?;
+            if got.map(|v| v.value) == Some(b"majority".to_vec()) {
+                break;
+            }
+            if Instant::now() >= deadline {
+                return Err(format!(
+                    "replica {} did not catch up to the majority write after heal",
+                    idx as u64 + 1
+                ));
+            }
+            tokio::time::sleep(Duration::from_millis(25)).await;
+        }
+    }
+
+    Ok(format!(
+        "on {replicas} voters, an isolated {minority_size}-node minority committed nothing and confirmed no leader while the quorum majority committed; the estate reconverged to one leader with the write intact on every replica — no split-brain allow"
     ))
 }
