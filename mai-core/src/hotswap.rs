@@ -37,7 +37,7 @@ pub enum SwapTarget {
         old_adapter: AdapterId,
         new_adapter: AdapterId,
     },
-    /// React to a hardware topology change (GPU added/removed, memristor card, thermal sensor).
+    /// React to a hardware topology change (GPU added/removed, thermal sensor).
     Hardware { event: HardwareChangeEvent },
 }
 
@@ -48,8 +48,6 @@ pub enum HardwareChangeEvent {
     GpuAdded { gpu_id: String },
     /// GPU removed or failed (thermal shutdown, physical removal).
     GpuRemoved { gpu_id: String },
-    /// TetraMem MX100 memristor card inserted (future: 2028+).
-    MemristorCardInserted,
     /// New thermal sensor detected (triggers health monitor reconfiguration).
     ThermalSensorAdded,
 }
@@ -424,7 +422,7 @@ impl HotSwapManager {
                     scheduler.set_adapter_health(gpu_id, false);
                     info!("Paused routing: GPU {gpu_id} adapters marked unhealthy");
                 } else {
-                    // GpuAdded, MemristorCardInserted, ThermalSensorAdded
+                    // GpuAdded, ThermalSensorAdded
                     // No existing routing to pause for additions
                     info!("Hardware addition event: no routing to pause");
                 }
@@ -554,11 +552,6 @@ impl HotSwapManager {
                         let mut health = self.health_monitor.write().await;
                         health.register_adapter(gpu_id.clone());
                         info!("Activated new GPU: {gpu_id}");
-                    }
-                    HardwareChangeEvent::MemristorCardInserted => {
-                        // TetraMem card detection: the adapter slot is reserved
-                        // but the actual TetraMem driver returns NotImplemented.
-                        info!("Memristor card detected - adapter slot reserved for future");
                     }
                     HardwareChangeEvent::ThermalSensorAdded => {
                         // Reconfigure health monitor thermal thresholds
@@ -1041,13 +1034,11 @@ mod tests {
         let removed = HardwareChangeEvent::GpuRemoved {
             gpu_id: "gpu-1".to_string(),
         };
-        let memristor = HardwareChangeEvent::MemristorCardInserted;
         let thermal = HardwareChangeEvent::ThermalSensorAdded;
 
         // Just verify these construct without panic (type coverage)
         let _ = format!("{added:?}");
         let _ = format!("{removed:?}");
-        let _ = format!("{memristor:?}");
         let _ = format!("{thermal:?}");
     }
 

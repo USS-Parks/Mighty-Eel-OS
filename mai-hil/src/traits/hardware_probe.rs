@@ -10,7 +10,6 @@ pub enum ComputeType {
     INT4,
     BF16,
     CPUFallback,
-    MemristorNative, // QM-era
 }
 
 /// Supported model weight formats
@@ -20,7 +19,6 @@ pub enum QuantizationFormat {
     EXL2,
     GPTQ,
     SafeTensors,
-    MemristorBinary, // QM-era
 }
 
 /// Hardware capability descriptor returned by all HIL drivers
@@ -64,7 +62,7 @@ impl Default for CapabilityDescriptor {
 }
 
 /// `HardwareProbe`: Standardized interface for hardware detection and capability reporting.
-/// Implemented by NVIDIA, AMD, CPU, and TetraMem drivers.
+/// Implemented by NVIDIA, AMD, and CPU drivers.
 #[async_trait]
 pub trait HardwareProbe: Send + Sync {
     /// Detects and enumerates all available hardware of this driver type.

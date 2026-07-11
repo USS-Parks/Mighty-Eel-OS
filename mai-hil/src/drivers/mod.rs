@@ -20,9 +20,6 @@ pub use nvidia::NvidiaDriver;
 pub mod amd;
 pub use amd::AmdDriver;
 
-pub mod tetramem_stub;
-pub use tetramem_stub::TetraMemDriver;
-
 /// Helper: parse a key=value line from /proc-style files
 pub(crate) fn parse_proc_line(line: &str) -> Option<(&str, &str)> {
     let line = line.trim();
