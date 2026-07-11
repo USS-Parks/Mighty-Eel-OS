@@ -1,6 +1,6 @@
 [package]
 name = "mai-admin"
-description = "MAI operator tooling: backup/restore, audit/trust/vault verification"
+description = "MAI operator tooling: backup/restore"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

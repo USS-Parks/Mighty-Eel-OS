@@ -1,10 +1,7 @@
 //! `mai-admin` CLI entry point.
 //!
 //! Wires `backup create` and `backup verify`, plus
-//! `restore plan` and `restore apply`. The remaining `audit`, `trust`,
-//! and `vault` subcommands ship in later sessions and stub here with a
-//! clear exit-with-message so the operator UX of `mai-admin --help`
-//! reflects the whole roadmap.
+//! `restore plan` and `restore apply`.
 //!
 //! Exit codes (stable, mirror SHIP-HARDENING-PLAN.md §13):
 //!   0  ok
@@ -51,12 +48,6 @@ enum Command {
     /// Restore management.
     #[command(subcommand)]
     Restore(RestoreCmd),
-    /// Audit chain verification. Pending session.
-    Audit,
-    /// Trust bundle verification. Pending session.
-    Trust,
-    /// Vault status report. Pending session.
-    Vault,
     /// Run narrated end-to-end compliance demos (WELCOME-01).
     #[command(subcommand)]
     Demo(DemoCmd),
@@ -218,18 +209,6 @@ fn main() -> ExitCode {
             force,
             json,
         ),
-        Command::Audit => {
-            eprintln!("`mai-admin audit verify` lands in a later session. Pending.");
-            ExitCode::from(2)
-        }
-        Command::Trust => {
-            eprintln!("`mai-admin trust verify` lands in a later session. Pending.");
-            ExitCode::from(2)
-        }
-        Command::Vault => {
-            eprintln!("`mai-admin vault status` lands in a later session. Pending.");
-            ExitCode::from(2)
-        }
         Command::Demo(DemoCmd::All { no_banner }) => run_demo(None, no_banner),
         Command::Demo(DemoCmd::Run {
             scenario,
