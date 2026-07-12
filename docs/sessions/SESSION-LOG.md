@@ -3,7 +3,7 @@
 **Project:** Island Mountain Model Abstraction Interface (MAI)
 **Source:** MAI-BUILD-PROMPT-ROSTER-v2.md (current at 46 sessions plus Trust Manifold backfill lane)
 **Instructions:** Update this file after each session completes. Mark deliverables as they are finished. Log blockers and notes as they arise.
-**Active Scope:** Historical log for Phase H onward — Sessions 26-46 + BF-1..BF-7 + Ship hardening lane. Gate D closed by Session 46; SHIP-01..SHIP-17 closed 2026-05-23; RC-01..RC-10 produced the RC1 tester bundle. Current active work is the DOUGHERTY remediation lane (J-01..J-26) before RC-11 re-bundle/re-ship; see `docs/INDEX.md`, `docs/COGENT-DEPLOYMENT-ROADMAP.md`, and `docs/dougherty/JOHN-REMEDIATION-PLAN.md`.
+**Active Scope:** Historical log for Phase H onward — Sessions 26-46 + BF-1..BF-7 + Ship hardening lane. Gate D closed by Session 46; SHIP-01..SHIP-17 closed 2026-05-23; RC-01..RC-10 produced the RC1 tester bundle. The DOUGHERTY remediation lane (J-01..J-26) and RC-11 re-bundle closed 2026-05-25. SUPERSEDED (2026-07-12): this pre-June-2026 MAI build generation was revived and folded into the modern Agentic Orchestration Governance (AOG) + Woven Security Fabric (WSF) stack; entries below are historical, not current status.
 
 ---
 
