@@ -1,7 +1,7 @@
 # MAI Known Issues
 
 **Project:** Island Mountain Model Abstraction Interface (MAI)
-**Last Updated:** 2026-05-26 (IGD-10 added Issue #16: triaged 5 source-level Follow-up: markers as accept-and-tracked)
+**Last Updated:** 2026-07-11 (Codex audit cleanup: added Issue #17 stale /v1/ws docs, Issue #18 test-evidence relocation)
 
 ---
 
@@ -239,6 +239,27 @@ The hardening lane's demo-default removal: `StubVault`, `MemoryAuditWriter`, `Nu
 **Resolved:** Session 14b, 2026-05-20
 
 Streaming handlers previously used simulated token producers. Session 14b wired the real inference path end-to-end through AdapterManager, connecting adapter IPC output to the SSE streaming channel.
+
+### 17. Stale `/v1/ws` references in API docs
+
+**Severity:** Low (documentation accuracy)
+**Affects:** `docs/api/API-REFERENCE.md`, `docs/api/MAI-API-SURFACE-SPEC.md`, `docs/product/LAMPREY-MAI-STACK-MEMO.md`
+**Status:** Open (2026-07-11)
+
+The `/v1/ws` WebSocket endpoint was removed (commit `81d1afe`), but the API reference,
+surface spec, and product memo still document it as a live endpoint. The removal is "until a
+governed token stream exists," so these should be deleted or marked deferred. Historical
+session-log DEVLOGs are left as point-in-time records.
+
+### 18. `test-evidence/` relocation to CI artifact storage
+
+**Severity:** Low (repo hygiene)
+**Affects:** `test-evidence/` (95 tracked files, ~6.7 MB)
+**Status:** Open (2026-07-11)
+
+The Codex audit's "native" finding: move tracked test-evidence artifacts to immutable
+CI/release artifact storage, keeping a small checked-in hash manifest for provenance. Needs a
+storage-destination decision; not started.
 
 ---
 

@@ -1183,3 +1183,37 @@ test binaries. +6 added by SHIP-17 (3 integration + 2 unit +
 - Same anti-truncation discipline as prior sessions: the new test
   file was staged through `$env:TEMP\opencode\` and byte-verified
   before copy.
+
+---
+
+### Codex Audit Cleanup — Dead-Code Removal (2026-07-11)
+
+**Status:** Complete 2026-07-11
+**Scope:** Post-build over-engineering cleanup outside the numbered roster, driven by a
+Codex audit (12 finding groups); each finding verified against the tree before action.
+**Branch:** `main`, no worktree — `origin/main` `5922752..a75ac24` (6 commits).
+
+Removed (verified no production consumer), one commit per group:
+- `0d4aa10` — unused deps + dead vault features (mai-api tower-http/futures-core/axum-extra/
+  pin-project-lite/prost-build, mai-core to mai-hil, mai-agent async-trait, mai-admin tracing,
+  mai-vault tss-esapi + tpm-hardware/zfs-storage, mai-sdk-rs tokio + reqwest to rustls,
+  tokio-test x7 + workspace, wsf-ledger fabric-token).
+- `14a7ce3` — router `fallback` module, `FullVault`, mai-hil `InferenceAdapter`/`HILHandle`
+  traits + HIL-only types + `futures` dep (adapter DTOs kept).
+- `fb34d14` — TetraMem driver + `Memristor*` variants + `MemristorCardInserted`.
+- `c120329` — mai-admin `audit`/`trust`/`vault` subcommands.
+- `81d1afe` + `a75ac24` — the `/v1/ws` WebSocket endpoint (inference path returned MAI-5004),
+  its route, the axum `"ws"` feature, and the stale route-policy row; SSE untouched.
+
+Kept (audit false-positives): the "dead field" and "shrink" findings are all
+`#[allow(dead_code)]`/`#[allow(clippy::...)]` + owner-tagged `TODO(basho):` staging — permitted
+debt under CANON section 11. Kept intact by decision.
+
+### Gates
+
+- `cargo check --workspace --all-targets` clean after every group.
+- `cargo test --workspace` 2,311 to 2,289 (drop is the removed modules' own tests: 6 fallback +
+  1 tetramem + 15 websocket), 0 regressions. fmt, no-slop (staged + full-tree on push),
+  route-policy, and commit-msg gates green on all six commits.
+
+Open items tracked as KNOWN-ISSUES #17 (stale /v1/ws docs) and #18 (test-evidence relocation).
