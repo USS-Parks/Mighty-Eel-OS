@@ -82,4 +82,3 @@
 /v1/updates/download	mai-api	x-im-token	no	-
 /v1/updates/status	mai-api	x-im-token	no	-
 /v1/usage	aog-gateway	bearer-vk	no	-
-/v1/ws	mai-api	x-im-token	no	-
