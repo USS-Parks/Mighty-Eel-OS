@@ -24,13 +24,12 @@ use axum::Router;
 use axum::body::Body;
 use axum::http::Request;
 use axum::middleware;
-use axum::routing::{any, get, post, post_service};
+use axum::routing::{get, post, post_service};
 use tower::service_fn;
 
 use crate::auth::auth_middleware;
 use crate::handlers;
 use crate::state::AppState;
-use crate::streaming;
 
 /// Build the complete API router with all routes and middleware.
 ///
@@ -188,9 +187,6 @@ pub fn build_router(state: AppState) -> Router {
             get(handlers::telemetry::scheduler_anomalies),
         );
 
-    // WebSocket streaming route
-    let ws_routes = Router::new().route("/v1/ws", any(streaming::ws::ws_upgrade));
-
     // Trust Manifold routes
     let trust_routes = Router::new()
         .route("/v1/trust/status", get(handlers::trust::get_trust_status))
@@ -298,7 +294,6 @@ pub fn build_router(state: AppState) -> Router {
         .merge(metrics_routes)
         .merge(system_routes)
         .merge(telemetry_routes)
-        .merge(ws_routes)
         .merge(trust_routes)
         .merge(compliance_routes)
         .layer(middleware::from_fn_with_state(

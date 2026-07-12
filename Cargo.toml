@@ -65,7 +65,7 @@ repository = "https://github.com/USS-Parks/im-mighty-eel-mai"
 tokio = { version = "1", features = ["full"] }
 
 # HTTP/gRPC
-axum = { version = "0.8", features = ["ws"] }
+axum = { version = "0.8" }
 tonic = "0.12"
 prost = "0.13"
 

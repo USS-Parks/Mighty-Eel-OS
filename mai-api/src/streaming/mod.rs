@@ -1,20 +1,13 @@
 //! Streaming protocol implementations for the MAI API server.
 //!
-//! Two streaming protocols are supported:
-//!
 //! - **SSE (Server-Sent Events):** Token-by-token delivery for
 //!   `stream=true` on `/v1/chat/completions`. OpenAI-compatible format
 //!   with sequence numbering, heartbeat, backpressure, and resume.
 //!
-//! - **WebSocket:** Bidirectional multiplexed streaming at `/v1/ws`.
-//!   Supports concurrent inference requests, audio chunks for STT,
-//!   and tool/function call results on a single connection.
-//!
-//! Both protocols share the `TokenSender`/`TokenReceiver` channel
-//! abstraction and `BackpressureMonitor` for flow control.
+//! The `TokenSender`/`TokenReceiver` channel abstraction and
+//! `BackpressureMonitor` provide flow control.
 
 pub mod sse;
-pub mod ws;
 
 use std::time::Instant;
 use tokio::sync::mpsc;
@@ -175,7 +168,7 @@ impl BackpressureMonitor {
 // ─── Stream Identifier ─────────────────────────────────────────────
 
 /// Unique identifier for a streaming session. Used to correlate
-/// SSE resume requests and WebSocket multiplexed responses.
+/// SSE resume requests.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct StreamId(pub String);
 
