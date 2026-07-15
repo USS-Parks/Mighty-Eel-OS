@@ -58,6 +58,8 @@ services:
     command: ["sh", "-c", "set -a && . /seed/appliance.env && exec /usr/local/bin/wsf-api serve"]
     environment:
       WSF_LISTEN: 0.0.0.0:8300
+      WSF_PROFILE: development
+      WSF_ALLOW_INSECURE_BIND: "1"
     volumes: ["seed-data:/seed:ro"]
     ports: ["127.0.0.1:8081:8300"]
     depends_on:
@@ -71,6 +73,7 @@ services:
     command: ["sh", "-c", "set -a && . /seed/appliance.env && exec /usr/local/bin/aog-gateway serve"]
     environment:
       AOG_LISTEN: 0.0.0.0:8080
+      AOG_PROFILE: development
       AOG_MODE: shadow
       AOG_OPENAI_KEY: ${OPENAI_API_KEY:?set OPENAI_API_KEY in deployment/shadow/.env}
       AOG_OPENAI_BASE: ${OPENAI_BASE:-https://api.openai.com}

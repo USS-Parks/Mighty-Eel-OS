@@ -106,6 +106,8 @@ spec:
               value: /tmp/aogd
             - name: AOGD_LISTEN
               value: 0.0.0.0:4600
+            - name: AOGD_PROFILE
+              value: development
             - name: AOGD_ALLOW_INSECURE_BIND
               value: "1"
           ports:

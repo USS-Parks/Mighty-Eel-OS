@@ -57,6 +57,8 @@ async fn run() -> Result<(), String> {
         return Err(format!("unknown subcommand '{sub}' (expected: serve)"));
     }
 
+    let profile = wsf_api::posture::Profile::parse(std::env::var("WSF_PROFILE").ok().as_deref())?;
+
     let addr = env("WSF_OPENBAO_ADDR")?;
     let role_id = env("WSF_OPENBAO_ROLE_ID")?;
     let secret_id = env("WSF_OPENBAO_SECRET_ID")?;
@@ -112,9 +114,17 @@ async fn run() -> Result<(), String> {
         .collect();
     let public_bind = wsf_api::posture::is_public_bind(&resolved);
     let workload_key = std::env::var("WSF_WORKLOAD_AUTHORITY_KEY").ok();
+    let allow_insecure_development_bind =
+        std::env::var("WSF_ALLOW_INSECURE_BIND").ok().as_deref() == Some("1");
     wsf_api::posture::enforce_startup_posture(
+        profile,
         public_bind,
         workload_key.is_some(),
+        // LSH-02 containment: the current binary constructs privileged services
+        // without a revocation store. W1 replaces this `false` with the real,
+        // mandatory shared store; production must remain unstartable until then.
+        false,
+        allow_insecure_development_bind,
         &wsf_hardening::DeploymentConfig {
             mode: wsf_hardening::DeployMode::Production,
             openbao_address: addr.clone(),

@@ -62,6 +62,7 @@ services:
     image: islandmountain/wsf-api:${WSF_API_VERSION:-v0.1.0}
     environment:
       WSF_OPENBAO_ADDR: https://openbao:8200
+      WSF_PROFILE: production
       WSF_MODE: production
       WSF_PG_URL: postgres://wsf@postgres/wsf
       WSF_OBJECTSTORE_URL: http://objectstore:9000

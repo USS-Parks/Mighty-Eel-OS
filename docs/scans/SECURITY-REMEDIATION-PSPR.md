@@ -5,7 +5,7 @@
 **Repository:** `im-mighty-eel-mai` at `C:\Users\17076\Documents\Claude\Mighty Eel OS\mai`  
 **Source audit:** 2026-07-05 parent-agent repository audit at commit `6ffaaeeea0a83c7fa071e114183cfa60c5898703`  
 **Author:** Basho Parks + Codex · **Created:** 2026-07-05  
-**Status:** **READY FOR STS APPROVAL — execution has not started**
+**Status:** **HISTORICAL EXECUTION RECORD — SUPERSEDED FOR CURRENT CLOSURE.** The roster was executed in `session/SEC-1`; the authoritative execution evidence is `docs/sessions/SECURITY-REMEDIATION-DEVLOG.md`. Its original unchecked prompt boxes are preserved rather than retroactively rewritten. Current WSF/AOG closure is governed by `PLANNING/LAMPREY-SADDLE-WSF-AOG-SECURITY-HARDENING-PSPR.md` because the 2026-07-15 source assessment found surviving/regressed controls.
 
 ---
 
@@ -506,4 +506,3 @@ Milestone evidence lives under `test-evidence/security-remediation/<milestone>/`
 This P-SPR is complete only when all checkboxes are closed, the DEVLOG is complete, all universal gates pass from a clean checkout, the live suite is green, migrations and rollback are proven, the independent scan reports zero Critical/High findings, production claims are reconciled, and the owner signs the final go/no-go.
 
 No finding is closed by documentation alone, a unit test alone where a live boundary exists, or a passing readiness flag that does not measure the claimed runtime property.
-

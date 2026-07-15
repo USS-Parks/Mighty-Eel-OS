@@ -48,6 +48,7 @@ services:
       AOGD_DATA_DIR: "/tmp/aogd"
       AOGD_LISTEN: "0.0.0.0:4600"
       AOGD_ADVERTISE: "http://cp1:4600"
+      AOGD_PROFILE: development
       AOGD_ALLOW_INSECURE_BIND: "1"
     ports: ["4601:4600"]
 
@@ -58,6 +59,7 @@ services:
       AOGD_DATA_DIR: "/tmp/aogd"
       AOGD_LISTEN: "0.0.0.0:4600"
       AOGD_ADVERTISE: "http://cp2:4600"
+      AOGD_PROFILE: development
       AOGD_ALLOW_INSECURE_BIND: "1"
 
   cp3:
@@ -67,6 +69,7 @@ services:
       AOGD_DATA_DIR: "/tmp/aogd"
       AOGD_LISTEN: "0.0.0.0:4600"
       AOGD_ADVERTISE: "http://cp3:4600"
+      AOGD_PROFILE: development
       AOGD_ALLOW_INSECURE_BIND: "1"
 
   cp4:
@@ -76,6 +79,7 @@ services:
       AOGD_DATA_DIR: "/tmp/aogd"
       AOGD_LISTEN: "0.0.0.0:4600"
       AOGD_ADVERTISE: "http://cp4:4600"
+      AOGD_PROFILE: development
       AOGD_ALLOW_INSECURE_BIND: "1"
 
   cp5:
@@ -85,6 +89,7 @@ services:
       AOGD_DATA_DIR: "/tmp/aogd"
       AOGD_LISTEN: "0.0.0.0:4600"
       AOGD_ADVERTISE: "http://cp5:4600"
+      AOGD_PROFILE: development
       AOGD_ALLOW_INSECURE_BIND: "1"
 
   cluster-init:

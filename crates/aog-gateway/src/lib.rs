@@ -15,6 +15,7 @@ pub mod app;
 pub mod http;
 pub mod meter;
 pub mod policy;
+pub mod posture;
 pub mod provider;
 pub mod recommend;
 pub mod route;

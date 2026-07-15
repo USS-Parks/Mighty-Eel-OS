@@ -45,8 +45,11 @@ pub(crate) fn build_http_client() -> reqwest::Client {
     reqwest::Client::builder()
         .connect_timeout(PROVIDER_CONNECT_TIMEOUT)
         .read_timeout(PROVIDER_READ_TIMEOUT)
+        // Never carry provider credentials across an upstream redirect. A
+        // configured base URL is the only authorized credential destination.
+        .redirect(reqwest::redirect::Policy::none())
         .build()
-        .expect("provider HTTP client config (timeouts only) is valid")
+        .expect("provider HTTP client config is valid")
 }
 
 /// A chat role in the neutral request model.

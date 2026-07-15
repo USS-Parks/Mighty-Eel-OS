@@ -1,13 +1,33 @@
-//! P1 — production startup posture for the `wsf-api` binary.
+//! Production startup posture for the `wsf-api` binary.
 //!
-//! The trust plane binds loopback by default; an operator widens `WSF_LISTEN`
-//! to a public interface only behind an authenticated ingress. This module is
-//! the enforcement: a **public (non-loopback) bind** must present a real
-//! workload-credential authority key *and* a hardened OpenBao/HMAC config, or
-//! the service refuses to start — it must never answer a public interface with
-//! the local-dev authenticator or a dev-fixture config.
+//! Production requirements apply on every bind, including loopback: hardened
+//! OpenBao/HMAC material, workload authentication, and mandatory revocation.
+//! The local-dev authenticator and fixture configuration are available only
+//! under an explicit development profile; an isolated non-loopback development
+//! bind requires a second explicit opt-in.
 
 use std::net::SocketAddr;
+
+/// Runtime posture. Missing or blank means production; development must be an
+/// explicit operator choice and is never inferred from loopback binding.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Profile {
+    Production,
+    Development,
+}
+
+impl Profile {
+    /// Parse `WSF_PROFILE` with a fail-safe production default.
+    pub fn parse(value: Option<&str>) -> Result<Self, String> {
+        match value.map(|v| v.trim().to_ascii_lowercase()).as_deref() {
+            None | Some("") | Some("production") | Some("prod") => Ok(Self::Production),
+            Some("development") | Some("dev") => Ok(Self::Development),
+            Some(other) => Err(format!(
+                "unrecognized WSF_PROFILE '{other}' (expected production | development)"
+            )),
+        }
+    }
+}
 
 /// True when any resolved bind address is non-loopback — i.e. reachable
 /// off-host (`0.0.0.0`, `::`, and any routable IP all qualify).
@@ -16,26 +36,34 @@ pub fn is_public_bind(addrs: &[SocketAddr]) -> bool {
     addrs.iter().any(|a| !a.ip().is_loopback())
 }
 
-/// Enforce the production startup posture for a resolved bind.
+/// Enforce the selected startup posture for a resolved bind.
 ///
-/// A loopback bind is unrestricted (the dev fallback stays host-only). A public
-/// bind must satisfy both:
-///   * [`wsf_hardening::assert_production_ready`] — no `http://` OpenBao, no dev
-///     root token, no weak/uniform subject-HMAC key; and
-///   * `has_workload_key` — a workload-credential authority key is configured,
-///     so the local-dev authenticator is not what answers a public interface.
+/// Production always requires [`wsf_hardening::assert_production_ready`], a
+/// workload authority key, and a wired revocation store. Development permits
+/// fixture configuration on loopback; a non-loopback bind additionally needs
+/// `allow_insecure_development_bind`.
 ///
 /// # Errors
-/// A human-readable reason when a public bind is missing the authority key or
-/// carries a dev-fixture config.
+/// A human-readable reason when the selected posture is incomplete or unsafe.
 pub fn enforce_startup_posture(
+    profile: Profile,
     public_bind: bool,
     has_workload_key: bool,
+    has_revocation_store: bool,
+    allow_insecure_development_bind: bool,
     cfg: &wsf_hardening::DeploymentConfig,
 ) -> Result<(), String> {
-    if !public_bind {
+    if profile == Profile::Development {
+        if public_bind && !allow_insecure_development_bind {
+            return Err(
+                "refusing non-loopback development bind: set WSF_ALLOW_INSECURE_BIND=1 only \
+                 for an isolated demo network"
+                    .to_string(),
+            );
+        }
         return Ok(());
     }
+
     if let Err(violations) = wsf_hardening::assert_production_ready(cfg) {
         let detail = violations
             .iter()
@@ -43,13 +71,20 @@ pub fn enforce_startup_posture(
             .collect::<Vec<_>>()
             .join("; ");
         return Err(format!(
-            "refusing public bind: production config not ready — {detail}"
+            "refusing production startup: production config not ready — {detail}"
         ));
     }
     if !has_workload_key {
         return Err(
-            "refusing public bind: WSF_WORKLOAD_AUTHORITY_KEY is required for a \
-             non-loopback bind (the local-dev authenticator must not serve a public interface)"
+            "refusing production startup: WSF_WORKLOAD_AUTHORITY_KEY is required; the \
+             local-dev authenticator is development-only"
+                .to_string(),
+        );
+    }
+    if !has_revocation_store {
+        return Err(
+            "refusing production startup: a mandatory revocation store must be wired into \
+             every privileged WSF service"
                 .to_string(),
         );
     }
@@ -88,39 +123,69 @@ mod tests {
     }
 
     #[test]
-    fn loopback_bind_is_unrestricted() {
-        // No key and a dev-ish config: a loopback bind still starts, because the
-        // dev fallback is only reachable from the host.
+    fn profile_defaults_to_production_and_development_is_explicit() {
+        assert_eq!(Profile::parse(None).unwrap(), Profile::Production);
+        assert_eq!(Profile::parse(Some("")).unwrap(), Profile::Production);
+        assert_eq!(
+            Profile::parse(Some("development")).unwrap(),
+            Profile::Development
+        );
+        assert!(Profile::parse(Some("demo-ish")).is_err());
+    }
+
+    #[test]
+    fn development_loopback_is_allowed_but_public_bind_needs_second_opt_in() {
         let cfg = DeploymentConfig {
             mode: DeployMode::Production,
             openbao_address: "http://127.0.0.1:8250".to_string(),
             openbao_token: "root".to_string(),
             subject_hmac_key: vec![7u8; 32],
         };
-        assert!(enforce_startup_posture(false, false, &cfg).is_ok());
+        assert!(
+            enforce_startup_posture(Profile::Development, false, false, false, false, &cfg).is_ok()
+        );
+        assert!(
+            enforce_startup_posture(Profile::Development, true, false, false, false, &cfg).is_err()
+        );
+        assert!(
+            enforce_startup_posture(Profile::Development, true, false, false, true, &cfg).is_ok()
+        );
     }
 
     #[test]
-    fn public_bind_without_workload_key_refuses() {
-        let err = enforce_startup_posture(true, false, &hardened()).unwrap_err();
+    fn production_loopback_without_workload_key_refuses() {
+        let err =
+            enforce_startup_posture(Profile::Production, false, false, true, true, &hardened())
+                .unwrap_err();
         assert!(err.contains("WSF_WORKLOAD_AUTHORITY_KEY"), "reason: {err}");
     }
 
     #[test]
-    fn public_bind_with_dev_fixtures_refuses() {
+    fn production_with_dev_fixtures_refuses() {
         let dev = DeploymentConfig {
             mode: DeployMode::Production,
             openbao_address: "http://openbao:8200".to_string(),
             openbao_token: "root".to_string(),
             subject_hmac_key: vec![7u8; 32],
         };
-        // Even with a key present, dev fixtures block a public bind.
-        let err = enforce_startup_posture(true, true, &dev).unwrap_err();
+        let err = enforce_startup_posture(Profile::Production, false, true, true, true, &dev)
+            .unwrap_err();
         assert!(err.contains("insecure_transport"), "reason: {err}");
     }
 
     #[test]
-    fn public_bind_hardened_with_key_starts() {
-        assert!(enforce_startup_posture(true, true, &hardened()).is_ok());
+    fn production_without_revocation_refuses_even_when_other_inputs_are_hardened() {
+        let err =
+            enforce_startup_posture(Profile::Production, false, true, false, true, &hardened())
+                .unwrap_err();
+        assert!(err.contains("mandatory revocation store"), "reason: {err}");
+    }
+
+    #[test]
+    fn production_hardened_with_key_and_revocation_starts() {
+        assert!(
+            enforce_startup_posture(Profile::Production, true, true, true, false, &hardened())
+                .is_ok()
+        );
     }
 }

@@ -11,6 +11,7 @@ use std::sync::Arc;
 
 use aog_gateway::app::{AppState, ModelMap, Target};
 use aog_gateway::policy::{Profile, resolve_mode};
+use aog_gateway::posture::{ProviderEndpoint, enforce_startup_posture};
 use aog_gateway::provider::Registry;
 use aog_gateway::provider::anthropic::AnthropicProvider;
 use aog_gateway::provider::openai::OpenAiProvider;
@@ -60,6 +61,40 @@ async fn run() -> Result<(), String> {
     let mode = resolve_mode(profile, std::env::var("AOG_MODE").ok().as_deref())
         .map_err(|e| e.to_string())?;
 
+    let revocation_path = env_or("AOG_REVOCATION_PATH", "kv/data/aog/revocation");
+    let local_base = env_or("AOG_LOCAL_BASE", "http://127.0.0.1:8000");
+    let openai_key = std::env::var("AOG_OPENAI_KEY")
+        .ok()
+        .filter(|key| !key.is_empty());
+    let openai_base = env_or("AOG_OPENAI_BASE", "https://api.openai.com");
+    let anthropic_key = std::env::var("AOG_ANTHROPIC_KEY")
+        .ok()
+        .filter(|key| !key.is_empty());
+    let anthropic_base = env_or("AOG_ANTHROPIC_BASE", "https://api.anthropic.com");
+    let mut provider_endpoints = vec![ProviderEndpoint {
+        name: "local",
+        base_url: &local_base,
+        credentialed: false,
+        local: true,
+    }];
+    if openai_key.is_some() {
+        provider_endpoints.push(ProviderEndpoint {
+            name: "openai",
+            base_url: &openai_base,
+            credentialed: true,
+            local: false,
+        });
+    }
+    if anthropic_key.is_some() {
+        provider_endpoints.push(ProviderEndpoint {
+            name: "anthropic",
+            base_url: &anthropic_base,
+            credentialed: true,
+            local: false,
+        });
+    }
+    enforce_startup_posture(profile, &revocation_path, &provider_endpoints)?;
+
     let addr = env("AOG_OPENBAO_ADDR")?;
     let role_id = env("AOG_OPENBAO_ROLE_ID")?;
     let secret_id = env("AOG_OPENBAO_SECRET_ID")?;
@@ -67,11 +102,10 @@ async fn run() -> Result<(), String> {
         .decode(env("AOG_TOKEN_ANCHOR")?)
         .map_err(|e| format!("AOG_TOKEN_ANCHOR not base64: {e}"))?;
     let vk_prefix = env_or("AOG_VIRTUAL_KEY_PREFIX", "kv/data/aog/virtual-keys");
-    let listen = env_or("AOG_LISTEN", "0.0.0.0:8080");
+    let listen = env_or("AOG_LISTEN", "127.0.0.1:8080");
 
     let openbao = OpenBaoAuth::new(OpenBaoConfig::new(&addr, role_id, secret_id))
         .map_err(|e| format!("openbao config: {e}"))?;
-    let revocation_path = env_or("AOG_REVOCATION_PATH", "kv/data/aog/revocation");
     let gateway = Arc::new(
         Gateway::new(
             openbao,
@@ -84,27 +118,20 @@ async fn run() -> Result<(), String> {
     );
 
     // Providers: always a local OpenAI-compatible backend; cloud providers when keyed.
-    let local_base = env_or("AOG_LOCAL_BASE", "http://mock-llm:8000");
     let mut registry = Registry::new();
     registry.register(Arc::new(OpenAiProvider::local(local_base)));
     let mut models = ModelMap::new()
         .route("demo", Target::new("local", "demo"))
         .default_target(Target::new("local", "demo"));
 
-    if let Ok(key) = std::env::var("AOG_OPENAI_KEY")
-        && !key.is_empty()
-    {
-        let base = env_or("AOG_OPENAI_BASE", "https://api.openai.com");
-        registry.register(Arc::new(OpenAiProvider::new("openai", base, key)));
+    if let Some(key) = openai_key {
+        registry.register(Arc::new(OpenAiProvider::new("openai", openai_base, key)));
         models = models
             .route("gpt-4o-mini", Target::new("openai", "gpt-4o-mini"))
             .route("gpt-4o", Target::new("openai", "gpt-4o"));
     }
-    if let Ok(key) = std::env::var("AOG_ANTHROPIC_KEY")
-        && !key.is_empty()
-    {
-        let base = env_or("AOG_ANTHROPIC_BASE", "https://api.anthropic.com");
-        registry.register(Arc::new(AnthropicProvider::new(base, key)));
+    if let Some(key) = anthropic_key {
+        registry.register(Arc::new(AnthropicProvider::new(anthropic_base, key)));
         models = models.route(
             "claude-3-5-sonnet",
             Target::new("anthropic", "claude-3-5-sonnet"),
