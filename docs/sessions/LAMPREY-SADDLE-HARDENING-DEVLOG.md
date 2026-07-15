@@ -15,7 +15,7 @@ Every entry records the vulnerable path/invariant, legitimate behavior, changed 
 
 ### LSH-00 — Execution lane bootstrap and drift check
 
-Status: **PASS** (commit pending M0 checkpoint).
+Status: **PASS** (implementation commit `c6282ab9c5933f4b5a014a49449b02f77dd8e9f4`).
 
 Objective: create an isolated execution lane at the exact assessed revision and preserve the interim scan evidence before implementation.
 
@@ -54,7 +54,7 @@ Gate result: tracked revision matches the assessment; no relevant source drift e
 
 ### LSH-01 — Canonical finding and regression registry
 
-Status: **PASS** (commit pending M0 checkpoint).
+Status: **PASS** (implementation commit `c6282ab9c5933f4b5a014a49449b02f77dd8e9f4`).
 
 The machine-readable register imports all 81 raw instances through the frozen evidence root and maps them exactly once to 29 confirmed families or 10 deferred families. Each confirmed family has a stable regression ID and prompt owner; each deferred family has a reachability question and prompt owner.
 
@@ -64,7 +64,7 @@ Gate: `python .integrity/scripts/lamprey-finding-register-check.py` PASS — 81 
 
 ### LSH-02 — Immediate production containment
 
-Status: **PASS** (commit pending M0 checkpoint).
+Status: **PASS** (implementation commit `c6282ab9c5933f4b5a014a49449b02f77dd8e9f4`).
 
 Containment now fails before listener bind at the production startup seams:
 
@@ -93,7 +93,7 @@ Residual risk: the underlying admin authorization, Raft mTLS, and mandatory shar
 
 ### LSH-03 — Baseline and adversarial fixture freeze
 
-Status: **PASS** (commit pending M0 checkpoint).
+Status: **PASS** (implementation commit `c6282ab9c5933f4b5a014a49449b02f77dd8e9f4`).
 
 `test-evidence/lamprey-saddle-hardening/M0/regression-plan.json` maps all 29 confirmed families to a unique canonical regression ID, narrow boundary, fixture, execution mode, vulnerable red condition, and repaired green condition. Destructive mutation and external-state PoCs are request-fixture-only until an owning prompt creates disposable isolated state. All 10 deferred families have argv-form read-only `rg` reachability questions.
 
@@ -105,4 +105,4 @@ Gates:
 - `cargo test -p aog-wire --test mtls` with that directory prepended to the command-local `PATH` — PASS, 2/2.
 - Full `cargo test --workspace` rerun with the same command-local prerequisite — PASS, exit 0, including all workspace and doctest lanes (repository-declared ignored/nightly/SLO tests remained ignored by the standard command).
 
-M0 acceptance: **PASS**. Containment is active, all frozen evidence and plans are machine-reproducible, focused lint/tests pass, and the standard full workspace gate passes when its existing OpenSSL prerequisite is supplied. No files are staged and no commit exists; M0 is now stopped at its mandatory commit-authorization checkpoint.
+M0 acceptance: **PASS**. Containment is active, all frozen evidence and plans are machine-reproducible, focused lint/tests pass, and the standard full workspace gate passes when its existing OpenSSL prerequisite is supplied. Implementation and evidence are committed as `c6282ab9c5933f4b5a014a49449b02f77dd8e9f4`; this DEVLOG SHA update is the follow-up metadata commit.
