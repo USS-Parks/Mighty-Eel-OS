@@ -1337,3 +1337,74 @@ the canonical footer. Both outgoing commits passed exact-footer and signature
 verification; the pre-push full-tree no-slop and 79-route policy gates passed;
 and `origin/main` advanced from `f7ee236` through `16e0c7e` on 2026-07-16. This
 final ledger update records the confirmed T4 remote checkpoint.
+
+### LSH-T5 — Authenticated approval decisions
+
+Status: **PASS** (implementation commit pending).
+
+The prior inbox accepted a free-form actor string, keyed pending work directly
+by caller-supplied call id, silently replaced an existing pending request on id
+collision, had no expiry or nonce, and carried neither tenant nor immutable
+argument binding. The toolproxy trusted the returned actor and wrote only that
+string to its receipt. Actor spoofing, replay, argument substitution,
+cross-tenant approval, and duplicate-id replacement were therefore not
+structurally excluded.
+
+Approval submission now accepts untrusted request material but derives the
+canonical arguments digest, monotonic server sequence, nonce, approval id,
+request time, and absolute expiry inside the inbox. Duplicate call ids receive
+independent nonce-derived approval ids and cannot overwrite one another.
+Tickets time out against the absolute expiry, atomically remove the exact
+nonce-bound pending item, and append a fail-closed expiry decision.
+
+Approve and deny operations now require a `VerifiedRequestContext` established
+for `AogUpdate` on the exact `approval/<id>` resource. The authenticated
+principal must carry `aog:approve` and match the pending tenant. A successful
+decision yields one `ApprovalGrant` binding approval id, authenticated actor,
+role, tenant, call id, canonical arguments digest, nonce, and expiry. Consuming
+the pending entry makes replay return unknown rather than re-authorize.
+
+The toolproxy independently revalidates every returned grant immediately before
+execution. Wrong role, tenant, call id, arguments digest, missing binding, bad
+expiry, or expired decision fails closed without entering the executor. The
+complete sanitized grant is included in the tool receipt chain, while the
+approval inbox decision chain carries the same binding metadata.
+
+Changed files:
+
+- `Cargo.lock`;
+- `crates/aog-approvals/Cargo.toml`;
+- `crates/aog-approvals/src/lib.rs`;
+- `crates/aog-conformance/tests/robustness_conformance.rs`;
+- `crates/aog-toolproxy/src/lib.rs`;
+- `crates/aog-toolproxy/src/receipt.rs`; and
+- this DEVLOG.
+
+Gates:
+
+- `cargo test -p aog-approvals
+  tests::reg_lsh_t5_authenticated_single_use_approval_decisions -- --exact` —
+  PASS, 1/1 authenticated actor, cross-tenant, duplicate-id, replay, nonce, and
+  expiry regression;
+- `cargo test -p aog-toolproxy
+  tests::reg_lsh_t5_invalid_approval_bindings_fail_closed -- --exact` — PASS,
+  1/1 role/tenant/call/arguments/expiry matrix with zero executor entries;
+- `cargo test -p aog-toolproxy -p aog-approvals` — PASS: 62 toolproxy tests,
+  six approval tests, and doc tests;
+- `cargo test -p aog-conformance --test robustness_conformance` — PASS, 11/11;
+- `cargo test -p aog-controller --test managed_toolproxy` — PASS in the current
+  prerequisite-free lane;
+- `cargo clippy -p aog-toolproxy -p aog-approvals -p aog-conformance -p
+  aog-controller --all-targets -- -D warnings -A clippy::pedantic` — PASS;
+- `cargo fmt --check` — PASS; and
+- `git diff --check` — PASS.
+
+Closure statement: T5's local approval boundary now authenticates the decider
+and makes every positive decision exact-call, exact-arguments, tenant-bound,
+expiring, nonce-bearing, and single-use in both receipt chains. LSH-T6 remains
+responsible for the real production caller/executor/credential/approval live
+gate. LSH-T6 is the next sequential prompt and the final prompt in M3.
+
+Commit state: implementation and prompt evidence are ready for the authorized
+commit/push sequence; exact SHAs and the remote checkpoint will be recorded in
+the closeout commit.

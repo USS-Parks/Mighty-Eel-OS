@@ -9,6 +9,7 @@ description = "AOG approval inbox: side-effecting tool calls pause for human app
 
 [dependencies]
 fabric-proof = { path = "../fabric-proof" }
+fabric-contracts = { path = "../fabric-contracts" }
 aog-toolproxy = { path = "../aog-toolproxy" }
 mai-agent = { path = "../../mai-agent" }
 serde = { workspace = true }

@@ -24,9 +24,11 @@ use std::time::{Duration, SystemTime};
 
 use async_trait::async_trait;
 use fabric_contracts::{Budget, VerifiedRequestContext};
+use fabric_proof::canonical_hash;
 use fabric_token::spend::{Reservation, ReservationKey, ReservationLedger, Spent};
 use mai_agent::ToolRegistry;
 use mai_agent::types::{AgentError, ToolAccessRole, ToolCall, ToolDefinition, ToolResult};
+use serde::Serialize;
 
 use crate::guard::Guardrails;
 use crate::mission::{Mission, MissionContract};
@@ -150,10 +152,65 @@ impl Drop for CredentialLease<'_> {
     }
 }
 
+/// Authenticated role required to decide a tool approval.
+pub const APPROVER_ROLE: &str = "aog:approve";
+
+/// Single-use approval evidence returned by an authenticated approval gate. The
+/// proxy revalidates every binding against the call immediately before execution.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct ApprovalGrant {
+    pub approval_id: String,
+    pub actor_id: String,
+    pub actor_role: String,
+    pub tenant_id: String,
+    pub call_id: String,
+    pub args_digest: String,
+    pub nonce: String,
+    pub expires_at: String,
+}
+
+/// Canonical digest of the immutable tool arguments an approval authorizes.
+#[must_use]
+pub fn approval_args_digest(call: &ToolCall) -> String {
+    hex::encode(canonical_hash(&call.arguments).expect("tool arguments canonicalize"))
+}
+
+fn validate_approval_grant(
+    grant: &ApprovalGrant,
+    call: &ToolCall,
+    ctx: &InvokeContext,
+) -> Result<(), String> {
+    if grant.approval_id.trim().is_empty()
+        || grant.actor_id.trim().is_empty()
+        || grant.nonce.trim().is_empty()
+    {
+        return Err("approval binding is incomplete".to_string());
+    }
+    if grant.actor_role != APPROVER_ROLE {
+        return Err("approval actor lacks the required role".to_string());
+    }
+    if Some(grant.tenant_id.as_str()) != ctx.tenant_id() {
+        return Err("approval tenant does not match the authenticated call".to_string());
+    }
+    if grant.call_id != call.call_id {
+        return Err("approval call id does not match the pending call".to_string());
+    }
+    if grant.args_digest != approval_args_digest(call) {
+        return Err("approval arguments digest does not match the pending call".to_string());
+    }
+    let expires_at = chrono::DateTime::parse_from_rfc3339(&grant.expires_at)
+        .map_err(|_| "approval expiry is invalid".to_string())?
+        .with_timezone(&chrono::Utc);
+    if expires_at <= chrono::Utc::now() {
+        return Err("approval decision expired before execution".to_string());
+    }
+    Ok(())
+}
+
 /// The seam to the approval inbox (aog-approvals): a side-effecting (`has_side_effects`)
 /// call pauses here for a human decision. Implementations **block** until approved or
-/// denied. `Ok(actor)` proceeds (recording who approved); `Err(reason)` blocks the
-/// call — it never executes. This is the mechanism T4 leans on: a mutating call
+/// denied. `Ok(grant)` proceeds only after the proxy validates its authenticated
+/// bindings; `Err(reason)` blocks the call — it never executes. This is the mechanism T4 leans on: a mutating call
 /// triggered by untrusted tool output must pass through this gate, not auto-run.
 #[async_trait]
 pub trait ApprovalGate: Send + Sync {
@@ -164,7 +221,7 @@ pub trait ApprovalGate: Send + Sync {
         call: &ToolCall,
         ctx: &InvokeContext,
         diff_preview: &str,
-    ) -> Result<String, String>;
+    ) -> Result<ApprovalGrant, String>;
 }
 
 /// The seam an agent / L4 implements to actually run a validated tool call. AOG
@@ -282,6 +339,14 @@ impl InvokeContext {
         self.canonical_system.as_deref()
     }
 
+    /// Authenticated tenant derived from verified request authority, when present.
+    #[must_use]
+    pub fn tenant_id(&self) -> Option<&str> {
+        self.authority
+            .as_ref()
+            .map(|authority| authority.tenant_id.as_str())
+    }
+
     fn reservation_key(&self, mission_id: Option<String>) -> Option<ReservationKey> {
         self.authority.as_ref().map(|authority| ReservationKey {
             tenant_id: authority.tenant_id.clone(),
@@ -325,6 +390,7 @@ pub struct ToolProxy {
 struct Governance {
     approval_required: bool,
     approved_by: Option<String>,
+    approval: Option<ApprovalGrant>,
     redacted_spans: u32,
     redaction_kinds: Vec<String>,
     mission_id: Option<String>,
@@ -568,13 +634,37 @@ impl ToolProxy {
         let needs_review = tool.has_side_effects || mission_deviation.is_some();
         let mut approval_required = false;
         let mut approved_by = None;
+        let mut approval = None;
         if needs_review {
             match &self.approvals {
                 Some(gate) => {
                     approval_required = true;
                     let preview = review_preview(&tool, call, mission_deviation.as_deref());
                     match gate.review(&tool, call, ctx, &preview).await {
-                        Ok(actor) => approved_by = Some(actor),
+                        Ok(grant) => match validate_approval_grant(&grant, call, ctx) {
+                            Ok(()) => {
+                                approved_by = Some(grant.actor_id.clone());
+                                approval = Some(grant);
+                            }
+                            Err(reason) => {
+                                let blocked = blocked_result(call, &reason);
+                                self.append_receipt(
+                                    call,
+                                    ctx,
+                                    &tool,
+                                    &blocked,
+                                    None,
+                                    Governance {
+                                        approval_required: true,
+                                        mission_id,
+                                        out_of_contract,
+                                        provenance_source: provenance_source.clone(),
+                                        ..Governance::default()
+                                    },
+                                );
+                                return Ok(blocked);
+                            }
+                        },
                         Err(reason) => {
                             let blocked = blocked_result(call, &reason);
                             self.append_receipt(
@@ -743,6 +833,7 @@ impl ToolProxy {
             Governance {
                 approval_required,
                 approved_by,
+                approval,
                 redacted_spans,
                 redaction_kinds,
                 mission_id,
@@ -873,6 +964,17 @@ impl ToolProxy {
             .approved_by
             .as_deref()
             .map(|actor| self.safe_receipt_text(actor));
+        let safe_approval = gov.approval.clone().map(|mut approval| {
+            approval.approval_id = self.safe_receipt_text(&approval.approval_id);
+            approval.actor_id = self.safe_receipt_text(&approval.actor_id);
+            approval.actor_role = self.safe_receipt_text(&approval.actor_role);
+            approval.tenant_id = self.safe_receipt_text(&approval.tenant_id);
+            approval.call_id = self.safe_receipt_text(&approval.call_id);
+            approval.args_digest = self.safe_receipt_text(&approval.args_digest);
+            approval.nonce = self.safe_receipt_text(&approval.nonce);
+            approval.expires_at = self.safe_receipt_text(&approval.expires_at);
+            approval
+        });
         let safe_mission_id = gov
             .mission_id
             .as_deref()
@@ -951,6 +1053,7 @@ impl ToolProxy {
                 cred_ttl_ms,
                 approval_required: gov.approval_required,
                 approved_by: safe_approved_by,
+                approval: safe_approval,
                 untrusted_context: true,
                 provenance_source: safe_provenance_source,
                 redacted_spans: gov.redacted_spans,
@@ -1128,6 +1231,19 @@ mod tests {
             root_lineage: "root-a".to_string(),
         });
         ctx
+    }
+
+    fn test_approval(call: &ToolCall, ctx: &InvokeContext, actor: &str) -> ApprovalGrant {
+        ApprovalGrant {
+            approval_id: format!("approval-{}", call.call_id),
+            actor_id: actor.to_string(),
+            actor_role: APPROVER_ROLE.to_string(),
+            tenant_id: ctx.tenant_id().unwrap().to_string(),
+            call_id: call.call_id.clone(),
+            args_digest: approval_args_digest(call),
+            nonce: format!("nonce-{}", call.call_id),
+            expires_at: (chrono::Utc::now() + chrono::TimeDelta::minutes(5)).to_rfc3339(),
+        }
     }
 
     #[test]
@@ -1707,12 +1823,12 @@ mod tests {
         async fn review(
             &self,
             _tool: &ToolDefinition,
-            _call: &ToolCall,
-            _ctx: &InvokeContext,
+            call: &ToolCall,
+            ctx: &InvokeContext,
             _preview: &str,
-        ) -> Result<String, String> {
+        ) -> Result<ApprovalGrant, String> {
             if self.approve {
-                Ok(self.actor.clone())
+                Ok(test_approval(call, ctx, &self.actor))
             } else {
                 Err("denied by policy".to_string())
             }
@@ -1789,6 +1905,71 @@ mod tests {
     }
 
     // ── T4: provenance tagging (the agentjacking defense) ────────────────
+
+    #[derive(Clone, Copy)]
+    enum InvalidApprovalBinding {
+        Role,
+        Tenant,
+        Call,
+        Arguments,
+        Expiry,
+    }
+
+    struct InvalidApprovalGate(InvalidApprovalBinding);
+
+    #[async_trait]
+    impl ApprovalGate for InvalidApprovalGate {
+        async fn review(
+            &self,
+            _tool: &ToolDefinition,
+            call: &ToolCall,
+            ctx: &InvokeContext,
+            _preview: &str,
+        ) -> Result<ApprovalGrant, String> {
+            let mut grant = test_approval(call, ctx, "mallory");
+            match self.0 {
+                InvalidApprovalBinding::Role => grant.actor_role = "viewer".to_string(),
+                InvalidApprovalBinding::Tenant => grant.tenant_id = "tenant-b".to_string(),
+                InvalidApprovalBinding::Call => grant.call_id = "different-call".to_string(),
+                InvalidApprovalBinding::Arguments => grant.args_digest = "00".repeat(32),
+                InvalidApprovalBinding::Expiry => {
+                    grant.expires_at =
+                        (chrono::Utc::now() - chrono::TimeDelta::seconds(1)).to_rfc3339();
+                }
+            }
+            Ok(grant)
+        }
+    }
+
+    #[tokio::test]
+    async fn reg_lsh_t5_invalid_approval_bindings_fail_closed() {
+        for invalid in [
+            InvalidApprovalBinding::Role,
+            InvalidApprovalBinding::Tenant,
+            InvalidApprovalBinding::Call,
+            InvalidApprovalBinding::Arguments,
+            InvalidApprovalBinding::Expiry,
+        ] {
+            let executions = Arc::new(AtomicUsize::new(0));
+            let proxy = ToolProxy::new().with_approvals(Box::new(InvalidApprovalGate(invalid)));
+            proxy
+                .register(tool("write.record", true, ToolAccessRole::Parent))
+                .unwrap();
+            let result = proxy
+                .invoke(
+                    &call("c1", "write.record"),
+                    &ctx(ToolAccessRole::Parent),
+                    &CountingExecutor(Arc::clone(&executions)),
+                )
+                .await
+                .unwrap();
+            assert!(!result.success);
+            assert_eq!(executions.load(Ordering::SeqCst), 0);
+            let receipt = &proxy.receipts()[0];
+            assert!(receipt.approval_required);
+            assert!(receipt.approval.is_none());
+        }
+    }
 
     #[tokio::test]
     async fn reg_lsf_026_server_provenance_blocks_injected_mutation() {
@@ -1882,12 +2063,12 @@ mod tests {
             async fn review(
                 &self,
                 _t: &ToolDefinition,
-                _c: &ToolCall,
-                _ctx: &InvokeContext,
+                call: &ToolCall,
+                ctx: &InvokeContext,
                 _p: &str,
-            ) -> Result<String, String> {
+            ) -> Result<ApprovalGrant, String> {
                 *self.called.lock().unwrap() = true;
-                Ok("alice".to_string())
+                Ok(test_approval(call, ctx, "alice"))
             }
         }
 
@@ -2345,13 +2526,13 @@ mod tests {
         async fn review(
             &self,
             _tool: &ToolDefinition,
-            _call: &ToolCall,
-            _ctx: &InvokeContext,
+            call: &ToolCall,
+            ctx: &InvokeContext,
             _preview: &str,
-        ) -> Result<String, String> {
+        ) -> Result<ApprovalGrant, String> {
             self.entered.notify_one();
             self.release.notified().await;
-            Ok("operator".to_string())
+            Ok(test_approval(call, ctx, "operator"))
         }
     }
 
