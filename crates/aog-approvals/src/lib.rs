@@ -422,13 +422,7 @@ mod tests {
                 chain_step: 0,
                 parallel_group: None,
             };
-            let ctx = InvokeContext {
-                session_id: "s1".to_string(),
-                profile_id: "tok_1".to_string(),
-                role: ToolAccessRole::Parent,
-                system: None,
-                estimated_cost_cents: 0,
-            };
+            let ctx = InvokeContext::unverified("s1", "tok_1", ToolAccessRole::Parent);
             p.invoke(&call, &ctx, &Exec).await
         });
 

@@ -312,13 +312,7 @@ fn echo_call(call_id: &str) -> ToolCall {
 }
 
 fn invoke_ctx() -> InvokeContext {
-    InvokeContext {
-        session_id: "x3-session".to_string(),
-        profile_id: "tok_x3".to_string(),
-        role: ToolAccessRole::Guest,
-        system: None,
-        estimated_cost_cents: 0,
-    }
+    InvokeContext::unverified("x3-session", "tok_x3", ToolAccessRole::Guest)
 }
 
 #[tokio::test]

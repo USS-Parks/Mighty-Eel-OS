@@ -18,15 +18,17 @@ pub mod receipt;
 pub mod scan;
 pub mod session;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::Duration;
 
 use async_trait::async_trait;
+use fabric_contracts::{Budget, VerifiedRequestContext};
+use fabric_token::spend::{Reservation, ReservationKey, ReservationLedger, Spent};
 use mai_agent::ToolRegistry;
 use mai_agent::types::{AgentError, ToolAccessRole, ToolCall, ToolDefinition, ToolResult};
 
-use crate::guard::{Guardrails, TaskUsage};
+use crate::guard::Guardrails;
 use crate::mission::{Mission, MissionContract};
 use crate::receipt::{ResultProvenanceBinding, ToolReceipt, ToolReceiptChain};
 use crate::scan::EgressScanner;
@@ -137,12 +139,84 @@ pub struct InvokeContext {
     pub profile_id: String,
     /// The caller's role (checked against the tool's `required_role`).
     pub role: ToolAccessRole,
-    /// T6: the target system this call touches, matched against the mission
-    /// contract's `allowed_systems`. `None` = the call declares no system.
-    pub system: Option<String>,
+    authority: Option<AuthorityBinding>,
+    canonical_system: Option<String>,
     /// T6: the caller's declared cost for this call in cents, for mission spend
     /// ceilings. `0` when unpriced.
     pub estimated_cost_cents: u64,
+}
+
+#[derive(Debug, Clone)]
+struct AuthorityBinding {
+    tenant_id: String,
+    root_lineage: String,
+}
+
+impl InvokeContext {
+    /// Construct an invocation without authenticated lineage or a canonical
+    /// target. Such a context remains usable for unconstrained read-only tools,
+    /// but cannot bypass mission/operator caps or system policy.
+    #[must_use]
+    pub fn unverified(
+        session_id: impl Into<String>,
+        profile_id: impl Into<String>,
+        role: ToolAccessRole,
+    ) -> Self {
+        Self {
+            session_id: session_id.into(),
+            profile_id: profile_id.into(),
+            role,
+            authority: None,
+            canonical_system: None,
+            estimated_cost_cents: 0,
+        }
+    }
+
+    /// Construct from the authenticated principal and final canonical resource
+    /// established by server routing. Token-derived principals carry the
+    /// immutable root lineage used by atomic mission and guard reservations.
+    #[must_use]
+    pub fn from_verified_request(
+        session_id: impl Into<String>,
+        role: ToolAccessRole,
+        request: &VerifiedRequestContext,
+    ) -> Self {
+        let principal = request.principal();
+        Self {
+            session_id: session_id.into(),
+            profile_id: principal.principal_id.clone(),
+            role,
+            authority: principal
+                .token_lineage
+                .as_ref()
+                .map(|root_lineage| AuthorityBinding {
+                    tenant_id: principal.tenant_id.clone(),
+                    root_lineage: root_lineage.clone(),
+                }),
+            canonical_system: Some(request.resource().name().to_owned()),
+            estimated_cost_cents: 0,
+        }
+    }
+
+    #[must_use]
+    pub fn with_estimated_cost_cents(mut self, cents: u64) -> Self {
+        self.estimated_cost_cents = cents;
+        self
+    }
+
+    #[must_use]
+    pub fn system(&self) -> Option<&str> {
+        self.canonical_system.as_deref()
+    }
+
+    fn reservation_key(&self, mission_id: Option<String>) -> Option<ReservationKey> {
+        self.authority.as_ref().map(|authority| ReservationKey {
+            tenant_id: authority.tenant_id.clone(),
+            root_lineage: authority.root_lineage.clone(),
+            mission_id,
+            system: self.canonical_system.clone(),
+        })
+    }
 }
 
 /// The governed tool proxy. Cheap to share behind an `Arc` — registration and
@@ -156,13 +230,17 @@ pub struct ToolProxy {
     /// The active mission contract (T6), if any — the declared scope this proxy
     /// holds calls to. `None` = unconstrained (T1–T5 behaviour).
     mission: Option<Mutex<Mission>>,
+    /// LSH-T2 atomic A4 reservations for mission call/spend ceilings.
+    mission_reservations: ReservationLedger,
     /// The session transcript (T7), if attached — the full agent-loop ledger this
     /// proxy mirrors every brokered call into.
     session: Option<Arc<Mutex<SessionRecord>>>,
     /// Operator guardrails (T8) — hard limits applied to every call.
     guardrails: Guardrails,
-    /// Per-task (session) usage the T8 blast-radius caps are measured against.
-    task_usage: Mutex<BTreeMap<String, TaskUsage>>,
+    /// LSH-T2 A4 ledgers for operator call and distinct-system reservations.
+    guard_call_reservations: ReservationLedger,
+    guard_system_reservations: ReservationLedger,
+    guard_systems: Mutex<HashMap<ReservationKey, BTreeSet<String>>>,
     /// LSH-T1 server-owned result lineage, keyed by session. Only completed proxy
     /// receipts populate this map; caller metadata can neither mint nor clear it.
     result_provenance: Mutex<BTreeMap<String, ResultProvenanceBinding>>,
@@ -182,6 +260,11 @@ struct Governance {
     provenance_source: Option<ResultProvenanceBinding>,
 }
 
+struct GuardReservations {
+    call: Option<Reservation>,
+    system: Option<(Reservation, ReservationKey, String)>,
+}
+
 impl Default for ToolProxy {
     fn default() -> Self {
         Self::new()
@@ -198,9 +281,12 @@ impl ToolProxy {
             approvals: None,
             scanner: EgressScanner::baseline(),
             mission: None,
+            mission_reservations: ReservationLedger::new(),
             session: None,
             guardrails: Guardrails::new(),
-            task_usage: Mutex::new(BTreeMap::new()),
+            guard_call_reservations: ReservationLedger::new(),
+            guard_system_reservations: ReservationLedger::new(),
+            guard_systems: Mutex::new(HashMap::new()),
             result_provenance: Mutex::new(BTreeMap::new()),
         }
     }
@@ -300,9 +386,7 @@ impl ToolProxy {
         // blast-radius) — hard limits applied before any mission / approval logic.
         // A trip blocks outright (no escalation) and is receipted.
         let guardrail_trip = if self.guardrails.is_active() {
-            let mut usage = self.task_usage.lock().expect("task usage lock");
-            let entry = task_usage_entry(&mut usage, &ctx.session_id);
-            self.guardrails.check(call, ctx, entry)
+            self.guardrails.check(call, ctx)
         } else {
             None
         };
@@ -351,6 +435,58 @@ impl ToolProxy {
             })
             .cloned();
         let provenance = Provenance::Untrusted;
+
+        // LSH-T2: reserve mission call/spend authority before any asynchronous
+        // approval. Concurrent calls therefore observe each other's in-flight
+        // reservations and cannot all pass the old check-then-record gap.
+        let mission_reservation = match &self.mission {
+            Some(mission) => match mission
+                .lock()
+                .expect("mission lock")
+                .reserve(&self.mission_reservations, ctx)
+            {
+                Ok(reservation) => reservation,
+                Err(reason) => {
+                    let blocked = blocked_result(call, &reason);
+                    self.append_receipt(
+                        call,
+                        ctx,
+                        &tool,
+                        &blocked,
+                        None,
+                        Governance {
+                            mission_id,
+                            out_of_contract: true,
+                            provenance_source,
+                            ..Governance::default()
+                        },
+                    );
+                    return Ok(blocked);
+                }
+            },
+            None => None,
+        };
+
+        let guard_reservations = match self.reserve_guard(ctx, mission_id.clone()) {
+            Ok(reservations) => reservations,
+            Err(reason) => {
+                let blocked = blocked_result(call, &reason);
+                self.append_receipt(
+                    call,
+                    ctx,
+                    &tool,
+                    &blocked,
+                    None,
+                    Governance {
+                        mission_id,
+                        guardrail_tripped: true,
+                        provenance_source,
+                        ..Governance::default()
+                    },
+                );
+                return Ok(blocked);
+            }
+        };
 
         // A call is routed to a human when it is side-effecting (T3) OR it deviates
         // from the mission contract (T6). Without an inbox, every mutation is
@@ -413,16 +549,43 @@ impl ToolProxy {
             }
         }
 
-        // Record the admitted call against the mission tally (T6) — it consumed a
-        // call (and any declared spend) whether it ultimately succeeds or fails.
-        if let Some(m) = &self.mission {
-            m.lock().expect("mission lock").record(ctx);
+        // Commit the authority reserved before review. Denial/early return drops
+        // the reservation and releases it automatically.
+        if self.commit_guard(guard_reservations).is_err() {
+            let blocked = blocked_result(call, "guard reservation commit failed");
+            self.append_receipt(
+                call,
+                ctx,
+                &tool,
+                &blocked,
+                None,
+                Governance {
+                    mission_id,
+                    guardrail_tripped: true,
+                    provenance_source,
+                    ..Governance::default()
+                },
+            );
+            return Ok(blocked);
         }
-
-        // Record the admitted call against the task's blast-radius usage (T8).
-        if self.guardrails.is_active() {
-            let mut usage = self.task_usage.lock().expect("task usage lock");
-            task_usage_entry(&mut usage, &ctx.session_id).record(ctx);
+        if let Some(reservation) = mission_reservation
+            && reservation.commit().is_err()
+        {
+            let blocked = blocked_result(call, "mission reservation commit failed");
+            self.append_receipt(
+                call,
+                ctx,
+                &tool,
+                &blocked,
+                None,
+                Governance {
+                    mission_id,
+                    out_of_contract: true,
+                    provenance_source,
+                    ..Governance::default()
+                },
+            );
+            return Ok(blocked);
         }
 
         // Mint the per-call credential (T2), if a minter is configured. It lives only
@@ -474,6 +637,96 @@ impl ToolProxy {
             },
         );
         Ok(result)
+    }
+
+    fn reserve_guard(
+        &self,
+        ctx: &InvokeContext,
+        mission_id: Option<String>,
+    ) -> Result<GuardReservations, String> {
+        let caps_active = self.guardrails.max_calls_per_task.is_some()
+            || self.guardrails.max_systems_per_task.is_some();
+        if !caps_active {
+            return Ok(GuardReservations {
+                call: None,
+                system: None,
+            });
+        }
+        let mut key = ctx.reservation_key(mission_id).ok_or_else(|| {
+            "blast-radius: authenticated tenant/root lineage is required".to_string()
+        })?;
+        key.system = None;
+
+        let call = if let Some(max) = self.guardrails.max_calls_per_task {
+            self.guard_call_reservations
+                .reserve(
+                    key.clone(),
+                    &Budget {
+                        tool_call_cap: max,
+                        ..Budget::default()
+                    },
+                    Spent {
+                        tool_calls: 1,
+                        ..Spent::default()
+                    },
+                )
+                .map(Some)
+                .map_err(|_| format!("blast-radius: root-lineage call cap {max} reached"))?
+        } else {
+            None
+        };
+
+        let system = if let Some(max) = self.guardrails.max_systems_per_task {
+            let system = ctx
+                .system()
+                .ok_or_else(|| "blast-radius: canonical target system is required".to_string())?
+                .to_owned();
+            let known = self
+                .guard_systems
+                .lock()
+                .expect("guard systems lock")
+                .get(&key)
+                .is_some_and(|systems| systems.contains(&system));
+            if known {
+                None
+            } else {
+                let reservation = self
+                    .guard_system_reservations
+                    .reserve(
+                        key.clone(),
+                        &Budget {
+                            tool_call_cap: max,
+                            ..Budget::default()
+                        },
+                        Spent {
+                            tool_calls: 1,
+                            ..Spent::default()
+                        },
+                    )
+                    .map_err(|_| format!("blast-radius: root-lineage system cap {max} reached"))?;
+                Some((reservation, key, system))
+            }
+        } else {
+            None
+        };
+
+        Ok(GuardReservations { call, system })
+    }
+
+    fn commit_guard(&self, reservations: GuardReservations) -> Result<(), ()> {
+        if let Some(call) = reservations.call {
+            call.commit().map_err(|_| ())?;
+        }
+        if let Some((system_reservation, key, system)) = reservations.system {
+            system_reservation.commit().map_err(|_| ())?;
+            self.guard_systems
+                .lock()
+                .expect("guard systems lock")
+                .entry(key)
+                .or_default()
+                .insert(system);
+        }
+        Ok(())
     }
 
     fn append_receipt(
@@ -654,33 +907,22 @@ fn timed_out_result(call: &ToolCall, timeout: Duration) -> ToolResult {
     }
 }
 
-/// Cap on distinct sessions tracked for the T8 blast-radius tally. Bounds memory
-/// against a session-id flood (audit D6); at the cap, admitting a new session
-/// evicts one existing entry (a rare, attack-only tally reset — far cheaper than
-/// an unbounded map).
+/// Cap on server-owned result provenance entries. At the cap, a new session
+/// evicts one entry rather than growing the map without bound.
 const MAX_TRACKED_SESSIONS: usize = 4096;
-
-/// Get (or create) the usage entry for `session_id`, first evicting one tracked
-/// session if the map is at [`MAX_TRACKED_SESSIONS`] and this session is new.
-fn task_usage_entry<'a>(
-    usage: &'a mut BTreeMap<String, TaskUsage>,
-    session_id: &str,
-) -> &'a mut TaskUsage {
-    if usage.len() >= MAX_TRACKED_SESSIONS
-        && !usage.contains_key(session_id)
-        && let Some(evict) = usage.keys().next().cloned()
-    {
-        usage.remove(&evict);
-    }
-    usage.entry(session_id.to_string()).or_default()
-}
 
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::Duration;
 
+    use fabric_contracts::{
+        Audience, AuthStrength, AuthenticatedFacts, CanonicalResource, IdentityKind,
+        RequestOperation, WsfPrincipal,
+    };
     use mai_agent::types::{ToolAccessRole, ToolCall, ToolDefinition, ToolResult};
+    use tokio::sync::Notify;
 
     use super::*;
 
@@ -731,13 +973,46 @@ mod tests {
     }
 
     fn ctx(role: ToolAccessRole) -> InvokeContext {
-        InvokeContext {
-            session_id: "s1".to_string(),
-            profile_id: "tok_1".to_string(),
-            role,
-            system: None,
-            estimated_cost_cents: 0,
-        }
+        let mut ctx = InvokeContext::unverified("s1", "tok_1", role);
+        ctx.authority = Some(AuthorityBinding {
+            tenant_id: "tenant-a".to_string(),
+            root_lineage: "root-a".to_string(),
+        });
+        ctx
+    }
+
+    #[test]
+    fn verified_request_derives_immutable_lineage_and_canonical_system() {
+        let principal = WsfPrincipal::establish(
+            AuthenticatedFacts {
+                principal_id: "grant-a".to_string(),
+                kind: IdentityKind::Workload,
+                tenant_id: "tenant-a".to_string(),
+                subject_hash: String::new(),
+                service_identity: Some("tool-runner".to_string()),
+                roles: vec![],
+                token_lineage: Some("root-a".to_string()),
+                auth_strength: AuthStrength::WorkloadToken,
+                audience: Audience::Aog,
+            },
+            "corr-a",
+            "2026-07-16T00:00:00Z",
+        );
+        let request = VerifiedRequestContext::establish(
+            principal,
+            RequestOperation::AogRead,
+            CanonicalResource::resolved("system", "aws-prod", Some("tenant-a".to_string()))
+                .unwrap(),
+        )
+        .unwrap();
+        let ctx =
+            InvokeContext::from_verified_request("session-a", ToolAccessRole::Guest, &request);
+        let key = ctx.reservation_key(Some("mission-a".to_string())).unwrap();
+        assert_eq!(key.tenant_id, "tenant-a");
+        assert_eq!(key.root_lineage, "root-a");
+        assert_eq!(key.mission_id.as_deref(), Some("mission-a"));
+        assert_eq!(key.system.as_deref(), Some("aws-prod"));
+        assert_eq!(ctx.profile_id, "grant-a");
     }
 
     /// An executor that hangs far past any tool timeout.
@@ -793,22 +1068,6 @@ mod tests {
             r.error
         );
         assert_eq!(proxy.receipt_count(), 1, "the timeout is still receipted");
-    }
-
-    #[test]
-    fn task_usage_map_is_bounded_against_session_flood() {
-        // Audit D6: a flood of distinct session ids must not grow the blast-radius
-        // map without limit.
-        let c = ctx(ToolAccessRole::Guest);
-        let mut usage = BTreeMap::new();
-        for i in 0..(MAX_TRACKED_SESSIONS + 100) {
-            task_usage_entry(&mut usage, &format!("sess-{i:07}")).record(&c);
-        }
-        assert_eq!(
-            usage.len(),
-            MAX_TRACKED_SESSIONS,
-            "map is bounded at the cap"
-        );
     }
 
     #[tokio::test]
@@ -1637,6 +1896,204 @@ mod tests {
             .find(|r| r.call_id == "c2")
             .unwrap();
         assert!(rec.guardrail_tripped);
+    }
+
+    struct HoldingGate {
+        entered: Arc<Notify>,
+        release: Arc<Notify>,
+    }
+
+    #[async_trait]
+    impl ApprovalGate for HoldingGate {
+        async fn review(
+            &self,
+            _tool: &ToolDefinition,
+            _call: &ToolCall,
+            _ctx: &InvokeContext,
+            _preview: &str,
+        ) -> Result<String, String> {
+            self.entered.notify_one();
+            self.release.notified().await;
+            Ok("operator".to_string())
+        }
+    }
+
+    struct CountingExecutor(Arc<AtomicUsize>);
+
+    #[async_trait]
+    impl ToolExecutor for CountingExecutor {
+        async fn execute(
+            &self,
+            _tool: &ToolDefinition,
+            call: &ToolCall,
+            _cred: Option<&MintedCredential>,
+        ) -> ToolResult {
+            self.0.fetch_add(1, Ordering::SeqCst);
+            ToolResult {
+                call_id: call.call_id.clone(),
+                tool_id: call.tool_id.clone(),
+                success: true,
+                output: serde_json::Value::Null,
+                error: None,
+                duration_ms: 1,
+            }
+        }
+    }
+
+    async fn overlapping_cap_case(
+        proxy: Arc<ToolProxy>,
+        entered: Arc<Notify>,
+        release: Arc<Notify>,
+        cost_cents: u64,
+    ) {
+        proxy
+            .register(tool("write.record", true, ToolAccessRole::Guest))
+            .unwrap();
+        let executions = Arc::new(AtomicUsize::new(0));
+
+        let first_proxy = Arc::clone(&proxy);
+        let first_executions = Arc::clone(&executions);
+        let mut first_ctx = ctx(ToolAccessRole::Guest);
+        first_ctx.session_id = "session-a".to_string();
+        first_ctx.estimated_cost_cents = cost_cents;
+        let first = tokio::spawn(async move {
+            first_proxy
+                .invoke(
+                    &call("call-a", "write.record"),
+                    &first_ctx,
+                    &CountingExecutor(first_executions),
+                )
+                .await
+                .unwrap()
+        });
+
+        entered.notified().await;
+        let mut rotated = ctx(ToolAccessRole::Guest);
+        rotated.session_id = "session-b".to_string();
+        rotated.profile_id = "rotated-profile".to_string();
+        rotated.estimated_cost_cents = cost_cents;
+        let second = tokio::time::timeout(
+            Duration::from_secs(1),
+            proxy.invoke(
+                &call("call-b", "write.record"),
+                &rotated,
+                &CountingExecutor(Arc::clone(&executions)),
+            ),
+        )
+        .await
+        .expect("the overlapping call is rejected before approval")
+        .unwrap();
+        assert!(
+            !second.success,
+            "the overlapping reservation exceeds the cap"
+        );
+        assert!(
+            second.error.unwrap().contains("ceiling")
+                || proxy.receipts().last().unwrap().guardrail_tripped
+        );
+
+        release.notify_one();
+        assert!(first.await.unwrap().success);
+        assert_eq!(executions.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn reg_lsf_027_atomic_mission_and_guard_reservations() {
+        let entered = Arc::new(Notify::new());
+        let release = Arc::new(Notify::new());
+        let mission_proxy = Arc::new(
+            ToolProxy::new()
+                .with_mission(
+                    MissionContract::new("mission-a")
+                        .allow_tool("write.record")
+                        .with_max_calls(1),
+                )
+                .with_approvals(Box::new(HoldingGate {
+                    entered: Arc::clone(&entered),
+                    release: Arc::clone(&release),
+                })),
+        );
+        overlapping_cap_case(mission_proxy, entered, release, 0).await;
+
+        let entered = Arc::new(Notify::new());
+        let release = Arc::new(Notify::new());
+        let spend_proxy = Arc::new(
+            ToolProxy::new()
+                .with_mission(
+                    MissionContract::new("mission-spend")
+                        .allow_tool("write.record")
+                        .with_spend_ceiling_cents(1),
+                )
+                .with_approvals(Box::new(HoldingGate {
+                    entered: Arc::clone(&entered),
+                    release: Arc::clone(&release),
+                })),
+        );
+        overlapping_cap_case(spend_proxy, entered, release, 1).await;
+
+        let entered = Arc::new(Notify::new());
+        let release = Arc::new(Notify::new());
+        let guard_proxy = Arc::new(
+            ToolProxy::new()
+                .with_guardrails(Guardrails::new().with_max_calls_per_task(1))
+                .with_approvals(Box::new(HoldingGate {
+                    entered: Arc::clone(&entered),
+                    release: Arc::clone(&release),
+                })),
+        );
+        overlapping_cap_case(guard_proxy, entered, release, 0).await;
+    }
+
+    #[tokio::test]
+    async fn reg_lsd_009_missing_and_multi_system_fanout_fail_closed() {
+        let proxy =
+            ToolProxy::new().with_guardrails(Guardrails::new().with_max_systems_per_task(1));
+        proxy
+            .register(tool("read.remote", false, ToolAccessRole::Guest))
+            .unwrap();
+
+        let missing = proxy
+            .invoke(
+                &call("missing", "read.remote"),
+                &ctx(ToolAccessRole::Guest),
+                &EchoExecutor,
+            )
+            .await
+            .unwrap();
+        assert!(!missing.success);
+
+        let mut aws = ctx(ToolAccessRole::Guest);
+        aws.canonical_system = Some("aws-prod".to_string());
+        assert!(
+            proxy
+                .invoke(&call("aws-a", "read.remote"), &aws, &EchoExecutor)
+                .await
+                .unwrap()
+                .success
+        );
+
+        let mut same_root_new_session = aws.clone();
+        same_root_new_session.session_id = "rotated-session".to_string();
+        assert!(
+            proxy
+                .invoke(
+                    &call("aws-b", "read.remote"),
+                    &same_root_new_session,
+                    &EchoExecutor,
+                )
+                .await
+                .unwrap()
+                .success
+        );
+
+        let mut gcp = same_root_new_session;
+        gcp.canonical_system = Some("gcp-prod".to_string());
+        let fanout = proxy
+            .invoke(&call("gcp", "read.remote"), &gcp, &EchoExecutor)
+            .await
+            .unwrap();
+        assert!(!fanout.success);
+        assert!(fanout.error.unwrap().contains("system cap 1"));
     }
 
     #[tokio::test]

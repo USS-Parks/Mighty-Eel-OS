@@ -27,9 +27,9 @@ use crate::InvokeContext;
 /// tools). Build with the `with_*` / `allow_*` / `deny_*` builders.
 #[derive(Debug, Clone, Default)]
 pub struct Guardrails {
-    /// Maximum tool calls a single task (session) may make. `None` = no cap.
+    /// Maximum calls one immutable root-lineage/mission may make. `None` = no cap.
     pub max_calls_per_task: Option<u32>,
-    /// Maximum distinct systems a single task may touch. `None` = no cap.
+    /// Maximum distinct canonical systems one root-lineage/mission may touch.
     pub max_systems_per_task: Option<u32>,
     /// Per-token tool allowlists: token id → the tools it may call. A token with an
     /// entry may call only those tools.
@@ -46,14 +46,14 @@ impl Guardrails {
         Self::default()
     }
 
-    /// Cap the number of tool calls per task (session).
+    /// Cap calls per immutable root-lineage/mission accounting namespace.
     #[must_use]
     pub fn with_max_calls_per_task(mut self, max: u32) -> Self {
         self.max_calls_per_task = Some(max);
         self
     }
 
-    /// Cap the number of distinct systems a task may touch.
+    /// Cap distinct canonical systems per root-lineage/mission.
     #[must_use]
     pub fn with_max_systems_per_task(mut self, max: u32) -> Self {
         self.max_systems_per_task = Some(max);
@@ -108,53 +108,19 @@ impl Guardrails {
     /// Check a call against the guardrails given the task's current usage. Returns
     /// `Some(reason)` when a hard limit trips (a block, never an escalation).
     #[must_use]
-    pub fn check(&self, call: &ToolCall, ctx: &InvokeContext, usage: &TaskUsage) -> Option<String> {
+    pub fn check(&self, call: &ToolCall, ctx: &InvokeContext) -> Option<String> {
         if let Err(reason) = self.tool_allowed_for_token(&ctx.profile_id, &call.tool_id) {
             return Some(reason);
         }
-        if let Some(max) = self.max_calls_per_task
-            && usage.calls >= max
+        if (self.max_calls_per_task.is_some() || self.max_systems_per_task.is_some())
+            && ctx.reservation_key(None).is_none()
         {
-            return Some(format!("blast-radius: task call cap {max} reached"));
+            return Some("blast-radius: authenticated tenant/root lineage is required".to_string());
         }
-        if let Some(max) = self.max_systems_per_task
-            && let Some(system) = &ctx.system
-            && !usage.systems.contains(system)
-            && u32::try_from(usage.systems.len()).unwrap_or(u32::MAX) >= max
-        {
-            return Some(format!("blast-radius: task system cap {max} reached"));
+        if self.max_systems_per_task.is_some() && ctx.system().is_none() {
+            return Some("blast-radius: canonical target system is required".to_string());
         }
         None
-    }
-}
-
-/// Per-task (per-session) running usage the blast-radius caps are measured against.
-#[derive(Debug, Default)]
-pub struct TaskUsage {
-    calls: u32,
-    systems: BTreeSet<String>,
-}
-
-impl TaskUsage {
-    /// Record an admitted call: one more call, and its system (if any) added to the
-    /// touched set.
-    pub fn record(&mut self, ctx: &InvokeContext) {
-        self.calls = self.calls.saturating_add(1);
-        if let Some(system) = &ctx.system {
-            self.systems.insert(system.clone());
-        }
-    }
-
-    /// Calls made so far by this task.
-    #[must_use]
-    pub fn calls(&self) -> u32 {
-        self.calls
-    }
-
-    /// Distinct systems touched so far by this task.
-    #[must_use]
-    pub fn systems_touched(&self) -> usize {
-        self.systems.len()
     }
 }
 
@@ -164,13 +130,13 @@ mod tests {
     use mai_agent::types::ToolAccessRole;
 
     fn ctx(profile: &str, system: Option<&str>) -> InvokeContext {
-        InvokeContext {
-            session_id: "s1".to_string(),
-            profile_id: profile.to_string(),
-            role: ToolAccessRole::Guest,
-            system: system.map(str::to_string),
-            estimated_cost_cents: 0,
-        }
+        let mut ctx = InvokeContext::unverified("s1", profile, ToolAccessRole::Guest);
+        ctx.authority = Some(crate::AuthorityBinding {
+            tenant_id: "tenant-a".to_string(),
+            root_lineage: "root-a".to_string(),
+        });
+        ctx.canonical_system = system.map(str::to_string);
+        ctx
     }
 
     fn call(tool_id: &str) -> ToolCall {
@@ -187,31 +153,17 @@ mod tests {
     fn default_guardrails_are_inactive_and_permissive() {
         let g = Guardrails::new();
         assert!(!g.is_active());
-        assert!(
-            g.check(&call("anything"), &ctx("tok", None), &TaskUsage::default())
-                .is_none()
-        );
+        assert!(g.check(&call("anything"), &ctx("tok", None)).is_none());
     }
 
     #[test]
     fn per_token_allowlist_denies_an_unlisted_tool() {
         let g = Guardrails::new().allow_token_tool("tok_1", "read.file");
         assert!(
-            g.check(
-                &call("read.file"),
-                &ctx("tok_1", None),
-                &TaskUsage::default()
-            )
-            .is_none(),
+            g.check(&call("read.file"), &ctx("tok_1", None)).is_none(),
             "the listed tool passes"
         );
-        let reason = g
-            .check(
-                &call("write.db"),
-                &ctx("tok_1", None),
-                &TaskUsage::default(),
-            )
-            .unwrap();
+        let reason = g.check(&call("write.db"), &ctx("tok_1", None)).unwrap();
         assert!(reason.contains("not allowed tool 'write.db'"));
     }
 
@@ -222,52 +174,31 @@ mod tests {
             .deny_unlisted_tokens();
         // A different token with no allowlist entry is denied everything.
         assert!(
-            g.check(
-                &call("read.file"),
-                &ctx("tok_other", None),
-                &TaskUsage::default()
-            )
-            .unwrap()
-            .contains("deny-unlisted")
+            g.check(&call("read.file"), &ctx("tok_other", None))
+                .unwrap()
+                .contains("deny-unlisted")
         );
     }
 
     #[test]
-    fn call_cap_trips_when_reached() {
+    fn call_cap_requires_authenticated_lineage() {
         let g = Guardrails::new().with_max_calls_per_task(2);
-        let mut usage = TaskUsage::default();
-        assert!(g.check(&call("t"), &ctx("tok", None), &usage).is_none());
-        usage.record(&ctx("tok", None));
-        usage.record(&ctx("tok", None));
-        // Two calls made; the cap now trips.
+        let unverified = InvokeContext::unverified("s1", "tok", ToolAccessRole::Guest);
         assert!(
-            g.check(&call("t"), &ctx("tok", None), &usage)
+            g.check(&call("t"), &unverified)
                 .unwrap()
-                .contains("call cap 2")
+                .contains("root lineage")
         );
     }
 
     #[test]
-    fn system_cap_trips_on_a_new_system_beyond_the_limit() {
+    fn system_cap_requires_canonical_target() {
         let g = Guardrails::new().with_max_systems_per_task(1);
-        let mut usage = TaskUsage::default();
-        // First system is fine and gets recorded.
         assert!(
-            g.check(&call("t"), &ctx("tok", Some("aws")), &usage)
-                .is_none()
-        );
-        usage.record(&ctx("tok", Some("aws")));
-        // Same system again is fine (not a new one).
-        assert!(
-            g.check(&call("t"), &ctx("tok", Some("aws")), &usage)
-                .is_none()
-        );
-        // A second, different system trips the cap.
-        assert!(
-            g.check(&call("t"), &ctx("tok", Some("gcp")), &usage)
+            g.check(&call("t"), &ctx("tok", None))
                 .unwrap()
-                .contains("system cap 1")
+                .contains("canonical target")
         );
-        assert_eq!(usage.systems_touched(), 1);
+        assert!(g.check(&call("t"), &ctx("tok", Some("aws"))).is_none());
     }
 }

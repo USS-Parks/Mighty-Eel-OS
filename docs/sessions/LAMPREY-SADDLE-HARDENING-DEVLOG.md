@@ -1113,3 +1113,77 @@ the canonical footer. Both outgoing commits passed exact-footer and signature
 verification; the pre-push full-tree no-slop and 79-route policy gates passed;
 and `origin/main` advanced from `d97a8a7` through `be08d5d` on 2026-07-16. This
 final ledger update records the confirmed T1 remote checkpoint.
+
+### LSH-T2 — Atomic mission and guard enforcement
+
+Status: **PASS** (implementation commit pending).
+
+The mission and operator blast-radius controls previously checked counters,
+released their locks, awaited approval, and only then recorded usage. Parallel
+calls could therefore observe the same pre-charge state and all execute beyond
+the configured call, spend, or distinct-system ceiling. The same boundary also
+treated absent caller-supplied `system` metadata as unconstrained.
+
+Toolproxy now reuses the LSH-A4 `ReservationLedger` for mission call/spend,
+operator call, and operator distinct-system authority. Reservations occur
+before asynchronous approval; denial and early return release pending authority
+automatically; admitted calls commit it before credential minting/execution.
+Mission and guard ledgers are independent so one call does not double-charge a
+shared axis, while both use immutable tenant/root-lineage/mission keys rather
+than session, profile, or call IDs.
+
+`InvokeContext` can no longer be built with a public struct literal containing
+caller-selected lineage or system metadata. `from_verified_request` derives the
+tenant, immutable token root, grant/principal identity, and final canonical
+system from `VerifiedRequestContext`; `unverified` carries neither. A constrained
+mission treats missing canonical system identity as a deviation requiring
+approval or denial. An active operator call/system cap hard-denies missing
+authenticated lineage, and an active system cap hard-denies a missing canonical
+target.
+
+The deterministic `REG-LSF-027` regression holds the first call inside approval
+while a second call rotates session, profile, and call IDs. Mission call,
+mission spend, and operator call ceilings each admit exactly one executor entry.
+The `LSD-009` regression denies omitted system metadata, permits the same
+canonical system after session rotation, and blocks fan-out to a second system.
+
+Changed files:
+
+- `Cargo.lock`;
+- `crates/aog-toolproxy/Cargo.toml`;
+- `crates/aog-toolproxy/src/lib.rs`;
+- `crates/aog-toolproxy/src/mission.rs`;
+- `crates/aog-toolproxy/src/guard.rs`;
+- `crates/aog-approvals/src/lib.rs`;
+- `crates/aog-conformance/tests/robustness_conformance.rs`;
+- `crates/aog-controller/tests/managed_toolproxy.rs`; and
+- this DEVLOG.
+
+Gates:
+
+- `cargo test -p aog-toolproxy
+  tests::reg_lsf_027_atomic_mission_and_guard_reservations -- --exact` — PASS,
+  1/1 deterministic concurrency regression;
+- `cargo test -p aog-toolproxy
+  tests::reg_lsd_009_missing_and_multi_system_fanout_fail_closed -- --exact` —
+  PASS, 1/1 omitted-target and fan-out regression;
+- `cargo test -p aog-toolproxy -p aog-approvals` — PASS: 55 toolproxy tests,
+  five approval tests, and doc tests;
+- `cargo test -p aog-conformance --test robustness_conformance` — PASS, 11/11;
+- `cargo test -p aog-controller --test managed_toolproxy --test
+  live_revocation` — PASS, 2/2 in the current prerequisite-free lane;
+- `cargo clippy -p aog-toolproxy -p aog-approvals -p aog-conformance -p
+  aog-controller --all-targets -- -D warnings -A clippy::pedantic` — PASS;
+- source search confirms the non-atomic `Mission::check`/`record` and
+  `TaskUsage` paths are removed and canonical system state is private;
+- `cargo fmt --check` — PASS; and
+- `git diff --check` — PASS.
+
+Closure statement: both `LSF-027` instances are closed by A4 reservations, and
+the two reachable `LSD-009` omission paths are closed at the toolproxy boundary.
+LSH-T3 is the next sequential prompt. The broader M3 milestone remains open
+through LSH-T6.
+
+Commit state: implementation and prompt evidence are ready for the authorized
+commit/push sequence; exact SHAs and the remote checkpoint will be recorded in
+the closeout commit.

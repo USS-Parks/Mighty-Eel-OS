@@ -344,7 +344,9 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "chrono",
+ "fabric-contracts",
  "fabric-proof",
+ "fabric-token",
  "hex",
  "mai-agent",
  "mai-compliance",

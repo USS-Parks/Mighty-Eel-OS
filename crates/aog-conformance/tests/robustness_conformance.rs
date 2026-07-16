@@ -297,13 +297,7 @@ async fn rc6_side_effecting_call_without_approval_never_executes() {
                 chain_step: 0,
                 parallel_group: None,
             },
-            &InvokeContext {
-                session_id: "s1".to_owned(),
-                profile_id: "tok".to_owned(),
-                role: ToolAccessRole::Guest,
-                system: None,
-                estimated_cost_cents: 0,
-            },
+            &InvokeContext::unverified("s1", "tok", ToolAccessRole::Guest),
             &RecordingExecutor(Arc::clone(&ran)),
         )
         .await
@@ -496,13 +490,7 @@ async fn rc_leak_every_exfil_path_is_denied() {
                 chain_step: 0,
                 parallel_group: None,
             },
-            &InvokeContext {
-                session_id: "s1".to_owned(),
-                profile_id: "tok".to_owned(),
-                role: ToolAccessRole::Guest,
-                system: None,
-                estimated_cost_cents: 0,
-            },
+            &InvokeContext::unverified("s1", "tok", ToolAccessRole::Guest),
             &LeakyExecutor,
         )
         .await

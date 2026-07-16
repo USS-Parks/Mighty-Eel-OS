@@ -14,6 +14,8 @@
 
 use std::collections::BTreeSet;
 
+use fabric_contracts::Budget;
+use fabric_token::spend::{Reservation, ReservationLedger, Spent};
 use mai_agent::types::ToolCall;
 
 use crate::InvokeContext;
@@ -80,23 +82,18 @@ impl MissionContract {
     }
 }
 
-/// A running mission: a contract plus the tally of what it has consumed so far.
+/// An active mission contract. Runtime call/spend state lives in the shared A4
+/// reservation ledger rather than a check-then-record counter on this value.
 #[derive(Debug, Clone)]
 pub struct Mission {
     contract: MissionContract,
-    calls: u32,
-    spend_cents: u64,
 }
 
 impl Mission {
     /// Start a mission from its contract, with a zeroed tally.
     #[must_use]
     pub fn new(contract: MissionContract) -> Self {
-        Self {
-            contract,
-            calls: 0,
-            spend_cents: 0,
-        }
+        Self { contract }
     }
 
     /// The mission id (for receipts).
@@ -105,23 +102,8 @@ impl Mission {
         &self.contract.mission_id
     }
 
-    /// Calls made so far.
-    #[must_use]
-    pub fn calls(&self) -> u32 {
-        self.calls
-    }
-
-    /// Cumulative spend so far (cents).
-    #[must_use]
-    pub fn spend_cents(&self) -> u64 {
-        self.spend_cents
-    }
-
-    /// Evaluate a call against the contract **without** mutating the tally. Returns
-    /// `Some(reason)` when the call is out of contract (an un-listed tool, an
-    /// un-listed target system, or one that would breach the call / spend ceiling),
-    /// `None` when it is within scope. Read-only, so it never holds a lock across an
-    /// approval `await`.
+    /// Evaluate immutable tool/system scope. Call and spend ceilings are reserved
+    /// atomically by [`Self::reserve`] before asynchronous approval.
     #[must_use]
     pub fn check(&self, call: &ToolCall, ctx: &InvokeContext) -> Option<String> {
         let c = &self.contract;
@@ -131,7 +113,13 @@ impl Mission {
                 call.tool_id, c.mission_id
             ));
         }
-        if let Some(system) = &ctx.system
+        if !c.allowed_systems.is_empty() && ctx.system().is_none() {
+            return Some(format!(
+                "canonical target system is required by mission '{}'",
+                c.mission_id
+            ));
+        }
+        if let Some(system) = ctx.system()
             && !c.allowed_systems.contains(system)
         {
             return Some(format!(
@@ -139,26 +127,60 @@ impl Mission {
                 c.mission_id
             ));
         }
-        if self.calls >= c.max_tool_calls {
-            return Some(format!(
-                "mission '{}' call ceiling reached ({} of {})",
-                c.mission_id, self.calls, c.max_tool_calls
-            ));
-        }
-        if self.spend_cents.saturating_add(ctx.estimated_cost_cents) > c.spend_ceiling_cents {
-            return Some(format!(
-                "mission '{}' spend ceiling {}¢ would be exceeded",
-                c.mission_id, c.spend_ceiling_cents
-            ));
-        }
         None
     }
 
-    /// Record an admitted call's consumption against the tally. Called once a call
-    /// is cleared to proceed (in-contract, or a deviation a human approved).
-    pub fn record(&mut self, ctx: &InvokeContext) {
-        self.calls = self.calls.saturating_add(1);
-        self.spend_cents = self.spend_cents.saturating_add(ctx.estimated_cost_cents);
+    /// Atomically reserve one call and its declared spend against the immutable
+    /// tenant/root-lineage/mission namespace. The aggregate cap deliberately
+    /// spans systems; system fan-out is reserved separately by guardrails.
+    pub fn reserve(
+        &self,
+        ledger: &ReservationLedger,
+        ctx: &InvokeContext,
+    ) -> Result<Option<Reservation>, String> {
+        if self.contract.max_tool_calls == u32::MAX && self.contract.spend_ceiling_cents == u64::MAX
+        {
+            return Ok(None);
+        }
+        let mut key = ctx
+            .reservation_key(Some(self.contract.mission_id.clone()))
+            .ok_or_else(|| {
+                format!(
+                    "mission '{}' requires authenticated tenant/root lineage",
+                    self.contract.mission_id
+                )
+            })?;
+        key.system = None;
+        let cap = Budget {
+            tool_call_cap: if self.contract.max_tool_calls == u32::MAX {
+                0
+            } else {
+                self.contract.max_tool_calls
+            },
+            usd_cap_cents: if self.contract.spend_ceiling_cents == u64::MAX {
+                0
+            } else {
+                self.contract.spend_ceiling_cents
+            },
+            ..Budget::default()
+        };
+        ledger
+            .reserve(
+                key,
+                &cap,
+                Spent {
+                    tool_calls: 1,
+                    usd_cents: ctx.estimated_cost_cents,
+                    ..Spent::default()
+                },
+            )
+            .map(Some)
+            .map_err(|_| {
+                format!(
+                    "mission '{}' authority ceiling reached",
+                    self.contract.mission_id
+                )
+            })
     }
 }
 
@@ -168,13 +190,12 @@ mod tests {
     use mai_agent::types::ToolAccessRole;
 
     fn ctx() -> InvokeContext {
-        InvokeContext {
-            session_id: "s1".to_string(),
-            profile_id: "tok_1".to_string(),
-            role: ToolAccessRole::Guest,
-            system: None,
-            estimated_cost_cents: 0,
-        }
+        let mut ctx = InvokeContext::unverified("s1", "tok_1", ToolAccessRole::Guest);
+        ctx.authority = Some(crate::AuthorityBinding {
+            tenant_id: "tenant-a".to_string(),
+            root_lineage: "root-a".to_string(),
+        });
+        ctx
     }
 
     fn call(tool_id: &str) -> ToolCall {
@@ -215,9 +236,14 @@ mod tests {
                 .allow_system("aws"),
         );
         let mut c = ctx();
-        c.system = Some("gcp".to_string());
+        assert!(
+            m.check(&call("s3.get"), &c)
+                .unwrap()
+                .contains("canonical target")
+        );
+        c.canonical_system = Some("gcp".to_string());
         assert!(m.check(&call("s3.get"), &c).unwrap().contains("gcp"));
-        c.system = Some("aws".to_string());
+        c.canonical_system = Some("aws".to_string());
         assert!(
             m.check(&call("s3.get"), &c).is_none(),
             "allowed system passes"
@@ -226,22 +252,23 @@ mod tests {
 
     #[test]
     fn call_ceiling_blocks_once_reached() {
-        let mut m = Mission::new(
+        let m = Mission::new(
             MissionContract::new("m1")
                 .allow_tool("read.file")
                 .with_max_calls(2),
         );
-        assert!(m.check(&call("read.file"), &ctx()).is_none());
-        m.record(&ctx());
-        assert!(m.check(&call("read.file"), &ctx()).is_none());
-        m.record(&ctx());
-        // Two calls made; the third is over the ceiling.
-        assert!(
-            m.check(&call("read.file"), &ctx())
-                .unwrap()
-                .contains("ceiling")
-        );
-        assert_eq!(m.calls(), 2);
+        let ledger = ReservationLedger::new();
+        m.reserve(&ledger, &ctx())
+            .unwrap()
+            .unwrap()
+            .commit()
+            .unwrap();
+        m.reserve(&ledger, &ctx())
+            .unwrap()
+            .unwrap()
+            .commit()
+            .unwrap();
+        assert!(m.reserve(&ledger, &ctx()).unwrap_err().contains("ceiling"));
     }
 
     #[test]
@@ -251,13 +278,16 @@ mod tests {
                 .allow_tool("api.call")
                 .with_spend_ceiling_cents(100),
         );
-        let mut c = ctx();
-        c.estimated_cost_cents = 150;
-        assert!(m.check(&call("api.call"), &c).unwrap().contains("spend"));
-        c.estimated_cost_cents = 100;
+        let ledger = ReservationLedger::new();
+        m.reserve(&ledger, &ctx().with_estimated_cost_cents(100))
+            .unwrap()
+            .unwrap()
+            .commit()
+            .unwrap();
         assert!(
-            m.check(&call("api.call"), &c).is_none(),
-            "exactly at ceiling passes"
+            m.reserve(&ledger, &ctx().with_estimated_cost_cents(1))
+                .unwrap_err()
+                .contains("ceiling")
         );
     }
 }
