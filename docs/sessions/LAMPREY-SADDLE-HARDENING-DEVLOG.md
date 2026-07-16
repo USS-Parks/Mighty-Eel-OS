@@ -791,7 +791,7 @@ final ledger update records the confirmed G6 remote checkpoint.
 
 ### LSH-G7 — Bounded provider responses and truthful stream termination
 
-Status: **PASS** (implementation pending commit).
+Status: **PASS** (implementation commit `b3bccb8`).
 
 The shared provider boundary previously used unbounded `Response::json` and
 `Response::text`, buffered SSE into a newline-delimited `String` without a line,
@@ -866,5 +866,7 @@ client-protocol surfaces. G8 still owns authoritative local usage and safe
 reconciliation; G9 owns the complete two-tenant adversarial live compatibility
 matrix. No broader M3 milestone claim is made.
 
-Commit state: implementation and prompt evidence are pending the authorized
-commit, exact-SHA closeout, footer verification, and push sequence.
+Commit state: implementation and prompt evidence were committed as
+`b3bccb89c1a811031393cb4082399c388018b6f1`. The commit is SSH-signed and
+carries the canonical `Authored and reviewed by Basho Parks, copyright 2026`
+footer. The exact-SHA DEVLOG closeout and remote checkpoint are pending.
