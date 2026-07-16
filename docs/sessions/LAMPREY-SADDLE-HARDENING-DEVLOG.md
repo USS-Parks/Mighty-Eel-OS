@@ -679,3 +679,8 @@ resolution boundary. Unauthenticated input can no longer create unbounded
 OpenBao work or unbounded cache growth, and overload is an explicit 429 rather
 than backend queue accumulation. LSH-G6 is the next sequential prompt; no M3
 milestone claim is made.
+
+Commit state: implementation and prompt evidence were committed as
+`27bc5819af01df14f71ededecaa0eae81de00183`. The commit is SSH-signed and
+carries the canonical `Authored and reviewed by Basho Parks, copyright 2026`
+footer. Push and remote-checkpoint confirmation remain pending.
