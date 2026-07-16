@@ -21,7 +21,8 @@ use aog_store::raft::RaftNode;
 use aog_store::raft::types::{NodeId, TypeConfig};
 use axum::Router;
 use axum::body::Bytes;
-use axum::extract::State;
+use axum::extract::connect_info::MockConnectInfo;
+use axum::extract::{ConnectInfo, State};
 use axum::http::StatusCode;
 use axum::routing::post;
 use openraft::BasicNode;
@@ -33,6 +34,8 @@ use openraft::raft::{
 };
 use serde::Serialize;
 use serde::de::DeserializeOwned;
+
+use crate::tls::TlsPeer;
 
 // ─────────────────────────────── client ───────────────────────────────
 
@@ -172,11 +175,34 @@ impl RaftNetwork<TypeConfig> for WireConnection {
 /// on a listener the peers can reach; the peer URL in cluster membership points
 /// here.
 pub fn router(node: Arc<RaftNode>) -> Router {
+    router_with_peer_identity(node, false)
+}
+
+/// A Raft router that requires the mTLS certificate's node SPIFFE identity to
+/// match the sender id carried by each decoded RPC before invoking openraft.
+pub fn secure_router(node: Arc<RaftNode>) -> Router {
+    router_with_peer_identity(node, true)
+}
+
+#[derive(Clone)]
+struct WireState {
+    node: Arc<RaftNode>,
+    require_peer_identity: bool,
+}
+
+fn router_with_peer_identity(node: Arc<RaftNode>, require_peer_identity: bool) -> Router {
     Router::new()
         .route("/raft/append-entries", post(append_entries))
         .route("/raft/vote", post(vote))
         .route("/raft/install-snapshot", post(install_snapshot))
-        .with_state(node)
+        .with_state(WireState {
+            node,
+            require_peer_identity,
+        })
+        .layer(MockConnectInfo(TlsPeer {
+            socket_addr: SocketAddr::from(([127, 0, 0, 1], 0)),
+            node_id: None,
+        }))
 }
 
 /// Bind `addr` and serve `node`'s Raft endpoints until the task is dropped.
@@ -189,28 +215,51 @@ pub async fn serve(node: Arc<RaftNode>, addr: SocketAddr) -> io::Result<()> {
 }
 
 async fn append_entries(
-    State(node): State<Arc<RaftNode>>,
+    State(state): State<WireState>,
+    ConnectInfo(peer): ConnectInfo<TlsPeer>,
     body: Bytes,
 ) -> Result<Vec<u8>, StatusCode> {
     let rpc: AppendEntriesRequest<TypeConfig> =
         serde_json::from_slice(&body).map_err(|_| StatusCode::BAD_REQUEST)?;
-    let result = node.raft().append_entries(rpc).await;
+    authorize_peer(&state, peer, rpc.vote.leader_id.node_id)?;
+    let result = state.node.raft().append_entries(rpc).await;
     serde_json::to_vec(&result).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
 }
 
-async fn vote(State(node): State<Arc<RaftNode>>, body: Bytes) -> Result<Vec<u8>, StatusCode> {
+async fn vote(
+    State(state): State<WireState>,
+    ConnectInfo(peer): ConnectInfo<TlsPeer>,
+    body: Bytes,
+) -> Result<Vec<u8>, StatusCode> {
     let rpc: VoteRequest<NodeId> =
         serde_json::from_slice(&body).map_err(|_| StatusCode::BAD_REQUEST)?;
-    let result = node.raft().vote(rpc).await;
+    authorize_peer(&state, peer, rpc.vote.leader_id.node_id)?;
+    let result = state.node.raft().vote(rpc).await;
     serde_json::to_vec(&result).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
 }
 
 async fn install_snapshot(
-    State(node): State<Arc<RaftNode>>,
+    State(state): State<WireState>,
+    ConnectInfo(peer): ConnectInfo<TlsPeer>,
     body: Bytes,
 ) -> Result<Vec<u8>, StatusCode> {
     let rpc: InstallSnapshotRequest<TypeConfig> =
         serde_json::from_slice(&body).map_err(|_| StatusCode::BAD_REQUEST)?;
-    let result = node.raft().install_snapshot(rpc).await;
+    authorize_peer(&state, peer, rpc.vote.leader_id.node_id)?;
+    let result = state.node.raft().install_snapshot(rpc).await;
     serde_json::to_vec(&result).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+}
+
+fn authorize_peer(
+    state: &WireState,
+    peer: TlsPeer,
+    claimed_node_id: NodeId,
+) -> Result<(), StatusCode> {
+    if !state.require_peer_identity {
+        return Ok(());
+    }
+    match peer.node_id {
+        Some(authenticated_node_id) if authenticated_node_id == claimed_node_id => Ok(()),
+        _ => Err(StatusCode::FORBIDDEN),
+    }
 }

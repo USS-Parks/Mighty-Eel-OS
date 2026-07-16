@@ -104,6 +104,8 @@ async fn admin_mutation_without_admin_role_is_403() {
         advertise: format!("http://{addr}"),
         anchor_pubkey: Some(anchor.public_key().to_vec()),
         openbao: None,
+        node_tls: None,
+        allow_insecure_admin: false,
     };
     let daemon = Daemon::start(config).await.unwrap();
     let app = daemon.app();

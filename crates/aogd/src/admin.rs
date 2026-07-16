@@ -11,13 +11,17 @@
 //! node that later lost leadership). The hop is guarded so it cannot loop.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::net::SocketAddr;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use aog_apiserver::auth::{Authenticator, TOKEN_HEADER};
 use aog_store::raft::RaftNode;
 use aog_store::raft::types::{NodeId, RaftResponse};
 use aog_store::{Op, Versioned};
-use axum::extract::{Request, State};
+use aog_wire::tls::TlsPeer;
+use axum::extract::connect_info::MockConnectInfo;
+use axum::extract::{ConnectInfo, Request, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::middleware::Next;
 use axum::response::Response;
@@ -45,14 +49,39 @@ pub struct AdminState {
     /// When present, the mutating `/admin/*` routes require an admin-scoped token;
     /// when absent (pre-anchor bootstrap) the daemon is loopback-contained (0.2).
     authenticator: Option<Arc<Authenticator>>,
+    /// When true, every membership address must be HTTPS and forwarding uses
+    /// the node's mutually-authenticated client.
+    secure_transport: bool,
+    /// Explicit legacy harness mode, rejected by the production binary.
+    allow_insecure_admin: bool,
+    /// One-shot local initialization capability when trust is absent.
+    bootstrap_open: Arc<AtomicBool>,
 }
 
 /// The admin + health routes, backed by `node`.
-pub fn router(node: Arc<RaftNode>, authenticator: Option<Arc<Authenticator>>) -> Router {
+pub fn router(
+    node: Arc<RaftNode>,
+    authenticator: Option<Arc<Authenticator>>,
+    http: reqwest::Client,
+    secure_transport: bool,
+    allow_insecure_admin: bool,
+) -> Router {
+    let has_membership = node
+        .raft()
+        .metrics()
+        .borrow()
+        .membership_config
+        .membership()
+        .voter_ids()
+        .next()
+        .is_some();
     let state = AdminState {
         node,
-        http: reqwest::Client::new(),
+        http,
         authenticator,
+        secure_transport,
+        allow_insecure_admin,
+        bootstrap_open: Arc::new(AtomicBool::new(!has_membership)),
     };
     // A1 (audit C1): the mutating admin routes require an admin-scoped principal once
     // an anchor is provisioned; `/healthz` and the read-only `/admin/leader` stay open.
@@ -72,6 +101,7 @@ pub fn router(node: Arc<RaftNode>, authenticator: Option<Arc<Authenticator>>) ->
         .route("/admin/leader", get(leader))
         .merge(guarded)
         .with_state(state)
+        .layer(MockConnectInfo(SocketAddr::from(([127, 0, 0, 1], 0))))
 }
 
 /// A1 middleware: authenticate an admin request against the front-door authenticator
@@ -99,8 +129,36 @@ async fn require_admin(
                 format!("admin role '{AOG_ADMIN_ROLE}' required"),
             ));
         }
+    } else if !state.allow_insecure_admin {
+        let peer = request_peer(req.extensions());
+        if !bounded_bootstrap_allows(
+            req.uri().path(),
+            peer,
+            state.bootstrap_open.load(Ordering::Acquire),
+        ) {
+            return Err((
+                StatusCode::FORBIDDEN,
+                "admin trust is not provisioned; only one local initialize is permitted".to_owned(),
+            ));
+        }
     }
     Ok(next.run(req).await)
+}
+
+fn request_peer(extensions: &axum::http::Extensions) -> SocketAddr {
+    extensions
+        .get::<ConnectInfo<TlsPeer>>()
+        .map(|ConnectInfo(peer)| peer.socket_addr)
+        .or_else(|| {
+            extensions
+                .get::<ConnectInfo<SocketAddr>>()
+                .map(|ConnectInfo(peer)| *peer)
+        })
+        .unwrap_or_else(|| SocketAddr::from(([0, 0, 0, 0], 0)))
+}
+
+fn bounded_bootstrap_allows(path: &str, peer: SocketAddr, bootstrap_open: bool) -> bool {
+    bootstrap_open && peer.ip().is_loopback() && path == "/admin/initialize"
 }
 
 /// Whether a token's roles include the admin role.
@@ -135,17 +193,30 @@ async fn initialize(
     State(state): State<AdminState>,
     Json(req): Json<InitializeRequest>,
 ) -> AdminResult<StatusCode> {
-    let members: BTreeMap<NodeId, BasicNode> = req
-        .members
-        .into_iter()
-        .map(|m| (m.id, BasicNode::new(m.addr)))
-        .collect();
-    state
-        .node
-        .raft()
-        .initialize(members)
-        .await
-        .map_err(failed)?;
+    let bounded_bootstrap = state.authenticator.is_none() && !state.allow_insecure_admin;
+    if bounded_bootstrap
+        && state
+            .bootstrap_open
+            .compare_exchange(true, false, Ordering::AcqRel, Ordering::Acquire)
+            .is_err()
+    {
+        return Err((
+            StatusCode::CONFLICT,
+            "local bootstrap has already been consumed".to_owned(),
+        ));
+    }
+    let mut members = BTreeMap::new();
+    for member in req.members {
+        validate_membership_address(&state, &member.addr)?;
+        members.insert(member.id, BasicNode::new(member.addr));
+    }
+    let result = state.node.raft().initialize(members).await;
+    if let Err(error) = result {
+        if bounded_bootstrap {
+            state.bootstrap_open.store(true, Ordering::Release);
+        }
+        return Err(failed(error));
+    }
     Ok(StatusCode::OK)
 }
 
@@ -154,6 +225,7 @@ async fn add_learner(
     State(state): State<AdminState>,
     Json(m): Json<Member>,
 ) -> AdminResult<StatusCode> {
+    validate_membership_address(&state, &m.addr)?;
     state
         .node
         .raft()
@@ -161,6 +233,21 @@ async fn add_learner(
         .await
         .map_err(failed)?;
     Ok(StatusCode::OK)
+}
+
+fn validate_membership_address(state: &AdminState, address: &str) -> AdminResult<()> {
+    if !state.secure_transport {
+        return Ok(());
+    }
+    let uri = reqwest::Url::parse(address)
+        .map_err(|e| (StatusCode::BAD_REQUEST, format!("invalid member URI: {e}")))?;
+    if uri.scheme() != "https" {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "secure Raft membership requires https:// addresses".to_owned(),
+        ));
+    }
+    Ok(())
 }
 
 /// Set the cluster's voter set (promotes caught-up learners, or removes a member).
@@ -248,7 +335,9 @@ async fn leader(State(state): State<AdminState>) -> Json<LeaderStatus> {
 
 #[cfg(test)]
 mod admin_auth_tests {
-    use super::{AOG_ADMIN_ROLE, roles_include_admin};
+    use std::net::SocketAddr;
+
+    use super::{AOG_ADMIN_ROLE, bounded_bootstrap_allows, roles_include_admin};
 
     #[test]
     fn admin_role_gate() {
@@ -258,5 +347,15 @@ mod admin_auth_tests {
         ]));
         assert!(!roles_include_admin(&["adult".to_owned()]));
         assert!(!roles_include_admin(&[]));
+    }
+
+    #[test]
+    fn bootstrap_is_one_time_initialize_from_loopback_only() {
+        let local: SocketAddr = "127.0.0.1:4444".parse().unwrap();
+        let remote: SocketAddr = "192.0.2.44:4444".parse().unwrap();
+        assert!(bounded_bootstrap_allows("/admin/initialize", local, true));
+        assert!(!bounded_bootstrap_allows("/admin/write", local, true));
+        assert!(!bounded_bootstrap_allows("/admin/initialize", remote, true));
+        assert!(!bounded_bootstrap_allows("/admin/initialize", local, false));
     }
 }

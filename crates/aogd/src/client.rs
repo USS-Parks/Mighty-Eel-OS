@@ -25,8 +25,14 @@ pub struct Client {
 impl Client {
     #[must_use]
     pub fn new(base: impl Into<String>) -> Self {
+        Self::with_http(base, reqwest::Client::new())
+    }
+
+    /// Construct an admin client with an explicitly configured HTTP/mTLS pool.
+    #[must_use]
+    pub fn with_http(base: impl Into<String>, http: reqwest::Client) -> Self {
         Self {
-            http: reqwest::Client::new(),
+            http,
             base: base.into(),
         }
     }

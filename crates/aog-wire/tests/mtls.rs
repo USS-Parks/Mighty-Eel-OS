@@ -18,7 +18,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use aog_wire::WireNetwork;
-use aog_wire::tls::NodeTls;
+use aog_wire::tls::{NodeIdentityContract, NodeTls};
 use rustls::crypto::ring;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, ServerName};
 use rustls::{ClientConfig, RootCertStore, ServerConfig};
@@ -160,6 +160,12 @@ fn ca_der(dir: &Path, ca: &Ca) -> CertificateDer<'static> {
 const SERVER_EXT: &str = "[ v3 ]\nsubjectAltName = DNS:localhost, IP:127.0.0.1\nextendedKeyUsage = serverAuth\nbasicConstraints = CA:FALSE\n";
 const CLIENT_EXT: &str = "[ v3 ]\nextendedKeyUsage = clientAuth\nbasicConstraints = CA:FALSE\n";
 
+fn node_ext(node_id: u64, host: &str) -> String {
+    format!(
+        "[ v3 ]\nsubjectAltName = DNS:{host}, URI:spiffe://loom/node/{node_id}\nextendedKeyUsage = serverAuth,clientAuth\nbasicConstraints = CA:FALSE\n"
+    )
+}
+
 fn cert(path: &Path) -> CertificateDer<'static> {
     CertificateDer::from(std::fs::read(path).unwrap())
 }
@@ -284,4 +290,156 @@ fn with_tls_builds_a_wire_network() {
         WireNetwork::with_tls(tls.client_config().unwrap()).is_ok(),
         "the estate mTLS client config must build a wire transport"
     );
+}
+
+#[test]
+fn node_identity_contract_binds_ca_node_id_san_and_advertise_host() {
+    let dir = scratch("aog-wire-node-identity");
+    let ca = gen_ca(&dir, "estate-ca");
+    let anchor = ca_der(&dir, &ca);
+    let ext = node_ext(1, "cp1");
+    let (node_cert, node_key) = gen_leaf(&dir, "node-1", &ca, &ext);
+
+    let contract = NodeIdentityContract::new(1, "https://cp1:4600", Duration::from_secs(3600))
+        .expect("valid node identity contract");
+    assert!(
+        NodeTls::for_node(
+            vec![anchor.clone()],
+            vec![cert(&node_cert)],
+            key(&node_key),
+            &contract,
+        )
+        .is_ok(),
+        "a current estate-signed leaf with the exact node SPIFFE URI and advertised host must pass"
+    );
+
+    let wrong_node =
+        NodeIdentityContract::new(2, "https://cp1:4600", Duration::from_secs(3600)).unwrap();
+    let err = NodeTls::for_node(
+        vec![anchor.clone()],
+        vec![cert(&node_cert)],
+        key(&node_key),
+        &wrong_node,
+    )
+    .err()
+    .expect("a node-1 certificate must not authorize node 2");
+    assert!(err.to_string().contains("spiffe://loom/node/2"));
+
+    let wrong_host =
+        NodeIdentityContract::new(1, "https://cp2:4600", Duration::from_secs(3600)).unwrap();
+    assert!(
+        NodeTls::for_node(
+            vec![anchor.clone()],
+            vec![cert(&node_cert)],
+            key(&node_key),
+            &wrong_host,
+        )
+        .is_err(),
+        "the leaf SAN must match the advertised membership host"
+    );
+
+    let rogue_ca = gen_ca(&dir, "rogue-ca");
+    let (rogue_cert, rogue_key) = gen_leaf(&dir, "rogue-node-1", &rogue_ca, &ext);
+    assert!(
+        NodeTls::for_node(
+            vec![anchor],
+            vec![cert(&rogue_cert)],
+            key(&rogue_key),
+            &contract,
+        )
+        .is_err(),
+        "a leaf outside the estate CA must fail at startup"
+    );
+}
+
+#[test]
+fn node_identity_contract_rejects_missing_malformed_and_rotation_unsafe_material() {
+    let dir = scratch("aog-wire-node-identity-invalid");
+    let ca = gen_ca(&dir, "estate-ca");
+    let anchor = ca_der(&dir, &ca);
+    let ext = node_ext(1, "cp1");
+    let (node_cert, node_key) = gen_leaf(&dir, "node-1", &ca, &ext);
+    let contract = NodeIdentityContract::new(1, "https://cp1:4600", Duration::from_secs(3600))
+        .expect("valid node identity contract");
+
+    assert!(
+        NodeTls::for_node(vec![], vec![cert(&node_cert)], key(&node_key), &contract).is_err(),
+        "an estate trust root is mandatory"
+    );
+    assert!(
+        NodeTls::for_node(vec![anchor.clone()], vec![], key(&node_key), &contract,).is_err(),
+        "a node certificate is mandatory"
+    );
+
+    let malformed = CertificateDer::from(vec![1, 2, 3, 4]);
+    assert!(
+        NodeTls::for_node(
+            vec![anchor.clone()],
+            vec![malformed],
+            key(&node_key),
+            &contract,
+        )
+        .is_err(),
+        "malformed certificate bytes must fail before bind"
+    );
+
+    let (_other_cert, other_key) = gen_leaf(&dir, "other-node-key", &ca, &ext);
+    assert!(
+        NodeTls::for_node(
+            vec![anchor.clone()],
+            vec![cert(&node_cert)],
+            key(&other_key),
+            &contract,
+        )
+        .is_err(),
+        "a valid but mismatched private key must fail before bind"
+    );
+
+    let secret_marker = b"never-log-this-private-key".to_vec();
+    let err = NodeTls::for_node_der(
+        vec![anchor.clone().as_ref().to_vec()],
+        vec![cert(&node_cert).as_ref().to_vec()],
+        secret_marker.clone(),
+        &contract,
+    )
+    .err()
+    .expect("malformed private key must fail");
+    assert!(
+        !err.to_string()
+            .contains(std::str::from_utf8(&secret_marker).unwrap()),
+        "private-key bytes must never enter errors/loggable output"
+    );
+
+    let rotation_unsafe = NodeIdentityContract::new(
+        1,
+        "https://cp1:4600",
+        Duration::from_secs(36501 * 24 * 60 * 60),
+    )
+    .unwrap();
+    assert!(
+        NodeTls::for_node(
+            vec![anchor],
+            vec![cert(&node_cert)],
+            key(&node_key),
+            &rotation_unsafe,
+        )
+        .is_err(),
+        "a certificate inside the configured rotation safety window must fail startup"
+    );
+}
+
+#[test]
+fn node_identity_contract_requires_a_credential_free_https_origin() {
+    for invalid in [
+        "http://cp1:4600",
+        "https://user:password@cp1:4600",
+        "https://cp1:4600/raft",
+        "https://cp1:4600/?redirect=evil",
+        "https://cp1:4600/#fragment",
+    ] {
+        assert!(
+            NodeIdentityContract::new(1, invalid, Duration::from_secs(3600)).is_err(),
+            "invalid advertised identity must fail: {invalid}"
+        );
+    }
 }

@@ -7,6 +7,7 @@
 
 use std::net::SocketAddr;
 
+use aog_wire::tls::{TlsListener, TlsPeer};
 use aogd::{Config, Daemon, DaemonError};
 use tracing_subscriber::EnvFilter;
 
@@ -38,9 +39,16 @@ fn check_startup_posture(
     profile: Profile,
     listen: &SocketAddr,
     has_trust: bool,
+    has_node_tls_source: bool,
     allow_insecure_development_bind: bool,
+    allow_insecure_admin: bool,
 ) -> Result<(), DaemonError> {
     if profile == Profile::Production {
+        if allow_insecure_admin {
+            return Err(DaemonError::Config(
+                "AOGD_ALLOW_INSECURE_ADMIN is forbidden in production".to_owned(),
+            ));
+        }
         if !has_trust {
             return Err(DaemonError::Config(
                 "production requires AOGD_ANCHOR_PUBKEY or AOGD_OPENBAO_ADDR; refusing the \
@@ -48,11 +56,14 @@ fn check_startup_posture(
                     .to_string(),
             ));
         }
-        return Err(DaemonError::Config(
-            "production is contained until authenticated /admin authorization and Raft mTLS \
-             are wired; plaintext/unauthenticated control-plane transport is forbidden"
-                .to_string(),
-        ));
+        if !has_node_tls_source {
+            return Err(DaemonError::Config(
+                "production requires node TLS from AOGD_RAFT_TLS_OPENBAO_PATH or the complete \
+                 AOGD_RAFT_{CA,CERT,KEY}_DER_PATH set"
+                    .to_string(),
+            ));
+        }
+        return Ok(());
     }
 
     if listen.ip().is_loopback() || allow_insecure_development_bind {
@@ -76,9 +87,19 @@ async fn main() -> Result<(), DaemonError> {
     let config = Config::from_env()?;
     let allow_insecure = std::env::var("AOGD_ALLOW_INSECURE_BIND").ok().as_deref() == Some("1");
     let has_trust = config.anchor_pubkey.is_some() || config.openbao.is_some();
-    check_startup_posture(profile, &config.listen, has_trust, allow_insecure)?;
-    let listener = tokio::net::TcpListener::bind(config.listen).await?;
+    let has_node_tls_source = config.node_tls.is_some();
+    let allow_insecure_admin = config.allow_insecure_admin;
+    check_startup_posture(
+        profile,
+        &config.listen,
+        has_trust,
+        has_node_tls_source,
+        allow_insecure,
+        allow_insecure_admin,
+    )?;
+    let listen = config.listen;
     let daemon = Daemon::start(config).await?;
+    let listener = tokio::net::TcpListener::bind(listen).await?;
 
     tracing::info!(
         node_id = daemon.node().id(),
@@ -86,7 +107,25 @@ async fn main() -> Result<(), DaemonError> {
         "aogd started"
     );
 
-    axum::serve(listener, daemon.app()).await?;
+    let server_tls = daemon
+        .node_tls()
+        .map(|tls| tls.server_config())
+        .transpose()
+        .map_err(|e| DaemonError::Config(format!("node TLS server config: {e}")))?;
+    let app = daemon.app();
+    if let Some(server_tls) = server_tls {
+        axum::serve(
+            TlsListener::new(listener, server_tls),
+            app.into_make_service_with_connect_info::<TlsPeer>(),
+        )
+        .await?;
+    } else {
+        axum::serve(
+            listener,
+            app.into_make_service_with_connect_info::<SocketAddr>(),
+        )
+        .await?;
+    }
     Ok(())
 }
 
@@ -111,30 +150,81 @@ mod tests {
 
     #[test]
     fn production_refuses_missing_trust_before_transport_check() {
-        let err = check_startup_posture(Profile::Production, &addr("127.0.0.1:4600"), false, true)
-            .unwrap_err();
+        let err = check_startup_posture(
+            Profile::Production,
+            &addr("127.0.0.1:4600"),
+            false,
+            false,
+            true,
+            false,
+        )
+        .unwrap_err();
         assert!(err.to_string().contains("requires AOGD_ANCHOR_PUBKEY"));
     }
 
     #[test]
-    fn production_refuses_plaintext_transport_even_with_trust_and_override() {
-        let err = check_startup_posture(Profile::Production, &addr("127.0.0.1:4600"), true, true)
-            .unwrap_err();
-        assert!(err.to_string().contains("Raft mTLS"));
+    fn production_refuses_missing_node_tls_before_transport_check() {
+        let err = check_startup_posture(
+            Profile::Production,
+            &addr("127.0.0.1:4600"),
+            true,
+            false,
+            true,
+            false,
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("requires node TLS"));
+    }
+
+    #[test]
+    fn production_with_identity_passes_prebind_posture_for_mtls_startup() {
+        assert!(
+            check_startup_posture(
+                Profile::Production,
+                &addr("127.0.0.1:4600"),
+                true,
+                true,
+                false,
+                false,
+            )
+            .is_ok()
+        );
     }
 
     #[test]
     fn development_nonloopback_requires_second_explicit_opt_in() {
         assert!(
-            check_startup_posture(Profile::Development, &addr("127.0.0.1:4600"), false, false)
-                .is_ok()
+            check_startup_posture(
+                Profile::Development,
+                &addr("127.0.0.1:4600"),
+                false,
+                false,
+                false,
+                false,
+            )
+            .is_ok()
         );
         assert!(
-            check_startup_posture(Profile::Development, &addr("0.0.0.0:4600"), false, false)
-                .is_err()
+            check_startup_posture(
+                Profile::Development,
+                &addr("0.0.0.0:4600"),
+                false,
+                false,
+                false,
+                false,
+            )
+            .is_err()
         );
         assert!(
-            check_startup_posture(Profile::Development, &addr("0.0.0.0:4600"), false, true).is_ok()
+            check_startup_posture(
+                Profile::Development,
+                &addr("0.0.0.0:4600"),
+                false,
+                false,
+                true,
+                true,
+            )
+            .is_ok()
         );
     }
 }

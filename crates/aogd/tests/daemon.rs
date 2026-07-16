@@ -68,6 +68,8 @@ async fn three_aogd_daemons_form_consensus_through_the_admin_api() {
             advertise: urls[i].clone(),
             anchor_pubkey: None,
             openbao: None,
+            node_tls: None,
+            allow_insecure_admin: true,
         })
         .await
         .unwrap();

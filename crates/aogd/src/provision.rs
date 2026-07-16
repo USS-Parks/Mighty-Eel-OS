@@ -21,6 +21,7 @@
 
 use aog_apiserver::auth::Authenticator;
 use aog_apiserver::seal::Sealer;
+use aog_wire::tls::{NodeIdentityContract, NodeTls};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use fabric_crypto::providers::RustCryptoMlDsa87;
@@ -41,6 +42,9 @@ const ANCHOR: &str = "anchor_pubkey";
 const SEAL_DATA_KEY: &str = "seal_data_key";
 const SEAL_SIGNER_PK: &str = "seal_signer_pk";
 const SEAL_SIGNER_SK: &str = "seal_signer_sk";
+const RAFT_CA_DER: &str = "raft_ca_der";
+const RAFT_CERT_DER: &str = "raft_cert_der";
+const RAFT_KEY_DER: &str = "raft_key_der";
 
 /// The `key_id` the assembled seal signer carries — same label the kernel
 /// default (`Sealer::generate`) uses, so the two are drop-in interchangeable.
@@ -68,6 +72,76 @@ pub async fn from_openbao(trust: &OpenBaoTrust) -> Result<TrustMaterial, DaemonE
         .await
         .map_err(|e| DaemonError::Config(format!("openbao trust read: {e}")))?;
     assemble(&record)
+}
+
+/// Read and validate a per-node Raft TLS record from OpenBao. The record keeps
+/// private material separate from the estate-wide application trust record and
+/// contains base64 DER fields `raft_ca_der`, `raft_cert_der`, and
+/// `raft_key_der`. Errors never include field contents.
+///
+/// # Errors
+/// [`DaemonError::Config`] if login/read fails or the identity contract rejects
+/// the material.
+pub async fn node_tls_from_openbao(
+    trust: &OpenBaoTrust,
+    path: &str,
+    contract: &NodeIdentityContract,
+) -> Result<NodeTls, DaemonError> {
+    let client = OpenBaoAuth::new(OpenBaoConfig::new(
+        &trust.address,
+        &trust.role_id,
+        &trust.secret_id,
+    ))
+    .map_err(|e| DaemonError::Config(format!("openbao client: {e}")))?;
+    let token = client
+        .login()
+        .await
+        .map_err(|e| DaemonError::Config(format!("openbao login: {e}")))?;
+    let record = client
+        .get_kv_data(&token, path)
+        .await
+        .map_err(|e| DaemonError::Config(format!("openbao node TLS read: {e}")))?;
+    assemble_node_tls(&record, contract)
+}
+
+/// Load DER files and validate them against the node identity contract before
+/// the daemon can bind a listener.
+///
+/// # Errors
+/// [`DaemonError::Config`] names the unreadable file or rejected public
+/// contract without logging private-key bytes.
+pub fn node_tls_from_files(
+    ca_path: &std::path::Path,
+    cert_path: &std::path::Path,
+    key_path: &std::path::Path,
+    contract: &NodeIdentityContract,
+) -> Result<NodeTls, DaemonError> {
+    let ca = std::fs::read(ca_path)
+        .map_err(|e| DaemonError::Config(format!("read estate CA DER: {e}")))?;
+    let cert = std::fs::read(cert_path)
+        .map_err(|e| DaemonError::Config(format!("read node certificate DER: {e}")))?;
+    let key = std::fs::read(key_path)
+        .map_err(|e| DaemonError::Config(format!("read node private-key DER: {e}")))?;
+    NodeTls::for_node_der(vec![ca], vec![cert], key, contract)
+        .map_err(|e| DaemonError::Config(format!("node TLS identity: {e}")))
+}
+
+/// Assemble a node TLS record without exposing decoded key material.
+///
+/// # Errors
+/// [`DaemonError::Config`] if a field is absent/malformed or the certificate
+/// violates the node identity contract.
+pub fn assemble_node_tls(
+    record: &serde_json::Value,
+    contract: &NodeIdentityContract,
+) -> Result<NodeTls, DaemonError> {
+    NodeTls::for_node_der(
+        vec![field(record, RAFT_CA_DER)?],
+        vec![field(record, RAFT_CERT_DER)?],
+        field(record, RAFT_KEY_DER)?,
+        contract,
+    )
+    .map_err(|e| DaemonError::Config(format!("node TLS identity: {e}")))
 }
 
 /// Assemble trust material from a KV-v2 `data.data` record. Pure — the offline
@@ -111,6 +185,128 @@ mod tests {
     use fabric_contracts::{Attenuation, Classification, RevocationStatus, Signature, TrustToken};
     use fabric_crypto::Signer;
     use serde_json::json;
+    use std::process::Command;
+    use std::time::Duration;
+
+    fn openssl(args: &[&str]) {
+        let output = Command::new("openssl")
+            .args(args)
+            .output()
+            .expect("openssl on PATH");
+        assert!(
+            output.status.success(),
+            "openssl {args:?} failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    fn node_tls_record() -> serde_json::Value {
+        let dir = std::env::temp_dir().join("aogd-node-tls-record");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let ca = dir.join("ca.pem");
+        let ca_key = dir.join("ca.key.pem");
+        let cert = dir.join("node.pem");
+        let key = dir.join("node.key.pem");
+        let csr = dir.join("node.csr");
+        let ext = dir.join("node.ext");
+        let ca_der = dir.join("ca.der");
+        let cert_der = dir.join("node.der");
+        let key_der = dir.join("node.key.der");
+        std::fs::write(
+            &ext,
+            "[ v3 ]\nsubjectAltName = DNS:cp1, URI:spiffe://loom/node/1\nextendedKeyUsage = serverAuth,clientAuth\nbasicConstraints = CA:FALSE\n",
+        )
+        .unwrap();
+        openssl(&[
+            "req",
+            "-x509",
+            "-newkey",
+            "ec",
+            "-pkeyopt",
+            "ec_paramgen_curve:prime256v1",
+            "-nodes",
+            "-keyout",
+            ca_key.to_str().unwrap(),
+            "-out",
+            ca.to_str().unwrap(),
+            "-subj",
+            "/CN=estate-ca",
+            "-days",
+            "36500",
+            "-addext",
+            "basicConstraints=critical,CA:TRUE",
+            "-addext",
+            "keyUsage=critical,keyCertSign,cRLSign",
+        ]);
+        openssl(&[
+            "req",
+            "-newkey",
+            "ec",
+            "-pkeyopt",
+            "ec_paramgen_curve:prime256v1",
+            "-nodes",
+            "-keyout",
+            key.to_str().unwrap(),
+            "-out",
+            csr.to_str().unwrap(),
+            "-subj",
+            "/CN=node-1",
+        ]);
+        openssl(&[
+            "x509",
+            "-req",
+            "-in",
+            csr.to_str().unwrap(),
+            "-CA",
+            ca.to_str().unwrap(),
+            "-CAkey",
+            ca_key.to_str().unwrap(),
+            "-CAcreateserial",
+            "-out",
+            cert.to_str().unwrap(),
+            "-days",
+            "36500",
+            "-extfile",
+            ext.to_str().unwrap(),
+            "-extensions",
+            "v3",
+        ]);
+        openssl(&[
+            "x509",
+            "-in",
+            ca.to_str().unwrap(),
+            "-outform",
+            "DER",
+            "-out",
+            ca_der.to_str().unwrap(),
+        ]);
+        openssl(&[
+            "x509",
+            "-in",
+            cert.to_str().unwrap(),
+            "-outform",
+            "DER",
+            "-out",
+            cert_der.to_str().unwrap(),
+        ]);
+        openssl(&[
+            "pkcs8",
+            "-topk8",
+            "-nocrypt",
+            "-in",
+            key.to_str().unwrap(),
+            "-outform",
+            "DER",
+            "-out",
+            key_der.to_str().unwrap(),
+        ]);
+        json!({
+            RAFT_CA_DER: BASE64.encode(std::fs::read(ca_der).unwrap()),
+            RAFT_CERT_DER: BASE64.encode(std::fs::read(cert_der).unwrap()),
+            RAFT_KEY_DER: BASE64.encode(std::fs::read(key_der).unwrap()),
+        })
+    }
 
     /// A `base64(json(TrustToken))` `x-wsf-token` header value under `signer`.
     fn token_header(signer: &RustCryptoMlDsa87) -> String {
@@ -217,5 +413,27 @@ mod tests {
             assemble(&bad_key).is_err(),
             "wrong-length seal key must fail closed"
         );
+    }
+
+    #[test]
+    fn openbao_node_tls_record_binds_the_exact_node_identity() {
+        let record = node_tls_record();
+        let contract =
+            NodeIdentityContract::new(1, "https://cp1:4600", Duration::from_secs(3600)).unwrap();
+        assert!(assemble_node_tls(&record, &contract).is_ok());
+
+        let wrong_node =
+            NodeIdentityContract::new(2, "https://cp1:4600", Duration::from_secs(3600)).unwrap();
+        assert!(
+            assemble_node_tls(&record, &wrong_node).is_err(),
+            "an OpenBao node-1 record must not provision node 2"
+        );
+
+        let mut missing_key = record;
+        missing_key.as_object_mut().unwrap().remove(RAFT_KEY_DER);
+        let err = assemble_node_tls(&missing_key, &contract)
+            .err()
+            .expect("missing private key must fail closed");
+        assert!(err.to_string().contains(RAFT_KEY_DER));
     }
 }

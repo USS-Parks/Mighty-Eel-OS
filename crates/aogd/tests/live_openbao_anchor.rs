@@ -246,6 +246,8 @@ async fn aogd_trust_from_live_openbao() {
             secret_id,
             trust_path: TRUST_PATH.to_owned(),
         }),
+        node_tls: None,
+        allow_insecure_admin: false,
     };
     let daemon = Daemon::start(config)
         .await

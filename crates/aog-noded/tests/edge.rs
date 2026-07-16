@@ -36,6 +36,8 @@ async fn edge_daemons_register_and_heartbeat_into_the_control_plane() {
         advertise: cp_url.clone(),
         anchor_pubkey: None,
         openbao: None,
+        node_tls: None,
+        allow_insecure_admin: true,
     })
     .await
     .unwrap();

@@ -50,6 +50,7 @@ services:
       AOGD_ADVERTISE: "http://cp1:4600"
       AOGD_PROFILE: development
       AOGD_ALLOW_INSECURE_BIND: "1"
+      AOGD_ALLOW_INSECURE_ADMIN: "1"
     ports: ["4601:4600"]
 
   cp2:
@@ -61,6 +62,7 @@ services:
       AOGD_ADVERTISE: "http://cp2:4600"
       AOGD_PROFILE: development
       AOGD_ALLOW_INSECURE_BIND: "1"
+      AOGD_ALLOW_INSECURE_ADMIN: "1"
 
   cp3:
     <<: *aogd
@@ -71,6 +73,7 @@ services:
       AOGD_ADVERTISE: "http://cp3:4600"
       AOGD_PROFILE: development
       AOGD_ALLOW_INSECURE_BIND: "1"
+      AOGD_ALLOW_INSECURE_ADMIN: "1"
 
   cp4:
     <<: *aogd
@@ -81,6 +84,7 @@ services:
       AOGD_ADVERTISE: "http://cp4:4600"
       AOGD_PROFILE: development
       AOGD_ALLOW_INSECURE_BIND: "1"
+      AOGD_ALLOW_INSECURE_ADMIN: "1"
 
   cp5:
     <<: *aogd
@@ -91,6 +95,7 @@ services:
       AOGD_ADVERTISE: "http://cp5:4600"
       AOGD_PROFILE: development
       AOGD_ALLOW_INSECURE_BIND: "1"
+      AOGD_ALLOW_INSECURE_ADMIN: "1"
 
   cluster-init:
     image: loom-harness:vh4

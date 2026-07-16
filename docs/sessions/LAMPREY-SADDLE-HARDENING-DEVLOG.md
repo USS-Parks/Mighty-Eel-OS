@@ -294,3 +294,49 @@ Final verification on 2026-07-15:
 - Live disposable services — PASS with OpenBao on port 8200 and Moto on port 5566; no secret/plaintext evidence was logged.
 
 Gate notes: the first unmodified-`PATH` workspace test run failed only because `openssl` was not discoverable; the command-local Git OpenSSL path closed that environment prerequisite. Full gates then exposed and closed one `aogd` principal-accessor migration and eleven strict WSF needless-borrow lints before the final green run.
+
+---
+
+## M2 — Authenticated AOG control plane (partial checkpoint)
+
+Checkpoint status: **PASS for LSH-C1 through LSH-C3; M2 remains IN PROGRESS**. LSH-C4 and LSH-C5 were not started in this checkpoint and remain required before M2 acceptance.
+
+### LSH-C1 — Node identity and TLS provisioning contract
+
+Status: **PASS** (checkpoint commit pending at the time of this entry).
+
+`aog-wire` now validates a credential-free HTTPS advertised origin, the exact `spiffe://loom/node/<node-id>` URI SAN, advertised-host SAN, estate CA chain, server/client EKUs, validity and rotation window, and certificate/private-key pairing. `aogd` provisions DER identity from either mounted files or an OpenBao record and validates it before listener startup. Private-key material is represented only by a redacted diagnostic marker. The operator contract and rolling-rotation procedure are recorded in `docs/operations/AOG-CONTROL-PLANE-TLS.md`.
+
+Gate: missing, malformed, wrong-node, wrong-host, wrong-CA, rotation-unsafe, and mismatched-key fixtures fail closed; valid material passes. The focused `aog-wire` and `aogd` tests pass with the existing Git OpenSSL directory prepended only to the command's `PATH`.
+
+### LSH-C2 — Integrate mTLS into Raft client and server
+
+Status: **PASS** (checkpoint commit pending at the time of this entry).
+
+The daemon now constructs the Raft network and admin forwarding client from the validated node identity, disables redirects, terminates Axum through a client-certificate-requiring TLS listener, extracts the authenticated node identity before HTTP/Raft decoding, and rejects claimed Raft sender identities that do not match the certificate. Secure membership requires HTTPS.
+
+Gate: `crates/aogd/tests/daemon_mtls.rs` forms and writes through a real three-node mTLS Raft cluster. No-certificate, rogue-CA, HTTP membership, and valid-certificate forged vote/append/snapshot attempts are rejected before Raft state handling.
+
+### LSH-C3 — Fail-closed admin trust and bounded bootstrap
+
+Status: **PASS** (checkpoint commit pending at the time of this entry).
+
+Without configured admin trust, normal admin mutations remain unavailable. The sole bootstrap exception is one loopback `/admin/initialize` request, atomically consumed and kept closed after persisted membership survives restart. Remote bootstrap, wrong-path mutation, and replay are denied. `AOGD_ALLOW_INSECURE_ADMIN=1` is an explicit development-harness escape hatch and is rejected by the production posture check.
+
+Gate: the unit authorization matrix and `crates/aogd/tests/bootstrap.rs` pass, including normal-write denial, one loopback initialization, replay denial, and replay denial after shutdown/restart with the same data directory.
+
+### Partial-M2 verification
+
+Final focused verification on 2026-07-15:
+
+- `cargo fmt --check` — PASS.
+- `cargo check -p aog-wire -p aogd -p aog-noded --all-targets` — PASS.
+- `cargo clippy -p aog-wire -p aogd -p aog-noded --all-targets -- -D warnings -A clippy::pedantic` — PASS.
+- `cargo test -p aog-wire` — PASS (5 mTLS/identity cases plus the three-node wire test).
+- `cargo test -p aogd` — PASS, including admin authorization, persistent bootstrap, real three-node mTLS, and OpenBao provisioning seams.
+- `cargo test -p aog-noded` — PASS, including downstream edge registration/heartbeat behavior.
+- `git diff --check` — PASS.
+
+During final verification, one production-posture test fixture still enabled the newly forbidden insecure-admin flag. Correcting that boolean fixture restored the intended production-with-mTLS case; the complete focused gate set was rerun and passed afterward.
+
+Commit state: implementation and evidence are staged for the user-authorized partial-M2 checkpoint; commit SHA will be recorded in the follow-up closeout commit.

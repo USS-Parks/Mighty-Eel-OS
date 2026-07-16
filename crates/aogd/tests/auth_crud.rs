@@ -87,6 +87,8 @@ async fn aogd_authenticated_crud_via_from_raft() {
         advertise: format!("http://{addr}"),
         anchor_pubkey: Some(anchor.public_key().to_vec()),
         openbao: None,
+        node_tls: None,
+        allow_insecure_admin: false,
     };
     let daemon = Daemon::start(config).await.unwrap();
     let app = daemon.app();
