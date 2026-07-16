@@ -228,25 +228,21 @@ async fn budget_exhaustion_and_revocation_halt_the_next_call() {
         .await
         .expect("seed revocation key");
 
-    let gateway = Gateway::new(
-        openbao,
-        GatewayConfig {
-            token_public_key: anchor.public_key().to_vec(),
-            virtual_key_kv_prefix: KV_PREFIX.to_string(),
-        },
-    )
-    .with_revocation_path(REVOCATION_PATH.to_string());
+    let gateway_config = GatewayConfig {
+        token_public_key: anchor.public_key().to_vec(),
+        virtual_key_kv_prefix: KV_PREFIX.to_string(),
+    };
     let now = Utc::now();
 
     // --- Negative control: absent snapshot → fail-closed deny --------------
     // The revocation path is configured and the snapshot was destroyed above:
     // the gateway must refuse to resolve rather than run silently unprotected.
-    match gateway.resolve_and_check("vk_bud", now).await {
+    match Gateway::new_production(openbao.clone(), gateway_config.clone(), REVOCATION_PATH).await {
         Err(GatewayError::Unauthorized(msg)) => assert!(
             msg.contains("revocation snapshot unavailable"),
             "expected the fail-closed reason, got: {msg}"
         ),
-        other => panic!("expected fail-closed deny with no snapshot, got {other:?}"),
+        _ => panic!("expected production construction to fail with no snapshot"),
     }
 
     // Publish a baseline nothing-revoked snapshot (sequence 1; the revoking
@@ -260,6 +256,9 @@ async fn budget_exhaustion_and_revocation_halt_the_next_call() {
     .with_sequence(1);
     let signed_baseline = fabric_revocation::sign(baseline, &anchor).expect("sign baseline");
     put_snapshot(&addr, &c, &root_token(), &signed_baseline).await;
+    let gateway = Gateway::new_production(openbao, gateway_config, REVOCATION_PATH)
+        .await
+        .expect("production gateway loads the baseline snapshot");
 
     // --- Budget kill-switch: exhaustion blocks mid-session -----------------
     gateway
@@ -298,6 +297,17 @@ async fn budget_exhaustion_and_revocation_halt_the_next_call() {
     match gateway.resolve_and_check("vk_rev", now).await {
         Err(GatewayError::Revoked) => {}
         other => panic!("expected Revoked after the snapshot is written, got {other:?}"),
+    }
+
+    // Replay the older clean baseline. The held sequence-2 revocation must not
+    // be replaced by a cleaner sequence-1 view.
+    put_snapshot(&addr, &c, &root_token(), &signed_baseline).await;
+    match gateway.resolve_and_check("vk_rev", now).await {
+        Err(GatewayError::Unauthorized(message)) => assert!(
+            message.contains("rollback"),
+            "expected monotonic rollback denial, got: {message}"
+        ),
+        other => panic!("expected rollback replay to fail closed, got {other:?}"),
     }
 }
 

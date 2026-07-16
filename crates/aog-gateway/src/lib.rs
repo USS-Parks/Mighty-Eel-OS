@@ -24,12 +24,12 @@ pub mod surface_anthropic;
 pub mod surface_openai;
 pub mod tokenize;
 
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 use chrono::{DateTime, Utc};
 use fabric_contracts::TrustToken;
 use fabric_crypto::providers::MlDsa87Verifier;
-use fabric_revocation::RevocationSnapshot;
+use fabric_revocation::{CurrentRevocationError, MonotonicRevocationStore, RevocationSnapshot};
 use fabric_token::spend::{LocalSpendLedger, SpendLedger, Spent};
 use sha2::{Digest, Sha256};
 use wsf_bridge::OpenBaoAuth;
@@ -91,7 +91,15 @@ pub struct Gateway {
     spend: Arc<dyn SpendLedger>,
     /// G9 kill switch: KV path to the signed revocation snapshot. Empty (the
     /// default) disables the check — no snapshot source configured.
-    revocation_kv_path: String,
+    revocation: GatewayRevocation,
+}
+
+enum GatewayRevocation {
+    DevelopmentDisabled,
+    Required {
+        path: String,
+        store: Arc<RwLock<MonotonicRevocationStore>>,
+    },
 }
 
 /// Whether a budget has any dimension exhausted (a cap of 0 = that axis unused).
@@ -103,15 +111,56 @@ pub fn budget_exhausted(budget: &fabric_contracts::Budget) -> bool {
 }
 
 impl Gateway {
-    /// Assemble a gateway from an OpenBao client and config.
+    /// Assemble an explicit development/test gateway with revocation disabled.
+    /// Production callers must use [`Self::new_production`].
     #[must_use]
     pub fn new(openbao: OpenBaoAuth, config: GatewayConfig) -> Self {
         Self {
             openbao,
             config,
             spend: Arc::new(LocalSpendLedger::default()),
-            revocation_kv_path: String::new(),
+            revocation: GatewayRevocation::DevelopmentDisabled,
         }
+    }
+
+    /// Assemble a production gateway and load its mandatory initial revocation
+    /// snapshot before returning. Listener construction must happen only after
+    /// this succeeds.
+    pub async fn new_production(
+        openbao: OpenBaoAuth,
+        config: GatewayConfig,
+        revocation_path: impl Into<String>,
+    ) -> Result<Self, GatewayError> {
+        let revocation_path = revocation_path.into();
+        if revocation_path.trim().is_empty() {
+            return Err(GatewayError::Unauthorized(
+                "mandatory production revocation path is empty".to_string(),
+            ));
+        }
+        let gateway = Self {
+            openbao,
+            config,
+            spend: Arc::new(LocalSpendLedger::default()),
+            revocation: GatewayRevocation::Required {
+                path: revocation_path,
+                store: Arc::new(RwLock::new(MonotonicRevocationStore::new())),
+            },
+        };
+        gateway.refresh_revocation().await?;
+        gateway.ensure_current_revocation(Utc::now())?;
+        Ok(gateway)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn with_test_revocation_store(
+        mut self,
+        store: Arc<RwLock<MonotonicRevocationStore>>,
+    ) -> Self {
+        self.revocation = GatewayRevocation::Required {
+            path: String::new(),
+            store,
+        };
+        self
     }
 
     /// Swap the runtime spend ledger — e.g. a shared ledger for a horizontally
@@ -123,12 +172,72 @@ impl Gateway {
         self
     }
 
-    /// Set the KV path the kill switch reads the signed revocation snapshot from
-    /// (e.g. `kv/data/aog/revocation`). Empty (the default) disables the check.
-    #[must_use]
-    pub fn with_revocation_path(mut self, path: impl Into<String>) -> Self {
-        self.revocation_kv_path = path.into();
-        self
+    async fn refresh_revocation(&self) -> Result<(), GatewayError> {
+        let GatewayRevocation::Required { path, store } = &self.revocation else {
+            return Ok(());
+        };
+        if path.is_empty() {
+            return Ok(());
+        }
+        let vault_token = self.openbao.login().await?;
+        let data = match self.openbao.get_kv_data(&vault_token, path).await {
+            Ok(data) => data,
+            Err(wsf_bridge::OpenBaoError::NotFound(_)) => {
+                return Err(GatewayError::Unauthorized(
+                    "revocation snapshot unavailable (fail-closed)".to_string(),
+                ));
+            }
+            Err(error) => return Err(GatewayError::OpenBao(error)),
+        };
+        let value = data
+            .get("snapshot")
+            .cloned()
+            .ok_or_else(|| GatewayError::Unauthorized("malformed revocation record".to_string()))?;
+        let candidate: RevocationSnapshot = serde_json::from_value(value)
+            .map_err(|error| GatewayError::Unauthorized(format!("revocation snapshot: {error}")))?;
+        let mut held = store.write().map_err(|_| {
+            GatewayError::Unauthorized("revocation store lock poisoned".to_string())
+        })?;
+        if held.current() != Some(&candidate) {
+            held.advance(candidate, &MlDsa87Verifier, &self.config.token_public_key)
+                .map_err(|error| {
+                    GatewayError::Unauthorized(format!("revocation snapshot rejected: {error}"))
+                })?;
+        }
+        Ok(())
+    }
+
+    fn authorize_held(&self, token: &TrustToken, now: DateTime<Utc>) -> Result<(), GatewayError> {
+        let GatewayRevocation::Required { store, .. } = &self.revocation else {
+            return Ok(());
+        };
+        let held = store.read().map_err(|_| {
+            GatewayError::Unauthorized("revocation store lock poisoned".to_string())
+        })?;
+        held.authorize(token, now).map_err(map_revocation_error)
+    }
+
+    fn ensure_current_revocation(&self, now: DateTime<Utc>) -> Result<(), GatewayError> {
+        let GatewayRevocation::Required { store, .. } = &self.revocation else {
+            return Ok(());
+        };
+        let held = store.read().map_err(|_| {
+            GatewayError::Unauthorized("revocation store lock poisoned".to_string())
+        })?;
+        held.ensure_current(now)
+            .map(|_| ())
+            .map_err(map_revocation_error)
+    }
+
+    /// Refresh and apply current revocation immediately before a privileged
+    /// provider step or stream continuation.
+    pub async fn authorize_current(
+        &self,
+        token: &TrustToken,
+        now: DateTime<Utc>,
+    ) -> Result<(), GatewayError> {
+        self.refresh_revocation().await?;
+        self.authorize_held(token, now)
     }
 
     /// Resolve a virtual key to a verified, in-budget [`ResolvedContext`].
@@ -169,38 +278,7 @@ impl Gateway {
         // the snapshot is absent or was deleted (F2-N2). The verified snapshot is
         // then checked for freshness (F2-N3) and against the complete revocation
         // predicate — every dimension, not just token id + subject (F2-N1).
-        if !self.revocation_kv_path.is_empty() {
-            match self
-                .openbao
-                .get_kv_data(&vault_token, &self.revocation_kv_path)
-                .await
-            {
-                Ok(d) => {
-                    let snap = d.get("snapshot").cloned().ok_or_else(|| {
-                        GatewayError::Unauthorized("malformed revocation record".to_string())
-                    })?;
-                    let snapshot: RevocationSnapshot =
-                        serde_json::from_value(snap).map_err(|e| {
-                            GatewayError::Unauthorized(format!("revocation snapshot: {e}"))
-                        })?;
-                    fabric_revocation::verify(
-                        &snapshot,
-                        &MlDsa87Verifier,
-                        &self.config.token_public_key,
-                    )
-                    .map_err(|e| {
-                        GatewayError::Unauthorized(format!("revocation snapshot signature: {e}"))
-                    })?;
-                    revocation_decision(&snapshot, &token, now)?;
-                }
-                Err(wsf_bridge::OpenBaoError::NotFound(_)) => {
-                    return Err(GatewayError::Unauthorized(
-                        "revocation snapshot unavailable (fail-closed)".to_string(),
-                    ));
-                }
-                Err(e) => return Err(GatewayError::OpenBao(e)),
-            }
-        }
+        self.authorize_current(&token, now).await?;
 
         // Budget pre-flight (G1 static caps + G9 session-cumulative runtime spend).
         // Metering is keyed by the attenuation lineage (T5) so sibling children
@@ -240,16 +318,20 @@ impl Gateway {
 /// A revocation snapshot is stale once `now` is at or past its `expires_at`
 /// (F2-N3). A snapshot whose expiry cannot be parsed is treated as stale
 /// (fail-closed) rather than trusted indefinitely.
-fn snapshot_is_stale(snapshot: &RevocationSnapshot, now: DateTime<Utc>) -> bool {
-    match DateTime::parse_from_rfc3339(&snapshot.expires_at) {
-        Ok(exp) => now >= exp.with_timezone(&Utc),
-        Err(_) => true,
+fn map_revocation_error(error: CurrentRevocationError) -> GatewayError {
+    match error {
+        CurrentRevocationError::Revoked(_) => GatewayError::Revoked,
+        other => GatewayError::Unauthorized(format!("revocation state: {other}")),
     }
 }
 
-/// The gateway's decision for a signature-verified revocation snapshot (F2).
-/// Fails closed on a stale snapshot; denies on any revoked dimension via the
-/// complete predicate (`RevocationSnapshot::revokes`).
+#[cfg(test)]
+fn snapshot_is_stale(snapshot: &RevocationSnapshot, now: DateTime<Utc>) -> bool {
+    DateTime::parse_from_rfc3339(&snapshot.expires_at)
+        .map_or(true, |expires| now >= expires.with_timezone(&Utc))
+}
+
+#[cfg(test)]
 fn revocation_decision(
     snapshot: &RevocationSnapshot,
     token: &TrustToken,

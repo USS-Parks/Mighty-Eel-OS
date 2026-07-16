@@ -16,7 +16,7 @@ use chrono::Utc;
 use futures::StreamExt;
 use serde_json::{Value, json};
 
-use crate::app::{AppState, authorize, authorize_dispatch};
+use crate::app::{AppState, DispatchError, authorize, authorize_dispatch};
 use crate::provider::{
     ChatMessage, ChunkStream, CompletionRequest, CompletionResponse, ProviderError, Role,
 };
@@ -98,6 +98,13 @@ pub(crate) fn provider_http(e: &ProviderError) -> (StatusCode, String) {
         ProviderError::Transport(m) | ProviderError::Decode(m) => {
             (StatusCode::BAD_GATEWAY, m.clone())
         }
+    }
+}
+
+pub(crate) fn dispatch_http(e: &DispatchError) -> (StatusCode, String) {
+    match e {
+        DispatchError::Revocation(error) => crate::http::to_http(error),
+        DispatchError::Provider(error) => provider_http(error),
     }
 }
 
@@ -191,7 +198,7 @@ async fn chat_completions(
                         reservation: dispatch.take_reservation(),
                     },
                 ),
-                Err(e) => provider_http(&e).into_response(),
+                Err(e) => dispatch_http(&e).into_response(),
             }
         }
     } else {
@@ -241,7 +248,7 @@ async fn chat_completions(
                     Err(error) => crate::app::reservation_http(&error),
                 }
             }
-            Err(e) => provider_http(&e).into_response(),
+            Err(e) => dispatch_http(&e).into_response(),
         }
     };
     let resp = crate::route::tag_route(resp, &decision);
@@ -393,7 +400,19 @@ fn chat_sse(model: String, mut chunks: ChunkStream, meter: crate::meter::StreamM
             Event::default().data(chunk_json(&id, ts, &model, &json!({ "role": "assistant" }), None)),
         );
         let mut closed = false;
+        let mut revocation_denied = false;
         while let Some(frame) = chunks.next().await {
+            if let Err(error) = meter.authorize_continuation().await {
+                yield Ok(Event::default().data(json!({
+                    "error": {
+                        "message": error.to_string(),
+                        "type": "authorization_denied",
+                        "code": "aog_stream_revoked"
+                    }
+                }).to_string()));
+                revocation_denied = true;
+                break;
+            }
             match frame {
                 Ok(c) => {
                     meter.observe(&c);
@@ -412,10 +431,12 @@ fn chat_sse(model: String, mut chunks: ChunkStream, meter: crate::meter::StreamM
                 Err(_) => break,
             }
         }
-        if !closed {
+        if !closed && !revocation_denied {
             yield Ok(Event::default().data(chunk_json(&id, ts, &model, &json!({}), Some("stop"))));
         }
-        yield Ok(Event::default().data("[DONE]"));
+        if !revocation_denied {
+            yield Ok(Event::default().data("[DONE]"));
+        }
     };
     Sse::new(stream).into_response()
 }
@@ -542,7 +563,7 @@ async fn completions(
                 Err(error) => crate::app::reservation_http(&error),
             }
         }
-        Err(e) => provider_http(&e).into_response(),
+        Err(e) => dispatch_http(&e).into_response(),
     };
     let resp = crate::route::tag_route(resp, &decision);
     let resp = crate::policy::tag_policy(resp, &policy_decision, state.mode, outcome);

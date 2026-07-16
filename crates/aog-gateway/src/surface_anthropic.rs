@@ -15,7 +15,7 @@ use serde_json::{Value, json};
 
 use crate::app::{AppState, authorize_dispatch};
 use crate::provider::{ChatMessage, ChunkStream, CompletionRequest, CompletionResponse, Role};
-use crate::surface_openai::{new_id, opt_f32, opt_u32, provider_http};
+use crate::surface_openai::{dispatch_http, new_id, opt_f32, opt_u32};
 
 /// Mount the Anthropic-compatible routes over shared [`AppState`].
 pub fn router(state: AppState) -> Router {
@@ -167,7 +167,7 @@ async fn messages(
                         reservation: dispatch.take_reservation(),
                     },
                 ),
-                Err(e) => provider_http(&e).into_response(),
+                Err(e) => dispatch_http(&e).into_response(),
             }
         }
     } else {
@@ -217,7 +217,7 @@ async fn messages(
                     Err(error) => crate::app::reservation_http(&error),
                 }
             }
-            Err(e) => provider_http(&e).into_response(),
+            Err(e) => dispatch_http(&e).into_response(),
         }
     };
     let resp = crate::route::tag_route(resp, &decision);
@@ -276,7 +276,19 @@ fn messages_sse(
         }));
 
         let mut out_tokens = 0u32;
+        let mut revocation_denied = false;
         while let Some(frame) = chunks.next().await {
+            if let Err(error) = meter.authorize_continuation().await {
+                yield ev("error", &json!({
+                    "type": "error",
+                    "error": {
+                        "type": "authentication_error",
+                        "message": error.to_string()
+                    }
+                }));
+                revocation_denied = true;
+                break;
+            }
             match frame {
                 Ok(c) => {
                     meter.observe(&c);
@@ -299,13 +311,15 @@ fn messages_sse(
             }
         }
 
-        yield ev("content_block_stop", &json!({ "type": "content_block_stop", "index": 0 }));
-        yield ev("message_delta", &json!({
-            "type": "message_delta",
-            "delta": { "stop_reason": "end_turn", "stop_sequence": Value::Null },
-            "usage": { "output_tokens": out_tokens }
-        }));
-        yield ev("message_stop", &json!({ "type": "message_stop" }));
+        if !revocation_denied {
+            yield ev("content_block_stop", &json!({ "type": "content_block_stop", "index": 0 }));
+            yield ev("message_delta", &json!({
+                "type": "message_delta",
+                "delta": { "stop_reason": "end_turn", "stop_sequence": Value::Null },
+                "usage": { "output_tokens": out_tokens }
+            }));
+            yield ev("message_stop", &json!({ "type": "message_stop" }));
+        }
     };
     Sse::new(stream).into_response()
 }

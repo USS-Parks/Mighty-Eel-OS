@@ -29,7 +29,7 @@ use crate::provider::{
     ChunkStream, CompletionRequest, CompletionResponse, Provider, ProviderError, Registry, Usage,
 };
 use crate::route::GatewayRoute;
-use crate::{Gateway, ResolvedContext};
+use crate::{Gateway, GatewayError, ResolvedContext};
 
 /// Where a requested model is dispatched: which registered provider, under what
 /// upstream model id.
@@ -204,6 +204,7 @@ pub(crate) async fn authorize(
 /// only provider-call methods overwrite the request model with the frozen target.
 pub(crate) struct AuthorizedDispatch {
     ctx: ResolvedContext,
+    gateway: Arc<Gateway>,
     inbound_model: String,
     target: Target,
     provider: Arc<dyn Provider>,
@@ -212,6 +213,14 @@ pub(crate) struct AuthorizedDispatch {
     policy: PolicyDecision,
     outcome: ModeOutcome,
     reservation: Option<DispatchReservation>,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum DispatchError {
+    #[error(transparent)]
+    Revocation(#[from] GatewayError),
+    #[error(transparent)]
+    Provider(#[from] ProviderError),
 }
 
 /// Authority reserved before a provider side effect. Streaming requests move
@@ -345,8 +354,12 @@ fn validate_final_decision(
 }
 
 impl AuthorizedDispatch {
+    // Every argument is a frozen authorization input; grouping them into a
+    // caller-constructible bag would weaken the boundary this type enforces.
+    #[allow(clippy::too_many_arguments)]
     fn new(
         ctx: ResolvedContext,
+        gateway: Arc<Gateway>,
         inbound_model: String,
         target: Target,
         provider: Arc<dyn Provider>,
@@ -361,6 +374,7 @@ impl AuthorizedDispatch {
         let target_cloud = crate::policy::target_is_cloud(&target);
         Ok(Self {
             ctx,
+            gateway,
             inbound_model,
             target,
             provider,
@@ -459,19 +473,25 @@ impl AuthorizedDispatch {
     pub(crate) async fn complete(
         &self,
         request: &CompletionRequest,
-    ) -> Result<CompletionResponse, ProviderError> {
+    ) -> Result<CompletionResponse, DispatchError> {
+        self.gateway
+            .authorize_current(&self.ctx.token, Utc::now())
+            .await?;
         let mut frozen = request.clone();
         frozen.model.clone_from(&self.target.model);
-        self.provider.complete(&frozen).await
+        Ok(self.provider.complete(&frozen).await?)
     }
 
     pub(crate) async fn stream(
         &self,
         request: &CompletionRequest,
-    ) -> Result<ChunkStream, ProviderError> {
+    ) -> Result<ChunkStream, DispatchError> {
+        self.gateway
+            .authorize_current(&self.ctx.token, Utc::now())
+            .await?;
         let mut frozen = request.clone();
         frozen.model.clone_from(&self.target.model);
-        self.provider.stream(&frozen).await
+        Ok(self.provider.stream(&frozen).await?)
     }
 }
 
@@ -520,6 +540,7 @@ pub(crate) async fn authorize_dispatch(
 
     let mut decision = AuthorizedDispatch::new(
         ctx,
+        state.gateway.clone(),
         inbound_model.to_string(),
         target,
         provider,
@@ -553,8 +574,14 @@ pub(crate) async fn authorize_dispatch(
 
 #[cfg(test)]
 mod tests {
+    use std::sync::RwLock;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
     use async_trait::async_trait;
     use fabric_contracts::{Attenuation, RevocationStatus, Signature, TrustToken};
+    use fabric_crypto::Signer;
+    use fabric_crypto::providers::{MlDsa87Verifier, RustCryptoMlDsa87};
+    use fabric_revocation::{MonotonicRevocationStore, RevocationSnapshot};
 
     use super::*;
     use crate::provider::{ChatMessage, Role, Usage};
@@ -602,6 +629,42 @@ mod tests {
             source: RouteSource::Classified,
             denied,
         }
+    }
+
+    fn offline_gateway() -> Arc<Gateway> {
+        Arc::new(Gateway::new(
+            wsf_bridge::OpenBaoAuth::new(wsf_bridge::OpenBaoConfig::new(
+                "http://127.0.0.1:1",
+                "role",
+                "secret",
+            ))
+            .unwrap(),
+            crate::GatewayConfig {
+                token_public_key: vec![],
+                virtual_key_kv_prefix: "kv/data/test".into(),
+            },
+        ))
+    }
+
+    fn required_test_gateway(
+        signer: &RustCryptoMlDsa87,
+        store: Arc<RwLock<MonotonicRevocationStore>>,
+    ) -> Arc<Gateway> {
+        Arc::new(
+            Gateway::new(
+                wsf_bridge::OpenBaoAuth::new(wsf_bridge::OpenBaoConfig::new(
+                    "http://127.0.0.1:1",
+                    "role",
+                    "secret",
+                ))
+                .unwrap(),
+                crate::GatewayConfig {
+                    token_public_key: signer.public_key().to_vec(),
+                    virtual_key_kv_prefix: "kv/data/test".into(),
+                },
+            )
+            .with_test_revocation_store(store),
+        )
     }
 
     #[test]
@@ -840,6 +903,228 @@ mod tests {
         }
     }
 
+    struct CountingProvider {
+        calls: Arc<AtomicUsize>,
+    }
+
+    #[async_trait]
+    impl Provider for CountingProvider {
+        fn name(&self) -> &str {
+            "openai"
+        }
+
+        async fn complete(
+            &self,
+            req: &CompletionRequest,
+        ) -> Result<CompletionResponse, ProviderError> {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            Ok(CompletionResponse {
+                model: req.model.clone(),
+                content: "unexpected".into(),
+                usage: Usage::default(),
+                finish_reason: "stop".into(),
+            })
+        }
+
+        async fn stream(&self, _req: &CompletionRequest) -> Result<ChunkStream, ProviderError> {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            Ok(Box::pin(futures::stream::empty()))
+        }
+    }
+
+    #[tokio::test]
+    async fn every_revocation_dimension_stops_all_five_surfaces_before_provider() {
+        let signer = RustCryptoMlDsa87::generate("g4-revocation-anchor").unwrap();
+        let now = Utc::now();
+        let baseline = fabric_revocation::sign(
+            RevocationSnapshot::new(
+                "baseline",
+                (now - chrono::Duration::minutes(1)).to_rfc3339(),
+                (now + chrono::Duration::hours(1)).to_rfc3339(),
+            )
+            .with_sequence(1),
+            &signer,
+        )
+        .unwrap();
+        let surfaces = [
+            ("openai_chat", false),
+            ("openai_stream", true),
+            ("openai_legacy", false),
+            ("anthropic_message", false),
+            ("anthropic_stream", true),
+        ];
+        let dimensions = [
+            "token_id",
+            "subject_hash",
+            "signing_key",
+            "issuer",
+            "bundle_version",
+            "tenant",
+            "service_identity",
+        ];
+        let calls = Arc::new(AtomicUsize::new(0));
+        let request = CompletionRequest {
+            model: "gpt-4o-mini".into(),
+            messages: vec![ChatMessage::user("hello")],
+            max_tokens: Some(8),
+            temperature: None,
+        };
+        let mut regressions = 0usize;
+
+        for (surface, streaming) in surfaces {
+            for dimension in dimensions {
+                let store = Arc::new(RwLock::new(MonotonicRevocationStore::new()));
+                store
+                    .write()
+                    .unwrap()
+                    .advance(baseline.clone(), &MlDsa87Verifier, signer.public_key())
+                    .unwrap();
+                let gateway = required_test_gateway(&signer, store.clone());
+                let mut ctx = context(
+                    vec!["gpt-4o-mini"],
+                    vec![Route::CloudAllowed],
+                    Classification::Restricted,
+                );
+                ctx.token.service_identity = Some("service-a".into());
+                let dispatch = AuthorizedDispatch::new(
+                    ctx,
+                    gateway,
+                    "gpt-4o-mini".into(),
+                    Target::new("openai", "gpt-4o-mini"),
+                    Arc::new(CountingProvider {
+                        calls: calls.clone(),
+                    }),
+                    gateway_route(Route::CloudAllowed, "public", false),
+                    PolicyDecision {
+                        allowed_cloud: true,
+                        phi_detected: false,
+                        effective_route: Route::CloudAllowed,
+                        reasons: vec![],
+                    },
+                    ModeOutcome {
+                        block: false,
+                        report: false,
+                    },
+                )
+                .unwrap();
+
+                let mut revoked = RevocationSnapshot::new(
+                    format!("revoked-{surface}-{dimension}"),
+                    (now - chrono::Duration::minutes(1)).to_rfc3339(),
+                    (now + chrono::Duration::hours(1)).to_rfc3339(),
+                )
+                .with_sequence(2);
+                match dimension {
+                    "token_id" => revoked.revoked_tokens.push("token-a".into()),
+                    "subject_hash" => revoked.revoked_subjects.push("hash-a".into()),
+                    "signing_key" => revoked.revoked_signing_keys.push("anchor".into()),
+                    "issuer" => revoked.revoked_issuers.push("wsf".into()),
+                    "bundle_version" => revoked.revoked_bundle_versions.push("v1".into()),
+                    "tenant" => revoked.revoked_tenants.push("tenant-a".into()),
+                    "service_identity" => {
+                        revoked.revoked_service_identities.push("service-a".into());
+                    }
+                    _ => unreachable!(),
+                }
+                store
+                    .write()
+                    .unwrap()
+                    .advance(
+                        fabric_revocation::sign(revoked, &signer).unwrap(),
+                        &MlDsa87Verifier,
+                        signer.public_key(),
+                    )
+                    .unwrap();
+
+                let denied = if streaming {
+                    matches!(
+                        dispatch.stream(&request).await,
+                        Err(DispatchError::Revocation(GatewayError::Revoked))
+                    )
+                } else {
+                    matches!(
+                        dispatch.complete(&request).await,
+                        Err(DispatchError::Revocation(GatewayError::Revoked))
+                    )
+                };
+                assert!(denied, "{surface}/{dimension} was not denied");
+                regressions += 1;
+            }
+        }
+
+        assert_eq!(regressions, 35, "five surfaces x seven dimensions");
+        assert_eq!(
+            calls.load(Ordering::SeqCst),
+            0,
+            "provider was never reached"
+        );
+    }
+
+    #[tokio::test]
+    async fn stream_continuation_observes_a_new_revocation_sequence() {
+        let signer = RustCryptoMlDsa87::generate("g4-stream-anchor").unwrap();
+        let now = Utc::now();
+        let store = Arc::new(RwLock::new(MonotonicRevocationStore::new()));
+        let baseline = fabric_revocation::sign(
+            RevocationSnapshot::new(
+                "baseline",
+                (now - chrono::Duration::minutes(1)).to_rfc3339(),
+                (now + chrono::Duration::hours(1)).to_rfc3339(),
+            )
+            .with_sequence(1),
+            &signer,
+        )
+        .unwrap();
+        store
+            .write()
+            .unwrap()
+            .advance(baseline, &MlDsa87Verifier, signer.public_key())
+            .unwrap();
+        let gateway = required_test_gateway(&signer, store.clone());
+        let ctx = context(
+            vec!["gpt-4o-mini"],
+            vec![Route::CloudAllowed],
+            Classification::Restricted,
+        );
+        let meter = crate::meter::StreamMeter {
+            receipts: Arc::new(Mutex::new(crate::meter::ReceiptLedger::new())),
+            prices: Arc::new(PriceBook::baseline()),
+            gateway,
+            ctx,
+            provider: "openai".into(),
+            model: "gpt-4o-mini".into(),
+            route: gateway_route(Route::CloudAllowed, "public", false),
+            allowed_cloud: true,
+            workflow_id: None,
+            input_estimate: 1,
+            reported: Usage::default(),
+            delta_chars: 0,
+            reservation: None,
+        };
+        assert!(meter.authorize_continuation().await.is_ok());
+
+        let mut revoked = RevocationSnapshot::new(
+            "revoked",
+            (now - chrono::Duration::minutes(1)).to_rfc3339(),
+            (now + chrono::Duration::hours(1)).to_rfc3339(),
+        )
+        .with_sequence(2);
+        revoked.revoked_tenants.push("tenant-a".into());
+        store
+            .write()
+            .unwrap()
+            .advance(
+                fabric_revocation::sign(revoked, &signer).unwrap(),
+                &MlDsa87Verifier,
+                signer.public_key(),
+            )
+            .unwrap();
+        assert!(matches!(
+            meter.authorize_continuation().await,
+            Err(GatewayError::Revoked)
+        ));
+    }
+
     fn budgeted_dispatch(
         budget: Budget,
         reservations: &ReservationLedger,
@@ -853,6 +1138,7 @@ mod tests {
         ctx.token.budget = Some(budget);
         let mut dispatch = AuthorizedDispatch::new(
             ctx,
+            offline_gateway(),
             "gpt-4o-mini".into(),
             Target::new("openai", "gpt-4o-mini"),
             Arc::new(NamedProvider("openai")),
@@ -1011,6 +1297,7 @@ mod tests {
                 vec![Route::LocalOnly],
                 Classification::Restricted,
             ),
+            offline_gateway(),
             "public-alias".into(),
             Target::new("local", "frozen-upstream"),
             provider,

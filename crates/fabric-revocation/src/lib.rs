@@ -337,6 +337,16 @@ impl MonotonicRevocationStore {
         Ok(())
     }
 
+    /// Prove that a current, sequenced snapshot exists at `trusted_now` without
+    /// evaluating a token. Production services use this during startup before
+    /// opening a listener.
+    pub fn ensure_current(
+        &self,
+        trusted_now: DateTime<Utc>,
+    ) -> Result<u64, CurrentRevocationError> {
+        Ok(self.current_at(trusted_now)?.sequence)
+    }
+
     /// Apply current revocation dimensions available on a verified principal.
     pub fn authorize_principal(
         &self,

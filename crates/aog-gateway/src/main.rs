@@ -106,16 +106,17 @@ async fn run() -> Result<(), String> {
 
     let openbao = OpenBaoAuth::new(OpenBaoConfig::new(&addr, role_id, secret_id))
         .map_err(|e| format!("openbao config: {e}"))?;
-    let gateway = Arc::new(
-        Gateway::new(
-            openbao,
-            GatewayConfig {
-                token_public_key: anchor,
-                virtual_key_kv_prefix: vk_prefix,
-            },
-        )
-        .with_revocation_path(revocation_path),
-    );
+    let gateway_config = GatewayConfig {
+        token_public_key: anchor,
+        virtual_key_kv_prefix: vk_prefix,
+    };
+    let gateway = Arc::new(if profile == Profile::Production {
+        Gateway::new_production(openbao, gateway_config, revocation_path)
+            .await
+            .map_err(|error| format!("mandatory production revocation: {error}"))?
+    } else {
+        Gateway::new(openbao, gateway_config)
+    });
 
     // Providers: always a local OpenAI-compatible backend; cloud providers when keyed.
     let mut registry = Registry::new();

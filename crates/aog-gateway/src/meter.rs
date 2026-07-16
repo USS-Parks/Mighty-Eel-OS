@@ -381,6 +381,14 @@ pub struct StreamMeter {
 }
 
 impl StreamMeter {
+    /// Revalidate current revocation before one more streamed provider frame is
+    /// released to the client.
+    pub async fn authorize_continuation(&self) -> Result<(), crate::GatewayError> {
+        self.gateway
+            .authorize_current(&self.ctx.token, Utc::now())
+            .await
+    }
+
     /// Fold one stream frame into the running account.
     pub fn observe(&mut self, chunk: &StreamChunk) {
         if let Some(u) = chunk.usage {

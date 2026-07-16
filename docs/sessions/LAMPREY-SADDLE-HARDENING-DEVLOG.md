@@ -550,3 +550,64 @@ SSH-signed and carry the canonical `Authored and reviewed by Basho Parks,
 copyright 2026` footer. The pre-push full no-slop and 79-route policy gates
 passed, and `origin/main` advanced from `01dfba2` through `fffa6ea` on
 2026-07-16. This final ledger update records the confirmed remote checkpoint.
+
+### LSH-G4 — Mandatory gateway revocation
+
+Status: **PASS** (implementation pending commit).
+
+Production gateway construction now requires a revocation source and loads a
+current, verified snapshot before a provider registry or listener can be made
+reachable. The gateway holds revocation state in a monotonic store: absent,
+expired, malformed, and rollback snapshots fail closed, while an identical
+current snapshot may be re-read without manufacturing a sequence advance. The
+legacy constructor remains explicitly development/test-only and cannot be used
+by the production startup branch.
+
+The declared enforcement bound is the next privileged gateway step after a
+revocation becomes visible through OpenBao: authorization refreshes immediately
+before atomic spend reservation, immediately before provider dispatch, and
+before every provider stream continuation frame. A newly revoked stream emits a
+protocol-native authorization error and terminates without a synthetic normal
+completion marker. The shared check covers token, subject, key, issuer, policy
+bundle, tenant, and tenant-ring revocation dimensions for all five OpenAI and
+Anthropic execution surfaces.
+
+Changed files:
+
+- `crates/fabric-revocation/src/lib.rs`;
+- `crates/fabric-revocation/tests/revocation.rs`;
+- `crates/aog-gateway/src/lib.rs`;
+- `crates/aog-gateway/src/main.rs`;
+- `crates/aog-gateway/src/app.rs`;
+- `crates/aog-gateway/src/meter.rs`;
+- `crates/aog-gateway/src/surface_openai.rs`;
+- `crates/aog-gateway/src/surface_anthropic.rs`; and
+- `crates/aog-gateway/tests/kill_switch.rs`.
+
+Gates:
+
+- `cargo test -p fabric-revocation` — PASS: 8 tests plus doc tests, including
+  explicit absent-state failure and current monotonic sequence acceptance;
+- `cargo test -p aog-gateway app::tests --lib` — PASS: 12 focused tests,
+  including a 35-case matrix (five surfaces times seven revocation dimensions)
+  that records zero provider calls after denial;
+- the stream-continuation regression publishes a newer revocation sequence
+  after dispatch and proves the next frame is denied before provider polling;
+- live `cargo test -p aog-gateway --test kill_switch -- --nocapture` against an
+  isolated loopback OpenBao dev instance — PASS, with the test enabled: an
+  absent production snapshot prevents startup, a newer token revocation stops
+  the next call, and replaying the lower baseline sequence is rejected;
+- `cargo test -p aog-gateway` — PASS: 72 library tests plus every gateway
+  integration and doc-test target;
+- `cargo clippy -p fabric-revocation -p aog-gateway --all-targets -- -D
+  warnings -A clippy::pedantic` — PASS;
+- `cargo fmt --check` — PASS; and
+- `git diff --check` — PASS.
+
+Closure statement: `LSF-019` is closed for the five gateway execution surfaces.
+Production cannot start without current revocation state, a stale or rollback
+snapshot cannot replace held authority, and every provider dispatch or stream
+continuation crosses the same current-state check. LSH-G5 remains sequentially
+responsible for bounding public preflight amplification and adding safe negative
+caching; G4 intentionally prioritizes immediate revocation visibility and makes
+no broader M3 milestone claim.

@@ -211,6 +211,10 @@ fn current_consumer_contract_fails_closed_for_absent_invalid_stale_and_revoked_s
         store.authorize(&tok, trusted_now()),
         Err(CurrentRevocationError::Unavailable)
     );
+    assert_eq!(
+        store.ensure_current(trusted_now()),
+        Err(CurrentRevocationError::Unavailable)
+    );
 
     let mut store = MonotonicRevocationStore::new();
     let forged = sign(
@@ -281,6 +285,7 @@ fn current_consumer_contract_fails_closed_for_absent_invalid_stale_and_revoked_s
         store.authorize(&tok, trusted_now()),
         Err(CurrentRevocationError::Revoked("tenant"))
     );
+    assert_eq!(store.ensure_current(trusted_now()), Ok(2));
 
     let cleaner_rollback = sign(
         RevocationSnapshot::new(
