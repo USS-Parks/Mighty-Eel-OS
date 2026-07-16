@@ -303,7 +303,7 @@ Checkpoint status: **PASS for LSH-C1 through LSH-C3; M2 remains IN PROGRESS**. L
 
 ### LSH-C1 — Node identity and TLS provisioning contract
 
-Status: **PASS** (checkpoint commit pending at the time of this entry).
+Status: **PASS** (implementation commit `9b31ad9`).
 
 `aog-wire` now validates a credential-free HTTPS advertised origin, the exact `spiffe://loom/node/<node-id>` URI SAN, advertised-host SAN, estate CA chain, server/client EKUs, validity and rotation window, and certificate/private-key pairing. `aogd` provisions DER identity from either mounted files or an OpenBao record and validates it before listener startup. Private-key material is represented only by a redacted diagnostic marker. The operator contract and rolling-rotation procedure are recorded in `docs/operations/AOG-CONTROL-PLANE-TLS.md`.
 
@@ -311,7 +311,7 @@ Gate: missing, malformed, wrong-node, wrong-host, wrong-CA, rotation-unsafe, and
 
 ### LSH-C2 — Integrate mTLS into Raft client and server
 
-Status: **PASS** (checkpoint commit pending at the time of this entry).
+Status: **PASS** (implementation commit `9b31ad9`).
 
 The daemon now constructs the Raft network and admin forwarding client from the validated node identity, disables redirects, terminates Axum through a client-certificate-requiring TLS listener, extracts the authenticated node identity before HTTP/Raft decoding, and rejects claimed Raft sender identities that do not match the certificate. Secure membership requires HTTPS.
 
@@ -319,7 +319,7 @@ Gate: `crates/aogd/tests/daemon_mtls.rs` forms and writes through a real three-n
 
 ### LSH-C3 — Fail-closed admin trust and bounded bootstrap
 
-Status: **PASS** (checkpoint commit pending at the time of this entry).
+Status: **PASS** (implementation commit `9b31ad9`).
 
 Without configured admin trust, normal admin mutations remain unavailable. The sole bootstrap exception is one loopback `/admin/initialize` request, atomically consumed and kept closed after persisted membership survives restart. Remote bootstrap, wrong-path mutation, and replay are denied. `AOGD_ALLOW_INSECURE_ADMIN=1` is an explicit development-harness escape hatch and is rejected by the production posture check.
 
@@ -339,4 +339,4 @@ Final focused verification on 2026-07-15:
 
 During final verification, one production-posture test fixture still enabled the newly forbidden insecure-admin flag. Correcting that boolean fixture restored the intended production-with-mTLS case; the complete focused gate set was rerun and passed afterward.
 
-Commit state: implementation and evidence are staged for the user-authorized partial-M2 checkpoint; commit SHA will be recorded in the follow-up closeout commit.
+Commit state: implementation and evidence committed in `9b31ad9`; this DEVLOG SHA closeout is the only remaining worktree change before the user-authorized push.
