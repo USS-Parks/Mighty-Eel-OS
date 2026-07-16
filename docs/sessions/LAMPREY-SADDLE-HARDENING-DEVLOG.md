@@ -875,3 +875,74 @@ the canonical footer. Both outgoing commits passed exact-footer verification;
 the pre-push full-tree no-slop and 79-route policy gates passed; and
 `origin/main` advanced from `34bb6d8` through `a0b130b` on 2026-07-16. This
 final ledger update records the confirmed G7 remote checkpoint.
+
+### LSH-G8 — Authoritative metering
+
+Status: **PASS** (implementation commit pending).
+
+Provider usage was previously trusted at the settlement boundary. Non-stream
+OpenAI, legacy-completion, and Anthropic responses passed provider-controlled
+counts directly into the reservation, receipt, price, and compatibility spend
+ledgers. Streams fell back to local accounting only when a field was exactly
+zero, so any positive low count suppressed the request estimate or observed
+output. The output fallback also rounded byte counts down.
+
+The gateway now treats provider usage as evidence. One shared reconciler computes
+a saturated, round-up local lower bound at four UTF-8 bytes per token and selects
+the per-field maximum of that bound and the provider report. Non-stream paths
+measure the message text actually dispatched after tokenization plus the raw
+provider response before detokenization. Stream paths retain the conservative
+input estimate, accumulate output bytes with saturating arithmetic, and merge
+late or split provider frames by per-field maximum before the same reconciliation.
+A missing, zero, low positive, contradictory, or late report therefore cannot
+reduce settlement below locally observed usage; high provider evidence remains
+visible and is conservatively reconciled through the bounded G3 reservation.
+
+Every real `GatewayReceipt` now carries `usage_reconciliation` with the
+`local_estimate`, `provider_reported`, and authoritative `final_usage` explicitly.
+The receipt's existing token and spend fields, atomic reservation settlement, and
+legacy runtime spend ledger all use `final_usage`. The outward compatibility
+response preserves the provider-reported usage fields, while the append-only
+receipt retains both that evidence and the gateway's authoritative accounting.
+The reconciliation field is omitted only for historical/hand-built pre-G8
+fixtures, preserving their byte and hash shape.
+
+Changed files:
+
+- `crates/aog-gateway/src/meter.rs`;
+- `crates/aog-gateway/src/route.rs`;
+- `crates/aog-gateway/src/app.rs`;
+- `crates/aog-gateway/src/surface_{openai,anthropic}.rs`;
+- `crates/aog-gateway/tests/tokenization.rs`; and
+- this DEVLOG.
+
+No dependency, lockfile, public route, provider protocol, or deployment-manifest
+change was needed.
+
+Gates:
+
+- focused G8 unit fixtures — PASS. Missing-normalized, explicit zero, positive
+  low, high, contradictory-field, stream-late/split, and positive-low streaming
+  reports all settle at or above the local policy; partial byte groups round up;
+- non-stream receipt fixture — PASS. The chain-verifying receipt contains the
+  local estimate, provider evidence, and final authoritative usage explicitly;
+- `cargo test -p aog-gateway` — PASS: 78 library tests plus every gateway
+  integration and doc-test target. Valid OpenAI chat/stream, legacy completion,
+  Anthropic message/stream, metering, budgets, policy, tokenization, revocation,
+  and tenant behavior remain green;
+- `cargo clippy -p aog-gateway --all-targets -- -D warnings -A
+  clippy::pedantic` — PASS;
+- `cargo fmt --check` — PASS; and
+- `git diff --check` — PASS.
+
+Closure statement: `LSF-025` is closed for its four OpenAI/Anthropic stream and
+non-stream instances at the shared reconciliation and receipt boundary. Provider
+counts can no longer suppress local accounting, and the evidence-to-final
+decision is auditable in the receipt chain. LSH-G9 owns the complete two-tenant
+adversarial live compatibility matrix and is the next sequential prompt. No
+broader M3 milestone claim is made.
+
+Commit state: implementation and prompt evidence are ready for the authorized
+signed commit and push. The exact implementation SHA, footer verification,
+pre-push integrity gates, and remote checkpoint will be recorded after Git
+confirms them.

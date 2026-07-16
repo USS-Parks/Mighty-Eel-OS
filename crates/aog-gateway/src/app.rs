@@ -1098,7 +1098,7 @@ mod tests {
             workflow_id: None,
             input_estimate: 1,
             reported: Usage::default(),
-            delta_chars: 0,
+            delta_bytes: 0,
             reservation: None,
         };
         assert!(meter.authorize_continuation().await.is_ok());

@@ -7,11 +7,12 @@
 //! off-host; the receipts carry the spend, provider, token counts, and — for a
 //! **local** model — a weights digest (cloud is named by provider+model).
 //!
-//! Streaming note: the non-stream path records from the provider's real `Usage`;
-//! the streamed path settles through [`StreamMeter`] when the SSE generator
-//! drops — terminal frame, provider error, or client disconnect alike — using
-//! provider-reported usage frames when they arrive and a ~4-chars/token
-//! estimate when they don't. Every call is metered.
+//! Provider usage is untrusted evidence. Both completion paths compute a local
+//! lower-bound estimate and reconcile each field to the greater of that estimate
+//! and the provider report. A missing, zero, or implausibly low positive report
+//! therefore cannot suppress accounting. Streams settle through [`StreamMeter`]
+//! when the SSE generator drops — terminal frame, provider error, or client
+//! disconnect alike. Every call is metered.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -108,6 +109,11 @@ pub struct GatewayReceipt {
     pub input_tokens: u32,
     pub output_tokens: u32,
     pub spend_cents: u64,
+    /// G8: the local lower bound, untrusted provider evidence, and authoritative
+    /// usage used for budget/spend settlement. Optional only so historical and
+    /// hand-built pre-G8 receipt fixtures retain their byte shape.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub usage_reconciliation: Option<UsageReconciliation>,
     /// Set for a local model (the cloud identity is provider+model).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub model_weights_digest: Option<String>,
@@ -119,6 +125,68 @@ pub struct GatewayReceipt {
     /// gateway and is never receipted — only this count is.
     #[serde(default, skip_serializing_if = "is_zero")]
     pub tokenized_spans: u32,
+}
+
+/// Auditable reconciliation of provider usage against the gateway's local
+/// lower bound. `final_usage` is authoritative for receipts, spend, and budget
+/// settlement; `provider_reported` remains evidence rather than authority.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct UsageReconciliation {
+    pub local_estimate: Usage,
+    pub provider_reported: Usage,
+    pub final_usage: Usage,
+}
+
+/// Estimate tokens from UTF-8 bytes at the gateway's conservative four-byte
+/// policy, rounding up and saturating instead of wrapping on extreme inputs.
+#[must_use]
+pub fn estimate_text_tokens(text: &str) -> u32 {
+    estimate_output_tokens(text.len())
+}
+
+/// Estimate output tokens from an observed byte count. Empty output is zero;
+/// every non-empty partial group of four bytes counts as one token.
+#[must_use]
+pub fn estimate_output_tokens(bytes: usize) -> u32 {
+    let tokens = bytes.saturating_add(3) / 4;
+    u32::try_from(tokens).unwrap_or(u32::MAX)
+}
+
+/// Reconcile provider-controlled counts with a locally observed lower bound.
+/// A high report remains visible and is conservatively charged; a missing,
+/// zero, low, or contradictory report cannot reduce either field below local.
+#[must_use]
+pub fn reconcile_usage(local_estimate: Usage, provider_reported: Usage) -> UsageReconciliation {
+    UsageReconciliation {
+        local_estimate,
+        provider_reported,
+        final_usage: Usage {
+            input_tokens: local_estimate
+                .input_tokens
+                .max(provider_reported.input_tokens),
+            output_tokens: local_estimate
+                .output_tokens
+                .max(provider_reported.output_tokens),
+        },
+    }
+}
+
+/// Reconcile one non-stream completion from the request and response text that
+/// actually crossed the provider boundary. The request side is at least one
+/// token; an empty response is allowed to remain zero.
+#[must_use]
+pub fn reconcile_completion_usage(
+    input_text: &str,
+    output_text: &str,
+    provider_reported: Usage,
+) -> UsageReconciliation {
+    reconcile_usage(
+        Usage {
+            input_tokens: estimate_text_tokens(input_text).max(1),
+            output_tokens: estimate_text_tokens(output_text),
+        },
+        provider_reported,
+    )
 }
 
 /// Aggregated spend for one (tenant, provider, model, task) group.
@@ -288,6 +356,7 @@ pub struct Completion<'a> {
     pub route: &'a GatewayRoute,
     pub allowed_cloud: bool,
     pub usage: Usage,
+    pub usage_reconciliation: UsageReconciliation,
     pub workflow_id: Option<String>,
     /// G8: sensitive spans tokenized on cloud egress (0 when local or nothing hit).
     pub tokenized_spans: u32,
@@ -339,6 +408,7 @@ pub fn record(ledger: &Mutex<ReceiptLedger>, prices: &PriceBook, c: &Completion)
         input_tokens: c.usage.input_tokens,
         output_tokens: c.usage.output_tokens,
         spend_cents: spend,
+        usage_reconciliation: Some(c.usage_reconciliation),
         model_weights_digest: local_weights_digest(c.provider, c.model),
         workflow_id: c.workflow_id.clone(),
         tokenized_spans: c.tokenized_spans,
@@ -365,16 +435,14 @@ pub struct StreamMeter {
     pub route: GatewayRoute,
     pub allowed_cloud: bool,
     pub workflow_id: Option<String>,
-    /// ~4-chars/token estimate of the request text — the input-side fallback
-    /// when the provider never reports usage on the stream.
+    /// Conservative local lower bound for request input usage.
     pub input_estimate: u32,
     /// Provider-reported usage, folded per-field across frames (reports are
     /// cumulative; Anthropic splits input onto `message_start` and output onto
     /// `message_delta`, OpenAI reports both on one terminal usage frame).
     pub reported: Usage,
-    /// Accumulated delta text length — the output-side fallback (~4 chars/token)
-    /// for a provider that streams text but never a usage frame.
-    pub delta_chars: usize,
+    /// Accumulated delta byte length for the output-side local lower bound.
+    pub delta_bytes: usize,
     /// Authority reserved before provider stream creation. Drop reconciles the
     /// observed/fallback usage and releases the unused portion exactly once.
     pub(crate) reservation: Option<DispatchReservation>,
@@ -395,29 +463,24 @@ impl StreamMeter {
             self.reported.input_tokens = self.reported.input_tokens.max(u.input_tokens);
             self.reported.output_tokens = self.reported.output_tokens.max(u.output_tokens);
         }
-        self.delta_chars += chunk.delta.len();
+        self.delta_bytes = self.delta_bytes.saturating_add(chunk.delta.len());
     }
 }
 
 impl Drop for StreamMeter {
     /// Settle the streamed call, however the stream ended: append the receipt
     /// and accrue spend against the token's attenuation lineage (T5), exactly
-    /// as the non-stream path does. Provider-reported usage wins; a
-    /// usage-silent stream falls back to the request-text estimate (input) and
-    /// ~4 chars/token of streamed deltas (output) rather than metering zero.
+    /// as the non-stream path does. Provider usage is evidence only; the final
+    /// per-field count cannot fall below the request/delta lower bound.
     fn drop(&mut self) {
-        let usage = Usage {
-            input_tokens: if self.reported.input_tokens > 0 {
-                self.reported.input_tokens
-            } else {
-                self.input_estimate
+        let reconciliation = reconcile_usage(
+            Usage {
+                input_tokens: self.input_estimate,
+                output_tokens: estimate_output_tokens(self.delta_bytes),
             },
-            output_tokens: if self.reported.output_tokens > 0 {
-                self.reported.output_tokens
-            } else {
-                u32::try_from(self.delta_chars / 4).unwrap_or(u32::MAX)
-            },
-        };
+            self.reported,
+        );
+        let usage = reconciliation.final_usage;
         if let Some(reservation) = self.reservation.take() {
             let _ = reservation.commit_usage(fabric_token::spend::Spent {
                 tokens: u64::from(usage.input_tokens)
@@ -441,6 +504,7 @@ impl Drop for StreamMeter {
                 route: &self.route,
                 allowed_cloud: self.allowed_cloud,
                 usage,
+                usage_reconciliation: reconciliation,
                 workflow_id: self.workflow_id.clone(),
                 // The stream path refuses a cloud dispatch that would need span
                 // tokenization, so a streamed receipt never carries spans.
@@ -559,7 +623,7 @@ pub(crate) mod testkit {
             workflow_id: Some("task-s".into()),
             input_estimate: 25,
             reported: Usage::default(),
-            delta_chars: 0,
+            delta_bytes: 0,
             reservation: None,
         }
     }
@@ -588,7 +652,7 @@ pub(crate) mod testkit {
 
 #[cfg(test)]
 mod tests {
-    use super::testkit::{delta, stream_meter, usage_frame};
+    use super::testkit::{budgeted_token, delta, stream_meter, test_route, usage_frame};
     use super::*;
     use fabric_contracts::Budget;
     use fabric_token::spend::{LocalSpendLedger, SpendLedger};
@@ -610,6 +674,7 @@ mod tests {
             input_tokens: 10,
             output_tokens: 5,
             spend_cents: spend,
+            usage_reconciliation: None,
             model_weights_digest: None,
             workflow_id: Some(wf.to_string()),
             tokenized_spans: 0,
@@ -738,6 +803,124 @@ mod tests {
     }
 
     #[test]
+    fn authoritative_usage_never_falls_below_the_local_policy() {
+        let input = "i".repeat(100);
+        let output = "o".repeat(32);
+        let local = Usage {
+            input_tokens: 25,
+            output_tokens: 8,
+        };
+        let fixtures = [
+            ("missing-normalized", Usage::default(), local),
+            ("explicit-zero", Usage::default(), local),
+            (
+                "positive-low",
+                Usage {
+                    input_tokens: 1,
+                    output_tokens: 1,
+                },
+                local,
+            ),
+            (
+                "provider-high",
+                Usage {
+                    input_tokens: 1000,
+                    output_tokens: 500,
+                },
+                Usage {
+                    input_tokens: 1000,
+                    output_tokens: 500,
+                },
+            ),
+            (
+                "contradictory-fields",
+                Usage {
+                    input_tokens: 1,
+                    output_tokens: 500,
+                },
+                Usage {
+                    input_tokens: 25,
+                    output_tokens: 500,
+                },
+            ),
+        ];
+
+        for (name, provider, expected) in fixtures {
+            let reconciled = reconcile_completion_usage(&input, &output, provider);
+            assert_eq!(
+                reconciled.local_estimate, local,
+                "{name}: estimate receipted"
+            );
+            assert_eq!(
+                reconciled.provider_reported, provider,
+                "{name}: provider evidence receipted"
+            );
+            assert_eq!(reconciled.final_usage, expected, "{name}: safe settlement");
+        }
+
+        assert_eq!(estimate_text_tokens(""), 0);
+        assert_eq!(estimate_text_tokens("a"), 1);
+        assert_eq!(estimate_text_tokens("abcde"), 2, "partial groups round up");
+    }
+
+    #[test]
+    fn non_stream_receipt_records_estimate_provider_and_final_usage() {
+        let ledger = Mutex::new(ReceiptLedger::new());
+        let prices = PriceBook::baseline();
+        let ctx = ResolvedContext {
+            token: budgeted_token("tok-non-stream"),
+            tenant_id: "tenant-a".to_string(),
+        };
+        let route = test_route();
+        let reconciliation = reconcile_completion_usage(
+            &"i".repeat(100),
+            &"o".repeat(32),
+            Usage {
+                input_tokens: 1,
+                output_tokens: 1,
+            },
+        );
+
+        record(
+            &ledger,
+            &prices,
+            &Completion {
+                ctx: &ctx,
+                provider: "openai",
+                model: "gpt-4o-mini",
+                route: &route,
+                allowed_cloud: true,
+                usage: reconciliation.final_usage,
+                usage_reconciliation: reconciliation,
+                workflow_id: Some("g8-fixture".to_string()),
+                tokenized_spans: 0,
+            },
+        );
+
+        let receipt = ledger.lock().unwrap().receipts()[0].clone();
+        assert_eq!(receipt.input_tokens, 25);
+        assert_eq!(receipt.output_tokens, 8);
+        assert_eq!(
+            receipt.usage_reconciliation,
+            Some(UsageReconciliation {
+                local_estimate: Usage {
+                    input_tokens: 25,
+                    output_tokens: 8,
+                },
+                provider_reported: Usage {
+                    input_tokens: 1,
+                    output_tokens: 1,
+                },
+                final_usage: Usage {
+                    input_tokens: 25,
+                    output_tokens: 8,
+                },
+            })
+        );
+        assert!(ledger.lock().unwrap().verify(), "receipt chain verifies");
+    }
+
+    #[test]
     fn stream_meter_settles_on_drop_without_a_terminal_frame() {
         // A client that hangs up mid-stream (no terminal frame, no usage
         // frame) is still receipted and budget-decremented when the SSE
@@ -775,16 +958,16 @@ mod tests {
     }
 
     #[test]
-    fn stream_meter_prefers_reported_usage_and_merges_split_frames() {
-        // Provider-reported usage wins over the estimates, including when input
-        // and output arrive on different frames (the Anthropic shape:
-        // message_start carries input, message_delta carries output).
+    fn stream_meter_reconciles_late_split_usage_without_undercharging() {
+        // Reports can arrive late and contradict earlier fields (the Anthropic
+        // shape splits input and output across frames). Per-field maxima preserve
+        // the strongest evidence, then local delta accounting supplies the floor.
         let receipts = Arc::new(Mutex::new(ReceiptLedger::new()));
         let spend = Arc::new(LocalSpendLedger::default());
         let mut meter = stream_meter(&receipts, &spend);
-        meter.observe(&usage_frame(1000, 0));
-        meter.observe(&delta("ok"));
-        meter.observe(&usage_frame(0, 500));
+        meter.observe(&usage_frame(1000, 1));
+        meter.observe(&delta("0123456789abcdef"));
+        meter.observe(&usage_frame(1, 500));
         drop(meter);
 
         let led = receipts.lock().unwrap();
@@ -799,6 +982,30 @@ mod tests {
         );
         // gpt-4o-mini baseline: 1000×15/1k + 500×60/1k = 45 cents.
         assert_eq!(r.spend_cents, 45);
+        let reconciliation = r
+            .usage_reconciliation
+            .expect("stream receipt carries estimate, evidence, and final usage");
+        assert_eq!(
+            reconciliation.local_estimate,
+            Usage {
+                input_tokens: 25,
+                output_tokens: 4,
+            }
+        );
+        assert_eq!(
+            reconciliation.provider_reported,
+            Usage {
+                input_tokens: 1000,
+                output_tokens: 500,
+            }
+        );
+        assert_eq!(
+            reconciliation.final_usage,
+            Usage {
+                input_tokens: 1000,
+                output_tokens: 500,
+            }
+        );
 
         // The full reported 1500 tokens accrued against the lineage key.
         let mut b = Budget {
@@ -807,5 +1014,33 @@ mod tests {
         };
         spend.fold("tok-stream", &mut b);
         assert!(budget_exhausted(&b), "1500/1500 is exhausted");
+    }
+
+    #[test]
+    fn positive_low_stream_report_cannot_suppress_observed_output() {
+        let receipts = Arc::new(Mutex::new(ReceiptLedger::new()));
+        let spend = Arc::new(LocalSpendLedger::default());
+        let mut meter = stream_meter(&receipts, &spend);
+        meter.observe(&usage_frame(1, 1));
+        meter.observe(&delta("0123456789abcdef"));
+        drop(meter);
+
+        let led = receipts.lock().unwrap();
+        let receipt = &led.receipts()[0];
+        assert_eq!(
+            receipt.input_tokens, 25,
+            "local input estimate is the floor"
+        );
+        assert_eq!(
+            receipt.output_tokens, 4,
+            "positive provider output cannot suppress observed bytes"
+        );
+        assert_eq!(
+            receipt.usage_reconciliation.unwrap().provider_reported,
+            Usage {
+                input_tokens: 1,
+                output_tokens: 1,
+            }
+        );
     }
 }

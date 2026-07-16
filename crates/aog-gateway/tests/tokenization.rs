@@ -111,6 +111,7 @@ fn receipt(request_id: &str, tokenized_spans: u32) -> GatewayReceipt {
         input_tokens: 12,
         output_tokens: 20,
         spend_cents: 3,
+        usage_reconciliation: None,
         model_weights_digest: None,
         workflow_id: None,
         tokenized_spans,

@@ -163,7 +163,7 @@ async fn messages(
                         workflow_id: workflow_id.clone(),
                         input_estimate: crate::route::estimate_tokens(None, &query),
                         reported: crate::provider::Usage::default(),
-                        delta_chars: 0,
+                        delta_bytes: 0,
                         reservation: dispatch.take_reservation(),
                     },
                 ),
@@ -180,11 +180,17 @@ async fn messages(
             messages: egress.messages,
             ..neutral.clone()
         };
+        let metered_query = crate::route::query_text(&dispatched.messages);
         match dispatch.complete(&dispatched).await {
             Ok(mut r) => {
-                let reconciliation = dispatch.commit_usage(state.prices.as_ref(), r.usage);
+                let usage_reconciliation =
+                    crate::meter::reconcile_completion_usage(&metered_query, &r.content, r.usage);
+                let authoritative_usage = usage_reconciliation.final_usage;
+                let reconciliation =
+                    dispatch.commit_usage(state.prices.as_ref(), authoritative_usage);
                 r.content = crate::tokenize::restore(&r.content, &egress.map);
-                // Metering + receipt (G7): every non-stream completion is receipted.
+                // Authoritative metering + receipt (G8): provider counts remain
+                // evidence and cannot suppress the local lower bound.
                 crate::meter::record(
                     &state.receipts,
                     &state.prices,
@@ -194,7 +200,8 @@ async fn messages(
                         model: &inbound_model,
                         route: &decision,
                         allowed_cloud: policy_decision.allowed_cloud,
-                        usage: r.usage,
+                        usage: authoritative_usage,
+                        usage_reconciliation,
                         workflow_id: workflow_id.clone(),
                         tokenized_spans,
                     },
@@ -203,12 +210,13 @@ async fn messages(
                 // the next resolve folds it in and rejects once a cap is reached.
                 state.gateway.record_spend(
                     fabric_token::lineage_key(&ctx.token),
-                    u64::from(r.usage.input_tokens) + u64::from(r.usage.output_tokens),
+                    u64::from(authoritative_usage.input_tokens)
+                        + u64::from(authoritative_usage.output_tokens),
                     state.prices.cost(
                         &provider_name,
                         &inbound_model,
-                        r.usage.input_tokens,
-                        r.usage.output_tokens,
+                        authoritative_usage.input_tokens,
+                        authoritative_usage.output_tokens,
                     ),
                     1,
                 );
