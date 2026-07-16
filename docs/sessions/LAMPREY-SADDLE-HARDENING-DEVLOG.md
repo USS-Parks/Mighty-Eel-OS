@@ -1197,7 +1197,7 @@ final ledger update records the confirmed T2 remote checkpoint.
 
 ### LSH-T3 — Complete bounded egress scanning
 
-Status: **PASS** (implementation committed; exact-SHA closeout pending).
+Status: **PASS** (remote checkpoint confirmed).
 
 The prior scanner traversed only JSON string values. Tool error text flowed
 unchanged to the caller and receipt, object keys were cloned verbatim, and
@@ -1261,4 +1261,9 @@ remains open through LSH-T6.
 Commit state: implementation and prompt evidence were committed as
 `39c34384bf3b94bce4c7e64634aa55d78b3a61c4`. The commit is SSH-signed and
 carries the canonical `Authored and reviewed by Basho Parks, copyright 2026`
-footer. The exact-SHA DEVLOG closeout and remote checkpoint remain pending.
+footer. The exact-SHA DEVLOG closeout was committed as
+`e251a9094169c17b2c1b51f02eea69bc5a99c0e7`; it is also SSH-signed and carries
+the canonical footer. Both outgoing commits passed exact-footer and signature
+verification; the pre-push full-tree no-slop and 79-route policy gates passed;
+and `origin/main` advanced from `ade0178` through `e251a90` on 2026-07-16. This
+final ledger update records the confirmed T3 remote checkpoint.
