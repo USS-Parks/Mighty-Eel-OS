@@ -19,14 +19,18 @@ pub mod grants;
 pub mod policy;
 pub mod posture;
 
-use std::sync::{Arc, Mutex};
+use std::collections::HashSet;
+use std::sync::{Arc, Mutex, RwLock};
 
 use axum::extract::{Extension, Query, State};
 use axum::http::{StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use fabric_contracts::{Audience, Budget, Envelope, TrustToken, WsfPrincipal};
+use fabric_contracts::{
+    Audience, Budget, CanonicalResource, Envelope, RequestOperation, TrustToken,
+    VerifiedRequestContext, WsfPrincipal,
+};
 
 use audit::AuditorStore;
 use auth::{WsfAuthenticator, require_principal};
@@ -40,6 +44,122 @@ use wsf_bridge::{IssueTokenRequest, TrustBridge};
 use wsf_broker::AwsStsBroker;
 use wsf_ledger::{Ledger, LedgerEntry};
 use wsf_seal::{LabelSpec, SealRequest, SealService, UnsealRequest};
+
+/// Explicit revocation posture for privileged handlers. Production constructs
+/// only `Required`; bypass is named and limited to the development profile.
+#[derive(Clone)]
+pub enum RevocationEnforcement {
+    Required(Arc<RwLock<fabric_revocation::MonotonicRevocationStore>>),
+    DevelopmentDisabled,
+}
+
+impl RevocationEnforcement {
+    #[must_use]
+    pub fn required(store: Arc<RwLock<fabric_revocation::MonotonicRevocationStore>>) -> Self {
+        Self::Required(store)
+    }
+
+    #[must_use]
+    pub fn development_disabled() -> Self {
+        Self::DevelopmentDisabled
+    }
+
+    fn authorize_token(&self, token: &TrustToken) -> Result<(), String> {
+        match self {
+            Self::Required(store) => store
+                .read()
+                .map_err(|_| "revocation store lock poisoned".to_string())?
+                .authorize(token, Utc::now())
+                .map_err(|e| e.to_string()),
+            Self::DevelopmentDisabled => Ok(()),
+        }
+    }
+
+    fn authorize_principal(&self, principal: &WsfPrincipal) -> Result<(), String> {
+        match self {
+            Self::Required(store) => store
+                .read()
+                .map_err(|_| "revocation store lock poisoned".to_string())?
+                .authorize_principal(principal, Utc::now())
+                .map_err(|e| e.to_string()),
+            Self::DevelopmentDisabled => Ok(()),
+        }
+    }
+
+    #[must_use]
+    pub fn required_store(
+        &self,
+    ) -> Option<Arc<RwLock<fabric_revocation::MonotonicRevocationStore>>> {
+        match self {
+            Self::Required(store) => Some(Arc::clone(store)),
+            Self::DevelopmentDisabled => None,
+        }
+    }
+}
+
+/// Shared attenuation state: authoritative root-lineage spend plus a
+/// process-wide child-id registry. Both are mandatory so handler-local signed
+/// counters and duplicate requests cannot reset authority.
+#[derive(Debug, Default)]
+pub struct AttenuationState {
+    reservations: fabric_token::spend::ReservationLedger,
+    child_ids: Mutex<HashSet<String>>,
+}
+
+impl AttenuationState {
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Record completed spend against the immutable root lineage. The same
+    /// ledger is folded into every later attenuation decision.
+    pub fn commit_spend(
+        &self,
+        token: &TrustToken,
+        usage: fabric_token::spend::Spent,
+    ) -> Result<(), fabric_token::spend::ReservationError> {
+        let Some(cap) = token.budget.as_ref() else {
+            return Err(fabric_token::spend::ReservationError::Exhausted);
+        };
+        self.reservations
+            .reserve(
+                fabric_token::spend::ReservationKey::for_token(token, None, None),
+                cap,
+                usage,
+            )?
+            .commit()
+    }
+
+    fn current_parent(&self, parent: &TrustToken) -> TrustToken {
+        let mut current = parent.clone();
+        if let Some(budget) = current.budget.as_mut() {
+            let spent =
+                self.reservations
+                    .committed(&fabric_token::spend::ReservationKey::for_token(
+                        parent, None, None,
+                    ));
+            budget.tokens_spent = budget.tokens_spent.max(spent.tokens);
+            budget.usd_spent_cents = budget.usd_spent_cents.max(spent.usd_cents);
+            budget.tool_calls_spent = budget.tool_calls_spent.max(spent.tool_calls);
+        }
+        current
+    }
+
+    fn claim_child_id(&self, child_id: &str) -> bool {
+        self.child_ids
+            .lock()
+            .expect("attenuation child-id lock")
+            .insert(child_id.to_owned())
+    }
+
+    fn release_child_id(&self, child_id: &str) {
+        self.child_ids
+            .lock()
+            .expect("attenuation child-id lock")
+            .remove(child_id);
+    }
+}
 
 /// The OpenAPI 3.0 document for the WSF API, served at `/openapi.json`.
 pub const OPENAPI_JSON: &str = include_str!("openapi.json");
@@ -69,6 +189,10 @@ pub struct AppState {
     /// Server-side global-auditor enrollment (plan L2). The only path past
     /// receipt tenant scoping; `StaticAuditors::none()` for non-audit planes.
     pub auditors: Arc<dyn AuditorStore>,
+    /// Mandatory current revocation in production; explicit bypass in dev.
+    pub revocation: RevocationEnforcement,
+    /// Mandatory root-lineage remaining-authority and duplicate-id state.
+    pub attenuation: Arc<AttenuationState>,
 }
 
 /// Mount all routes over `state`.
@@ -271,7 +395,15 @@ fn b64_decode(s: &str) -> Result<Vec<u8>, ApiError> {
 /// tenant matches the token's — no cross-tenant use of a token on this plane.
 /// The seal, unseal, and exchange handlers all funnel through this so the
 /// tenant binding is enforced identically (403 on mismatch).
-fn enforce_token_tenant(principal: &WsfPrincipal, token: &TrustToken) -> Result<(), ApiError> {
+fn enforce_token_tenant(
+    context: &VerifiedRequestContext,
+    expected_operation: RequestOperation,
+    token: &TrustToken,
+) -> Result<(), ApiError> {
+    context
+        .require_operation(expected_operation)
+        .map_err(|e| ApiError::new(StatusCode::FORBIDDEN, e.to_string()))?;
+    let principal = context.principal();
     if !principal.is_for(Audience::Wsf) {
         return Err(ApiError::new(
             StatusCode::FORBIDDEN,
@@ -285,6 +417,81 @@ fn enforce_token_tenant(principal: &WsfPrincipal, token: &TrustToken) -> Result<
         ));
     }
     Ok(())
+}
+
+/// Bind a transport-authenticated principal to the operation and final resource
+/// selected by the server. Every privileged handler calls this before its sink;
+/// payloads cannot deserialize either the principal or the resulting context.
+fn require_request_context(
+    principal: &WsfPrincipal,
+    operation: RequestOperation,
+    kind: &str,
+    name: &str,
+    tenant_id: Option<String>,
+) -> Result<VerifiedRequestContext, ApiError> {
+    let resource = CanonicalResource::resolved(kind, name, tenant_id)
+        .map_err(|e| ApiError::new(StatusCode::FORBIDDEN, e.to_string()))?;
+    let context = VerifiedRequestContext::establish(principal.clone(), operation, resource)
+        .map_err(|e| ApiError::new(StatusCode::FORBIDDEN, e.to_string()))?;
+    context
+        .require_operation(operation)
+        .map_err(|e| ApiError::new(StatusCode::FORBIDDEN, e.to_string()))?;
+    Ok(context)
+}
+
+fn require_current_token(
+    state: &AppState,
+    context: &VerifiedRequestContext,
+    token: &TrustToken,
+) -> Result<(), ApiError> {
+    state.revocation.authorize_token(token).map_err(|reason| {
+        receipt_revocation_deny(state, context, Some(&token.token_id), &reason);
+        ApiError::new(
+            StatusCode::FORBIDDEN,
+            "current revocation denied the operation",
+        )
+    })
+}
+
+fn require_current_principal(
+    state: &AppState,
+    context: &VerifiedRequestContext,
+) -> Result<(), ApiError> {
+    state
+        .revocation
+        .authorize_principal(context.principal())
+        .map_err(|reason| {
+            receipt_revocation_deny(state, context, None, &reason);
+            ApiError::new(
+                StatusCode::FORBIDDEN,
+                "current revocation denied the operation",
+            )
+        })
+}
+
+fn receipt_revocation_deny(
+    state: &AppState,
+    context: &VerifiedRequestContext,
+    token_id: Option<&str>,
+    reason: &str,
+) {
+    let receipt = serde_json::json!({
+        "kind": "revocation_decision",
+        "decision": "deny",
+        "reason": reason,
+        "token_id": token_id,
+        "tenant_id": context.principal().tenant_id,
+        "subject_hash": context.principal().subject_hash,
+        "operation": context.operation(),
+        "resource": context.resource(),
+        "correlation_id": context.principal().correlation_id,
+        "recorded_at": Utc::now().to_rfc3339(),
+    });
+    let _ = state
+        .ledger
+        .lock()
+        .expect("ledger lock")
+        .ingest("wsf-revocation", receipt);
 }
 
 /// Authorize a requested budget against the tenant ceiling (plan A3): every
@@ -329,6 +536,15 @@ async fn issue(
     Extension(principal): Extension<WsfPrincipal>,
     Json(req): Json<IssueReq>,
 ) -> Result<Json<TokenResp>, ApiError> {
+    let context = require_request_context(
+        &principal,
+        RequestOperation::WsfIssue,
+        "tenant",
+        &principal.tenant_id,
+        Some(principal.tenant_id.clone()),
+    )?;
+    require_current_principal(&s, &context)?;
+    let principal = context.principal();
     // Authority is derived from the authenticated principal + server-side tenant
     // policy — never from the request body (plan A3). Every
     // allow and deny is receipted (plan A4).
@@ -336,7 +552,7 @@ async fn issue(
     if !principal.is_for(Audience::Wsf) {
         return Err(deny_issuance(
             &s,
-            &principal,
+            principal,
             "unknown",
             "principal is not authenticated for the WSF plane",
             roles,
@@ -345,7 +561,7 @@ async fn issue(
     let Some(policy) = s.policy.policy_for(&principal.tenant_id) else {
         return Err(deny_issuance(
             &s,
-            &principal,
+            principal,
             "unknown",
             "no issuance policy for this tenant",
             roles,
@@ -358,7 +574,7 @@ async fn issue(
     if !policy.permits_mode(mode) {
         return Err(deny_issuance(
             &s,
-            &principal,
+            principal,
             mode.label(),
             "issuance mode is not permitted for this tenant",
             roles,
@@ -367,7 +583,7 @@ async fn issue(
     if mode.is_delegation_capable() && policy.max_delegation_depth == 0 {
         return Err(deny_issuance(
             &s,
-            &principal,
+            principal,
             mode.label(),
             "tenant forbids delegation for this issuance mode",
             roles,
@@ -379,24 +595,32 @@ async fn issue(
         if !policy.may_grant_role(role) {
             return Err(deny_issuance(
                 &s,
-                &principal,
+                principal,
                 mode.label(),
                 "requested role is not grantable for this tenant",
                 roles,
             ));
         }
     }
-    // Models: requested must lie within the allowlist when the tenant restricts.
-    for model in &req.requested_models {
-        if !policy.allows_model(model) {
-            return Err(deny_issuance(
-                &s,
-                &principal,
-                mode.label(),
-                "requested model is not permitted for this tenant",
-                roles,
-            ));
-        }
+    // Models: omission/empty resolves to the restrictive policy allowlist;
+    // explicit values must be a subset. An over-broad request is denied.
+    let Some(effective_models) = policy.models_for_request(&req.requested_models) else {
+        return Err(deny_issuance(
+            &s,
+            principal,
+            mode.label(),
+            "requested model is not permitted for this tenant",
+            roles,
+        ));
+    };
+    if !policy.allows_service_identity(principal.service_identity.as_deref()) {
+        return Err(deny_issuance(
+            &s,
+            principal,
+            mode.label(),
+            "authenticated service identity is not permitted for this tenant",
+            roles,
+        ));
     }
     // Budget: every counter at or below the ceiling; unspecified ⇒ the ceiling.
     let budget = match authorize_budget(req.budget.as_ref(), &policy.max_budget) {
@@ -404,7 +628,7 @@ async fn issue(
         Err(e) => {
             issuance_receipt(
                 &s,
-                &principal,
+                principal,
                 mode.label(),
                 "deny",
                 "requested budget exceeds tenant ceiling",
@@ -421,8 +645,17 @@ async fn issue(
         principal.subject_hash.clone()
     };
 
+    // Empty/omitted requested_models means "use the policy allowlist", never
+    // "unrestricted" when the policy is restrictive. Every other authority
+    // axis is selected by authenticated server context + tenant policy.
     let ir = IssueTokenRequest::new(principal.tenant_id.clone(), subject_source, roles.clone())
-        .with_models(req.requested_models.clone())
+        .with_models(effective_models)
+        .with_authority(
+            policy.allowed_routes.clone(),
+            policy.compliance_scopes.clone(),
+            policy.max_classification,
+            principal.service_identity.clone(),
+        )
         .with_budget(budget);
 
     let token = s.bridge.issue_token(&ir).await.map_err(|e| match e {
@@ -436,7 +669,7 @@ async fn issue(
     })?;
 
     // Allow receipt (the authorized decision) + the bridge's token correlation.
-    issuance_receipt(&s, &principal, mode.label(), "allow", "issued", roles);
+    issuance_receipt(&s, principal, mode.label(), "allow", "issued", roles);
     let correlation = s.bridge.audit_correlation(&token);
     if let Ok(value) = serde_json::to_value(&correlation) {
         let _ = s
@@ -491,14 +724,26 @@ fn deny_issuance(
     ApiError::new(StatusCode::FORBIDDEN, reason)
 }
 
-async fn verify(State(s): State<AppState>, Json(req): Json<VerifyReq>) -> Json<VerifyResp> {
+async fn verify(
+    State(s): State<AppState>,
+    Extension(principal): Extension<WsfPrincipal>,
+    Json(req): Json<VerifyReq>,
+) -> Result<Json<VerifyResp>, ApiError> {
+    let _context = require_request_context(
+        &principal,
+        RequestOperation::WsfVerify,
+        "token",
+        &req.token.token_id,
+        Some(req.token.tenant_id.clone()),
+    )?;
+    require_current_token(&s, &_context, &req.token)?;
     if let Err(e) = fabric_token::verify(&req.token, &MlDsa87Verifier, &s.token_public_key) {
-        return Json(VerifyResp {
+        return Ok(Json(VerifyResp {
             valid: false,
             reason: e.to_string(),
-        });
+        }));
     }
-    match fabric_token::is_expired(&req.token, Utc::now()) {
+    Ok(match fabric_token::is_expired(&req.token, Utc::now()) {
         Ok(false) => Json(VerifyResp {
             valid: true,
             reason: "ok".to_string(),
@@ -511,7 +756,7 @@ async fn verify(State(s): State<AppState>, Json(req): Json<VerifyReq>) -> Json<V
             valid: false,
             reason: e.to_string(),
         }),
-    }
+    })
 }
 
 async fn attenuate(
@@ -519,14 +764,24 @@ async fn attenuate(
     Extension(principal): Extension<WsfPrincipal>,
     Json(req): Json<AttenuateReq>,
 ) -> Result<Json<TokenResp>, ApiError> {
+    let context = require_request_context(
+        &principal,
+        RequestOperation::WsfAttenuate,
+        "token",
+        &req.parent.token_id,
+        Some(req.parent.tenant_id.clone()),
+    )?;
+    require_current_token(&s, &context, &req.parent)?;
+    let principal = context.principal();
     // T3: authenticate the presented parent under the trust anchor, bound to the
     // caller's tenant, before any child is constructed. The child's identity is
     // copied from the authenticated parent (T2); the request carries narrowing
     // restrictions only.
+    let now = Utc::now();
     let ctx = fabric_token::VerificationContext::new(
         &MlDsa87Verifier,
         &s.token_public_key,
-        Utc::now(),
+        now,
         fabric_token::Operation::Attenuate,
     )
     .expect_tenant(&principal.tenant_id)
@@ -534,14 +789,41 @@ async fn attenuate(
     // version — is refused attenuation (LegacyAttenuationDenied → 422).
     .require_current_bundle(s.bridge.bundle_version());
 
-    let token = fabric_token::attenuate(
-        &req.parent,
+    let Some(policy) = s.policy.policy_for(&principal.tenant_id) else {
+        return Err(ApiError::new(
+            StatusCode::FORBIDDEN,
+            "no attenuation policy for this tenant",
+        ));
+    };
+    fabric_token::verify_in_context(&req.parent, &ctx).map_err(map_attenuate_error)?;
+    if ctx.is_legacy(&req.parent) {
+        return Err(map_attenuate_error(
+            fabric_token::TokenError::LegacyAttenuationDenied(
+                req.parent.trust_bundle_version.clone(),
+            ),
+        ));
+    }
+    if !s.attenuation.claim_child_id(&req.restrictions.new_token_id) {
+        return Err(map_attenuate_error(
+            fabric_token::TokenError::InvalidChildId,
+        ));
+    }
+    let current_parent = s.attenuation.current_parent(&req.parent);
+    let result = fabric_token::attenuate_preverified(
+        &current_parent,
         &req.restrictions,
-        &ctx,
-        None,
+        now,
+        Some(policy.max_delegation_depth),
         s.bridge.signer(),
-    )
-    .map_err(map_attenuate_error)?;
+    );
+    let token = match result {
+        Ok(token) => token,
+        Err(error) => {
+            s.attenuation
+                .release_child_id(&req.restrictions.new_token_id);
+            return Err(map_attenuate_error(error));
+        }
+    };
     Ok(Json(TokenResp { token }))
 }
 
@@ -576,10 +858,18 @@ async fn seal(
     Extension(principal): Extension<WsfPrincipal>,
     Json(req): Json<SealReq>,
 ) -> Result<Json<SealResp>, ApiError> {
+    let context = require_request_context(
+        &principal,
+        RequestOperation::WsfSeal,
+        "envelope",
+        &req.envelope_id,
+        Some(req.token.tenant_id.clone()),
+    )?;
+    require_current_token(&s, &context, &req.token)?;
     // Bind the presented token to the authenticated principal's tenant (parity
     // with `exchange`): the seal plane must not let a principal seal under a
     // token minted for a different tenant.
-    enforce_token_tenant(&principal, &req.token)?;
+    enforce_token_tenant(&context, RequestOperation::WsfSeal, &req.token)?;
     let plaintext = b64_decode(&req.plaintext_b64)?;
     let before = s.seal.receipts_snapshot().len();
     let result = s
@@ -604,9 +894,17 @@ async fn unseal(
     Extension(principal): Extension<WsfPrincipal>,
     Json(req): Json<UnsealReq>,
 ) -> Result<Json<UnsealResp>, ApiError> {
+    let context = require_request_context(
+        &principal,
+        RequestOperation::WsfUnseal,
+        "envelope",
+        &req.envelope.envelope_id,
+        Some(req.token.tenant_id.clone()),
+    )?;
+    require_current_token(&s, &context, &req.token)?;
     // Same tenant binding as `seal`: a principal may only unseal with a token
     // belonging to its own tenant.
-    enforce_token_tenant(&principal, &req.token)?;
+    enforce_token_tenant(&context, RequestOperation::WsfUnseal, &req.token)?;
     let before = s.seal.receipts_snapshot().len();
     let result = s
         .seal
@@ -630,12 +928,21 @@ async fn exchange(
     Extension(principal): Extension<WsfPrincipal>,
     Json(req): Json<ExchangeReq>,
 ) -> Result<Json<ExchangeResp>, ApiError> {
+    let context = require_request_context(
+        &principal,
+        RequestOperation::WsfBroker,
+        "grant",
+        &req.grant_id,
+        Some(req.token.tenant_id.clone()),
+    )?;
+    require_current_token(&s, &context, &req.token)?;
     // B1/B2: the cloud identity is resolved server-side from a tenant-scoped
     // grant — the caller never names a role ARN. A grant is scoped to the
     // authenticated principal's tenant, and the presented token must belong to
     // that same tenant (no cross-tenant brokering) — the same binding seal and
     // unseal enforce.
-    enforce_token_tenant(&principal, &req.token)?;
+    enforce_token_tenant(&context, RequestOperation::WsfBroker, &req.token)?;
+    let principal = context.principal();
     let grant = s
         .grants
         .grant_for(&principal.tenant_id, &req.grant_id)
@@ -679,6 +986,15 @@ async fn receipts(
     Extension(principal): Extension<WsfPrincipal>,
     Query(q): Query<ReceiptsQuery>,
 ) -> Result<Json<ReceiptsResp>, ApiError> {
+    let context = require_request_context(
+        &principal,
+        RequestOperation::WsfAuditRead,
+        "receipt-ledger",
+        "tenant-view",
+        Some(principal.tenant_id.clone()),
+    )?;
+    require_current_principal(&s, &context)?;
+    let principal = context.principal();
     // L1/L2: the query is authenticated (principal established by the A2
     // middleware) and **mandatorily tenant-scoped** to the caller's tenant. A
     // receipt is returned only if it carries a `tenant_id` equal to the
@@ -694,7 +1010,7 @@ async fn receipts(
     // L2: a server-enrolled global auditor is the one exception to tenant
     // scoping — enrollment is by authenticated principal_id, never by anything
     // in the request.
-    let auditor = s.auditors.is_global_auditor(&principal);
+    let auditor = s.auditors.is_global_auditor(principal);
     let ledger = s.ledger.lock().expect("ledger lock");
 
     // Optional typed field filter — always intersected with the tenant scope,
@@ -723,13 +1039,22 @@ async fn export_receipts(
     State(s): State<AppState>,
     Extension(principal): Extension<WsfPrincipal>,
 ) -> Result<Json<wsf_ledger::EvidencePack>, ApiError> {
+    let context = require_request_context(
+        &principal,
+        RequestOperation::WsfAuditExport,
+        "receipt-ledger",
+        "estate-export",
+        None,
+    )?;
+    require_current_principal(&s, &context)?;
+    let principal = context.principal();
     if !principal.is_for(Audience::Wsf) {
         return Err(ApiError::new(
             StatusCode::FORBIDDEN,
             "principal is not authenticated for the WSF plane",
         ));
     }
-    if !s.auditors.is_global_auditor(&principal) {
+    if !s.auditors.is_global_auditor(principal) {
         return Err(ApiError::new(
             StatusCode::FORBIDDEN,
             "receipt export requires global-auditor enrollment",
@@ -862,6 +1187,8 @@ mod tenant_binding_tests {
                 tenant_id: tenant.into(),
                 subject_hash: String::new(),
                 service_identity: None,
+                roles: Vec::new(),
+                token_lineage: None,
                 auth_strength: AuthStrength::WorkloadToken,
                 audience: Audience::Wsf,
             },
@@ -907,11 +1234,57 @@ mod tenant_binding_tests {
         // `enforce_token_tenant`; a token minted for another tenant is refused
         // 403 at the handler, never sealed/unsealed under the caller's identity.
         let alice = principal("tenant-a");
+        let context = require_request_context(
+            &alice,
+            RequestOperation::WsfSeal,
+            "envelope",
+            "env-1",
+            Some("tenant-a".into()),
+        )
+        .unwrap();
         // Same tenant: allowed.
-        assert!(enforce_token_tenant(&alice, &token("tenant-a")).is_ok());
+        assert!(
+            enforce_token_tenant(&context, RequestOperation::WsfSeal, &token("tenant-a")).is_ok()
+        );
         // Cross-tenant token: 403.
-        let err = enforce_token_tenant(&alice, &token("tenant-b")).unwrap_err();
+        let err = enforce_token_tenant(&context, RequestOperation::WsfSeal, &token("tenant-b"))
+            .unwrap_err();
         assert_eq!(err.status, StatusCode::FORBIDDEN);
+        // A context established for another operation cannot reach this sink.
+        let err = enforce_token_tenant(&context, RequestOperation::WsfUnseal, &token("tenant-a"))
+            .unwrap_err();
+        assert_eq!(err.status, StatusCode::FORBIDDEN);
+    }
+
+    #[test]
+    fn attenuation_state_uses_root_spend_and_rejects_duplicate_child_ids() {
+        let mut parent = token("tenant-a");
+        parent.token_id = "root-a".into();
+        parent.budget = Some(Budget {
+            token_cap: 100,
+            usd_cap_cents: 100,
+            tool_call_cap: 10,
+            ..Budget::default()
+        });
+        let state = AttenuationState::new();
+        state
+            .commit_spend(
+                &parent,
+                fabric_token::spend::Spent {
+                    tokens: 40,
+                    usd_cents: 25,
+                    tool_calls: 2,
+                },
+            )
+            .unwrap();
+        let current = state.current_parent(&parent);
+        let budget = current.budget.unwrap();
+        assert_eq!(budget.tokens_spent, 40);
+        assert_eq!(budget.usd_spent_cents, 25);
+        assert_eq!(budget.tool_calls_spent, 2);
+
+        assert!(state.claim_child_id("child-a"));
+        assert!(!state.claim_child_id("child-a"));
     }
 
     #[test]
@@ -925,13 +1298,36 @@ mod tenant_binding_tests {
                 tenant_id: "tenant-a".into(),
                 subject_hash: String::new(),
                 service_identity: None,
+                roles: Vec::new(),
+                token_lineage: None,
                 auth_strength: AuthStrength::WorkloadToken,
                 audience: Audience::Aog,
             },
             "corr-1".to_string(),
             "2026-07-10T00:00:00Z".to_string(),
         );
-        let err = enforce_token_tenant(&aog_principal, &token("tenant-a")).unwrap_err();
+        let err = require_request_context(
+            &aog_principal,
+            RequestOperation::WsfSeal,
+            "envelope",
+            "env-1",
+            Some("tenant-a".into()),
+        )
+        .unwrap_err();
+        assert_eq!(err.status, StatusCode::FORBIDDEN);
+    }
+
+    #[test]
+    fn forged_resource_tenant_is_refused_before_the_sink() {
+        let alice = principal("tenant-a");
+        let err = require_request_context(
+            &alice,
+            RequestOperation::WsfUnseal,
+            "envelope",
+            "env-foreign",
+            Some("tenant-b".into()),
+        )
+        .unwrap_err();
         assert_eq!(err.status, StatusCode::FORBIDDEN);
     }
 }

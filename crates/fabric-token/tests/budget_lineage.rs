@@ -38,6 +38,9 @@ fn child(token_id: &str, parent_id: &str, cap: u64) -> TrustToken {
         }),
         attenuation: Attenuation {
             parent_id: Some(parent_id.into()),
+            root_id: Some(parent_id.into()),
+            depth: 1,
+            ancestor_ids: vec![parent_id.into()],
             caveats: vec![],
         },
         signature: Signature {
@@ -89,6 +92,16 @@ fn siblings_share_one_lineage_counter() {
     );
     assert_eq!(remaining(&ledger, &c1), 0);
     assert_eq!(remaining(&ledger, &c2), 0);
+}
+
+#[test]
+fn nested_descendants_keep_the_immutable_root_namespace() {
+    let child = child("child", "root", 1000);
+    let mut grandchild = child.clone();
+    grandchild.token_id = "grandchild".into();
+    grandchild.attenuation.parent_id = Some("child".into());
+    assert_eq!(grandchild.attenuation.root_id.as_deref(), Some("root"));
+    assert_eq!(lineage_key(&grandchild), "root");
 }
 
 #[test]

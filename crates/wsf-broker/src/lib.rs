@@ -208,7 +208,20 @@ impl AwsStsBroker {
                 self.config.min_duration_secs
             )));
         }
-        let duration = clamp_duration(self.config.min_duration_secs, max, &token.expires_at, now)?;
+        let revocation_expires_at = self.revocation.as_ref().and_then(|store| {
+            store
+                .read()
+                .expect("revocation store lock")
+                .current()
+                .map(|snapshot| snapshot.expires_at.clone())
+        });
+        let duration = strict_duration(
+            self.config.min_duration_secs,
+            max,
+            &token.expires_at,
+            revocation_expires_at.as_deref(),
+            now,
+        )?;
 
         // 3. Session policy: the grant's approved actions on the token's
         //    resource scope — never `Action:"*"` (B3).
@@ -325,40 +338,41 @@ pub(crate) fn verify_token(
         return Ok(());
     };
     let store = store.read().expect("revocation store lock");
-    let Some(snapshot) = store.current() else {
-        return Err(BrokerError::TokenRejected(
-            "revocation state unavailable (fail closed)".to_string(),
-        ));
-    };
-    let fresh = DateTime::parse_from_rfc3339(&snapshot.expires_at)
-        .map(|e| e.with_timezone(&Utc) > now)
-        .unwrap_or(false);
-    if !fresh {
-        return Err(BrokerError::TokenRejected(
-            "revocation snapshot expired (fail closed)".to_string(),
-        ));
-    }
-    if let Some(dimension) = snapshot.revokes(token) {
-        return Err(BrokerError::TokenRejected(format!(
-            "token revoked ({dimension})"
-        )));
-    }
-    Ok(())
+    store
+        .authorize(token, now)
+        .map_err(|e| BrokerError::TokenRejected(format!("{e} (fail closed)")))
 }
 
-/// Compute a cloud-cred duration: the token's remaining lifetime, clamped to
-/// `[min, max]`. Errors only on a malformed `expires_at`.
-pub(crate) fn clamp_duration(
+/// Compute the strict intersection of provider/grant maximum, token remaining
+/// lifetime, and revocation-snapshot freshness. If that intersection is below
+/// the provider minimum, deny; never widen authority to satisfy the floor.
+pub(crate) fn strict_duration(
     min: i64,
     max: i64,
     expires_at: &str,
+    revocation_expires_at: Option<&str>,
     now: DateTime<Utc>,
 ) -> Result<i64, BrokerError> {
-    let exp = DateTime::parse_from_rfc3339(expires_at)
+    let token_exp = DateTime::parse_from_rfc3339(expires_at)
         .map_err(|e| BrokerError::TokenRejected(format!("bad expires_at: {e}")))?
         .with_timezone(&Utc);
-    let remaining = (exp - now).num_seconds();
-    Ok(remaining.clamp(min, max))
+    let token_remaining = (token_exp - now).num_seconds();
+    let revocation_remaining = match revocation_expires_at {
+        Some(value) => {
+            let exp = DateTime::parse_from_rfc3339(value).map_err(|e| {
+                BrokerError::TokenRejected(format!("bad revocation expires_at: {e}"))
+            })?;
+            (exp.with_timezone(&Utc) - now).num_seconds()
+        }
+        None => i64::MAX,
+    };
+    let remaining = token_remaining.min(revocation_remaining).min(max);
+    if remaining < min {
+        return Err(BrokerError::AuthorityLifetime(format!(
+            "{remaining}s remains, provider minimum is {min}s"
+        )));
+    }
+    Ok(remaining)
 }
 
 /// STS `RoleSessionName` must match `[\w+=,.@-]{2,64}`; sanitize + cap the
@@ -418,6 +432,9 @@ mod tests {
             budget: None,
             attenuation: Attenuation {
                 parent_id: None,
+                root_id: None,
+                depth: 0,
+                ancestor_ids: vec![],
                 caveats,
             },
             signature: Signature {
@@ -545,25 +562,43 @@ mod tests {
     }
 
     #[test]
-    fn duration_tracks_ttl_and_clamps() {
+    fn duration_is_a_strict_authority_intersection() {
         let now = DateTime::parse_from_rfc3339("2026-07-03T12:00:00Z")
             .unwrap()
             .with_timezone(&Utc);
-        // 15 min remaining → clamps up to the 900s floor exactly.
+        // 15 min remaining satisfies the floor exactly.
         assert_eq!(
-            clamp_duration(900, 3600, "2026-07-03T12:15:00Z", now).unwrap(),
+            strict_duration(900, 3600, "2026-07-03T12:15:00Z", None, now).unwrap(),
             900
         );
         // 2h remaining → clamps down to the 3600s ceiling.
         assert_eq!(
-            clamp_duration(900, 3600, "2026-07-03T14:00:00Z", now).unwrap(),
+            strict_duration(900, 3600, "2026-07-03T14:00:00Z", None, now).unwrap(),
             3600
         );
         // 30 min remaining → passes through.
         assert_eq!(
-            clamp_duration(900, 3600, "2026-07-03T12:30:00Z", now).unwrap(),
+            strict_duration(900, 3600, "2026-07-03T12:30:00Z", None, now).unwrap(),
             1800
         );
+
+        for remaining in 1..900 {
+            let expiry = now + chrono::Duration::seconds(remaining);
+            assert!(matches!(
+                strict_duration(900, 3600, &expiry.to_rfc3339(), None, now),
+                Err(BrokerError::AuthorityLifetime(_))
+            ));
+        }
+        assert!(matches!(
+            strict_duration(
+                900,
+                3600,
+                "2026-07-03T14:00:00Z",
+                Some("2026-07-03T12:10:00Z"),
+                now,
+            ),
+            Err(BrokerError::AuthorityLifetime(_))
+        ));
     }
 
     #[test]

@@ -85,6 +85,8 @@ async fn spawn_with(tenant: &str, ledger: Arc<Mutex<Ledger>>, auditors: StaticAu
         policy: Arc::new(StaticTenantPolicies::single_dev(tenant, &["user"])),
         grants: Arc::new(StaticGrants::new()),
         auditors: Arc::new(auditors),
+        revocation: wsf_api::RevocationEnforcement::development_disabled(),
+        attenuation: Arc::new(wsf_api::AttenuationState::new()),
     };
     let app = wsf_api::router(state);
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();

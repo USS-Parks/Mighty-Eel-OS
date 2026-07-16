@@ -33,6 +33,9 @@ use crate::runtime::{Action, ReconcileError, Reconciler};
 /// (empty = unrestricted).
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct GrantEntry {
+    /// Immutable tenant partition for this authority entry.
+    #[serde(default)]
+    pub tenant_id: String,
     pub tool: String,
     pub systems: Vec<String>,
 }
@@ -179,19 +182,23 @@ impl EdgeGrantCache {
 
     /// Whether `tool` is granted right now (present in the applied set).
     #[must_use]
-    pub fn allows(&self, tool: &str) -> bool {
-        self.applied
-            .as_ref()
-            .is_some_and(|s| s.grants.iter().any(|g| g.tool == tool))
+    pub fn allows(&self, tenant_id: &str, tool: &str) -> bool {
+        self.applied.as_ref().is_some_and(|s| {
+            s.grants
+                .iter()
+                .any(|g| g.tenant_id == tenant_id && g.tool == tool)
+        })
     }
 
     /// Whether `tool` may reach `system`: the tool is granted and either the grant
     /// is system-unrestricted or names `system`.
     #[must_use]
-    pub fn allows_system(&self, tool: &str, system: &str) -> bool {
+    pub fn allows_system(&self, tenant_id: &str, tool: &str, system: &str) -> bool {
         self.applied.as_ref().is_some_and(|set| {
             set.grants.iter().any(|g| {
-                g.tool == tool && (g.systems.is_empty() || g.systems.iter().any(|s| s == system))
+                g.tenant_id == tenant_id
+                    && g.tool == tool
+                    && (g.systems.is_empty() || g.systems.iter().any(|s| s == system))
             })
         })
     }
@@ -283,6 +290,7 @@ impl<S: GrantStore> ToolGrantController<S> {
                 && grant.metadata.deletion_timestamp.is_none()
             {
                 grants.push(GrantEntry {
+                    tenant_id: grant.metadata.tenant.unwrap_or_default(),
                     tool: grant.spec.tool,
                     systems: grant.spec.systems,
                 });
@@ -334,6 +342,7 @@ mod tests {
 
     fn entry(tool: &str, systems: &[&str]) -> GrantEntry {
         GrantEntry {
+            tenant_id: "tenant-a".into(),
             tool: tool.to_owned(),
             systems: systems.iter().map(|s| (*s).to_owned()).collect(),
         }
@@ -350,17 +359,32 @@ mod tests {
         .unwrap();
         let mut edge = EdgeGrantCache::new(s.public_key().to_vec());
         edge.accept(set).expect("valid set accepted");
-        assert!(edge.allows("search") && edge.allows("calc"));
-        assert!(!edge.allows("delete_db"), "an ungranted tool is denied");
-        assert!(edge.allows_system("search", "crm"));
+        assert!(edge.allows("tenant-a", "search") && edge.allows("tenant-a", "calc"));
         assert!(
-            !edge.allows_system("search", "prod"),
+            !edge.allows("tenant-a", "delete_db"),
+            "an ungranted tool is denied"
+        );
+        assert!(edge.allows_system("tenant-a", "search", "crm"));
+        assert!(
+            !edge.allows_system("tenant-a", "search", "prod"),
             "system scope enforced"
         );
         assert!(
-            edge.allows_system("calc", "anything"),
+            edge.allows_system("tenant-a", "calc", "anything"),
             "unrestricted grant reaches any system"
         );
+    }
+
+    #[test]
+    fn identical_tool_names_do_not_cross_tenant_partitions() {
+        let signer = RustCryptoMlDsa87::generate("grant-tenant-anchor").unwrap();
+        let set = sign_grants(1, vec![entry("search", &["crm"])], &signer).unwrap();
+        let mut edge = EdgeGrantCache::new(signer.public_key().to_vec());
+        edge.accept(set).unwrap();
+        assert!(edge.allows("tenant-a", "search"));
+        assert!(edge.allows_system("tenant-a", "search", "crm"));
+        assert!(!edge.allows("tenant-b", "search"));
+        assert!(!edge.allows_system("tenant-b", "search", "crm"));
     }
 
     #[test]
@@ -405,10 +429,10 @@ mod tests {
             .unwrap(),
         )
         .unwrap();
-        assert!(edge.allows("calc"));
+        assert!(edge.allows("tenant-a", "calc"));
         // A newer set without calc = calc revoked.
         edge.accept(sign_grants(2, vec![entry("search", &[])], s.as_ref()).unwrap())
             .unwrap();
-        assert!(edge.allows("search") && !edge.allows("calc"));
+        assert!(edge.allows("tenant-a", "search") && !edge.allows("tenant-a", "calc"));
     }
 }

@@ -120,6 +120,18 @@ pub struct IssueTokenRequest {
     pub budget: Option<Budget>,
     /// Optional model allowlist (empty = unrestricted at this layer).
     pub allowed_models: Vec<String>,
+    /// Server-authorized route ceiling. `None` preserves the bridge's legacy
+    /// OpenBao tenant-envelope mapping; WSF API issuance always supplies it.
+    pub allowed_routes: Option<Vec<Route>>,
+    /// Server-authorized compliance scopes. `None` preserves the legacy bridge
+    /// mapping; WSF API issuance always supplies it.
+    pub compliance_scopes: Option<Vec<ComplianceScope>>,
+    /// Server-authorized classification ceiling. `None` preserves the legacy
+    /// bridge mapping; WSF API issuance always supplies it.
+    pub max_data_classification: Option<Classification>,
+    /// Service identity copied from authenticated server context, never the
+    /// untrusted issue-token body.
+    pub service_identity: Option<String>,
 }
 
 impl IssueTokenRequest {
@@ -136,6 +148,10 @@ impl IssueTokenRequest {
             roles,
             budget: None,
             allowed_models: Vec::new(),
+            allowed_routes: None,
+            compliance_scopes: None,
+            max_data_classification: None,
+            service_identity: None,
         }
     }
 
@@ -150,6 +166,22 @@ impl IssueTokenRequest {
     #[must_use]
     pub fn with_models(mut self, models: Vec<String>) -> Self {
         self.allowed_models = models;
+        self
+    }
+
+    /// Builder: attach the complete server-authorized token authority.
+    #[must_use]
+    pub fn with_authority(
+        mut self,
+        routes: Vec<Route>,
+        scopes: Vec<ComplianceScope>,
+        classification: Classification,
+        service_identity: Option<String>,
+    ) -> Self {
+        self.allowed_routes = Some(routes);
+        self.compliance_scopes = Some(scopes);
+        self.max_data_classification = Some(classification);
+        self.service_identity = service_identity;
         self
     }
 }
@@ -311,18 +343,26 @@ fn compose_token(
     let expires = now
         + chrono::TimeDelta::from_std(config.token_ttl)
             .map_err(|e| BridgeError::Config(format!("token_ttl out of range: {e}")))?;
-    let compliance_scopes = tenant
-        .compliance_scopes
-        .iter()
-        .map(|s| parse_wire::<ComplianceScope>(s, "compliance scope"))
-        .collect::<Result<Vec<_>, _>>()?;
-    let allowed_routes = tenant
-        .default_allowed_routes
-        .iter()
-        .map(|s| parse_wire::<Route>(s, "route"))
-        .collect::<Result<Vec<_>, _>>()?;
-    let max_data_classification =
-        parse_wire::<Classification>(&tenant.max_data_classification, "classification")?;
+    let compliance_scopes = match &req.compliance_scopes {
+        Some(scopes) => scopes.clone(),
+        None => tenant
+            .compliance_scopes
+            .iter()
+            .map(|s| parse_wire::<ComplianceScope>(s, "compliance scope"))
+            .collect::<Result<Vec<_>, _>>()?,
+    };
+    let allowed_routes = match &req.allowed_routes {
+        Some(routes) => routes.clone(),
+        None => tenant
+            .default_allowed_routes
+            .iter()
+            .map(|s| parse_wire::<Route>(s, "route"))
+            .collect::<Result<Vec<_>, _>>()?,
+    };
+    let max_data_classification = match req.max_data_classification {
+        Some(classification) => classification,
+        None => parse_wire::<Classification>(&tenant.max_data_classification, "classification")?,
+    };
     Ok(TrustToken {
         token_id,
         issued_at: now.to_rfc3339(),
@@ -332,7 +372,7 @@ fn compose_token(
         tenant_id: tenant.tenant_id.clone(),
         subject_id: None, // pseudonymous: cleartext subject is never stored on the token
         subject_hash,
-        service_identity: None,
+        service_identity: req.service_identity.clone(),
         identity_id: None,
         roles: req.roles.clone(),
         compliance_scopes,
@@ -409,6 +449,34 @@ mod tests {
         assert!(tok.subject_id.is_none());
         assert_eq!(tok.subject_hash, subject_hash);
         assert!(tok.subject_hash.starts_with(fabric_proof::HMAC_PREFIX));
+    }
+
+    #[test]
+    fn compose_uses_server_authority_instead_of_broader_tenant_envelope() {
+        let cfg = test_config();
+        let req = IssueTokenRequest::new("tribal-health-demo", "service-a", vec!["worker".into()])
+            .with_models(vec!["model-a".into()])
+            .with_authority(
+                vec![Route::LocalOnly],
+                vec![ComplianceScope::Hipaa],
+                Classification::Internal,
+                Some("service-a".into()),
+            );
+        let tok = compose_token(
+            &cfg,
+            &test_tenant(),
+            &req,
+            "tok_policy".into(),
+            "hmac:v1:test".into(),
+            Utc::now(),
+        )
+        .unwrap();
+
+        assert_eq!(tok.allowed_models, vec!["model-a"]);
+        assert_eq!(tok.allowed_routes, vec![Route::LocalOnly]);
+        assert_eq!(tok.compliance_scopes, vec![ComplianceScope::Hipaa]);
+        assert_eq!(tok.max_data_classification, Classification::Internal);
+        assert_eq!(tok.service_identity.as_deref(), Some("service-a"));
     }
 
     #[test]

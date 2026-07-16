@@ -4,10 +4,11 @@
 //! use the read-only [`crate::reader::StoreReader`]. There is no handler path
 //! that writes the store directly.
 
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
+use serde::Deserialize;
 use serde_json::{Value, json};
 
 use aog_estate::ResourceObject;
@@ -64,15 +65,37 @@ pub async fn create(
 pub async fn get_one(
     State(state): State<AppState>,
     Path((kind_seg, name)): Path<(String, String)>,
+    Extension(principal): Extension<Principal>,
 ) -> Result<Response, ApiError> {
     let kind = parse_kind(&kind_seg).ok_or(ApiError::UnknownKind(kind_seg))?;
-    match state.reader.get(kind, &name).await? {
+    match state
+        .reader
+        .get_scoped(
+            kind,
+            &name,
+            principal.tenant(),
+            principal.is_estate_reader(),
+        )
+        .await?
+    {
         Some(value) => Ok(Json(value).into_response()),
         None => Err(ApiError::NotFound {
             kind: kind.to_string(),
             name,
         }),
     }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ListQuery {
+    #[serde(default = "default_list_limit")]
+    limit: usize,
+    #[serde(default)]
+    continue_after: Option<String>,
+}
+
+fn default_list_limit() -> usize {
+    100
 }
 
 /// `GET .../{kind}` — list resources of a kind.
@@ -82,13 +105,40 @@ pub async fn get_one(
 pub async fn list(
     State(state): State<AppState>,
     Path(kind_seg): Path<String>,
+    Extension(principal): Extension<Principal>,
+    Query(query): Query<ListQuery>,
 ) -> Result<Response, ApiError> {
     let kind = parse_kind(&kind_seg).ok_or(ApiError::UnknownKind(kind_seg))?;
-    let items = state.reader.list(kind).await?;
+    let limit = query.limit.clamp(1, 1_000);
+    let mut visible = state
+        .reader
+        .list_scoped(kind, principal.tenant(), principal.is_estate_reader())
+        .await?;
+    if let Some(after) = query.continue_after.as_deref() {
+        visible.retain(|value| {
+            value["metadata"]["name"]
+                .as_str()
+                .is_some_and(|name| name > after)
+        });
+    }
+    let has_more = visible.len() > limit;
+    visible.truncate(limit);
+    let continue_after = if has_more {
+        visible
+            .last()
+            .and_then(|value| value.get("metadata"))
+            .and_then(|metadata| metadata.get("name"))
+            .and_then(Value::as_str)
+            .map(ToOwned::to_owned)
+    } else {
+        None
+    };
     Ok(Json(json!({
         "apiVersion": aog_estate::API_VERSION,
         "kind": format!("{kind}List"),
-        "items": items,
+        "items": visible,
+        "continue_after": continue_after,
+        "limit": limit,
     }))
     .into_response())
 }

@@ -106,10 +106,10 @@ async fn revoking_a_grant_halts_the_tool_on_every_proxy() {
     proxy_a.accept(set.clone()).expect("proxy A accepts");
     proxy_b.accept(set).expect("proxy B accepts");
     assert!(
-        proxy_a.allows("calc") && proxy_b.allows("calc"),
+        proxy_a.allows("", "calc") && proxy_b.allows("", "calc"),
         "calc is granted on both proxies"
     );
-    assert!(proxy_a.allows("search") && proxy_b.allows("search"));
+    assert!(proxy_a.allows("", "search") && proxy_b.allows("", "search"));
 
     // Revoke calc by deleting its ToolGrant; the controller republishes.
     client.delete(Kind::ToolGrant, "g-calc").await.unwrap();
@@ -129,11 +129,11 @@ async fn revoking_a_grant_halts_the_tool_on_every_proxy() {
         .expect("proxy A pulls newer set");
     proxy_b.accept(set2).expect("proxy B pulls newer set");
     assert!(
-        !proxy_a.allows("calc") && !proxy_b.allows("calc"),
+        !proxy_a.allows("", "calc") && !proxy_b.allows("", "calc"),
         "the revoked tool is halted on every proxy"
     );
     assert!(
-        proxy_a.allows("search") && proxy_b.allows("search"),
+        proxy_a.allows("", "search") && proxy_b.allows("", "search"),
         "a still-granted tool keeps working"
     );
 }

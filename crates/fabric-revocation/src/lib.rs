@@ -6,7 +6,8 @@
 //! [`emergency`] snapshots are short-TTL, out-of-band revocations applied on the
 //! next poll regardless of the normal cadence.
 
-use fabric_contracts::{Signature, TrustToken};
+use chrono::{DateTime, Utc};
+use fabric_contracts::{Signature, TrustToken, WsfPrincipal};
 use fabric_crypto::{Signer, Verifier};
 use fabric_proof::canonical_hash;
 use serde::{Deserialize, Serialize};
@@ -173,6 +174,24 @@ impl RevocationSnapshot {
         }
         None
     }
+
+    /// Complete predicate available for a transport-authenticated principal
+    /// before a trust token exists.
+    #[must_use]
+    pub fn revokes_principal(&self, principal: &WsfPrincipal) -> Option<&'static str> {
+        if self.is_tenant_revoked(&principal.tenant_id) {
+            return Some("tenant");
+        }
+        if self.is_subject_revoked(&principal.subject_hash) {
+            return Some("subject_hash");
+        }
+        if let Some(service) = &principal.service_identity
+            && self.is_service_identity_revoked(service)
+        {
+            return Some("service_identity");
+        }
+        None
+    }
 }
 
 fn sequence_is_zero(sequence: &u64) -> bool {
@@ -203,6 +222,33 @@ pub enum RevocationError {
         /// Sequence of the rejected candidate.
         candidate: u64,
     },
+}
+
+/// Fail-closed result from consulting the current revocation state at a
+/// caller-supplied trusted time.
+#[derive(Debug, thiserror::Error, PartialEq, Eq)]
+pub enum CurrentRevocationError {
+    /// No anchor-verified snapshot has been accepted yet.
+    #[error("revocation state unavailable")]
+    Unavailable,
+    /// Sequence zero is a legacy transport value, not current production state.
+    #[error("revocation snapshot has no monotonic sequence")]
+    Unsequenced,
+    /// The signed issue time is malformed.
+    #[error("revocation snapshot issued_at is invalid")]
+    InvalidIssuedAt,
+    /// The signed issue time is ahead of trusted time.
+    #[error("revocation snapshot is not yet valid")]
+    NotYetValid,
+    /// The signed expiry is malformed.
+    #[error("revocation snapshot expires_at is invalid")]
+    InvalidExpiresAt,
+    /// Trusted time is at or beyond the signed expiry.
+    #[error("revocation snapshot expired")]
+    Expired,
+    /// The complete predicate matched a token dimension.
+    #[error("token revoked ({0})")]
+    Revoked(&'static str),
 }
 
 /// Monotonic, anti-rollback revocation state for a service consumer.
@@ -271,6 +317,63 @@ impl MonotonicRevocationStore {
     #[must_use]
     pub fn revokes(&self, token: &TrustToken) -> Option<&'static str> {
         self.current.as_ref().and_then(|s| s.revokes(token))
+    }
+
+    /// Consult the anchor-verified, monotonic snapshot at `trusted_now` and
+    /// apply the complete token predicate. Missing, unsequenced, malformed,
+    /// future, expired, or matching state denies.
+    ///
+    /// # Errors
+    /// A [`CurrentRevocationError`] describing the fail-closed condition.
+    pub fn authorize(
+        &self,
+        token: &TrustToken,
+        trusted_now: DateTime<Utc>,
+    ) -> Result<(), CurrentRevocationError> {
+        let snapshot = self.current_at(trusted_now)?;
+        if let Some(dimension) = snapshot.revokes(token) {
+            return Err(CurrentRevocationError::Revoked(dimension));
+        }
+        Ok(())
+    }
+
+    /// Apply current revocation dimensions available on a verified principal.
+    pub fn authorize_principal(
+        &self,
+        principal: &WsfPrincipal,
+        trusted_now: DateTime<Utc>,
+    ) -> Result<(), CurrentRevocationError> {
+        let snapshot = self.current_at(trusted_now)?;
+        if let Some(dimension) = snapshot.revokes_principal(principal) {
+            return Err(CurrentRevocationError::Revoked(dimension));
+        }
+        Ok(())
+    }
+
+    fn current_at(
+        &self,
+        trusted_now: DateTime<Utc>,
+    ) -> Result<&RevocationSnapshot, CurrentRevocationError> {
+        let snapshot = self
+            .current
+            .as_ref()
+            .ok_or(CurrentRevocationError::Unavailable)?;
+        if snapshot.sequence == 0 {
+            return Err(CurrentRevocationError::Unsequenced);
+        }
+        let issued_at = DateTime::parse_from_rfc3339(&snapshot.issued_at)
+            .map_err(|_| CurrentRevocationError::InvalidIssuedAt)?
+            .with_timezone(&Utc);
+        if issued_at > trusted_now {
+            return Err(CurrentRevocationError::NotYetValid);
+        }
+        let expires_at = DateTime::parse_from_rfc3339(&snapshot.expires_at)
+            .map_err(|_| CurrentRevocationError::InvalidExpiresAt)?
+            .with_timezone(&Utc);
+        if trusted_now >= expires_at {
+            return Err(CurrentRevocationError::Expired);
+        }
+        Ok(snapshot)
     }
 }
 

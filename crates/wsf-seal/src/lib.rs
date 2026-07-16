@@ -292,25 +292,9 @@ impl SealService {
             return Ok(());
         };
         let store = store.read().expect("revocation store lock");
-        let Some(snapshot) = store.current() else {
-            return Err(SealError::Unauthorized(
-                "revocation state unavailable (fail closed)".to_string(),
-            ));
-        };
-        let fresh = DateTime::parse_from_rfc3339(&snapshot.expires_at)
-            .map(|e| e.with_timezone(&Utc) > now)
-            .unwrap_or(false);
-        if !fresh {
-            return Err(SealError::Unauthorized(
-                "revocation snapshot expired (fail closed)".to_string(),
-            ));
-        }
-        if let Some(dimension) = snapshot.revokes(token) {
-            return Err(SealError::Unauthorized(format!(
-                "token revoked ({dimension})"
-            )));
-        }
-        Ok(())
+        store
+            .authorize(token, now)
+            .map_err(|e| SealError::Unauthorized(format!("{e} (fail closed)")))
     }
 
     /// Seal a payload into an envelope (Transit-wrapped data key + provenance
@@ -398,6 +382,15 @@ impl SealService {
                 "cross-tenant unseal denied".to_string(),
             ));
         }
+        if binding.owner_subject_hash != req.token.subject_hash {
+            let delegated_service = has_delegated_unseal(&req.token);
+            if !delegated_service {
+                self.record("unseal", &envelope.envelope_id, &req.token, "deny", now);
+                return Err(SealError::Unauthorized(
+                    "envelope owner mismatch; explicit service delegation required".to_string(),
+                ));
+            }
+        }
         if binding.audience != "wsf" {
             self.record("unseal", &envelope.envelope_id, &req.token, "deny", now);
             return Err(SealError::Unauthorized(
@@ -441,6 +434,16 @@ impl SealService {
         self.record("unseal", &envelope.envelope_id, &req.token, "allow", now);
         Ok(plaintext)
     }
+}
+
+/// Cross-subject access is a named service capability, not tenant equality or
+/// a generic delegation/admin marker.
+fn has_delegated_unseal(token: &TrustToken) -> bool {
+    token.service_identity.is_some()
+        && token
+            .roles
+            .iter()
+            .any(|role| role == "envelope:delegate-unseal")
 }
 
 #[cfg(test)]
@@ -598,6 +601,21 @@ mod tests {
             s.revoked_tenants.push(t.to_string());
         }
         fabric_revocation::sign(s, rev_anchor).unwrap()
+    }
+
+    #[test]
+    fn only_the_named_service_unseal_capability_allows_cross_subject_access() {
+        let anchor = RustCryptoMlDsa87::generate("token-anchor").unwrap();
+        let mut token = valid_token(&anchor, "tenant-a");
+        token.subject_hash = "different-subject".into();
+        token.roles = vec!["admin".into(), "envelope:delegate".into()];
+        assert!(!has_delegated_unseal(&token));
+
+        token.roles.push("envelope:delegate-unseal".into());
+        assert!(!has_delegated_unseal(&token));
+
+        token.service_identity = Some("unseal-worker".into());
+        assert!(has_delegated_unseal(&token));
     }
 
     #[tokio::test]

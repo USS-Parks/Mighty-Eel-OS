@@ -155,21 +155,20 @@ pub fn is_expired(token: &TrustToken, now: DateTime<Utc>) -> Result<bool, TokenE
 
 /// The shared budget-metering key for a token's attenuation lineage (plan T5).
 ///
-/// Sibling children of one parent must draw from a *single* shared spend
-/// counter, or each could independently spend the parent's full remaining
+/// Siblings and nested descendants draw from a *single* shared spend
+/// counter, or each could independently spend the root's full remaining
 /// budget (a concurrent double-spend). Keying spend by the immediate parent —
 /// the anchor all siblings share — makes their combined spend meter against one
-/// atomic counter, so it can never exceed the parent ceiling. A root token
+/// atomic counter, so it can never exceed the root ceiling. A root token
 /// (no parent) keys by its own id, unchanged.
 ///
-/// This binds one level of siblings to their parent's pool. Accounting a full
-/// deep subtree against the lineage *root* additionally needs the chain, which
-/// lives in the receipt ledger (Phase L) — documented, not silently assumed.
+/// The first attenuation stamps the lineage root and every deeper descendant
+/// copies it unchanged.
 #[must_use]
 pub fn lineage_key(token: &TrustToken) -> &str {
     token
         .attenuation
-        .parent_id
+        .root_id
         .as_deref()
         .unwrap_or(&token.token_id)
 }
@@ -507,13 +506,24 @@ fn narrow_child(
     now: DateTime<Utc>,
     max_child_depth: Option<u32>,
 ) -> Result<TrustToken, TokenError> {
-    // Depth budget for this hop.
-    if matches!(max_child_depth, Some(0)) {
+    let child_depth = parent.attenuation.depth.saturating_add(1);
+    if max_child_depth.is_some_and(|maximum| child_depth > maximum) {
         return Err(TokenError::DepthExceeded);
     }
 
     // Child id: non-empty and not the parent's (no trivial cycle / duplicate).
-    if restrictions.new_token_id.is_empty() || restrictions.new_token_id == parent.token_id {
+    if restrictions.new_token_id.is_empty()
+        || restrictions.new_token_id == parent.token_id
+        || parent
+            .attenuation
+            .root_id
+            .as_ref()
+            .is_some_and(|root| root == &restrictions.new_token_id)
+        || parent
+            .attenuation
+            .ancestor_ids
+            .contains(&restrictions.new_token_id)
+    {
         return Err(TokenError::InvalidChildId);
     }
 
@@ -521,7 +531,17 @@ fn narrow_child(
     let mut child = parent.clone();
     child.token_id = restrictions.new_token_id.clone();
     child.issued_at = now.to_rfc3339();
+    child.attenuation.root_id = Some(
+        parent
+            .attenuation
+            .root_id
+            .clone()
+            .unwrap_or_else(|| parent.token_id.clone()),
+    );
     child.attenuation.parent_id = Some(parent.token_id.clone());
+    child.attenuation.depth = child_depth;
+    child.attenuation.ancestor_ids = parent.attenuation.ancestor_ids.clone();
+    child.attenuation.ancestor_ids.push(parent.token_id.clone());
 
     // 3. Apply each restriction, narrowing only.
     if let Some(exp) = &restrictions.expires_at {
@@ -726,5 +746,36 @@ mod attenuation_monotonicity_tests {
             ..TokenRestrictions::new("child")
         };
         assert!(narrow_child(&parent, &r, now(), None).is_ok());
+    }
+
+    #[test]
+    fn tenant_maximum_depth_is_enforced_across_recursive_attenuation() {
+        let parent = parent_with_models(vec![]);
+        let child =
+            narrow_child(&parent, &TokenRestrictions::new("child"), now(), Some(1)).unwrap();
+        assert_eq!(child.attenuation.depth, 1);
+        assert_eq!(child.attenuation.root_id.as_deref(), Some("parent"));
+        assert_eq!(child.attenuation.ancestor_ids, vec!["parent"]);
+        assert_eq!(
+            narrow_child(
+                &child,
+                &TokenRestrictions::new("grandchild"),
+                now(),
+                Some(1),
+            )
+            .unwrap_err(),
+            TokenError::DepthExceeded
+        );
+    }
+
+    #[test]
+    fn recursive_root_or_ancestor_id_reuse_is_rejected() {
+        let parent = parent_with_models(vec![]);
+        let child =
+            narrow_child(&parent, &TokenRestrictions::new("child"), now(), Some(3)).unwrap();
+        assert_eq!(
+            narrow_child(&child, &TokenRestrictions::new("parent"), now(), Some(3),).unwrap_err(),
+            TokenError::InvalidChildId
+        );
     }
 }

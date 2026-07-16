@@ -10,7 +10,7 @@
 use std::collections::BTreeSet;
 use std::sync::{Arc, Mutex};
 
-use fabric_contracts::{Budget, Classification};
+use fabric_contracts::{Budget, Classification, ComplianceScope, Route};
 use fabric_crypto::Signer;
 use fabric_crypto::providers::RustCryptoMlDsa87;
 use reqwest::{Client, StatusCode};
@@ -66,6 +66,8 @@ async fn spawn(policy: TenantIssuancePolicy) -> String {
         policy: Arc::new(StaticTenantPolicies::new().with(policy)),
         grants: Arc::new(wsf_api::grants::StaticGrants::new()),
         auditors: Arc::new(wsf_api::audit::StaticAuditors::none()),
+        revocation: wsf_api::RevocationEnforcement::development_disabled(),
+        attenuation: Arc::new(wsf_api::AttenuationState::new()),
     };
     let app = wsf_api::router(state);
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -109,6 +111,9 @@ fn base_policy(permitted: &[IssuanceMode], depth: u32) -> TenantIssuancePolicy {
             ..Budget::default()
         },
         allowed_models: Vec::new(),
+        allowed_routes: vec![Route::LocalOnly],
+        compliance_scopes: vec![ComplianceScope::Hipaa],
+        allowed_service_identities: BTreeSet::new(),
     }
 }
 

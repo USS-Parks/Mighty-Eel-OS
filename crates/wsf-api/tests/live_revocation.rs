@@ -3,13 +3,12 @@
 //! Env-gated on `WSF_OPENBAO_ADDR` + `WSF_AWS_ENDPOINT`. Drives the full loop
 //! over live OpenBao + Moto through the real HTTP API:
 //!
-//! 1. issue → seal → unseal → exchange all succeed with the revocation store
+//! 1. issue → verify → attenuate → seal → unseal → exchange all succeed with the revocation store
 //!    engaged (a clean sequence-1 snapshot, distributed via OpenBao KV);
 //! 2. a signed sequence-2 snapshot revoking the tenant is published to KV,
 //!    fetched back, and advanced into the store the seal service and broker
 //!    share;
-//! 3. unseal AND credential exchange are both denied (403) — no restart, no
-//!    cache to clear;
+//! 3. every privileged token consumer is denied (403) — no restart/cache clear;
 //! 4. replaying the older clean snapshot is refused (anti-rollback) and
 //!    the denials stand.
 #![allow(clippy::print_stdout, clippy::print_stderr)]
@@ -25,13 +24,14 @@ use reqwest::{Client, Method};
 use serde_json::{Value, json};
 use wsf_api::client::{ClientError, WsfClient};
 use wsf_api::{AppState, ExchangeReq, IssueReq, SealReq, UnsealReq};
-use wsf_bridge::{BridgeConfig, OpenBaoAuth, OpenBaoConfig, TrustBridge};
+use wsf_bridge::{BridgeConfig, IssueTokenRequest, OpenBaoAuth, OpenBaoConfig, TrustBridge};
 use wsf_broker::{AwsStsBroker, BrokerConfig};
 use wsf_ledger::Ledger;
 use wsf_seal::{LabelSpec, SealService, SealServiceConfig};
 
 const ROLE: &str = "wsf-r6-test";
 const TENANT: &str = "wsf-r6-tenant";
+const TENANT_B: &str = "wsf-r6-tenant-b";
 const TRANSIT_KEY: &str = "wsf-r6-dek";
 const CRED_PATH: &str = "kv/data/broker/aws-root";
 const REV_PATH: &str = "revocation/r6-current";
@@ -116,6 +116,15 @@ async fn provision(c: &Client, addr: &str, tok: &str) -> (String, String) {
         Some(json!({"type":"aes256-gcm96"})),
     )
     .await;
+    bao(
+        c,
+        addr,
+        tok,
+        Method::POST,
+        &format!("transit/keys/{TRANSIT_KEY}-{TENANT_B}"),
+        Some(json!({"type":"aes256-gcm96"})),
+    )
+    .await;
 
     let policy = format!(
         "path \"kv/data/tenants/*\" {{ capabilities=[\"read\"] }}\npath \"kv/data/broker/*\" {{ capabilities=[\"read\"] }}\npath \"kv/data/revocation/*\" {{ capabilities=[\"read\"] }}\npath \"transit/encrypt/{TRANSIT_KEY}-*\" {{ capabilities=[\"update\"] }}\npath \"transit/decrypt/{TRANSIT_KEY}-*\" {{ capabilities=[\"update\"] }}"
@@ -127,6 +136,20 @@ async fn provision(c: &Client, addr: &str, tok: &str) -> (String, String) {
         Method::PUT,
         &format!("sys/policies/acl/{ROLE}"),
         Some(json!({ "policy": policy })),
+    )
+    .await;
+    let attrs_b = json!({
+        "tenant_id": TENANT_B, "display_name": "WSF R6 Tenant B",
+        "compliance_scopes": ["hipaa"], "default_allowed_routes": ["local_only"],
+        "max_data_classification": "restricted"
+    });
+    bao(
+        c,
+        addr,
+        tok,
+        Method::POST,
+        &format!("kv/data/tenants/{TENANT_B}"),
+        Some(json!({ "data": { "attributes": attrs_b.to_string() } })),
     )
     .await;
     bao(
@@ -292,12 +315,15 @@ async fn revocation_propagates_to_seal_and_broker_end_to_end() {
 
     let bridge_signer = Arc::new(RustCryptoMlDsa87::generate("wsf-r6-bridge").unwrap());
     let anchor = bridge_signer.public_key().to_vec();
+    let bridge = Arc::new(TrustBridge::new(
+        ob(),
+        bridge_signer.clone(),
+        BridgeConfig::new("2026.07.07.r6", vec![6u8; 32])
+            .with_token_ttl(std::time::Duration::from_secs(1_200)),
+    ));
+    let seal_signer = Arc::new(RustCryptoMlDsa87::generate("wsf-r6-seal").unwrap());
     let state = AppState {
-        bridge: Arc::new(TrustBridge::new(
-            ob(),
-            bridge_signer.clone(),
-            BridgeConfig::new("2026.07.07.r6", vec![6u8; 32]),
-        )),
+        bridge: bridge.clone(),
         broker: Arc::new(
             AwsStsBroker::new(
                 ob(),
@@ -309,7 +335,7 @@ async fn revocation_propagates_to_seal_and_broker_end_to_end() {
         seal: Arc::new(
             SealService::new(
                 ob(),
-                Arc::new(RustCryptoMlDsa87::generate("wsf-r6-seal").unwrap()),
+                seal_signer.clone(),
                 SealServiceConfig {
                     transit_key: TRANSIT_KEY.to_string(),
                     token_public_key: anchor.clone(),
@@ -320,7 +346,7 @@ async fn revocation_propagates_to_seal_and_broker_end_to_end() {
         ledger: Arc::new(Mutex::new(Ledger::new(Arc::new(
             RustCryptoMlDsa87::generate("wsf-r6-ledger").unwrap(),
         )))),
-        token_public_key: Arc::new(anchor),
+        token_public_key: Arc::new(anchor.clone()),
         auth: Arc::new(wsf_api::auth::LocalDevAuthenticator::for_wsf(TENANT)),
         policy: Arc::new(wsf_api::policy::StaticTenantPolicies::single_dev(
             TENANT,
@@ -332,6 +358,8 @@ async fn revocation_propagates_to_seal_and_broker_end_to_end() {
             "arn:aws:iam::000000000000:role/wsf-r6",
         )),
         auditors: Arc::new(wsf_api::audit::StaticAuditors::none()),
+        revocation: wsf_api::RevocationEnforcement::required(store.clone()),
+        attenuation: Arc::new(wsf_api::AttenuationState::new()),
     };
 
     let app = wsf_api::router(state);
@@ -339,6 +367,53 @@ async fn revocation_propagates_to_seal_and_broker_end_to_end() {
     let base = format!("http://{}", listener.local_addr().unwrap());
     let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
     let sdk = WsfClient::new(base);
+
+    // A second real HTTP plane uses the same trust/revocation anchors but an
+    // independently authenticated tenant. This proves revocation and envelope
+    // behavior are tenant-partitioned, not merely single-fixture happy paths.
+    let state_b = AppState {
+        bridge: bridge.clone(),
+        broker: Arc::new(
+            AwsStsBroker::new(
+                ob(),
+                Client::new(),
+                BrokerConfig::new("us-east-1", &aws, CRED_PATH),
+            )
+            .with_revocation_store(store.clone()),
+        ),
+        seal: Arc::new(
+            SealService::new(
+                ob(),
+                seal_signer.clone(),
+                SealServiceConfig {
+                    transit_key: TRANSIT_KEY.to_string(),
+                    token_public_key: anchor.clone(),
+                },
+            )
+            .with_revocation_store(store.clone()),
+        ),
+        ledger: Arc::new(Mutex::new(Ledger::new(Arc::new(
+            RustCryptoMlDsa87::generate("wsf-r6-ledger-b").unwrap(),
+        )))),
+        token_public_key: Arc::new(anchor.clone()),
+        auth: Arc::new(wsf_api::auth::LocalDevAuthenticator::for_wsf(TENANT_B)),
+        policy: Arc::new(wsf_api::policy::StaticTenantPolicies::single_dev(
+            TENANT_B,
+            &["clinician"],
+        )),
+        grants: Arc::new(wsf_api::grants::StaticGrants::single_dev(
+            TENANT_B,
+            "aws-readonly",
+            "arn:aws:iam::000000000000:role/wsf-r6-b",
+        )),
+        auditors: Arc::new(wsf_api::audit::StaticAuditors::none()),
+        revocation: wsf_api::RevocationEnforcement::required(store.clone()),
+        attenuation: Arc::new(wsf_api::AttenuationState::new()),
+    };
+    let app_b = wsf_api::router(state_b);
+    let listener_b = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let sdk_b = WsfClient::new(format!("http://{}", listener_b.local_addr().unwrap()));
+    let server_b = tokio::spawn(async move { axum::serve(listener_b, app_b).await.unwrap() });
 
     // ---- Allow phase: everything works with the store engaged. ----
     let token = sdk
@@ -349,38 +424,89 @@ async fn revocation_propagates_to_seal_and_broker_end_to_end() {
         })
         .await
         .expect("issue");
+    assert!(sdk.verify(&token).await.expect("verify").valid);
+    let child = sdk
+        .attenuate(&token, &fabric_token::TokenRestrictions::new("r6-child"))
+        .await
+        .expect("attenuate before revocation");
+    let second_subject = bridge
+        .issue_token(&IssueTokenRequest::new(
+            TENANT,
+            "subject-two",
+            vec!["clinician".to_string()],
+        ))
+        .await
+        .expect("issue second subject");
+    let label = LabelSpec {
+        classification: Classification::Restricted,
+        compliance_scopes: vec![],
+        origin: "r6".to_string(),
+        permitted_ops: vec!["unseal".to_string()],
+        permitted_destinations: vec![],
+        detected_entities: vec![],
+    };
     let envelope = sdk
         .seal(&SealReq {
-            token: token.clone(),
+            token: child.clone(),
             plaintext_b64: base64::engine::general_purpose::STANDARD.encode(b"r6 payload"),
-            label: LabelSpec {
-                classification: Classification::Restricted,
-                compliance_scopes: vec![],
-                origin: "r6".to_string(),
-                permitted_ops: vec!["unseal".to_string()],
-                permitted_destinations: vec![],
-                detected_entities: vec![],
-            },
+            label: label.clone(),
             envelope_id: "env-r6".to_string(),
         })
         .await
         .expect("seal succeeds before revocation");
     let plaintext = sdk
         .unseal(&UnsealReq {
-            token: token.clone(),
+            token: child.clone(),
             envelope: envelope.clone(),
         })
         .await
         .expect("unseal succeeds before revocation");
     assert_eq!(plaintext, b"r6 payload");
+    assert_403(
+        sdk.unseal(&UnsealReq {
+            token: second_subject,
+            envelope: envelope.clone(),
+        })
+        .await,
+        "same-tenant second subject unseal",
+    );
     let creds = sdk
         .exchange(&ExchangeReq {
-            token: token.clone(),
+            token: child.clone(),
             grant_id: "aws-readonly".to_string(),
         })
         .await
         .expect("exchange succeeds before revocation");
     assert!(!creds.access_key_id.is_empty());
+
+    let token_b = sdk_b
+        .issue(&IssueReq {
+            requested_roles: vec!["clinician".to_string()],
+            requested_models: vec![],
+            budget: None,
+        })
+        .await
+        .expect("tenant B issue");
+    let envelope_b = sdk_b
+        .seal(&SealReq {
+            token: token_b.clone(),
+            plaintext_b64: base64::engine::general_purpose::STANDARD.encode(b"tenant b payload"),
+            label: LabelSpec {
+                classification: Classification::Restricted,
+                compliance_scopes: vec![],
+                origin: "r6-b".to_string(),
+                permitted_ops: vec!["unseal".to_string()],
+                permitted_destinations: vec![],
+                detected_entities: vec![],
+            },
+            envelope_id: "env-r6-b".to_string(),
+        })
+        .await
+        .expect("tenant B seal");
+    assert_403(
+        sdk.verify(&token_b).await,
+        "tenant A presenting tenant B token",
+    );
 
     // ---- Revoke: sequence 2 names the tenant; consumers refresh from KV. ----
     let mut revoked =
@@ -399,10 +525,29 @@ async fn revocation_propagates_to_seal_and_broker_end_to_end() {
         2
     );
 
-    // Both privileged surfaces deny the still-signature-valid token now.
+    // Every privileged surface denies the still-signature-valid token now.
+    assert_403(sdk.verify(&child).await, "verify after revocation");
+    assert_403(
+        sdk.attenuate(
+            &child,
+            &fabric_token::TokenRestrictions::new("r6-grandchild"),
+        )
+        .await,
+        "attenuate after revocation",
+    );
+    assert_403(
+        sdk.seal(&SealReq {
+            token: child.clone(),
+            plaintext_b64: base64::engine::general_purpose::STANDARD.encode(b"denied"),
+            label,
+            envelope_id: "env-r6-denied".to_string(),
+        })
+        .await,
+        "seal after revocation",
+    );
     assert_403(
         sdk.unseal(&UnsealReq {
-            token: token.clone(),
+            token: child.clone(),
             envelope: envelope.clone(),
         })
         .await,
@@ -410,11 +555,45 @@ async fn revocation_propagates_to_seal_and_broker_end_to_end() {
     );
     assert_403(
         sdk.exchange(&ExchangeReq {
-            token: token.clone(),
+            token: child.clone(),
             grant_id: "aws-readonly".to_string(),
         })
         .await,
         "exchange after revocation",
+    );
+    assert_403(
+        sdk.issue(&IssueReq {
+            requested_roles: vec!["clinician".to_string()],
+            requested_models: vec![],
+            budget: None,
+        })
+        .await,
+        "issue after principal tenant revocation",
+    );
+    assert!(
+        sdk_b.verify(&token_b).await.expect("tenant B verify").valid,
+        "tenant B remains valid when only tenant A is revoked"
+    );
+    assert_eq!(
+        sdk_b
+            .unseal(&UnsealReq {
+                token: token_b.clone(),
+                envelope: envelope_b.clone(),
+            })
+            .await
+            .expect("tenant B unseal after tenant A revocation"),
+        b"tenant b payload"
+    );
+    assert!(
+        !sdk_b
+            .exchange(&ExchangeReq {
+                token: token_b.clone(),
+                grant_id: "aws-readonly".to_string(),
+            })
+            .await
+            .expect("tenant B exchange after tenant A revocation")
+            .access_key_id
+            .is_empty()
     );
 
     // ---- anti-rollback: replaying the old clean snapshot is refused. ----
@@ -436,15 +615,75 @@ async fn revocation_propagates_to_seal_and_broker_end_to_end() {
     );
     assert_403(
         sdk.unseal(&UnsealReq {
-            token: token.clone(),
+            token: child.clone(),
             envelope: envelope.clone(),
         })
         .await,
         "unseal after rollback attempt",
     );
 
+    // Process restart: rebuild revocation state solely from the signed
+    // OpenBao-distributed sequence-2 snapshot, then prove the denial survives.
+    let restart_store = Arc::new(RwLock::new(MonotonicRevocationStore::new()));
+    restart_store
+        .write()
+        .unwrap()
+        .advance(
+            fetch_snapshot(&c, &addr, &root).await,
+            &MlDsa87Verifier,
+            rev_anchor.public_key(),
+        )
+        .expect("restart adopts current snapshot");
+    let restart_state = AppState {
+        bridge: bridge.clone(),
+        broker: Arc::new(
+            AwsStsBroker::new(
+                ob(),
+                Client::new(),
+                BrokerConfig::new("us-east-1", &aws, CRED_PATH),
+            )
+            .with_revocation_store(restart_store.clone()),
+        ),
+        seal: Arc::new(
+            SealService::new(
+                ob(),
+                seal_signer,
+                SealServiceConfig {
+                    transit_key: TRANSIT_KEY.to_string(),
+                    token_public_key: anchor.clone(),
+                },
+            )
+            .with_revocation_store(restart_store.clone()),
+        ),
+        ledger: Arc::new(Mutex::new(Ledger::new(Arc::new(
+            RustCryptoMlDsa87::generate("wsf-r6-ledger-restart").unwrap(),
+        )))),
+        token_public_key: Arc::new(anchor),
+        auth: Arc::new(wsf_api::auth::LocalDevAuthenticator::for_wsf(TENANT)),
+        policy: Arc::new(wsf_api::policy::StaticTenantPolicies::single_dev(
+            TENANT,
+            &["clinician"],
+        )),
+        grants: Arc::new(wsf_api::grants::StaticGrants::single_dev(
+            TENANT,
+            "aws-readonly",
+            "arn:aws:iam::000000000000:role/wsf-r6",
+        )),
+        auditors: Arc::new(wsf_api::audit::StaticAuditors::none()),
+        revocation: wsf_api::RevocationEnforcement::required(restart_store),
+        attenuation: Arc::new(wsf_api::AttenuationState::new()),
+    };
+    let restart_app = wsf_api::router(restart_state);
+    let restart_listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let restart_sdk = WsfClient::new(format!("http://{}", restart_listener.local_addr().unwrap()));
+    let restart_server =
+        tokio::spawn(async move { axum::serve(restart_listener, restart_app).await.unwrap() });
+    assert_403(restart_sdk.verify(&child).await, "verify after restart");
+
     server.abort();
+    server_b.abort();
+    restart_server.abort();
     eprintln!(
-        "live gate PASSED against {addr} (+Moto {aws}): KV-distributed revocation denied unseal + exchange end-to-end; rollback replay refused"
+        "live gate PASSED against {addr} (+Moto {aws}): two tenants/two subjects isolated; revocation denied issue/verify/attenuate/seal/unseal/exchange; rollover, rollback refusal, and restart rehydration passed"
     );
 }

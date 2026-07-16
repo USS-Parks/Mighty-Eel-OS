@@ -6,13 +6,13 @@
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
 use std::net::ToSocketAddrs;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 
 use base64::Engine;
 use fabric_contracts::Audience;
 use fabric_crypto::providers::{MlDsa87Verifier, RustCryptoMlDsa87};
-use wsf_api::AppState;
 use wsf_api::auth::{LocalDevAuthenticator, WorkloadAuthenticator, WsfAuthenticator};
+use wsf_api::{AppState, RevocationEnforcement};
 use wsf_bridge::{BridgeConfig, OpenBaoAuth, OpenBaoConfig, TrustBridge};
 use wsf_broker::{AwsStsBroker, BrokerConfig};
 use wsf_ledger::Ledger;
@@ -116,14 +116,37 @@ async fn run() -> Result<(), String> {
     let workload_key = std::env::var("WSF_WORKLOAD_AUTHORITY_KEY").ok();
     let allow_insecure_development_bind =
         std::env::var("WSF_ALLOW_INSECURE_BIND").ok().as_deref() == Some("1");
+
+    let revocation = if profile == wsf_api::posture::Profile::Production {
+        let path = env_or("WSF_REVOCATION_PATH", "kv/data/revocation/current");
+        let openbao = new_openbao()?;
+        let vault_token = openbao
+            .login()
+            .await
+            .map_err(|e| format!("load revocation login: {e}"))?;
+        let data = openbao
+            .get_kv_data(&vault_token, &path)
+            .await
+            .map_err(|e| format!("load mandatory revocation snapshot {path}: {e}"))?;
+        let snapshot: fabric_revocation::RevocationSnapshot = serde_json::from_value(
+            data.get("snapshot")
+                .cloned()
+                .ok_or_else(|| format!("mandatory revocation record {path} lacks snapshot"))?,
+        )
+        .map_err(|e| format!("decode mandatory revocation snapshot {path}: {e}"))?;
+        let mut store = fabric_revocation::MonotonicRevocationStore::new();
+        store
+            .advance(snapshot, &MlDsa87Verifier, &anchor)
+            .map_err(|e| format!("verify mandatory revocation snapshot {path}: {e}"))?;
+        RevocationEnforcement::required(Arc::new(RwLock::new(store)))
+    } else {
+        RevocationEnforcement::development_disabled()
+    };
     wsf_api::posture::enforce_startup_posture(
         profile,
         public_bind,
         workload_key.is_some(),
-        // LSH-02 containment: the current binary constructs privileged services
-        // without a revocation store. W1 replaces this `false` with the real,
-        // mandatory shared store; production must remain unstartable until then.
-        false,
+        revocation.required_store().is_some(),
         allow_insecure_development_bind,
         &wsf_hardening::DeploymentConfig {
             mode: wsf_hardening::DeployMode::Production,
@@ -181,25 +204,36 @@ async fn run() -> Result<(), String> {
         }
     };
 
+    let broker = AwsStsBroker::new(
+        new_openbao()?,
+        reqwest::Client::new(),
+        BrokerConfig::new(region, aws_endpoint, cred_path),
+    );
+    let seal = SealService::new(
+        new_openbao()?,
+        seal_signer,
+        SealServiceConfig {
+            transit_key,
+            token_public_key: anchor.clone(),
+        },
+    );
+    let broker = match revocation.required_store() {
+        Some(store) => broker.with_revocation_store(store),
+        None => broker,
+    };
+    let seal = match revocation.required_store() {
+        Some(store) => seal.with_revocation_store(store),
+        None => seal,
+    };
+
     let state = AppState {
         bridge: Arc::new(TrustBridge::new(
             new_openbao()?,
             bridge_signer,
             BridgeConfig::new(bundle, hmac),
         )),
-        broker: Arc::new(AwsStsBroker::new(
-            new_openbao()?,
-            reqwest::Client::new(),
-            BrokerConfig::new(region, aws_endpoint, cred_path),
-        )),
-        seal: Arc::new(SealService::new(
-            new_openbao()?,
-            seal_signer,
-            SealServiceConfig {
-                transit_key,
-                token_public_key: anchor.clone(),
-            },
-        )),
+        broker: Arc::new(broker),
+        seal: Arc::new(seal),
         ledger: Arc::new(Mutex::new(Ledger::new(ledger_signer))),
         token_public_key: Arc::new(anchor),
         auth: authenticator,
@@ -207,6 +241,8 @@ async fn run() -> Result<(), String> {
         grants: cloud_grants,
         // L2: no global auditors unless explicitly enrolled (safe default).
         auditors: Arc::new(wsf_api::audit::StaticAuditors::none()),
+        revocation,
+        attenuation: Arc::new(wsf_api::AttenuationState::new()),
     };
 
     let app = wsf_api::router(state);

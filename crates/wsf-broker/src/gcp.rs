@@ -19,7 +19,7 @@ use fabric_revocation::MonotonicRevocationStore;
 use wsf_bridge::OpenBaoAuth;
 
 use crate::error::BrokerError;
-use crate::{GcpGrantScope, clamp_duration, verify_token};
+use crate::{GcpGrantScope, strict_duration, verify_token};
 
 /// Static configuration for the GCP broker.
 #[derive(Debug, Clone)]
@@ -132,7 +132,24 @@ impl GcpBroker {
         // 1. Fail closed on trust.
         verify_token(token, verifier, public_key, self.revocation.as_deref(), now)?;
 
-        // 2. Broker's Google bearer from OpenBao (never exposed downstream).
+        // 2. Refuse before custody when the token/revocation authority cannot
+        // satisfy the provider lifetime floor.
+        let revocation_expires_at = self.revocation.as_ref().and_then(|store| {
+            store
+                .read()
+                .expect("revocation store lock")
+                .current()
+                .map(|snapshot| snapshot.expires_at.clone())
+        });
+        let lifetime = strict_duration(
+            self.config.min_lifetime_secs,
+            self.config.max_lifetime_secs,
+            &token.expires_at,
+            revocation_expires_at.as_deref(),
+            now,
+        )?;
+
+        // 3. Broker's Google bearer from OpenBao (never exposed downstream).
         let vault_token = self.openbao.login().await?;
         let data = self
             .openbao
@@ -142,14 +159,6 @@ impl GcpBroker {
             .get("bearer")
             .and_then(serde_json::Value::as_str)
             .ok_or_else(|| BrokerError::RootCredential("missing gcp bearer".into()))?;
-
-        // 3. Lifetime tracks the token TTL, clamped to the GCP window.
-        let lifetime = clamp_duration(
-            self.config.min_lifetime_secs,
-            self.config.max_lifetime_secs,
-            &token.expires_at,
-            now,
-        )?;
 
         // 4. generateAccessToken.
         let url = format!(

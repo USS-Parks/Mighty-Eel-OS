@@ -23,7 +23,8 @@
 
 use std::collections::HashMap;
 use std::future::Future;
-use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex, Weak};
 
 use fabric_contracts::Budget;
 
@@ -35,6 +36,189 @@ pub struct Spent {
     pub tool_calls: u32,
 }
 
+/// Immutable accounting namespace shared by gateway, mission, and guard
+/// enforcement. Every token descendant uses the root lineage id.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ReservationKey {
+    pub tenant_id: String,
+    pub root_lineage: String,
+    pub mission_id: Option<String>,
+    pub system: Option<String>,
+}
+
+impl ReservationKey {
+    #[must_use]
+    pub fn for_token(
+        token: &fabric_contracts::TrustToken,
+        mission_id: Option<String>,
+        system: Option<String>,
+    ) -> Self {
+        Self {
+            tenant_id: token.tenant_id.clone(),
+            root_lineage: crate::lineage_key(token).to_owned(),
+            mission_id,
+            system,
+        }
+    }
+}
+
+#[derive(Debug, thiserror::Error, PartialEq, Eq)]
+pub enum ReservationError {
+    #[error("reservation would exceed an authority ceiling")]
+    Exhausted,
+    #[error("reservation is no longer pending")]
+    NotPending,
+}
+
+#[derive(Debug, Default)]
+struct ReservationState {
+    committed: Spent,
+    reserved: Spent,
+    pending: HashMap<u64, Spent>,
+}
+
+#[derive(Debug, Default)]
+struct ReservationInner {
+    next_id: AtomicU64,
+    state: Mutex<HashMap<ReservationKey, ReservationState>>,
+}
+
+/// Atomic reserve/commit/release ledger for authority ceilings. A reservation
+/// releases automatically on drop, including async cancellation paths.
+#[derive(Debug, Clone, Default)]
+pub struct ReservationLedger {
+    inner: Arc<ReservationInner>,
+}
+
+impl ReservationLedger {
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Atomically reserve `usage` against `cap`. Concurrent reservations count
+    /// immediately, so check-then-charge races cannot cross the ceiling.
+    pub fn reserve(
+        &self,
+        key: ReservationKey,
+        cap: &Budget,
+        usage: Spent,
+    ) -> Result<Reservation, ReservationError> {
+        let mut all = self.inner.state.lock().expect("reservation ledger lock");
+        let state = all.entry(key.clone()).or_default();
+        let in_flight = state.committed.saturating_add(state.reserved);
+        let proposed = in_flight.saturating_add(usage);
+        if exceeds(cap, proposed) {
+            return Err(ReservationError::Exhausted);
+        }
+        let id = self
+            .inner
+            .next_id
+            .fetch_add(1, Ordering::Relaxed)
+            .saturating_add(1);
+        state.reserved = state.reserved.saturating_add(usage);
+        state.pending.insert(id, usage);
+        Ok(Reservation {
+            id,
+            key,
+            usage,
+            inner: Arc::downgrade(&self.inner),
+            settled: false,
+        })
+    }
+
+    #[must_use]
+    pub fn committed(&self, key: &ReservationKey) -> Spent {
+        self.inner
+            .state
+            .lock()
+            .expect("reservation ledger lock")
+            .get(key)
+            .map_or_else(Spent::default, |state| state.committed)
+    }
+}
+
+/// One in-flight authority reservation. Call [`commit`](Self::commit) after a
+/// successful side effect or [`release`](Self::release) on an explicit abort;
+/// dropping an unsettled value releases it automatically.
+#[derive(Debug)]
+pub struct Reservation {
+    id: u64,
+    key: ReservationKey,
+    usage: Spent,
+    inner: Weak<ReservationInner>,
+    settled: bool,
+}
+
+impl Reservation {
+    #[must_use]
+    pub fn key(&self) -> &ReservationKey {
+        &self.key
+    }
+
+    #[must_use]
+    pub fn usage(&self) -> Spent {
+        self.usage
+    }
+
+    pub fn commit(mut self) -> Result<(), ReservationError> {
+        self.settle(true)
+    }
+
+    pub fn release(mut self) -> Result<(), ReservationError> {
+        self.settle(false)
+    }
+
+    fn settle(&mut self, commit: bool) -> Result<(), ReservationError> {
+        let Some(inner) = self.inner.upgrade() else {
+            self.settled = true;
+            return Err(ReservationError::NotPending);
+        };
+        settle(&inner, &self.key, self.id, commit)?;
+        self.settled = true;
+        Ok(())
+    }
+}
+
+impl Drop for Reservation {
+    fn drop(&mut self) {
+        if self.settled {
+            return;
+        }
+        if let Some(inner) = self.inner.upgrade() {
+            let _ = settle(&inner, &self.key, self.id, false);
+        }
+        self.settled = true;
+    }
+}
+
+fn settle(
+    inner: &ReservationInner,
+    key: &ReservationKey,
+    id: u64,
+    commit: bool,
+) -> Result<(), ReservationError> {
+    let mut all = inner.state.lock().expect("reservation ledger lock");
+    let state = all.get_mut(key).ok_or(ReservationError::NotPending)?;
+    let usage = state
+        .pending
+        .remove(&id)
+        .ok_or(ReservationError::NotPending)?;
+    state.reserved = state.reserved.saturating_sub(usage);
+    if commit {
+        state.committed = state.committed.saturating_add(usage);
+    }
+    Ok(())
+}
+
+fn exceeds(cap: &Budget, usage: Spent) -> bool {
+    (cap.token_cap > 0 && cap.tokens_spent.saturating_add(usage.tokens) > cap.token_cap)
+        || (cap.usd_cap_cents > 0
+            && cap.usd_spent_cents.saturating_add(usage.usd_cents) > cap.usd_cap_cents)
+        || (cap.tool_call_cap > 0
+            && cap.tool_calls_spent.saturating_add(usage.tool_calls) > cap.tool_call_cap)
+}
+
 impl Spent {
     /// Saturating per-axis sum.
     #[must_use]
@@ -43,6 +227,15 @@ impl Spent {
             tokens: self.tokens.saturating_add(other.tokens),
             usd_cents: self.usd_cents.saturating_add(other.usd_cents),
             tool_calls: self.tool_calls.saturating_add(other.tool_calls),
+        }
+    }
+
+    #[must_use]
+    pub fn saturating_sub(self, other: Spent) -> Spent {
+        Spent {
+            tokens: self.tokens.saturating_sub(other.tokens),
+            usd_cents: self.usd_cents.saturating_sub(other.usd_cents),
+            tool_calls: self.tool_calls.saturating_sub(other.tool_calls),
         }
     }
 
@@ -475,5 +668,75 @@ mod tests {
         assert!(ledger.try_spend("k", &cap, usage).await.unwrap());
         assert!(ledger.try_spend("k", &cap, usage).await.unwrap());
         assert!(!ledger.try_spend("k", &cap, usage).await.unwrap());
+    }
+
+    #[test]
+    fn reservation_barrier_never_exceeds_the_cap_under_concurrency() {
+        let ledger = Arc::new(ReservationLedger::new());
+        let cap = Budget {
+            tool_call_cap: 10,
+            ..Budget::default()
+        };
+        let key = ReservationKey {
+            tenant_id: "tenant-a".into(),
+            root_lineage: "root-a".into(),
+            mission_id: Some("mission-a".into()),
+            system: Some("system-a".into()),
+        };
+        let barrier = Arc::new(std::sync::Barrier::new(100));
+        let mut workers = Vec::new();
+        for _ in 0..100 {
+            let ledger = Arc::clone(&ledger);
+            let cap = cap.clone();
+            let key = key.clone();
+            let barrier = Arc::clone(&barrier);
+            workers.push(std::thread::spawn(move || {
+                barrier.wait();
+                ledger
+                    .reserve(
+                        key,
+                        &cap,
+                        Spent {
+                            tool_calls: 1,
+                            ..Spent::default()
+                        },
+                    )
+                    .ok()
+                    .is_some_and(|reservation| reservation.commit().is_ok())
+            }));
+        }
+        let admitted = workers
+            .into_iter()
+            .map(|worker| usize::from(worker.join().unwrap()))
+            .sum::<usize>();
+        assert_eq!(admitted, 10);
+        assert_eq!(ledger.committed(&key).tool_calls, 10);
+    }
+
+    #[test]
+    fn dropped_reservation_releases_capacity() {
+        let ledger = ReservationLedger::new();
+        let cap = Budget {
+            usd_cap_cents: 50,
+            ..Budget::default()
+        };
+        let key = ReservationKey {
+            tenant_id: "tenant-a".into(),
+            root_lineage: "root-a".into(),
+            mission_id: None,
+            system: None,
+        };
+        let pending = ledger.reserve(key.clone(), &cap, usd(50)).unwrap();
+        assert_eq!(
+            ledger.reserve(key.clone(), &cap, usd(1)).unwrap_err(),
+            ReservationError::Exhausted
+        );
+        drop(pending);
+        ledger
+            .reserve(key.clone(), &cap, usd(50))
+            .unwrap()
+            .commit()
+            .unwrap();
+        assert_eq!(ledger.committed(&key).usd_cents, 50);
     }
 }

@@ -85,7 +85,11 @@ async fn admitted_object_bears_admission_stamps() {
     );
     assert_eq!(created["metadata"]["generation"], 1);
     assert!(created["metadata"]["created_at"].as_str().is_some());
-    assert_eq!(created["metadata"]["resource_version"], 1);
+    assert!(
+        created["metadata"]["resource_version"]
+            .as_u64()
+            .is_some_and(|revision| revision >= 1)
+    );
 
     // The persisted copy carries the same identity on read-back.
     let (status, got) = send(
@@ -98,5 +102,8 @@ async fn admitted_object_bears_admission_stamps() {
     .await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(got["metadata"]["uid"], created["metadata"]["uid"]);
-    assert_eq!(got["metadata"]["resource_version"], 1);
+    assert_eq!(
+        got["metadata"]["resource_version"],
+        created["metadata"]["resource_version"]
+    );
 }

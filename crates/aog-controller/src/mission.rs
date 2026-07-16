@@ -16,6 +16,7 @@
 //!     pruned for withdrawn ones), and marks the contract `Failed` once its call
 //!     ceiling is spent, `Ready` otherwise.
 
+use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::future::Future;
@@ -121,8 +122,10 @@ fn label(s: &str) -> String {
 
 /// The `ToolGrant` name derived for `tool` under mission `mission`. Capped at the
 /// 63-char name limit, never edge-quoting a hyphen.
-fn grant_name(mission: &str, tool: &str) -> String {
-    let mut name = format!("{mission}-t-{}", label(tool));
+fn grant_name(tenant: &str, mission_uid: &str, mission: &str, tool: &str) -> String {
+    let digest = Sha256::digest(format!("{tenant}\0{mission_uid}\0{mission}\0{tool}").as_bytes());
+    let suffix = &hex::encode(digest)[..10];
+    let mut name = format!("{mission}-t-{}-{suffix}", label(tool));
     name.truncate(63);
     name.trim_end_matches('-').to_owned()
 }
@@ -141,15 +144,19 @@ impl MissionContractController {
     }
 
     /// Every live `ToolGrant` owned by mission `mission`.
-    async fn owned_grants(&self, mission: &str) -> Result<Vec<ToolGrant>, ReconcileError> {
+    async fn owned_grants(
+        &self,
+        mission: &str,
+        mission_uid: &str,
+        tenant: Option<&str>,
+    ) -> Result<Vec<ToolGrant>, ReconcileError> {
         let mut out = Vec::new();
         for object in self.client.list(Kind::ToolGrant).await? {
             if let ResourceObject::ToolGrant(grant) = object
-                && grant
-                    .metadata
-                    .owner_refs
-                    .iter()
-                    .any(|o| o.kind == Kind::MissionContract && o.name == mission)
+                && grant.metadata.owner_refs.iter().any(|o| {
+                    o.kind == Kind::MissionContract && o.name == mission && o.uid == mission_uid
+                })
+                && grant.metadata.tenant.as_deref() == tenant
             {
                 out.push(grant);
             }
@@ -189,9 +196,25 @@ impl MissionContractController {
             .spec
             .allowed_tools
             .iter()
-            .map(|tool| (grant_name(name, tool), tool.clone()))
+            .map(|tool| {
+                (
+                    grant_name(
+                        contract.metadata.tenant.as_deref().unwrap_or_default(),
+                        &contract.metadata.uid,
+                        name,
+                        tool,
+                    ),
+                    tool.clone(),
+                )
+            })
             .collect();
-        let existing = self.owned_grants(name).await?;
+        let existing = self
+            .owned_grants(
+                name,
+                &contract.metadata.uid,
+                contract.metadata.tenant.as_deref(),
+            )
+            .await?;
         let existing_names: BTreeSet<String> =
             existing.iter().map(|g| g.metadata.name.clone()).collect();
 
@@ -224,6 +247,12 @@ impl MissionContractController {
             if !desired.contains_key(&grant.metadata.name) {
                 self.client
                     .delete(Kind::ToolGrant, &grant.metadata.name)
+                    .await?;
+            } else if grant.spec.systems != contract.spec.allowed_systems {
+                let mut narrowed = grant.clone();
+                narrowed.spec.systems = contract.spec.allowed_systems.clone();
+                self.client
+                    .update(ResourceObject::ToolGrant(narrowed))
                     .await?;
             }
         }
@@ -322,7 +351,7 @@ mod tests {
     fn derived_grant_names_are_valid_labels() {
         // Arbitrary tool strings sanitize to DNS labels.
         for (mission, tool) in [("m1", "search"), ("mission-a", "Delete_DB"), ("m", "a/b c")] {
-            let name = grant_name(mission, tool);
+            let name = grant_name("tenant-a", "uid-a", mission, tool);
             assert!(
                 aog_estate::validate_name(&name).is_ok(),
                 "grant name {name:?} must validate"

@@ -58,6 +58,8 @@ mod tests {
                 tenant_id: "tenant-a".to_string(),
                 subject_hash: "hmac:x".to_string(),
                 service_identity: None,
+                roles: vec!["auditor".to_string()],
+                token_lineage: None,
                 auth_strength: AuthStrength::MutualTls,
                 audience: Audience::Wsf,
             },

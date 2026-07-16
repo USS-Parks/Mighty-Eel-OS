@@ -90,7 +90,7 @@ async fn require_admin(
             )
         })?;
         let is_admin = principal
-            .token
+            .token()
             .as_ref()
             .is_some_and(|t| roles_include_admin(&t.roles));
         if !is_admin {

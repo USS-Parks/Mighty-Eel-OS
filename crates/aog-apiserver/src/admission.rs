@@ -17,6 +17,7 @@
 //! All five stages do real work now. The choke point is complete — every mutation
 //! traverses this one method, and each admitted one is receipted.
 
+use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 
 use aog_estate::{Kind, ResourceObject, TokenRef};
@@ -25,7 +26,11 @@ use aog_store::raft::types::RaftResponse;
 use aog_store::{Op, Precondition, Revision};
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64;
-use fabric_contracts::TrustToken;
+use fabric_contracts::{
+    Audience, AuthStrength, AuthenticatedFacts, CanonicalResource, EstateScope, IdentityKind,
+    PrivilegedCapability, RequestOperation, TenantScope, TrustToken, VerifiedRequestContext,
+    WsfPrincipal,
+};
 use fabric_crypto::providers::RustCryptoMlDsa87;
 use wsf_ledger::{EvidencePack, Ledger};
 
@@ -57,23 +62,45 @@ impl Verb {
 /// stamp provenance and can attenuate a child from the parent token.
 #[derive(Debug, Clone)]
 pub struct Principal {
-    /// The token subject (`subject_hash`), or `system:apiserver`.
-    pub subject: String,
-    /// The tenant the token belongs to, when authenticated.
-    pub tenant: Option<String>,
+    request_principal: WsfPrincipal,
+    system: bool,
     /// The authorizing capability reference stamped onto mutated objects.
-    pub token_ref: Option<TokenRef>,
+    token_ref: Option<TokenRef>,
     /// The verified trust token — carried for downstream stages (attenuation).
-    pub token: Option<TrustToken>,
+    token: Option<TrustToken>,
 }
 
 impl Principal {
     /// A verified caller from an authenticated WSF trust token.
     #[must_use]
     pub fn authenticated(token: TrustToken) -> Self {
+        let principal_id = token
+            .service_identity
+            .clone()
+            .unwrap_or_else(|| token.subject_hash.clone());
+        let kind = if token.service_identity.is_some() {
+            IdentityKind::Workload
+        } else {
+            IdentityKind::Human
+        };
+        let request_principal = WsfPrincipal::establish(
+            AuthenticatedFacts {
+                principal_id,
+                kind,
+                tenant_id: token.tenant_id.clone(),
+                subject_hash: token.subject_hash.clone(),
+                service_identity: token.service_identity.clone(),
+                roles: token.roles.clone(),
+                token_lineage: Some(fabric_token::lineage_key(&token).to_string()),
+                auth_strength: AuthStrength::WorkloadToken,
+                audience: Audience::Aog,
+            },
+            uuid::Uuid::new_v4().to_string(),
+            chrono::Utc::now().to_rfc3339(),
+        );
         Self {
-            subject: token.subject_hash.clone(),
-            tenant: Some(token.tenant_id.clone()),
+            request_principal,
+            system: false,
             token_ref: Some(TokenRef {
                 token_id: token.token_id.clone(),
             }),
@@ -84,13 +111,73 @@ impl Principal {
     /// The system principal — for internal callers with no external request
     /// (later-phase controllers). Never minted from an inbound request.
     #[must_use]
-    pub fn system() -> Self {
+    fn system() -> Self {
         Self {
-            subject: "system:apiserver".to_owned(),
-            tenant: None,
+            request_principal: WsfPrincipal::establish(
+                AuthenticatedFacts {
+                    principal_id: "system:apiserver".to_owned(),
+                    kind: IdentityKind::Workload,
+                    tenant_id: String::new(),
+                    subject_hash: "system:apiserver".to_owned(),
+                    service_identity: Some("aog-controller".to_owned()),
+                    roles: vec!["estate-system".to_owned()],
+                    token_lineage: None,
+                    auth_strength: AuthStrength::MutualTls,
+                    audience: Audience::Aog,
+                },
+                uuid::Uuid::new_v4().to_string(),
+                chrono::Utc::now().to_rfc3339(),
+            ),
+            system: true,
             token_ref: None,
             token: None,
         }
+    }
+
+    #[must_use]
+    pub fn subject(&self) -> &str {
+        &self.request_principal.subject_hash
+    }
+
+    #[must_use]
+    pub fn tenant(&self) -> Option<&str> {
+        (!self.system)
+            .then_some(self.request_principal.tenant_id.as_str())
+            .filter(|tenant| !tenant.is_empty())
+    }
+
+    /// Explicit estate-wide reader authority. Ordinary tenant principals never
+    /// receive global read behavior merely because their token is valid.
+    #[must_use]
+    pub fn is_estate_reader(&self) -> bool {
+        self.system
+            || self
+                .request_principal
+                .roles
+                .iter()
+                .any(|role| role == "estate:read")
+    }
+
+    #[must_use]
+    pub fn token_ref(&self) -> Option<&TokenRef> {
+        self.token_ref.as_ref()
+    }
+
+    #[must_use]
+    pub fn token(&self) -> Option<&TrustToken> {
+        self.token.as_ref()
+    }
+
+    fn request_context(&self, req: &AdmissionRequest) -> Result<VerifiedRequestContext, ApiError> {
+        let operation = match req.verb {
+            Verb::Create => RequestOperation::AogCreate,
+            Verb::Update => RequestOperation::AogUpdate,
+            Verb::Delete => RequestOperation::AogDelete,
+        };
+        let resource = CanonicalResource::resolved(req.kind.to_string(), &req.name, None)
+            .map_err(|e| ApiError::Forbidden(e.to_string()))?;
+        VerifiedRequestContext::establish(self.request_principal.clone(), operation, resource)
+            .map_err(|e| ApiError::Forbidden(e.to_string()))
     }
 }
 
@@ -118,6 +205,7 @@ pub struct Admission {
     policy: AdmissionPolicy,
     sealer: Sealer,
     ledger: Arc<Mutex<Ledger>>,
+    delivered_receipts: Mutex<HashSet<String>>,
 }
 
 impl Admission {
@@ -132,6 +220,7 @@ impl Admission {
             policy: AdmissionPolicy::baseline(),
             sealer,
             ledger: Arc::new(Mutex::new(Ledger::new(Arc::new(ledger_signer)))),
+            delivered_receipts: Mutex::new(HashSet::new()),
         }
     }
 
@@ -151,24 +240,195 @@ impl Admission {
         // Stage 1 (authenticate) is the front-door middleware (`crate::auth`):
         // `principal` is already a verified token by the time admission runs.
         // The chain here is validate -> mutate -> commit -> receipt.
-        self.validate(&req, principal)?;
-        let staged = self.mutate(&req, principal).await?;
+        let context = principal.request_context(&req)?;
+        self.validate(&req, principal, &context)?;
+        let staged = self.mutate(&req, principal, &context).await?;
         let before_digest = staged.before_digest.clone();
         let mutated = staged.op.is_some();
+        let audit_intent = if mutated {
+            Some(
+                self.persist_audit_intent(&req, principal, &context, &staged)
+                    .await?,
+            )
+        } else {
+            None
+        };
         let outcome = self.commit(&req, staged).await?;
         // Receipts are 1:1 with *mutations*: an idempotent no-op (a repeat
         // delete of an already-terminating object) changed nothing and writes none.
         if mutated {
-            self.receipt(&req, principal, before_digest.as_deref(), &outcome);
+            let intent = audit_intent.as_ref().expect("mutated intent");
+            let receipt = self.receipt_value(
+                &req,
+                principal,
+                before_digest.as_deref(),
+                &outcome,
+                &intent.id,
+            );
+            self.finalize_audit_intent(intent, &receipt).await?;
+            self.deliver_receipt(receipt);
         }
         Ok(outcome)
     }
 
+    async fn persist_audit_intent(
+        &self,
+        req: &AdmissionRequest,
+        principal: &Principal,
+        context: &VerifiedRequestContext,
+        staged: &Staged,
+    ) -> Result<AuditIntent, ApiError> {
+        let intent_id = uuid::Uuid::new_v4().to_string();
+        let key = format!("AuditOutbox/{intent_id}");
+        let value = serde_json::to_vec(&serde_json::json!({
+            "schema": "aog.audit-intent/v1",
+            "intent_id": intent_id,
+            "correlation_id": context.principal().correlation_id,
+            "tenant_id": principal.tenant().unwrap_or_default(),
+            "subject_hash": principal.subject(),
+            "operation": context.operation(),
+            "resource": context.resource(),
+            "verb": req.verb.as_str(),
+            "before_digest": staged.before_digest,
+            "after_digest": staged.object.as_ref().and_then(digest),
+            "planned_op": staged.op,
+            "created_at": now_rfc3339(),
+        }))
+        .map_err(|e| ApiError::Store(format!("serialize audit intent: {e}")))?;
+        match self
+            .raft
+            .write(Op::Put {
+                key,
+                value,
+                expected: Precondition::Absent,
+            })
+            .await
+            .map_err(|e| ApiError::Store(format!("persist audit intent: {e}")))?
+        {
+            RaftResponse::Applied { revision, .. } => Ok(AuditIntent {
+                id: intent_id,
+                revision,
+            }),
+            RaftResponse::Rejected { reason } => Err(ApiError::Store(format!(
+                "audit intent rejected before mutation: {reason}"
+            ))),
+            other => Err(ApiError::Store(format!(
+                "unexpected audit intent response before mutation: {other:?}"
+            ))),
+        }
+    }
+
+    async fn finalize_audit_intent(
+        &self,
+        intent: &AuditIntent,
+        receipt: &serde_json::Value,
+    ) -> Result<(), ApiError> {
+        let value = serde_json::to_vec(&serde_json::json!({
+            "schema": "aog.audit-outbox/v1",
+            "intent_id": intent.id,
+            "status": "ready",
+            "receipt": receipt,
+        }))
+        .map_err(|error| ApiError::Store(format!("serialize audit outbox: {error}")))?;
+        match self
+            .raft
+            .write(Op::Put {
+                key: format!("AuditOutbox/{}", intent.id),
+                value,
+                expected: Precondition::Revision(intent.revision),
+            })
+            .await
+            .map_err(|error| ApiError::Store(format!("finalize audit outbox: {error}")))?
+        {
+            RaftResponse::Applied { .. } => Ok(()),
+            other => Err(ApiError::Store(format!(
+                "audit outbox finalization rejected after mutation: {other:?}"
+            ))),
+        }
+    }
+
+    /// Admit an internal controller mutation with a server-created estate
+    /// principal. Controllers never receive a constructor for that authority.
+    pub async fn admit_system(&self, req: AdmissionRequest) -> Result<AdmissionOutcome, ApiError> {
+        self.admit(req, &Principal::system()).await
+    }
+
     // 2. validate — structural (fail-closed) + policy (deny-wins over regimes).
-    fn validate(&self, req: &AdmissionRequest, principal: &Principal) -> Result<(), ApiError> {
+    fn validate(
+        &self,
+        req: &AdmissionRequest,
+        principal: &Principal,
+        context: &VerifiedRequestContext,
+    ) -> Result<(), ApiError> {
+        let expected_operation = match req.verb {
+            Verb::Create => RequestOperation::AogCreate,
+            Verb::Update => RequestOperation::AogUpdate,
+            Verb::Delete => RequestOperation::AogDelete,
+        };
+        context
+            .require_operation(expected_operation)
+            .map_err(|e| ApiError::Forbidden(e.to_string()))?;
+        debug_assert_eq!(context.resource().kind(), req.kind.to_string());
+        debug_assert_eq!(context.resource().name(), req.name);
         if let Some(object) = &req.object {
             object.validate()?;
             self.policy.evaluate(object, principal)?;
+            if let ResourceObject::RevocationIntent(intent) = object {
+                self.authorize_revocation(req, principal, &intent.spec.target)?;
+            }
+            if matches!(object, ResourceObject::PolicyBundle(_)) && principal.tenant().is_none() {
+                EstateScope::authorize(context, PrivilegedCapability::PolicyPublication)
+                    .map_err(|error| ApiError::Forbidden(error.to_string()))?;
+            }
+        }
+        Ok(())
+    }
+
+    fn authorize_revocation(
+        &self,
+        req: &AdmissionRequest,
+        principal: &Principal,
+        target: &aog_estate::RevocationTarget,
+    ) -> Result<(), ApiError> {
+        if let Some(tenant) = principal.tenant() {
+            if matches!(target, aog_estate::RevocationTarget::Ring(_)) {
+                return Err(ApiError::Forbidden(
+                    "tenant principal cannot create an estate-wide ring revocation".to_owned(),
+                ));
+            }
+            if let aog_estate::RevocationTarget::Tenant(target_tenant) = target
+                && target_tenant != tenant
+            {
+                return Err(ApiError::Forbidden(
+                    "tenant principal cannot revoke another tenant".to_owned(),
+                ));
+            }
+            let resource = CanonicalResource::resolved(
+                req.kind.to_string(),
+                &req.name,
+                Some(tenant.to_owned()),
+            )
+            .map_err(|error| ApiError::Forbidden(error.to_string()))?;
+            let context = VerifiedRequestContext::establish(
+                principal.request_principal.clone(),
+                match req.verb {
+                    Verb::Create => RequestOperation::AogCreate,
+                    Verb::Update => RequestOperation::AogUpdate,
+                    Verb::Delete => RequestOperation::AogDelete,
+                },
+                resource,
+            )
+            .map_err(|error| ApiError::Forbidden(error.to_string()))?;
+            TenantScope::authorize(&context, PrivilegedCapability::TenantRevocation)
+                .map_err(|error| ApiError::Forbidden(error.to_string()))?;
+        } else {
+            let context = principal.request_context(req)?;
+            EstateScope::authorize(&context, PrivilegedCapability::EstateRevocation)
+                .map_err(|error| ApiError::Forbidden(error.to_string()))?;
+            if matches!(target, aog_estate::RevocationTarget::Ring(_)) {
+                EstateScope::authorize(&context, PrivilegedCapability::RingKeyDestruction)
+                    .map_err(|error| ApiError::Forbidden(error.to_string()))?;
+            }
         }
         Ok(())
     }
@@ -178,6 +438,7 @@ impl Admission {
         &self,
         req: &AdmissionRequest,
         principal: &Principal,
+        context: &VerifiedRequestContext,
     ) -> Result<Staged, ApiError> {
         let key = store_key(req.kind, &req.name);
         match req.verb {
@@ -204,12 +465,16 @@ impl Admission {
                     kind: req.kind.to_string(),
                     name: req.name.clone(),
                 })?;
+                if current.object.metadata().tenant.is_none() {
+                    EstateScope::authorize(context, PrivilegedCapability::GlobalObjectMutation)
+                        .map_err(|error| ApiError::Forbidden(error.to_string()))?;
+                }
                 // A tenant-scoped principal may not overwrite an object owned by
                 // another tenant; a global principal is unrestricted (mirror the
                 // delete guard).
                 if let (Some(pt), Some(ot)) = (
-                    principal.tenant.as_ref(),
-                    current.object.metadata().tenant.as_ref(),
+                    principal.tenant(),
+                    current.object.metadata().tenant.as_deref(),
                 ) && pt != ot
                 {
                     return Err(ApiError::Forbidden(format!(
@@ -272,13 +537,22 @@ impl Admission {
                     name: req.name.clone(),
                 })?;
                 let meta = current.object.metadata();
+                if req.kind == Kind::RevocationIntent && principal.tenant().is_some() {
+                    return Err(ApiError::Forbidden(
+                        "tenant principals may not delete revocation/kill records".to_owned(),
+                    ));
+                }
+                if meta.tenant.is_none() {
+                    EstateScope::authorize(context, PrivilegedCapability::GlobalObjectMutation)
+                        .map_err(|error| ApiError::Forbidden(error.to_string()))?;
+                }
                 // A3: authorize the delete against the loaded target. The
                 // policy gate is skipped for deletes (validate sees object=None),
                 // which let any authenticated principal delete any object incl. a
                 // RevocationIntent (reversing a live kill). Run the same policy here,
                 // and bind a tenant-scoped principal to its own tenant.
                 self.policy.evaluate(&current.object, principal)?;
-                if let (Some(pt), Some(ot)) = (principal.tenant.as_ref(), meta.tenant.as_ref())
+                if let (Some(pt), Some(ot)) = (principal.tenant(), meta.tenant.as_deref())
                     && pt != ot
                 {
                     return Err(ApiError::Forbidden(format!(
@@ -312,8 +586,8 @@ impl Admission {
                     let meta = object.metadata_mut();
                     meta.deletion_timestamp = Some(now_rfc3339());
                     // Provenance of who requested the deletion.
-                    if principal.token_ref.is_some() {
-                        meta.token_ref.clone_from(&principal.token_ref);
+                    if let Some(token_ref) = principal.token_ref() {
+                        meta.token_ref = Some(token_ref.clone());
                     }
                     let value = encode(&object)?;
                     Ok(Staged {
@@ -369,7 +643,7 @@ impl Admission {
     ) -> Result<(), ApiError> {
         // Authorize the object by a child token scoped to this action, not the
         // broad parent (attenuation; I-1/I-3). Fail closed if it cannot be minted.
-        if let Some(parent) = &principal.token {
+        if let Some(parent) = principal.token() {
             let ceiling = crate::policy::classification_ceiling(object);
             let action = format!("{}/{}", object.kind(), object.name());
             let child = self.sealer.mint_child(parent, ceiling, &action)?;
@@ -430,25 +704,27 @@ impl Admission {
     }
 
     // 5. receipt — one hash-chained receipt per admitted mutation.
-    fn receipt(
+    fn receipt_value(
         &self,
         req: &AdmissionRequest,
         principal: &Principal,
         before_digest: Option<&str>,
         outcome: &AdmissionOutcome,
-    ) {
+        audit_intent_id: &str,
+    ) -> serde_json::Value {
         let token_id = outcome
             .object
             .as_ref()
             .and_then(|o| o.metadata().token_ref.as_ref())
-            .or(principal.token_ref.as_ref())
+            .or(principal.token_ref())
             .map(|t| t.token_id.clone())
             .unwrap_or_default();
         let after_digest = outcome.object.as_ref().and_then(digest);
-        let receipt = serde_json::json!({
+        serde_json::json!({
             "receipt_id": format!("rcpt:{}:{}:{}", req.kind, req.name, outcome.revision),
+            "audit_intent_id": audit_intent_id,
             "token_id": token_id,
-            "tenant_id": principal.tenant.clone().unwrap_or_default(),
+            "tenant_id": principal.tenant().unwrap_or_default(),
             "kind": req.kind.to_string(),
             "name": req.name,
             "verb": req.verb.as_str(),
@@ -457,7 +733,21 @@ impl Admission {
             "after_digest": after_digest,
             "revision": outcome.revision,
             "recorded_at": now_rfc3339(),
-        });
+        })
+    }
+
+    fn deliver_receipt(&self, receipt: serde_json::Value) {
+        let Some(receipt_id) = receipt.get("receipt_id").and_then(|value| value.as_str()) else {
+            return;
+        };
+        if !self
+            .delivered_receipts
+            .lock()
+            .expect("delivered receipt lock")
+            .insert(receipt_id.to_owned())
+        {
+            return;
+        }
         // Physically separate from the intent store (A1.4); provable off-host with
         // the ledger's public key alone. A canonical-JSON receipt cannot fail to
         // hash, so ingest is effectively infallible here.
@@ -468,10 +758,74 @@ impl Admission {
             .ingest("aog-apiserver", receipt);
     }
 
+    /// Rebuild the in-memory/off-host-verifiable sink from Raft-durable outbox
+    /// records. Finalized mutations replay their exact receipt. A pre-commit
+    /// intent left pending by a crash is preserved as an explicit,
+    /// indeterminate recovery receipt: it proves the durable audit barrier and
+    /// planned before/after digests without falsely claiming that the mutation
+    /// committed.
+    pub async fn recover_receipts(&self) -> Result<usize, ApiError> {
+        let entries = self
+            .raft
+            .range("AuditOutbox/")
+            .await
+            .map_err(|error| ApiError::Store(error.to_string()))?;
+        let mut recovered = 0;
+        for (_, versioned) in entries {
+            let value: serde_json::Value = serde_json::from_slice(&versioned.value)
+                .map_err(|error| ApiError::Store(format!("decode audit outbox: {error}")))?;
+            let receipt = match value.get("schema").and_then(|field| field.as_str()) {
+                Some("aog.audit-outbox/v1") => value.get("receipt").cloned().ok_or_else(|| {
+                    ApiError::Store("finalized audit outbox is missing its receipt".to_owned())
+                })?,
+                Some("aog.audit-intent/v1") => {
+                    let intent_id = value
+                        .get("intent_id")
+                        .and_then(|field| field.as_str())
+                        .ok_or_else(|| {
+                            ApiError::Store("pending audit intent is missing its id".to_owned())
+                        })?;
+                    serde_json::json!({
+                        "receipt_id": format!("audit-intent:{intent_id}"),
+                        "audit_intent_id": intent_id,
+                        "tenant_id": value.get("tenant_id").cloned().unwrap_or_default(),
+                        "subject_hash": value.get("subject_hash").cloned().unwrap_or_default(),
+                        "operation": value.get("operation").cloned().unwrap_or_default(),
+                        "resource": value.get("resource").cloned().unwrap_or_default(),
+                        "verb": value.get("verb").cloned().unwrap_or_default(),
+                        "decision": "audit-intent-recovered",
+                        "mutation_status": "indeterminate",
+                        "before_digest": value.get("before_digest").cloned().unwrap_or_default(),
+                        "after_digest": value.get("after_digest").cloned().unwrap_or_default(),
+                        "intent_revision": versioned.mod_revision,
+                        "recorded_at": value.get("created_at").cloned().unwrap_or_default(),
+                    })
+                }
+                other => {
+                    return Err(ApiError::Store(format!(
+                        "unknown audit outbox schema: {other:?}"
+                    )));
+                }
+            };
+            self.deliver_receipt(receipt);
+            recovered += 1;
+        }
+        Ok(recovered)
+    }
+
     /// Number of receipts in the ledger — one per admitted mutation.
     #[must_use]
     pub fn receipts_len(&self) -> usize {
         self.ledger.lock().expect("receipt ledger lock").len()
+    }
+
+    /// Number of durable audit intents retained for recovery/delivery.
+    pub async fn audit_intents_len(&self) -> Result<usize, ApiError> {
+        self.raft
+            .range("AuditOutbox/")
+            .await
+            .map(|entries| entries.len())
+            .map_err(|e| ApiError::Store(e.to_string()))
     }
 
     /// The receipt ledger's public key — verifies an exported pack off-host.
@@ -527,6 +881,11 @@ struct Current {
     revision: Revision,
 }
 
+struct AuditIntent {
+    id: String,
+    revision: Revision,
+}
+
 /// Stamp the identity/bookkeeping a fresh object gets on admission. `generation`
 /// starts at 1; `resource_version` is set from the commit revision afterward.
 fn stamp_create(object: &mut ResourceObject, principal: &Principal) {
@@ -538,19 +897,22 @@ fn stamp_create(object: &mut ResourceObject, principal: &Principal) {
     // Only a DELETE sets the deletion timestamp — a create body cannot smuggle
     // a terminating state in.
     meta.deletion_timestamp = None;
-    meta.token_ref.clone_from(&principal.token_ref);
+    meta.token_ref = principal.token_ref().cloned();
     // Bind a tenant-scoped principal's object to its own tenant — a create body
     // cannot smuggle a different metadata.tenant (the delete path enforces the
     // same binding). A global (untenanted) principal may still create for any
     // tenant.
-    if let Some(pt) = principal.tenant.as_ref() {
-        meta.tenant = Some(pt.clone());
+    if let Some(pt) = principal.tenant() {
+        meta.tenant = Some(pt.to_owned());
     }
 }
 
 /// Carry immutable identity (`uid`, `created_at`) forward on update and bump
 /// `generation` for the new spec.
 fn stamp_update(object: &mut ResourceObject, current: &ResourceObject, principal: &Principal) {
+    if !principal.system {
+        preserve_status(object, current);
+    }
     let prior = current.metadata();
     let meta = object.metadata_mut();
     meta.uid.clone_from(&prior.uid);
@@ -570,6 +932,47 @@ fn stamp_update(object: &mut ResourceObject, current: &ResourceObject, principal
         .token_ref
         .clone()
         .or_else(|| prior.token_ref.clone());
+}
+
+/// Status/counters are controller-owned authoritative state. External update
+/// bodies may change desired spec but cannot lower usage, replay versions, or
+/// manufacture readiness.
+fn preserve_status(object: &mut ResourceObject, current: &ResourceObject) {
+    macro_rules! copy_status {
+        ($new:ident, $old:ident) => {
+            $new.status.clone_from(&$old.status)
+        };
+    }
+    match (object, current) {
+        (ResourceObject::Tenant(new), ResourceObject::Tenant(old)) => copy_status!(new, old),
+        (ResourceObject::TrustRing(new), ResourceObject::TrustRing(old)) => copy_status!(new, old),
+        (ResourceObject::VirtualKey(new), ResourceObject::VirtualKey(old)) => {
+            copy_status!(new, old)
+        }
+        (ResourceObject::Capability(new), ResourceObject::Capability(old)) => {
+            copy_status!(new, old)
+        }
+        (ResourceObject::PolicyBundle(new), ResourceObject::PolicyBundle(old)) => {
+            copy_status!(new, old)
+        }
+        (ResourceObject::ProviderPool(new), ResourceObject::ProviderPool(old)) => {
+            copy_status!(new, old)
+        }
+        (ResourceObject::Workload(new), ResourceObject::Workload(old)) => copy_status!(new, old),
+        (ResourceObject::Placement(new), ResourceObject::Placement(old)) => copy_status!(new, old),
+        (ResourceObject::Node(new), ResourceObject::Node(old)) => copy_status!(new, old),
+        (ResourceObject::MissionContract(new), ResourceObject::MissionContract(old)) => {
+            copy_status!(new, old)
+        }
+        (ResourceObject::ToolGrant(new), ResourceObject::ToolGrant(old)) => copy_status!(new, old),
+        (ResourceObject::RolloutPlan(new), ResourceObject::RolloutPlan(old)) => {
+            copy_status!(new, old)
+        }
+        (ResourceObject::RevocationIntent(new), ResourceObject::RevocationIntent(old)) => {
+            copy_status!(new, old)
+        }
+        _ => {}
+    }
 }
 
 /// The `spec` sub-value of an object, for the terminating spec-freeze check.

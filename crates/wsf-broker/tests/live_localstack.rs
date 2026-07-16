@@ -142,7 +142,9 @@ async fn provision(c: &Client, addr: &str, tok: &str) -> (String, String) {
 
 fn signed_token(signer: &RustCryptoMlDsa87) -> TrustToken {
     let now = Utc::now();
-    let exp = now + ChronoDuration::minutes(15);
+    // Leave headroom above AWS STS's 900-second minimum so request latency
+    // cannot turn a legitimate live gate into an authority-floor denial.
+    let exp = now + ChronoDuration::minutes(20);
     let tok = TrustToken {
         token_id: "tok_broker-e2e".to_string(),
         issued_at: now.to_rfc3339(),
@@ -166,6 +168,9 @@ fn signed_token(signer: &RustCryptoMlDsa87) -> TrustToken {
         budget: None,
         attenuation: Attenuation {
             parent_id: None,
+            root_id: None,
+            depth: 0,
+            ancestor_ids: vec![],
             caveats: vec![Caveat {
                 caveat_type: CaveatType::ResourcePrefix,
                 value: "arn:aws:s3:::wsf-demo/*".to_string(),
@@ -219,9 +224,15 @@ async fn broker_scopes_credentials_against_localstack() {
 
     assert!(!creds.access_key_id.is_empty(), "temp access key returned");
     assert!(!creds.session_token.is_empty(), "session token returned");
-    // Creds expire in the future, bounded by the token TTL (clamped to the STS
-    // window). The token had 15 min TTL -> ~900s duration.
+    // Creds expire in the future and never outlive the token authority.
     assert!(creds.expiration > now, "creds must expire in the future");
+    let token_exp = chrono::DateTime::parse_from_rfc3339(&token.expires_at)
+        .unwrap()
+        .with_timezone(&Utc);
+    assert!(
+        creds.expiration <= token_exp,
+        "provider credential must not outlive token authority"
+    );
     assert!(
         (creds.expiration - now).num_seconds() <= 3600,
         "duration bounded by the STS ceiling"

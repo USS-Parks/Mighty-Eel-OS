@@ -152,6 +152,15 @@ fn token(signer: &RustCryptoMlDsa87, clearance: Classification) -> TrustToken {
 }
 
 fn token_for(signer: &RustCryptoMlDsa87, clearance: Classification, tenant: &str) -> TrustToken {
+    token_for_subject(signer, clearance, tenant, "hmac-sha256:demo")
+}
+
+fn token_for_subject(
+    signer: &RustCryptoMlDsa87,
+    clearance: Classification,
+    tenant: &str,
+    subject: &str,
+) -> TrustToken {
     let now = Utc::now();
     let t = TrustToken {
         token_id: format!("tok_seal-{tenant}-{clearance:?}"),
@@ -161,7 +170,7 @@ fn token_for(signer: &RustCryptoMlDsa87, clearance: Classification, tenant: &str
         trust_bundle_version: "2026.07.03".to_string(),
         tenant_id: tenant.to_string(),
         subject_id: None,
-        subject_hash: "hmac-sha256:demo".to_string(),
+        subject_hash: subject.to_string(),
         service_identity: None,
         identity_id: None,
         roles: vec![],
@@ -292,6 +301,25 @@ async fn seal_unseal_over_http_against_live_openbao() {
         cross_resp.status(),
         403,
         "cross-tenant unseal must be denied"
+    );
+
+    // 5. W2 same-tenant BOLA regression: tenant equality is not ownership.
+    let other_subject = token_for_subject(
+        &token_signer,
+        Classification::Secret,
+        "tenant-a",
+        "hmac-sha256:other-subject",
+    );
+    let cross_subject_resp = http
+        .post(format!("{base}/unseal"))
+        .json(&json!({ "token": other_subject, "envelope": envelope.clone() }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(
+        cross_subject_resp.status(),
+        403,
+        "same-tenant cross-subject unseal must be denied"
     );
 
     // Receipts: the chain verifies and records seal-allow, unseal-allow, unseal-deny.

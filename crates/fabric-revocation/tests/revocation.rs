@@ -2,11 +2,51 @@
 //! rejection, emergency flag, wrong-key rejection; plus the monotonic
 //! anti-rollback store.
 
+use chrono::{DateTime, Utc};
+use fabric_contracts::{Attenuation, Classification, RevocationStatus, Signature, TrustToken};
 use fabric_crypto::Signer;
 use fabric_crypto::providers::{MlDsa87Verifier, RustCryptoMlDsa87};
 use fabric_revocation::{
-    MonotonicRevocationStore, RevocationError, RevocationSnapshot, sign, verify,
+    CurrentRevocationError, MonotonicRevocationStore, RevocationError, RevocationSnapshot, sign,
+    verify,
 };
+
+fn token() -> TrustToken {
+    TrustToken {
+        token_id: "tok-a".into(),
+        issued_at: "2026-07-15T00:00:00Z".into(),
+        expires_at: "2026-07-16T00:00:00Z".into(),
+        issuer: "issuer-a".into(),
+        trust_bundle_version: "bundle-a".into(),
+        tenant_id: "tenant-a".into(),
+        subject_id: None,
+        subject_hash: "subject-a".into(),
+        service_identity: Some("service-a".into()),
+        identity_id: None,
+        roles: vec![],
+        compliance_scopes: vec![],
+        allowed_routes: vec![],
+        allowed_models: vec![],
+        max_data_classification: Classification::Restricted,
+        country: None,
+        person_type: None,
+        offline_mode: false,
+        revocation_status: RevocationStatus::Valid,
+        budget: None,
+        attenuation: Attenuation::default(),
+        signature: Signature {
+            alg: "ML-DSA-87".into(),
+            key_id: "key-a".into(),
+            value: String::new(),
+        },
+    }
+}
+
+fn trusted_now() -> DateTime<Utc> {
+    DateTime::parse_from_rfc3339("2026-07-15T12:00:00Z")
+        .unwrap()
+        .with_timezone(&Utc)
+}
 
 #[test]
 fn sign_verify_and_query() {
@@ -158,4 +198,107 @@ fn pre_sequence_snapshots_still_verify() {
     );
     let back: RevocationSnapshot = serde_json::from_str(&json).unwrap();
     verify(&back, &MlDsa87Verifier, signer.public_key()).unwrap();
+}
+
+#[test]
+fn current_consumer_contract_fails_closed_for_absent_invalid_stale_and_revoked_state() {
+    let anchor = RustCryptoMlDsa87::generate("rev-anchor-current").unwrap();
+    let impostor = RustCryptoMlDsa87::generate("rev-impostor-current").unwrap();
+    let tok = token();
+
+    let store = MonotonicRevocationStore::new();
+    assert_eq!(
+        store.authorize(&tok, trusted_now()),
+        Err(CurrentRevocationError::Unavailable)
+    );
+
+    let mut store = MonotonicRevocationStore::new();
+    let forged = sign(
+        RevocationSnapshot::new("forged", "2026-07-15T00:00:00Z", "2026-07-16T00:00:00Z")
+            .with_sequence(1),
+        &impostor,
+    )
+    .unwrap();
+    assert_eq!(
+        store.advance(forged, &MlDsa87Verifier, anchor.public_key()),
+        Err(RevocationError::InvalidSignature)
+    );
+    assert_eq!(
+        store.authorize(&tok, trusted_now()),
+        Err(CurrentRevocationError::Unavailable)
+    );
+
+    for (label, issued_at, expires_at, expected) in [
+        (
+            "unsequenced",
+            "2026-07-15T00:00:00Z",
+            "2026-07-16T00:00:00Z",
+            CurrentRevocationError::Unsequenced,
+        ),
+        (
+            "future",
+            "2026-07-15T13:00:00Z",
+            "2026-07-16T00:00:00Z",
+            CurrentRevocationError::NotYetValid,
+        ),
+        (
+            "stale",
+            "2026-07-14T00:00:00Z",
+            "2026-07-15T12:00:00Z",
+            CurrentRevocationError::Expired,
+        ),
+    ] {
+        let sequence = u64::from(label != "unsequenced");
+        let snapshot = sign(
+            RevocationSnapshot::new(label, issued_at, expires_at).with_sequence(sequence),
+            &anchor,
+        )
+        .unwrap();
+        let mut candidate = MonotonicRevocationStore::new();
+        candidate
+            .advance(snapshot, &MlDsa87Verifier, anchor.public_key())
+            .unwrap();
+        assert_eq!(
+            candidate.authorize(&tok, trusted_now()),
+            Err(expected),
+            "{label}"
+        );
+    }
+
+    let mut revoked =
+        RevocationSnapshot::new("revoked", "2026-07-15T00:00:00Z", "2026-07-16T00:00:00Z")
+            .with_sequence(2);
+    revoked.revoked_tenants.push("tenant-a".into());
+    let mut store = MonotonicRevocationStore::new();
+    store
+        .advance(
+            sign(revoked, &anchor).unwrap(),
+            &MlDsa87Verifier,
+            anchor.public_key(),
+        )
+        .unwrap();
+    assert_eq!(
+        store.authorize(&tok, trusted_now()),
+        Err(CurrentRevocationError::Revoked("tenant"))
+    );
+
+    let cleaner_rollback = sign(
+        RevocationSnapshot::new(
+            "cleaner-rollback",
+            "2026-07-15T00:00:00Z",
+            "2026-07-16T00:00:00Z",
+        )
+        .with_sequence(1),
+        &anchor,
+    )
+    .unwrap();
+    assert!(matches!(
+        store.advance(cleaner_rollback, &MlDsa87Verifier, anchor.public_key()),
+        Err(RevocationError::Rollback { .. })
+    ));
+    assert_eq!(
+        store.authorize(&tok, trusted_now()),
+        Err(CurrentRevocationError::Revoked("tenant")),
+        "a rejected lower sequence cannot replace held revocations"
+    );
 }

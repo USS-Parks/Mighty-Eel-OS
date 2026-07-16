@@ -18,6 +18,10 @@ pub use common::{
 };
 pub use envelope::{Envelope, EnvelopeBinding, Label, Seal, Thread};
 pub use identity::{Identity, IdentityKind};
-pub use principal::{Audience, AuthStrength, AuthenticatedFacts, WsfPrincipal};
+pub use principal::{
+    Audience, AuthStrength, AuthenticatedFacts, CanonicalResource, EstateScope,
+    PrivilegedCapability, RequestContextError, RequestOperation, ScopeAuthorizationError,
+    TenantScope, VerifiedRequestContext, WsfPrincipal,
+};
 pub use receipt::{Correlation, PeriodicSignature, Receipt};
 pub use token::{Attenuation, Budget, Caveat, CaveatType, TrustToken};

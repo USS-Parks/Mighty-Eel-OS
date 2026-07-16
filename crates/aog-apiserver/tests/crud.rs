@@ -96,16 +96,92 @@ async fn create_binds_object_to_the_principal_tenant() {
 }
 
 #[tokio::test]
+async fn reads_are_tenant_scoped_and_estate_pagination_is_explicit() {
+    let signer = anchor();
+    let app = app_anchored("aog-apiserver-xtenant-read", &signer, None).await;
+    let owner = header_for(&mint(&signer));
+    let intruder = header_for(&mint_with(&signer, |token| {
+        token.token_id = "tok-reader-mallory".into();
+        token.tenant_id = "tenant-mallory".into();
+        token.subject_hash = "hmac:reader-mallory".into();
+    }));
+    let estate_reader = header_for(&mint_with(&signer, |token| {
+        token.token_id = "tok-estate-reader".into();
+        token.tenant_id = "tenant-audit".into();
+        token.subject_hash = "hmac:estate-reader".into();
+        token.roles = vec!["estate:read".into()];
+    }));
+
+    for (name, version) in [("read-a", 1), ("read-b", 2), ("read-c", 3)] {
+        let (status, body) = send(
+            &app,
+            "POST",
+            &format!("{BASE}/PolicyBundle"),
+            Some(&owner),
+            Some(bundle(name, version)),
+        )
+        .await;
+        assert_eq!(status, StatusCode::CREATED, "create {name}: {body}");
+    }
+
+    let (status, _) = send(
+        &app,
+        "GET",
+        &format!("{BASE}/PolicyBundle/read-a"),
+        Some(&intruder),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND, "foreign existence is hidden");
+    let (status, page) = send(
+        &app,
+        "GET",
+        &format!("{BASE}/PolicyBundle?limit=1"),
+        Some(&intruder),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(page["items"].as_array().unwrap().is_empty());
+    assert!(page["continue_after"].is_null());
+
+    let (status, first) = send(
+        &app,
+        "GET",
+        &format!("{BASE}/PolicyBundle?limit=2"),
+        Some(&estate_reader),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(first["items"].as_array().unwrap().len(), 2);
+    let cursor = first["continue_after"].as_str().unwrap();
+    let (status, second) = send(
+        &app,
+        "GET",
+        &format!("{BASE}/PolicyBundle?limit=2&continue_after={cursor}"),
+        Some(&estate_reader),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(second["items"].as_array().unwrap().len(), 1);
+    assert!(second["continue_after"].is_null());
+}
+
+#[tokio::test]
 async fn cross_tenant_delete_is_denied() {
     // A tenant-scoped principal may not delete another tenant's object. The
     // sharpest instance is a RevocationIntent: deleting someone else's intent
     // would reverse a live kill. tenant-loom creates the intent;
     // tenant-mallory's delete is refused and changes nothing; the owner's own
-    // delete still proceeds (the denial is the tenant binding, not a blanket
-    // delete refusal).
+    // delete is also refused: kill/revocation records are append-only from the
+    // tenant plane and can only be retired by the estate/system workflow.
     let signer = anchor();
     let app = app_anchored("aog-apiserver-xtenant-delete", &signer, None).await;
-    let owner = header_for(&mint(&signer)); // tenant-loom
+    let owner = header_for(&mint_with(&signer, |token| {
+        token.roles = vec!["tenant:revocation".into()];
+    })); // tenant-loom
     let intruder = header_for(&mint_with(&signer, |t| {
         t.token_id = "tok-mallory".to_owned();
         t.tenant_id = "tenant-mallory".to_owned();
@@ -145,12 +221,110 @@ async fn cross_tenant_delete_is_denied() {
     let (status, body) = send(&app, "GET", &url, Some(owner.as_str()), None).await;
     assert_eq!(status, StatusCode::OK, "the kill intent survived: {body}");
 
-    // The owning tenant's delete proceeds.
+    // The owning tenant also cannot reverse its admitted kill record.
     let (status, body) = send(&app, "DELETE", &url, Some(owner.as_str()), None).await;
-    assert!(
-        status.is_success(),
-        "the owner's delete must proceed, got {status}: {body}"
-    );
+    assert_eq!(status, StatusCode::FORBIDDEN, "owner kill reversal: {body}");
+    let (status, body) = send(&app, "GET", &url, Some(owner.as_str()), None).await;
+    assert_eq!(status, StatusCode::OK, "kill record must remain: {body}");
+}
+
+#[tokio::test]
+async fn revocation_targets_require_exact_tenant_or_estate_capability() {
+    let signer = anchor();
+    let app = app_anchored("aog-apiserver-revocation-scope", &signer, None).await;
+    let plain = header_for(&mint(&signer));
+    let tenant_revoker = header_for(&mint_with(&signer, |token| {
+        token.token_id = "tok-tenant-revoker".into();
+        token.roles = vec!["tenant:revocation".into()];
+    }));
+    let forged_estate = header_for(&mint_with(&signer, |token| {
+        token.token_id = "tok-forged-estate".into();
+        token.roles = vec![
+            "estate:revocation".into(),
+            "estate:ring-key-destruction".into(),
+        ];
+    }));
+    let estate = header_for(&mint_with(&signer, |token| {
+        token.token_id = "tok-estate".into();
+        token.tenant_id.clear();
+        token.subject_hash = "hmac:estate".into();
+        token.roles = vec![
+            "estate:revocation".into(),
+            "estate:ring-key-destruction".into(),
+        ];
+    }));
+    let intent = |name: &str, target: serde_json::Value| {
+        serde_json::json!({
+            "api_version": "aog.islandmountain.io/v1",
+            "kind": "RevocationIntent",
+            "metadata": { "name": name },
+            "spec": { "target": target, "reason": "scope-test" }
+        })
+    };
+    let collection = format!("{BASE}/RevocationIntent");
+
+    let (status, _) = send(
+        &app,
+        "POST",
+        &collection,
+        Some(&plain),
+        Some(intent(
+            "plain",
+            serde_json::json!({"target":"token","id":"t"}),
+        )),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    let (status, _) = send(
+        &app,
+        "POST",
+        &collection,
+        Some(&tenant_revoker),
+        Some(intent(
+            "self-tenant",
+            serde_json::json!({"target":"tenant","id":"tenant-loom"}),
+        )),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let (status, _) = send(
+        &app,
+        "POST",
+        &collection,
+        Some(&tenant_revoker),
+        Some(intent(
+            "other-tenant",
+            serde_json::json!({"target":"tenant","id":"tenant-other"}),
+        )),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    for (header, name) in [
+        (&tenant_revoker, "ring-tenant"),
+        (&forged_estate, "ring-forged"),
+    ] {
+        let (status, _) = send(
+            &app,
+            "POST",
+            &collection,
+            Some(header),
+            Some(intent(name, serde_json::json!({"target":"ring","id":2}))),
+        )
+        .await;
+        assert_eq!(status, StatusCode::FORBIDDEN);
+    }
+    let (status, body) = send(
+        &app,
+        "POST",
+        &collection,
+        Some(&estate),
+        Some(intent(
+            "ring-estate",
+            serde_json::json!({"target":"ring","id":2}),
+        )),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "estate revocation: {body}");
 }
 
 #[tokio::test]

@@ -205,6 +205,8 @@ async fn issuance_authority_is_derived_not_caller_supplied() {
         policy: Arc::new(StaticTenantPolicies::single_dev(TENANT, &["clinician"])),
         grants: Arc::new(wsf_api::grants::StaticGrants::new()),
         auditors: Arc::new(wsf_api::audit::StaticAuditors::none()),
+        revocation: wsf_api::RevocationEnforcement::development_disabled(),
+        attenuation: Arc::new(wsf_api::AttenuationState::new()),
     };
 
     let app = wsf_api::router(state);
@@ -367,6 +369,8 @@ async fn two_tenants_two_workloads_against_live_openbao() {
         policy: Arc::new(policy),
         grants: Arc::new(wsf_api::grants::StaticGrants::new()),
         auditors: Arc::new(wsf_api::audit::StaticAuditors::none()),
+        revocation: wsf_api::RevocationEnforcement::development_disabled(),
+        attenuation: Arc::new(wsf_api::AttenuationState::new()),
     };
     let app = wsf_api::router(state);
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();

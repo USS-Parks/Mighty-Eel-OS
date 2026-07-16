@@ -240,6 +240,8 @@ async fn sdk_round_trips_every_endpoint() {
         // L2: only the explicitly-enrolled auditor principal may export; the
         // SDK's default dev principal ("local-dev") is NOT enrolled.
         auditors: Arc::new(wsf_api::audit::StaticAuditors::none().with("wsf-live-auditor")),
+        revocation: wsf_api::RevocationEnforcement::development_disabled(),
+        attenuation: Arc::new(wsf_api::AttenuationState::new()),
     };
 
     let app = wsf_api::router(state);

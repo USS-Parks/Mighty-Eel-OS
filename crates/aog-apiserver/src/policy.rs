@@ -50,7 +50,7 @@ impl AdmissionPolicy {
     pub fn evaluate(&self, object: &ResourceObject, principal: &Principal) -> Result<(), ApiError> {
         // The system principal (internal controllers, later phases) carries no
         // token; it is trusted and skips policy. API requests always carry one.
-        let Some(token) = &principal.token else {
+        let Some(token) = principal.token() else {
             return Ok(());
         };
         let facts = policy_facts(object);

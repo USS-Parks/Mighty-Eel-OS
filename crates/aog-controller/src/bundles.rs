@@ -85,6 +85,14 @@ impl<S: BundleStore> PolicyBundleController<S> {
             return Ok(Action::Done);
         }
 
+        // Tenant-scoped objects are proposals, never estate trust. Only an
+        // explicitly global bundle admitted through the estate publication
+        // capability may reach the signed distribution channel.
+        if bundle.metadata.tenant.is_some() {
+            self.store.retract(name).await?;
+            return self.mark(bundle, Phase::Degraded, Vec::new()).await;
+        }
+
         let published = self.store.fetch(name).await?;
         let public_key = self.signer.public_key().to_vec();
 

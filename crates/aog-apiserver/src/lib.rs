@@ -66,7 +66,13 @@ impl AppState {
         sealer: Sealer,
     ) -> Result<Self, NodeError> {
         let raft = Arc::new(RaftNode::bootstrap(node_id, dir).await?);
-        Ok(Self::from_raft(raft, authenticator, sealer))
+        let state = Self::from_raft(raft, authenticator, sealer);
+        state
+            .admission
+            .recover_receipts()
+            .await
+            .map_err(|error| NodeError::Storage(error.to_string()))?;
+        Ok(state)
     }
 
     /// Recover an existing estate under `dir` (no cluster init).
@@ -80,7 +86,13 @@ impl AppState {
         sealer: Sealer,
     ) -> Result<Self, NodeError> {
         let raft = Arc::new(RaftNode::start(node_id, dir).await?);
-        Ok(Self::from_raft(raft, authenticator, sealer))
+        let state = Self::from_raft(raft, authenticator, sealer);
+        state
+            .admission
+            .recover_receipts()
+            .await
+            .map_err(|error| NodeError::Storage(error.to_string()))?;
+        Ok(state)
     }
 
     /// Wrap an already-running Raft node in authenticated API state — the
@@ -100,6 +112,11 @@ impl AppState {
     #[must_use]
     pub fn receipts_len(&self) -> usize {
         self.admission.receipts_len()
+    }
+
+    /// Number of durable pre-mutation audit intents available for recovery.
+    pub async fn audit_intents_len(&self) -> Result<usize, crate::error::ApiError> {
+        self.admission.audit_intents_len().await
     }
 
     /// The receipt ledger's public key — verifies an exported pack off-host.

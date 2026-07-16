@@ -136,6 +136,9 @@ impl VirtualKeyController {
             budget: Some(cap.budget.clone()),
             attenuation: Attenuation {
                 parent_id: None,
+                root_id: None,
+                depth: 0,
+                ancestor_ids: vec![],
                 caveats: cap.caveats.clone(),
             },
             signature: Signature {

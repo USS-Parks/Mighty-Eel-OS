@@ -51,8 +51,21 @@ pub struct Caveat {
 pub struct Attenuation {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub parent_id: Option<String>,
+    /// Immutable root of the attenuation lineage.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub root_id: Option<String>,
+    /// Number of attenuation hops from the immutable root (`0` for a root).
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub depth: u32,
+    /// Signed ancestor token ids used to reject cycles and recursive id reuse.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub ancestor_ids: Vec<String>,
     #[serde(default)]
     pub caveats: Vec<Caveat>,
+}
+
+fn is_zero(value: &u32) -> bool {
+    *value == 0
 }
 
 /// The trust token. Field order and names mirror the MAI claim so existing

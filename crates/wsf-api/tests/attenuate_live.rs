@@ -186,6 +186,8 @@ async fn issue_attenuate_verify_and_adversarial_parents() {
         policy: Arc::new(StaticTenantPolicies::single_dev(TENANT, &["clinician"])),
         grants: Arc::new(wsf_api::grants::StaticGrants::new()),
         auditors: Arc::new(wsf_api::audit::StaticAuditors::none()),
+        revocation: wsf_api::RevocationEnforcement::development_disabled(),
+        attenuation: Arc::new(wsf_api::AttenuationState::new()),
     };
     let app = wsf_api::router(state);
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();

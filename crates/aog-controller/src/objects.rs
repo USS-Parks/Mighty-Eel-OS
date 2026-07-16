@@ -7,7 +7,7 @@
 
 use std::sync::Arc;
 
-use aog_apiserver::admission::{Admission, AdmissionRequest, Principal, Verb};
+use aog_apiserver::admission::{Admission, AdmissionRequest, Verb};
 use aog_apiserver::codec::parse_kind;
 use aog_apiserver::error::ApiError;
 use aog_apiserver::reader::StoreReader;
@@ -89,7 +89,7 @@ impl EstateClient {
             name: object.name().to_owned(),
             object: Some(object),
         };
-        match self.admission.admit(request, &Principal::system()).await {
+        match self.admission.admit_system(request).await {
             Ok(_) | Err(ApiError::Conflict { .. }) => Ok(()),
             Err(e) => Err(e.into()),
         }
@@ -108,7 +108,7 @@ impl EstateClient {
             name: object.name().to_owned(),
             object: Some(object),
         };
-        self.admission.admit(request, &Principal::system()).await?;
+        self.admission.admit_system(request).await?;
         Ok(())
     }
 
@@ -123,7 +123,7 @@ impl EstateClient {
             name: name.to_owned(),
             object: None,
         };
-        match self.admission.admit(request, &Principal::system()).await {
+        match self.admission.admit_system(request).await {
             Ok(_) | Err(ApiError::NotFound { .. }) => Ok(()),
             Err(e) => Err(e.into()),
         }

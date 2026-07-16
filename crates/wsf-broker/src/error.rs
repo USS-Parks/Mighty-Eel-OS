@@ -19,6 +19,10 @@ pub enum BrokerError {
     /// floor) — refuse rather than widen.
     #[error("grant rejected: {0}")]
     Grant(String),
+    /// The provider minimum session lifetime exceeds the token/revocation
+    /// authority that remains. Deny rather than extend authority to a floor.
+    #[error("remaining authority cannot satisfy provider lifetime: {0}")]
+    AuthorityLifetime(String),
     /// STS transport failure.
     #[error("sts transport: {0}")]
     Http(#[from] reqwest::Error),

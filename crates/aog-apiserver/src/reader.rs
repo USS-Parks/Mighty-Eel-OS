@@ -65,6 +65,26 @@ impl StoreReader {
         }
     }
 
+    /// Tenant-scoped fetch. A foreign/global object is returned as absent so a
+    /// tenant cannot infer its existence; estate readers are explicit.
+    pub async fn get_scoped(
+        &self,
+        kind: Kind,
+        name: &str,
+        tenant: Option<&str>,
+        estate_reader: bool,
+    ) -> Result<Option<Value>, ApiError> {
+        let value = self.get(kind, name).await?;
+        if estate_reader {
+            return Ok(value);
+        }
+        let Some(value) = value else {
+            return Ok(None);
+        };
+        let object = aog_estate::ResourceObject::from_value(value.clone())?;
+        Ok((object.metadata().tenant.as_deref() == tenant).then_some(value))
+    }
+
     /// List every object of a kind (ascending by name), each at the hub version.
     ///
     /// # Errors
@@ -79,6 +99,29 @@ impl StoreReader {
         entries
             .iter()
             .map(|(_, v)| decode_value(v).map(|value| self.conversions.convert(kind, value)))
+            .collect()
+    }
+
+    /// Tenant-scoped list with filtering before any handler pagination.
+    pub async fn list_scoped(
+        &self,
+        kind: Kind,
+        tenant: Option<&str>,
+        estate_reader: bool,
+    ) -> Result<Vec<Value>, ApiError> {
+        let values = self.list(kind).await?;
+        if estate_reader {
+            return Ok(values);
+        }
+        values
+            .into_iter()
+            .filter_map(
+                |value| match aog_estate::ResourceObject::from_value(value.clone()) {
+                    Ok(object) if object.metadata().tenant.as_deref() == tenant => Some(Ok(value)),
+                    Ok(_) => None,
+                    Err(error) => Some(Err(error.into())),
+                },
+            )
             .collect()
     }
 }

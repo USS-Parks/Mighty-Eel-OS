@@ -106,3 +106,191 @@ Gates:
 - Full `cargo test --workspace` rerun with the same command-local prerequisite — PASS, exit 0, including all workspace and doctest lanes (repository-declared ignored/nightly/SLO tests remained ignored by the standard command).
 
 M0 acceptance: **PASS**. Containment is active, all frozen evidence and plans are machine-reproducible, focused lint/tests pass, and the standard full workspace gate passes when its existing OpenSSL prerequisite is supplied. Implementation and evidence are committed as `c6282ab9c5933f4b5a014a49449b02f77dd8e9f4`; this DEVLOG SHA update is the follow-up metadata commit.
+
+---
+
+## M1 — Trust and tenant boundary
+
+### LSH-A1 — Mandatory verified request context
+
+Status: **PASS** (uncommitted M1 bundle).
+
+The shared `fabric-contracts` boundary now carries server-established roles, immutable token lineage, the authenticated audience and correlation identity, an exact privileged operation, and a final canonical resource. `WsfPrincipal`, `CanonicalResource`, and `VerifiedRequestContext` remain non-deserializable/private-field types, so ordinary JSON cannot manufacture them. An operation-specific sink check rejects replay of a valid context at the wrong operation.
+
+WSF privileged handlers establish the context before bridge, seal, broker, or ledger work; tenant-binding sinks now require the verified context rather than a raw principal. AOG admission establishes the same context before validation/mutation and internal controllers can obtain estate authority only through the server-owned `admit_system` seam.
+
+Changed files:
+
+- `crates/fabric-contracts/src/{lib.rs,principal.rs}`;
+- `crates/wsf-api/src/{auth.rs,audit.rs,lib.rs}`;
+- `crates/aog-apiserver/src/{admission.rs,policy.rs}`; and
+- `crates/aog-controller/src/objects.rs`.
+
+Focused gate:
+
+- `cargo fmt` — PASS;
+- `cargo test -p fabric-contracts -p wsf-api -p aog-apiserver -p aog-controller` — PASS, including two compile-fail principal construction tests, wrong-audience and forged-resource-tenant refusal, wrong-operation sink refusal, all crate unit/integration tests, and doc tests.
+
+Residual risk: A1 supplies the authenticated context contract; mandatory current revocation, explicit tenant/estate capabilities, reservations, and durable audit remain owned by A2–A5 and their downstream migration prompts.
+
+### LSH-A2 — Mandatory current revocation provider
+
+Status: **PASS** (uncommitted M1 bundle).
+
+`MonotonicRevocationStore::authorize` is now the single trusted-time consumer contract. Only anchor-verified, strictly advancing snapshots enter the store; absence, sequence zero, malformed/future issue time, malformed/expired freshness, rollback, and every complete-predicate revocation dimension fail closed. WSF seal and broker consumers reuse this contract instead of duplicating partial freshness logic.
+
+Gate: `cargo test -p fabric-revocation -p wsf-seal -p wsf-broker` PASS. The table-driven contract covers absent, wrong-anchor, future, expired, lower-sequence rollback, and revoked state.
+
+### LSH-A3 — Tenant and estate capability types
+
+Status: **PASS** (uncommitted M1 bundle).
+
+`TenantScope` and `EstateScope` are private-field, non-deserializable proof types derived only from `VerifiedRequestContext`. Exact roles are defined for tenant revocation, estate revocation, global mutation, ring/key destruction, and policy publication. A tenant-bound principal cannot construct estate authority even if its verified token contains an estate-looking role; the server-owned estate principal remains explicit.
+
+Gate: `cargo test -p fabric-contracts` PASS, including the complete dangerous-capability matrix and compile-fail principal construction proofs.
+
+### LSH-A4 — Atomic reservation and immutable lineage
+
+Status: **PASS** (uncommitted M1 bundle).
+
+Attenuation now stamps an immutable `root_id` on the first child and copies it through nested descendants. `ReservationLedger` provides atomic reserve/commit/release across tenant, root lineage, mission, and system keys; unsettled reservations release on drop/cancellation. One hundred barrier-synchronized contenders against a ten-call cap admit exactly ten, and dropped reservations restore capacity.
+
+Gate: `cargo test -p fabric-token` PASS, including nested-root lineage and deterministic concurrent reservation regressions.
+
+### LSH-A5 — Durable mutation/audit contract
+
+Status: **PASS** (uncommitted M1 bundle).
+
+AOG admission now Raft-commits a serialized `aog.audit-intent/v1` outbox record before each desired-state mutation. The intent binds correlation, tenant/subject, exact operation/resource, before/after digests, and planned store operation; the resulting receipt references the durable intent. A failure before the intent produces no mutation, while every later ordering retains a Raft-durable recovery record.
+
+Gate: `cargo test -p aog-apiserver` PASS; three successful mutations produce three receipts and three durable pre-commit intents, while a pre-admission rejection produces neither. Focused `cargo check` and clippy `-D warnings` across the shared contracts, WSF consumers, AOG API/controller, and node crates PASS.
+
+Residual migration: W1–W5, O1–O7, G3/G4, and T2 consume these mandatory contracts at their production seams; O4 owns outbox delivery/restart idempotency rather than treating the durable intent alone as final receipt delivery.
+
+### LSH-W1 — Revocation on every WSF privileged endpoint
+
+Status: **PASS** (uncommitted M1 bundle).
+
+`AppState` now carries non-optional `RevocationEnforcement`; production startup loads and verifies the current OpenBao snapshot and refuses startup without it. Issue, verify, attenuate, seal, unseal, exchange, and audit/export paths consult current principal/token revocation before privileged work, and denials are tenant-safe and receipted.
+
+Gate: live OpenBao + Moto test PASS. One valid token succeeded, a sequence-2 tenant revocation was adopted without restart, and issue/verify/attenuate/seal/unseal/exchange all returned 403; rollback replay remained denied.
+
+### LSH-W2 — Owner-bound envelope authorization
+
+Status: **PASS** (uncommitted M1 bundle).
+
+Unseal now requires the presenting token's subject hash to match the signed envelope owner. Cross-subject service access requires both a verified service identity and the exact `envelope:delegate-unseal` capability; generic admin/delegation roles do not qualify.
+
+Gate: offline named-capability matrix and live OpenBao HTTP seal/unseal PASS; two same-tenant subjects cannot unseal one another's envelope.
+
+### LSH-W3 — Complete tenant issuance policy
+
+Status: **PASS** (uncommitted M1 bundle).
+
+Omitted/empty requested models now resolve to the restrictive tenant allowlist. Signed token models, routes, compliance scopes, classification ceiling, and service identity are selected from server policy plus authenticated context; untrusted issue bodies remain bounded intent only.
+
+Gate: omission/empty/subset/over-broad model matrix, service-identity matrix, policy-authority bridge composition tests, `cargo test -p wsf-api -p wsf-bridge --lib`, and all-target compilation PASS.
+
+### LSH-W4 — Attenuation depth, revocation, and budget lineage
+
+Status: **PASS** (uncommitted M1 bundle).
+
+Attenuation verifies the original signed/current parent, enforces the tenant's absolute maximum depth, carries signed immutable root/depth/ancestor lineage, rejects duplicate/cyclic child IDs, and folds authoritative root-lineage reservations into remaining budget before signing a descendant.
+
+Gate: revoked parent, maximum depth, 100-way sibling reservation concurrency, spend-then-attenuate state, duplicate ID, and recursive root-reset regressions PASS in `fabric-token`/`wsf-api`; live attenuation-before-revocation and denial-after-revocation PASS.
+
+### LSH-W5 — Credential TTL intersection
+
+Status: **PASS** (uncommitted M1 bundle).
+
+AWS/GCP requested duration is the strict intersection of provider/grant maximum, token remaining lifetime, and revocation-snapshot freshness. When remaining authority is below the provider floor the broker denies before custody/cloud calls; it never rounds authority upward.
+
+Gate: every AWS remaining-token case from 1 through 899 seconds denies; revocation freshness below the floor denies; live Moto STS PASS and returned expiration is no later than token authority.
+
+### LSH-W6 — WSF live two-tenant gate
+
+Status: **PASS** (uncommitted M1 bundle).
+
+The live gate now drives issue → verify → attenuate → seal → unseal → exchange through real HTTP against OpenBao and Moto for two authenticated tenants and two same-tenant subjects. It proves subject/tenant isolation, clean tenant-B continuity while tenant A is revoked, snapshot sequence rollover, rollback refusal, and revocation-state rehydration after server restart.
+
+Gate: `cargo test -p wsf-api --test live_revocation -- --nocapture`, `cargo test -p wsf-seal --test live_seal -- --nocapture`, and `cargo test -p wsf-broker --test live_localstack -- --nocapture` PASS with no credential/plaintext logging in evidence output.
+
+### LSH-O1 — Tenant-safe GET and LIST
+
+Status: **PASS** (uncommitted M1 bundle).
+
+Authenticated GET/LIST now require principal context and apply tenant scope before lookup/pagination. Foreign-tenant GET is indistinguishable from absence; estate reads require the explicit `estate:read` role and use bounded continuation pagination (`limit` clamped to 1–1000).
+
+Gate: the cross-tenant GET/LIST/existence/pagination matrix in `aog-apiserver/tests/crud.rs` PASS.
+
+### LSH-O2 — Global object mutation rules
+
+Status: **PASS** (uncommitted M1 bundle).
+
+Update/delete of `tenant=None` objects now requires the exact global-object estate capability. Tenant principals cannot mutate another tenant's object, and tenant deletion of revocation/kill records is always refused.
+
+Gate: tenant-owned, other-tenant, global-object, and protected-revocation create/update/delete cases PASS in the AOG CRUD suite.
+
+### LSH-O3 — Revocation intent authorization
+
+Status: **PASS** (uncommitted M1 bundle).
+
+Tenant revocation requires `tenant:revocation` and an exact tenant target. Estate targets require `estate:revocation`; ring destruction additionally requires `estate:ring-key-destruction`. Empty-tenant authenticated principals no longer acquire tenant scope accidentally.
+
+Gate: the exact tenant/estate/ring authorization matrix PASS; normal tenant tokens cannot enqueue estate-wide or ring-key actions.
+
+### LSH-O4 — Audit-before-success mutation path
+
+Status: **PASS** (uncommitted M1 bundle).
+
+Every privileged mutation persists a Raft-replicated audit intent before desired-state commit, finalizes a durable outbox record after commit, and idempotently delivers the receipt into the separately signed ledger. Startup recovery replays finalized receipts. A crash in the post-commit/pre-finalization window now converts the retained intent into signed, explicitly `indeterminate` evidence, preserving the audit barrier without falsely claiming commit success.
+
+Gate: `cargo test -p aog-apiserver --test receipt -- --nocapture` PASS (3/3), including cold restart from the crash window, idempotent replay, off-host pack verification, and rejection-without-receipt.
+
+### LSH-O5 — Ring/key destruction confinement
+
+Status: **PASS** (uncommitted M1 bundle).
+
+Ring actions require both estate revocation and the dedicated ring-key-destruction authority; tenant-created intents are rejected before controller execution and cannot target shared estate Transit keys.
+
+Gate: the authorization matrix plus live OpenBao `live_ring` test PASS and observe only the authorized key target.
+
+### LSH-O6 — Policy-bundle publication trust boundary
+
+Status: **PASS** (uncommitted M1 bundle).
+
+Global PolicyBundle admission requires estate publication authority. The controller refuses tenant-scoped bundles as estate truth, retracts any previously derived publication, and records degraded status rather than re-signing arbitrary tenant desired state.
+
+Gate: tenant/global admission cases, bundle signature/anti-rollback unit coverage, and live OpenBao `live_bundle` PASS.
+
+### LSH-O7 — Derived controller state ownership and persistence
+
+Status: **PASS** (uncommitted M1 bundle).
+
+Mission-derived grants are keyed by tenant, immutable mission UID, mission name, and tool; namesake tenants cannot collide. Scope shrink updates allowed systems, removed tools are pruned, edge grant caches are tenant-partitioned, and client updates cannot lower controller-owned versions, counters, or typed status persisted in desired state.
+
+Gate: mission rename/namesake, tenant collision, scope reduction, tool removal, replay, and authoritative-status preservation tests PASS across `aog-controller`, `aog-node`, and AOG admission.
+
+### LSH-O8 — AOG API/controller integration gate
+
+Status: **PASS** (uncommitted M1 bundle).
+
+Combined black-box evidence exercises tenant-isolated API admission and Raft state, controller reconciliation, OpenBao-backed ring revocation and policy publication, durable audit recovery, replay, and restart behavior. `LSF-009`–`LSF-014` and the reachable M1 instances of `LSD-007/008` are closed.
+
+Gate: targeted `receipt`, `crud`, `mission`, `toolgrants`, `replay`, `live_ring`, `live_bundle`, and `live_revocation` tests PASS; `cargo test -p aog-apiserver -p aog-controller` PASS.
+
+### M1 — Trust and tenant boundary milestone gate
+
+Status: **PASS — awaiting mandatory commit approval**.
+
+Final verification on 2026-07-15:
+
+- `cargo fmt --check` — PASS.
+- `cargo check --workspace` — PASS.
+- `cargo clippy --workspace -- -D warnings -A clippy::pedantic` — PASS.
+- `cargo test --workspace` — PASS, including `aog-wire` mTLS when the existing `C:\Program Files\Git\usr\bin\openssl.exe` was added to this command's `PATH`; no machine configuration was changed.
+- `cargo audit` — PASS; 476 locked dependencies scanned against 1,160 RustSec advisories, no vulnerability reported.
+- `cargo deny check` — PASS (`advisories ok, bans ok, licenses ok, sources ok`); informational unmatched-license and duplicate-version warnings remain existing dependency-policy output.
+- Live disposable services — PASS with OpenBao on port 8200 and Moto on port 5566; no secret/plaintext evidence was logged.
+
+Gate notes: the first unmodified-`PATH` workspace test run failed only because `openssl` was not discoverable; the command-local Git OpenSSL path closed that environment prerequisite. Full gates then exposed and closed one `aogd` principal-accessor migration and eleven strict WSF needless-borrow lints before the final green run.

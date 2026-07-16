@@ -176,6 +176,9 @@ impl SchedulerController {
             budget: Some(budget),
             attenuation: Attenuation {
                 parent_id: None,
+                root_id: None,
+                depth: 0,
+                ancestor_ids: vec![],
                 caveats,
             },
             signature: Signature {

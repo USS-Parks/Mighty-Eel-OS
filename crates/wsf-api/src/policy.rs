@@ -9,7 +9,7 @@
 
 use std::collections::{BTreeSet, HashMap};
 
-use fabric_contracts::{Budget, Classification, IdentityKind};
+use fabric_contracts::{Budget, Classification, ComplianceScope, IdentityKind, Route};
 use serde::Serialize;
 
 /// How a token is being issued (plan A4). Determines which issuance permission
@@ -72,6 +72,13 @@ pub struct TenantIssuancePolicy {
     /// Model allowlist. Empty = unrestricted at this layer; non-empty = a
     /// requested model outside the list is refused.
     pub allowed_models: Vec<String>,
+    /// Server-selected route ceiling stamped on every issued token.
+    pub allowed_routes: Vec<Route>,
+    /// Server-selected compliance scopes stamped on every issued token.
+    pub compliance_scopes: Vec<ComplianceScope>,
+    /// Service identities permitted to mint service-bound tokens. Empty means
+    /// no service identity is permitted (human/session issuance is unaffected).
+    pub allowed_service_identities: BTreeSet<String>,
 }
 
 impl TenantIssuancePolicy {
@@ -85,6 +92,34 @@ impl TenantIssuancePolicy {
     #[must_use]
     pub fn allows_model(&self, model: &str) -> bool {
         self.allowed_models.is_empty() || self.allowed_models.iter().any(|m| m == model)
+    }
+
+    /// Resolve caller intent to an effective signed allowlist. With a
+    /// restrictive tenant policy, omission/empty means the policy allowlist;
+    /// an explicit subset stays a subset; any over-broad value fails closed.
+    #[must_use]
+    pub fn models_for_request(&self, requested: &[String]) -> Option<Vec<String>> {
+        if requested.iter().any(|model| !self.allows_model(model)) {
+            return None;
+        }
+        let source = if requested.is_empty() && !self.allowed_models.is_empty() {
+            &self.allowed_models
+        } else {
+            requested
+        };
+        let mut effective = source.to_vec();
+        effective.sort();
+        effective.dedup();
+        Some(effective)
+    }
+
+    /// Whether the authenticated service identity is allowed by this tenant.
+    #[must_use]
+    pub fn allows_service_identity(&self, service_identity: Option<&str>) -> bool {
+        match service_identity {
+            None => true,
+            Some(id) => self.allowed_service_identities.contains(id),
+        }
     }
 
     /// Classify the issuance (plan A4) from the principal kind and requested
@@ -167,6 +202,9 @@ impl StaticTenantPolicies {
                 ..Budget::default()
             },
             allowed_models: Vec::new(),
+            allowed_routes: Vec::new(),
+            compliance_scopes: Vec::new(),
+            allowed_service_identities: BTreeSet::new(),
         })
     }
 }
@@ -197,6 +235,40 @@ mod tests {
         assert!(!p.may_grant_role("admin"));
         // empty allowlist ⇒ unrestricted
         assert!(p.allows_model("anything"));
+    }
+
+    #[test]
+    fn restrictive_model_policy_matrix_is_deterministic_and_fail_closed() {
+        let mut p = StaticTenantPolicies::single_dev("t", &["user"])
+            .policy_for("t")
+            .unwrap();
+        p.allowed_models = vec!["model-b".into(), "model-a".into()];
+
+        assert_eq!(
+            p.models_for_request(&[]),
+            Some(vec!["model-a".into(), "model-b".into()])
+        );
+        assert_eq!(
+            p.models_for_request(&["model-a".into()]),
+            Some(vec!["model-a".into()])
+        );
+        assert_eq!(p.models_for_request(&["model-z".into()]), None);
+        assert_eq!(
+            p.models_for_request(&["model-a".into(), "model-z".into()]),
+            None
+        );
+    }
+
+    #[test]
+    fn service_identity_is_explicitly_tenant_authorized() {
+        let mut p = StaticTenantPolicies::single_dev("t", &["user"])
+            .policy_for("t")
+            .unwrap();
+        assert!(p.allows_service_identity(None));
+        assert!(!p.allows_service_identity(Some("svc-a")));
+        p.allowed_service_identities.insert("svc-a".into());
+        assert!(p.allows_service_identity(Some("svc-a")));
+        assert!(!p.allows_service_identity(Some("svc-b")));
     }
 
     #[test]
