@@ -951,3 +951,80 @@ the canonical footer. Both outgoing commits passed exact-footer verification;
 the pre-push full-tree no-slop and 79-route policy gates passed; and
 `origin/main` advanced from `6a19392` through `e6bc6c2` on 2026-07-16. This
 final ledger update records the confirmed G8 remote checkpoint.
+
+### LSH-G9 — Gateway live compatibility matrix
+
+Status: **PASS** (implementation commit pending).
+
+The existing OpenAI and Anthropic surface tests used raw `reqwest` requests that
+matched SDK wire shapes but explicitly deferred real SDK execution. They also
+split valid protocol checks, policy, budget, revocation, tenant isolation,
+redirects, response faults, and false usage across independent fixtures. That
+left no single live proof that vendor-maintained clients remained compatible
+after the G1–G8 security boundaries were composed.
+
+`official_client_compat.rs` now provisions a production `Gateway` against live
+OpenBao with a signed, current revocation snapshot; seeds separate tenant A,
+tenant B, budget, and revocation virtual keys; launches both governed provider
+adapters behind one adversarial upstream; and invokes
+`official_client_probe.py` as a child process. The probe uses pinned official
+OpenAI Python `2.45.0` and Anthropic Python `0.116.0` clients with only base URL
+and virtual-key changes.
+
+The live matrix proves all five execution surfaces: OpenAI chat non-stream,
+OpenAI chat stream, legacy OpenAI completion, Anthropic message non-stream, and
+Anthropic message stream. It also proves two-tenant receipt isolation, enforced
+PHI route denial, a first authorized call followed by atomic budget 402, a valid
+call followed by bridge-signed live revocation 403, redirect refusal with zero
+credential-sink hits, malformed and oversized JSON errors, truthful truncated
+OpenAI/Anthropic streams, and false provider usage reconciled from reported
+output `1` to the locally observed authoritative `8` in a chain-verifying
+receipt. Compatibility responses continue to expose provider evidence in the
+official SDK's native types.
+
+The CI live-trust job now installs those exact SDK versions and runs this matrix
+against its disposable OpenBao service. The local full live suite also exposed
+one stale pre-G3 metering fixture that expected a 1,400-token cap to admit the
+default 4,096-token reservation. The fixture now reserves exactly 1,500 tokens
+and settles the provider's 1,500-token usage, preserving its intended first-call
+success and next-call 402 assertion under the atomic reservation contract.
+
+Changed files:
+
+- `.github/workflows/ci.yml`;
+- `crates/aog-gateway/tests/official_client_compat.rs`;
+- `crates/aog-gateway/tests/official_client_probe.py`;
+- `crates/aog-gateway/tests/metering.rs`; and
+- this DEVLOG.
+
+No product runtime, Cargo dependency/lockfile, public route, or deployment
+manifest change was needed. Official SDK packages are test-only and pinned in
+the live CI lane.
+
+Gates:
+
+- `cargo test -p aog-gateway --test official_client_compat -- --nocapture` with
+  live OpenBao — PASS, 1/1. Both official SDK phases report PASS and the complete
+  adversarial matrix closes;
+- `cargo test -p aog-gateway --test metering
+  streamed_call_accrues_spend_and_cap_refuses_next_call -- --nocapture` with live
+  OpenBao — PASS, 1/1 after correcting the stale reservation fixture;
+- `cargo test -p aog-gateway` with live OpenBao and the pinned official SDKs —
+  PASS: 78 library tests, all 16 integration tests, and doc tests. The previous
+  OpenAI/Anthropic wire, policy, budget, revocation, tenant, metering,
+  tokenization, response-bound, and provider-origin gates remain green;
+- `cargo clippy -p aog-gateway --all-targets -- -D warnings -A
+  clippy::pedantic` — PASS;
+- Ruff `0.15.21` over `official_client_probe.py` — PASS;
+- `cargo fmt --check` — PASS; and
+- `git diff --check` — PASS.
+
+Closure statement: the gateway/provider half of M3 is complete. The live matrix
+confirms the composed closures for `LSF-015`–`LSF-025` and reachable
+`LSD-005/006` without breaking valid official-client behavior. LSH-T1 is the
+next sequential prompt; the broader M3 milestone remains open through LSH-T6.
+
+Commit state: implementation and prompt evidence are ready for the authorized
+signed commit and push. The exact implementation SHA, footer verification,
+pre-push integrity gates, and remote checkpoint will be recorded after Git
+confirms them.

@@ -340,14 +340,14 @@ async fn streamed_call_accrues_spend_and_cap_refuses_next_call() {
     let anchor = RustCryptoMlDsa87::generate("aog-r8-anchor").unwrap();
     let openbao = OpenBaoAuth::new(OpenBaoConfig::new(&addr, role_id, secret_id)).unwrap();
     let vault_token = openbao.login().await.expect("login");
-    // Cap below one streamed call's usage (1000 + 500): the first stream passes
-    // pre-flight (nothing spent yet), settles 1500 at stream end, and every call
-    // after that must be refused 402 on the folded spend.
+    // Reserve exactly one streamed call: the input estimate for "stream me" is
+    // 3 tokens and max_tokens is 1497 below, so atomic preflight reserves 1500.
+    // Provider settlement is also 1000 + 500 = 1500; every later call is 402.
     openbao
         .put_kv_data(
             &vault_token,
             &key_path("vk_r8s"),
-            json!({ "token": in_budget_token(&anchor, "tok_r8s", 1_400) }),
+            json!({ "token": in_budget_token(&anchor, "tok_r8s", 1_500) }),
         )
         .await
         .expect("seed key");
@@ -383,6 +383,7 @@ async fn streamed_call_accrues_spend_and_cap_refuses_next_call() {
         .json(&json!({
             "model": "gpt-4o-mini",
             "stream": true,
+            "max_tokens": 1497,
             "messages": [{"role": "user", "content": "stream me"}]
         }))
         .send()

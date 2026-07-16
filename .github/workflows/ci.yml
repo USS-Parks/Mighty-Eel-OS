@@ -163,6 +163,8 @@ jobs:
             sleep 1
           done
           echo "Moto did not become ready"; docker logs moto; exit 1
+      - name: Install pinned official gateway compatibility clients
+        run: python3 -m pip install --disable-pip-version-check openai==2.45.0 anthropic==0.116.0
       - name: WSF/AOG live-trust tests (OpenBao bridge + Moto STS broker)
         env:
           WSF_OPENBAO_ADDR: http://127.0.0.1:8200
@@ -185,6 +187,7 @@ jobs:
           cargo test -p aog-gateway --test anthropic_surface -- --nocapture
           cargo test -p aog-gateway --test policy_modes -- --nocapture
           cargo test -p aog-gateway --test metering -- --nocapture
+          cargo test -p aog-gateway --test official_client_compat -- --nocapture
 
   loom-live:
     name: Loom Phase-V Live Gates (containerized 5+5 estate)
