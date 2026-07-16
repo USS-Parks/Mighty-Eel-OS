@@ -299,7 +299,7 @@ Gate notes: the first unmodified-`PATH` workspace test run failed only because `
 
 ## M2 — Authenticated AOG control plane (partial checkpoint)
 
-Checkpoint status: **PASS for LSH-C1 through LSH-C3; M2 remains IN PROGRESS**. LSH-C4 and LSH-C5 were not started in this checkpoint and remain required before M2 acceptance.
+Checkpoint status: **PASS and PUSHED for LSH-C1 through LSH-C3; M2 remains IN PROGRESS**. LSH-C4 and LSH-C5 were not started in this checkpoint and remain required before M2 acceptance.
 
 ### LSH-C1 — Node identity and TLS provisioning contract
 
@@ -339,4 +339,4 @@ Final focused verification on 2026-07-15:
 
 During final verification, one production-posture test fixture still enabled the newly forbidden insecure-admin flag. Correcting that boolean fixture restored the intended production-with-mTLS case; the complete focused gate set was rerun and passed afterward.
 
-Commit state: implementation and evidence committed in `9b31ad9`; this DEVLOG SHA closeout is the only remaining worktree change before the user-authorized push.
+Commit state: implementation and evidence committed in `9b31ad9`; DEVLOG SHA closeout committed in `6eb5293`; `origin/main` advanced from `5ea75a9` through `6eb5293` on 2026-07-15. This final ledger update records the confirmed remote checkpoint.
