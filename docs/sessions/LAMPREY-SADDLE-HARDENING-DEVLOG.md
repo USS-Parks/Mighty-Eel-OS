@@ -1036,7 +1036,8 @@ final ledger update records the confirmed G9 remote checkpoint.
 
 ### LSH-T1 — Server-derived provenance
 
-Status: **PASS** (implementation commit pending).
+Status: **PASS** (implementation commit
+`5f92865ec807846934f89c14defaa5daadb5fbbe`).
 
 `InvokeContext.untrusted` let an integrating caller assert that model context
 was trusted. With no approval inbox, `false` admitted a side-effecting tool call
@@ -1103,6 +1104,8 @@ and injected tool-result instructions cannot reach mutation without approval.
 LSH-T2 is the next sequential prompt. The broader M3 milestone remains open
 through LSH-T6.
 
-Commit state: implementation and prompt evidence are ready for the authorized
-commit/push sequence; exact SHAs and the remote checkpoint will be recorded in
-the closeout commit.
+Commit state: implementation and prompt evidence were committed as
+`5f92865ec807846934f89c14defaa5daadb5fbbe`. The commit is SSH-signed and
+carries the canonical `Authored and reviewed by Basho Parks, copyright 2026`
+footer. The exact-SHA DEVLOG closeout and remote checkpoint remain in the
+authorized closeout sequence.
