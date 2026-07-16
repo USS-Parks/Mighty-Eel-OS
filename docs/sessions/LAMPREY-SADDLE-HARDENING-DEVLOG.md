@@ -689,5 +689,8 @@ gate then identified the instrumented test server's two literal mock paths as
 unregistered production routes; the bounded fixture-only repair was committed
 as `aadcf36b2afccbfe3195bd583aa7333797b2e7eb`. The focused adversarial test,
 strict clippy, file integrity, full no-slop scan, and 79-route policy inventory
-all pass after that repair. Push and remote-checkpoint confirmation remain
-pending.
+all pass after that repair. Its ledger record is
+`f45e8a291d4a6f407d224fa81dc3d5019b907db0`. The complete four-commit G5
+range passed signature/footer verification and the full pre-push no-slop and
+79-route policy gates; `origin/main` advanced from `f01aa49` through `f45e8a2`
+on 2026-07-16. This final ledger update records the confirmed remote checkpoint.
