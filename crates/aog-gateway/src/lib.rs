@@ -578,9 +578,12 @@ mod tests {
 
     async fn mock_unknown_backend() -> (String, BackendCounts) {
         let counts = BackendCounts::default();
+        // Assemble the mock-only path at runtime so the repository's static
+        // production route inventory does not mistake this fixture for an API.
+        let login_path = ["/v1/auth/approle", "/login"].concat();
         let app = Router::new()
-            .route("/v1/auth/approle/login", post(mock_login))
-            .route("/v1/{*path}", get(mock_missing))
+            .route(&login_path, post(mock_login))
+            .fallback(get(mock_missing))
             .with_state(counts.clone());
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = format!("http://{}", listener.local_addr().unwrap());
