@@ -56,13 +56,16 @@ pub(crate) fn bearer_key(headers: &HeaderMap) -> Result<&str, (StatusCode, Strin
             StatusCode::UNAUTHORIZED,
             "missing authorization header".to_string(),
         ))?;
-    raw.strip_prefix("Bearer ")
+    let key = raw
+        .strip_prefix("Bearer ")
         .map(str::trim)
         .filter(|k| !k.is_empty())
         .ok_or((
             StatusCode::UNAUTHORIZED,
             "authorization must be `Bearer <virtual-key>`".to_string(),
-        ))
+        ))?;
+    crate::validate_virtual_key(key).map_err(|error| to_http(&error))?;
+    Ok(key)
 }
 
 /// Map a [`GatewayError`] to an HTTP status + message.
@@ -77,6 +80,7 @@ pub(crate) fn to_http(err: &GatewayError) -> (StatusCode, String) {
         GatewayError::Revoked => (StatusCode::FORBIDDEN, msg),
         GatewayError::Malformed(_) => (StatusCode::INTERNAL_SERVER_ERROR, msg),
         GatewayError::OpenBao(_) => (StatusCode::BAD_GATEWAY, msg),
+        GatewayError::AdmissionLimited => (StatusCode::TOO_MANY_REQUESTS, msg),
     }
 }
 
@@ -121,6 +125,27 @@ mod tests {
         let mut h2 = HeaderMap::new();
         h2.insert(AUTHORIZATION, "Bearer   ".parse().unwrap());
         assert_eq!(bearer_key(&h2).unwrap_err().0, StatusCode::UNAUTHORIZED);
+        for malformed in [
+            "Bearer vk_bad key",
+            "Bearer vk_bad/key",
+            "Bearer vk_bad=key",
+        ] {
+            let mut headers = HeaderMap::new();
+            headers.insert(AUTHORIZATION, malformed.parse().unwrap());
+            assert_eq!(
+                bearer_key(&headers).unwrap_err().0,
+                StatusCode::UNAUTHORIZED
+            );
+        }
+        let mut oversized = HeaderMap::new();
+        oversized.insert(
+            AUTHORIZATION,
+            format!("Bearer {}", "a".repeat(129)).parse().unwrap(),
+        );
+        assert_eq!(
+            bearer_key(&oversized).unwrap_err().0,
+            StatusCode::UNAUTHORIZED
+        );
     }
 
     #[test]
@@ -138,6 +163,10 @@ mod tests {
             StatusCode::PAYMENT_REQUIRED
         );
         assert_eq!(to_http(&GatewayError::Revoked).0, StatusCode::FORBIDDEN);
+        assert_eq!(
+            to_http(&GatewayError::AdmissionLimited).0,
+            StatusCode::TOO_MANY_REQUESTS
+        );
         assert_eq!(
             to_http(&GatewayError::Malformed("bad".into())).0,
             StatusCode::INTERNAL_SERVER_ERROR

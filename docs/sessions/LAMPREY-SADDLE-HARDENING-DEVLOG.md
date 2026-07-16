@@ -620,3 +620,62 @@ footer. The exact-SHA DEVLOG closeout was committed as
 pre-push no-slop and 79-route policy gates, and `origin/main` advanced from
 `2590b50` through `eccc6a4` on 2026-07-16. This final ledger update records the
 confirmed remote checkpoint.
+
+### LSH-G5 — Preflight authentication amplification controls
+
+Status: **PASS** (implementation pending commit).
+
+Virtual-key admission is now bounded before unauthenticated input can fan out
+into OpenBao. Both Bearer and Anthropic `x-api-key` paths converge on the same
+resolver validation: keys remain opaque for compatibility, but must be 1–128
+bytes of ASCII URL-safe material. Whitespace, separators, control/non-ASCII
+material, empty values, and oversized values fail as 401 before hashing, AppRole
+login, or KV work.
+
+Syntactically valid candidates enter a shared admission controller with default
+production bounds of 32 concurrent resolutions and 128 newly admitted
+resolutions per one-second fixed window. Only SHA-256 key hashes enter admission
+memory. A duplicate hash already in flight receives a stable 429 instead of
+starting another login/read. Confirmed OpenBao 404 results are cached for one
+second in a 1,024-entry FIFO/expiry-bounded negative cache; transport, auth,
+protocol, token, and revocation results are never negative-cached. The public
+`GatewayAdmissionConfig` override permits tighter deployment/test bounds without
+changing the gateway request API.
+
+This placement preserves G4: successfully resolved tokens and every subsequent
+privileged/stream step still refresh current revocation state from OpenBao.
+Negative caching can delay recognition of a newly provisioned previously absent
+key by at most its one-second TTL, but it cannot make a revoked or stale token
+authorized.
+
+Changed files:
+
+- `crates/aog-gateway/src/lib.rs`;
+- `crates/aog-gateway/src/http.rs`; and
+- `docs/sessions/LAMPREY-SADDLE-HARDENING-DEVLOG.md`.
+
+Gates:
+
+- `cargo test -p aog-gateway
+  adversarial_bearers_bound_backend_calls_and_memory --lib` — PASS against an
+  instrumented local OpenBao wire mock;
+- 500 malformed candidates caused zero AppRole logins and zero KV reads;
+- 500 concurrent requests for one validly shaped unknown key collapsed to one
+  login/read, then remained a stable cached 401; concurrent followers received
+  bounded 429 responses;
+- 500 distinct validly shaped unknown keys under a test limit of 8 concurrent,
+  16 per 60-second window, and 8 negative entries produced no more than 16
+  login/read pairs, retained no more than 8 hashes, and left zero in-flight
+  entries;
+- `cargo test -p aog-gateway` — PASS: 73 library tests plus every gateway
+  integration and doc-test target;
+- `cargo clippy -p aog-gateway --all-targets -- -D warnings -A
+  clippy::pedantic` — PASS;
+- `cargo fmt --check` — PASS; and
+- `git diff --check` — PASS.
+
+Closure statement: `LSF-020` is closed at the shared public virtual-key
+resolution boundary. Unauthenticated input can no longer create unbounded
+OpenBao work or unbounded cache growth, and overload is an explicit 429 rather
+than backend queue accumulation. LSH-G6 is the next sequential prompt; no M3
+milestone claim is made.
