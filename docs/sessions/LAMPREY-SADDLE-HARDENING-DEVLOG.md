@@ -878,7 +878,7 @@ final ledger update records the confirmed G7 remote checkpoint.
 
 ### LSH-G8 — Authoritative metering
 
-Status: **PASS** (implementation commit pending).
+Status: **PASS** (implementation commit `be2e900`).
 
 Provider usage was previously trusted at the settlement boundary. Non-stream
 OpenAI, legacy-completion, and Anthropic responses passed provider-controlled
@@ -942,7 +942,8 @@ decision is auditable in the receipt chain. LSH-G9 owns the complete two-tenant
 adversarial live compatibility matrix and is the next sequential prompt. No
 broader M3 milestone claim is made.
 
-Commit state: implementation and prompt evidence are ready for the authorized
-signed commit and push. The exact implementation SHA, footer verification,
-pre-push integrity gates, and remote checkpoint will be recorded after Git
-confirms them.
+Commit state: implementation and prompt evidence were committed as
+`be2e900217b3b3aa77a2b8d6c1713a82a6ea612e`. The commit is SSH-signed and
+carries the canonical `Authored and reviewed by Basho Parks, copyright 2026`
+footer. The exact-SHA DEVLOG closeout, pre-push integrity gates, and remote
+checkpoint will be recorded after Git confirms them.
