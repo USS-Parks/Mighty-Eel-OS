@@ -11,7 +11,7 @@ use std::sync::Arc;
 
 use aog_gateway::app::{AppState, ModelMap, Target};
 use aog_gateway::policy::{Profile, resolve_mode};
-use aog_gateway::posture::{ProviderEndpoint, enforce_startup_posture};
+use aog_gateway::posture::{ProviderEndpoint, ProviderEndpointPolicy, enforce_startup_posture};
 use aog_gateway::provider::Registry;
 use aog_gateway::provider::anthropic::AnthropicProvider;
 use aog_gateway::provider::openai::OpenAiProvider;
@@ -24,6 +24,16 @@ fn env(key: &str) -> Result<String, String> {
 }
 fn env_or(key: &str, default: &str) -> String {
     std::env::var(key).unwrap_or_else(|_| default.to_string())
+}
+
+fn env_flag(key: &str) -> Result<bool, String> {
+    match std::env::var(key).ok().as_deref() {
+        None | Some("") | Some("0" | "false" | "FALSE") => Ok(false),
+        Some("1" | "true" | "TRUE") => Ok(true),
+        Some(value) => Err(format!(
+            "{key} must be one of 0, 1, false, or true; got '{value}'"
+        )),
+    }
 }
 
 fn main() {
@@ -93,7 +103,38 @@ async fn run() -> Result<(), String> {
             local: false,
         });
     }
-    enforce_startup_posture(profile, &revocation_path, &provider_endpoints)?;
+    let provider_policy = ProviderEndpointPolicy::new(
+        &env_or("AOG_LOCAL_ALLOWED_ORIGINS", "http://127.0.0.1:8000"),
+        &env_or("AOG_PRIVATE_PROVIDER_ALLOWED_ORIGINS", ""),
+        env_flag("AOG_ALLOW_INSECURE_PROVIDER_FIXTURES")?,
+    )?;
+    let mut approved_endpoints = enforce_startup_posture(
+        profile,
+        &revocation_path,
+        &provider_endpoints,
+        &provider_policy,
+    )
+    .await?
+    .into_iter();
+    let local_endpoint = approved_endpoints
+        .next()
+        .ok_or_else(|| "local provider endpoint was not approved".to_string())?;
+    let openai_endpoint = openai_key
+        .as_ref()
+        .map(|_| {
+            approved_endpoints
+                .next()
+                .ok_or_else(|| "OpenAI provider endpoint was not approved".to_string())
+        })
+        .transpose()?;
+    let anthropic_endpoint = anthropic_key
+        .as_ref()
+        .map(|_| {
+            approved_endpoints
+                .next()
+                .ok_or_else(|| "Anthropic provider endpoint was not approved".to_string())
+        })
+        .transpose()?;
 
     let addr = env("AOG_OPENBAO_ADDR")?;
     let role_id = env("AOG_OPENBAO_ROLE_ID")?;
@@ -120,19 +161,26 @@ async fn run() -> Result<(), String> {
 
     // Providers: always a local OpenAI-compatible backend; cloud providers when keyed.
     let mut registry = Registry::new();
-    registry.register(Arc::new(OpenAiProvider::local(local_base)));
+    registry.register(Arc::new(OpenAiProvider::local(local_endpoint)));
     let mut models = ModelMap::new()
         .route("demo", Target::new("local", "demo"))
         .default_target(Target::new("local", "demo"));
 
     if let Some(key) = openai_key {
-        registry.register(Arc::new(OpenAiProvider::new("openai", openai_base, key)));
+        registry.register(Arc::new(OpenAiProvider::new(
+            "openai",
+            openai_endpoint.expect("approved with configured OpenAI key"),
+            key,
+        )));
         models = models
             .route("gpt-4o-mini", Target::new("openai", "gpt-4o-mini"))
             .route("gpt-4o", Target::new("openai", "gpt-4o"));
     }
     if let Some(key) = anthropic_key {
-        registry.register(Arc::new(AnthropicProvider::new(anthropic_base, key)));
+        registry.register(Arc::new(AnthropicProvider::new(
+            anthropic_endpoint.expect("approved with configured Anthropic key"),
+            key,
+        )));
         models = models.route(
             "claude-3-5-sonnet",
             Target::new("anthropic", "claude-3-5-sonnet"),

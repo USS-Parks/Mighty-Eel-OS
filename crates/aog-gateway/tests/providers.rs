@@ -8,11 +8,14 @@
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use aog_gateway::provider::anthropic::AnthropicProvider;
 use aog_gateway::provider::openai::OpenAiProvider;
-use aog_gateway::provider::{ChatMessage, CompletionRequest, Registry};
-use axum::http::header::CONTENT_TYPE;
+use aog_gateway::provider::{ChatMessage, CompletionRequest, Provider, ProviderError, Registry};
+use axum::extract::State;
+use axum::http::StatusCode;
+use axum::http::header::{CONTENT_TYPE, LOCATION};
 use axum::response::{IntoResponse, Response};
 use axum::routing::post;
 use axum::{Json, Router};
@@ -80,6 +83,15 @@ async fn spawn(app: Router) -> String {
     base
 }
 
+async fn redirect_to(State(location): State<String>) -> Response {
+    (StatusCode::TEMPORARY_REDIRECT, [(LOCATION, location)]).into_response()
+}
+
+async fn credential_sink(State(hits): State<Arc<AtomicUsize>>) -> Response {
+    hits.fetch_add(1, Ordering::SeqCst);
+    StatusCode::NO_CONTENT.into_response()
+}
+
 #[tokio::test]
 async fn same_request_two_providers_one_interface_with_streaming() {
     let openai_base = spawn(Router::new().route("/v1/chat/completions", post(openai_mock))).await;
@@ -89,10 +101,13 @@ async fn same_request_two_providers_one_interface_with_streaming() {
     let mut reg = Registry::new();
     reg.register(Arc::new(OpenAiProvider::new(
         "openai",
-        openai_base,
+        aog_gateway::posture::ApprovedProviderEndpoint::loopback_fixture(&openai_base).unwrap(),
         "test-key",
     )));
-    reg.register(Arc::new(AnthropicProvider::new(anthropic_base, "test-key")));
+    reg.register(Arc::new(AnthropicProvider::new(
+        aog_gateway::posture::ApprovedProviderEndpoint::loopback_fixture(&anthropic_base).unwrap(),
+        "test-key",
+    )));
     assert_eq!(
         reg.names(),
         vec!["anthropic".to_string(), "openai".to_string()]
@@ -142,5 +157,48 @@ async fn same_request_two_providers_one_interface_with_streaming() {
 
     eprintln!(
         "G2 gate PASSED: one Provider interface, two backends (openai + anthropic), one-shot + streaming"
+    );
+}
+
+#[tokio::test]
+async fn cross_origin_redirects_never_receive_provider_credentials() {
+    let sink_hits = Arc::new(AtomicUsize::new(0));
+    let sink_base = spawn(
+        Router::new()
+            .route("/stolen", post(credential_sink))
+            .with_state(sink_hits.clone()),
+    )
+    .await;
+    let redirect_base = spawn(
+        Router::new()
+            .route("/v1/chat/completions", post(redirect_to))
+            .route("/v1/messages", post(redirect_to))
+            .with_state(format!("{sink_base}/stolen")),
+    )
+    .await;
+    let endpoint =
+        aog_gateway::posture::ApprovedProviderEndpoint::loopback_fixture(&redirect_base).unwrap();
+    let request = CompletionRequest {
+        model: "fixture".to_string(),
+        messages: vec![ChatMessage::user("credential leak probe")],
+        max_tokens: Some(1),
+        temperature: None,
+    };
+
+    let openai = OpenAiProvider::new("openai", endpoint.clone(), "openai-secret");
+    let anthropic = AnthropicProvider::new(endpoint, "anthropic-secret");
+    for result in [
+        openai.complete(&request).await,
+        anthropic.complete(&request).await,
+    ] {
+        assert!(
+            matches!(result, Err(ProviderError::Upstream { status: 307, .. })),
+            "redirect must be surfaced rather than followed: {result:?}"
+        );
+    }
+    assert_eq!(
+        sink_hits.load(Ordering::SeqCst),
+        0,
+        "redirect target received a request that could carry provider credentials"
     );
 }

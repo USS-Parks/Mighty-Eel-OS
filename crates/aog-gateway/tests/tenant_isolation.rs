@@ -257,7 +257,7 @@ async fn usage_and_roi_are_scoped_to_the_calling_tenant() {
     let mut registry = Registry::new();
     registry.register(Arc::new(OpenAiProvider::new(
         "openai",
-        upstream_base,
+        aog_gateway::posture::ApprovedProviderEndpoint::loopback_fixture(&upstream_base).unwrap(),
         "unused",
     )));
     let gateway = Arc::new(Gateway::new(

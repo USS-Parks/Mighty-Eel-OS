@@ -244,7 +244,10 @@ async fn anthropic_client_completes_message_and_stream() {
 
     let upstream_base = spawn(Router::new().route("/v1/messages", post(upstream))).await;
     let mut registry = Registry::new();
-    registry.register(Arc::new(AnthropicProvider::new(upstream_base, "unused")));
+    registry.register(Arc::new(AnthropicProvider::new(
+        aog_gateway::posture::ApprovedProviderEndpoint::loopback_fixture(&upstream_base).unwrap(),
+        "unused",
+    )));
     let gateway = Arc::new(Gateway::new(
         openbao,
         GatewayConfig {

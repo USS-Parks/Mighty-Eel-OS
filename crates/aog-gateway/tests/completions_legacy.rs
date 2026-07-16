@@ -257,7 +257,7 @@ async fn legacy_completions_runs_the_full_governed_pipeline() {
     let mut registry = Registry::new();
     registry.register(Arc::new(OpenAiProvider::new(
         "openai",
-        upstream_base,
+        aog_gateway::posture::ApprovedProviderEndpoint::loopback_fixture(&upstream_base).unwrap(),
         "unused",
     )));
     let gateway = Arc::new(Gateway::new(

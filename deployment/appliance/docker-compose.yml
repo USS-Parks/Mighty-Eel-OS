@@ -112,6 +112,8 @@ services:
     environment:
       AOG_LISTEN: 0.0.0.0:8080
       AOG_LOCAL_BASE: http://mock-llm:8000
+      AOG_LOCAL_ALLOWED_ORIGINS: http://mock-llm:8000
+      AOG_ALLOW_INSECURE_PROVIDER_FIXTURES: "1"
       # Demo runs shadow (never blocks). Shadow is development-only: production
       # profiles reject it and default to enforce. This explicit opt-in is why
       # the demo must declare development.

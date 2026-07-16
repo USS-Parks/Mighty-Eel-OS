@@ -25,6 +25,8 @@ use futures::StreamExt;
 use futures::stream::BoxStream;
 use serde::{Deserialize, Serialize};
 
+use crate::posture::ApprovedProviderEndpoint;
+
 /// Connect timeout for provider HTTP clients: bounds TCP+TLS establishment so a
 /// dead or unroutable backend fails fast instead of hanging (audit D3).
 const PROVIDER_CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
@@ -41,13 +43,17 @@ const PROVIDER_READ_TIMEOUT: std::time::Duration = std::time::Duration::from_sec
 /// total `timeout` keeps long SSE completions intact. The config is static, so
 /// `build` only fails on a TLS-backend init fault (an unrecoverable deployment
 /// error) — the same invariant `reqwest::Client::new` asserts internally.
-pub(crate) fn build_http_client() -> reqwest::Client {
-    reqwest::Client::builder()
+pub(crate) fn build_http_client(endpoint: &ApprovedProviderEndpoint) -> reqwest::Client {
+    let mut builder = reqwest::Client::builder()
         .connect_timeout(PROVIDER_CONNECT_TIMEOUT)
         .read_timeout(PROVIDER_READ_TIMEOUT)
         // Never carry provider credentials across an upstream redirect. A
         // configured base URL is the only authorized credential destination.
-        .redirect(reqwest::redirect::Policy::none())
+        .redirect(reqwest::redirect::Policy::none());
+    if let Some(host) = endpoint.dns_host() {
+        builder = builder.resolve_to_addrs(host, endpoint.resolved_addrs());
+    }
+    builder
         .build()
         .expect("provider HTTP client config is valid")
 }

@@ -76,6 +76,17 @@ Set provider keys on `aog-gateway` (see `.env.example`) to register real
 OpenAI/Anthropic providers; requests stay shadow-governed. This is the basis of
 the D2 shadow-mode lead artifact.
 
+Provider destinations are approved before OpenBao access, credential attachment,
+or listener bind. Credentialed providers require HTTPS. DNS answers are checked
+and pinned for the life of the client, redirects are not followed, and metadata,
+link-local, multicast, unspecified, and unapproved private addresses are denied.
+`AOG_LOCAL_ALLOWED_ORIGINS` is an exact-origin allowlist for the security-significant
+`local` route; `AOG_PRIVATE_PROVIDER_ALLOWED_ORIGINS` separately approves a private
+HTTPS origin when a deployment deliberately uses one. The demo's non-loopback HTTP
+mock is allowed only because the Compose file declares both its exact local origin
+and `AOG_ALLOW_INSECURE_PROVIDER_FIXTURES=1` under the development profile. Never
+set that fixture override in production.
+
 ## Teardown
 
 ```bash

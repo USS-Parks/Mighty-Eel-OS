@@ -352,7 +352,7 @@ async fn tool_calls_and_metering_continue_across_the_cutover_receipts_unbroken()
     let mut registry = Registry::new();
     registry.register(Arc::new(OpenAiProvider::new(
         "openai",
-        upstream_base,
+        aog_gateway::posture::ApprovedProviderEndpoint::loopback_fixture(&upstream_base).unwrap(),
         "unused",
     )));
     let gateway = Arc::new(Gateway::new(

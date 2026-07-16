@@ -243,7 +243,7 @@ async fn openai_client_completes_chat_and_stream() {
     let mut registry = Registry::new();
     registry.register(Arc::new(OpenAiProvider::new(
         "openai",
-        upstream_base,
+        aog_gateway::posture::ApprovedProviderEndpoint::loopback_fixture(&upstream_base).unwrap(),
         "unused",
     )));
     let gateway = Arc::new(Gateway::new(

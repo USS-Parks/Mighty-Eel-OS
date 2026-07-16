@@ -241,7 +241,7 @@ async fn cost_per_task_aggregates_and_chain_verifies() {
     let mut registry = Registry::new();
     registry.register(Arc::new(OpenAiProvider::new(
         "openai",
-        upstream_base,
+        aog_gateway::posture::ApprovedProviderEndpoint::loopback_fixture(&upstream_base).unwrap(),
         "unused",
     )));
     let gateway = Arc::new(Gateway::new(
@@ -356,7 +356,7 @@ async fn streamed_call_accrues_spend_and_cap_refuses_next_call() {
     let mut registry = Registry::new();
     registry.register(Arc::new(OpenAiProvider::new(
         "openai",
-        upstream_base,
+        aog_gateway::posture::ApprovedProviderEndpoint::loopback_fixture(&upstream_base).unwrap(),
         "unused",
     )));
     let gateway = Arc::new(Gateway::new(

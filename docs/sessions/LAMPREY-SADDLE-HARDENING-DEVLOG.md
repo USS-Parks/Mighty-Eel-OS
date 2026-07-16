@@ -694,3 +694,90 @@ all pass after that repair. Its ledger record is
 range passed signature/footer verification and the full pre-push no-slop and
 79-route policy gates; `origin/main` advanced from `f01aa49` through `f45e8a2`
 on 2026-07-16. This final ledger update records the confirmed remote checkpoint.
+
+### LSH-G6 — Provider endpoint and credential policy
+
+Status: **PASS** (implementation pending commit).
+
+The production seam previously parsed provider URLs and rejected credentialed
+HTTP plus non-loopback plaintext local backends, while provider adapters still
+accepted and retained raw base URLs. A configured `AOG_LOCAL_BASE` was trusted
+as sovereign solely because the registry named it `local`; DNS answers were not
+inspected or pinned, private/metadata destinations were not comprehensively
+blocked, and the adapter constructor itself did not require evidence that the
+destination had passed startup policy. Redirect following was already disabled
+in the shared client and was retained rather than reimplemented.
+
+`ApprovedProviderEndpoint` is now the capability required by both provider
+adapters. Startup canonicalizes each exact origin, rejects embedded credentials
+and query/fragment components, resolves every hostname before any OpenBao work
+or listener bind, validates every returned address, and carries the accepted
+socket set into reqwest's per-host resolver override. This pins the approved DNS
+answer set for the client lifetime, so a later rebind cannot redirect the
+credentialed request. Unspecified, multicast, broadcast, link-local/metadata,
+private, shared-address, loopback, unique-local IPv6, and IPv4-mapped forms fail
+closed unless the exact origin has the applicable explicit authority; metadata
+and link-local destinations are never provider destinations.
+
+The configuration contract is explicit:
+
+- credentialed providers require HTTPS; only an explicitly enabled development
+  fixture may use a credentialed loopback endpoint;
+- `AOG_LOCAL_ALLOWED_ORIGINS` binds the security-significant `local` provider
+  name to exact canonical origins (the production default is the loopback local
+  model at `http://127.0.0.1:8000`);
+- `AOG_PRIVATE_PROVIDER_ALLOWED_ORIGINS` separately authorizes an intentional
+  private HTTPS origin without suffix or wildcard matching; and
+- a non-loopback HTTP development fixture requires both its exact local origin
+  and `AOG_ALLOW_INSECURE_PROVIDER_FIXTURES=1`. The appliance demo declares that
+  narrow override for `mock-llm`; production cannot activate it.
+
+The only raw-URL adapter path left is the public `loopback_fixture` constructor
+used by integration tests. It accepts only an IP-literal loopback URL, so tests
+cannot silently create an arbitrary/private/public credential sink. The existing
+OpenAI, Anthropic, gateway-surface, metering, tenant, and managed-controller
+fixtures were migrated to that constructor. No dependency or lockfile changed.
+
+Changed files:
+
+- `crates/aog-gateway/src/{main.rs,posture.rs,provider.rs}`;
+- `crates/aog-gateway/src/provider/{openai.rs,anthropic.rs}`;
+- gateway provider/surface/metering/policy/tenant integration fixtures;
+- `crates/aog-controller/tests/{managed_gateway.rs,managed_toolproxy.rs}`; and
+- `deployment/appliance/{docker-compose.yml,.env.example,README.md}`.
+
+Gates:
+
+- `cargo test -p aog-gateway posture::tests --lib` — PASS, 5/5. HTTP,
+  metadata IP, arbitrary local origin, and mixed public/private DNS answers are
+  denied before provider construction; approved public/private answers retain
+  their exact pinned socket sets; and the development HTTP override is both
+  allowlisted and profile-bound;
+- `cargo test -p aog-gateway --test providers` — PASS, 2/2. OpenAI Bearer and
+  Anthropic `x-api-key` requests each receive a cross-origin 307; both surface
+  the redirect as an upstream error and the credential sink records zero hits;
+- `cargo test -p aog-gateway` — PASS: 73 library tests plus every gateway
+  integration and doc-test target;
+- `cargo test -p aog-controller --test managed_gateway --test
+  managed_toolproxy` — PASS, 2/2;
+- `cargo clippy -p aog-gateway --all-targets -- -D warnings -A
+  clippy::pedantic` — PASS;
+- `python deployment/appliance/validate_profile.py --profile demo
+  deployment/appliance/docker-compose.yml` — PASS after providing the CI-listed
+  PyYAML prerequisite in ignored `target/`; validator regression suite PASS,
+  16/16 (one environment-only warning because the transient lane did not include
+  the repository's optional pytest-asyncio plugin);
+- `cargo fmt --check` — PASS; and
+- `git diff --check` — PASS.
+
+Closure statement: `LSF-021`, `LSF-022`, and `LSF-023` are closed at the
+provider-construction and connection boundary. Provider credentials and governed
+prompts cannot be dispatched over unapproved plaintext, to an arbitrary semantic
+`local` destination, through a mixed/private DNS answer, to metadata/link-local
+space, or across a redirect. DNS changes intentionally require a gateway restart
+and revalidation. G7 remains responsible for response/body/SSE bounds and truthful
+termination; G8 for authoritative usage; G9 for the complete adversarial live
+compatibility matrix. No broader M3 milestone claim is made.
+
+Commit state: implementation and prompt evidence are pending the authorized
+commit, exact-SHA closeout, footer verification, and push sequence.

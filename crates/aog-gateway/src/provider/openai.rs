@@ -11,6 +11,8 @@
 use async_trait::async_trait;
 use serde_json::{Value, json};
 
+use crate::posture::ApprovedProviderEndpoint;
+
 use super::{
     ChunkStream, CompletionRequest, CompletionResponse, Provider, ProviderError, StreamChunk,
     Usage, sse_stream,
@@ -19,37 +21,31 @@ use super::{
 /// An OpenAI-compatible chat provider.
 pub struct OpenAiProvider {
     name: String,
-    base_url: String,
+    endpoint: ApprovedProviderEndpoint,
     api_key: String,
     client: reqwest::Client,
 }
 
 impl OpenAiProvider {
-    /// Cloud OpenAI (`https://api.openai.com`), named `"openai"`.
-    #[must_use]
-    pub fn openai(api_key: impl Into<String>) -> Self {
-        Self::new("openai", "https://api.openai.com", api_key)
-    }
-
     /// A local OpenAI-compatible backend (vLLM/Ollama), named `"local"`.
     #[must_use]
-    pub fn local(base_url: impl Into<String>) -> Self {
-        Self::new("local", base_url, String::new())
+    pub fn local(endpoint: ApprovedProviderEndpoint) -> Self {
+        Self::new("local", endpoint, String::new())
     }
 
-    /// A named provider at an explicit base URL (e.g. an Azure OpenAI endpoint,
-    /// or a mock in tests).
+    /// A named provider at a policy-approved, DNS-pinned endpoint.
     #[must_use]
     pub fn new(
         name: impl Into<String>,
-        base_url: impl Into<String>,
+        endpoint: ApprovedProviderEndpoint,
         api_key: impl Into<String>,
     ) -> Self {
+        let client = super::build_http_client(&endpoint);
         Self {
             name: name.into(),
-            base_url: base_url.into().trim_end_matches('/').to_string(),
+            endpoint,
             api_key: api_key.into(),
-            client: super::build_http_client(),
+            client,
         }
     }
 
@@ -73,8 +69,8 @@ impl OpenAiProvider {
     }
 
     async fn post(&self, body: &Value) -> Result<reqwest::Response, ProviderError> {
-        let url = format!("{}/v1/chat/completions", self.base_url);
-        let mut rb = self.client.post(&url).json(body);
+        let url = self.endpoint.request_url("v1/chat/completions");
+        let mut rb = self.client.post(url).json(body);
         if !self.api_key.is_empty() {
             rb = rb.header("authorization", format!("Bearer {}", self.api_key));
         }
