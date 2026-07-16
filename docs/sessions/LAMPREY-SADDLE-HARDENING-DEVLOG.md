@@ -1270,7 +1270,7 @@ final ledger update records the confirmed T3 remote checkpoint.
 
 ### LSH-T4 — Cancellation-safe credentials
 
-Status: **PASS** (implementation committed; exact-SHA closeout pending).
+Status: **PASS** (remote checkpoint confirmed).
 
 The prior `CredentialMinter` returned a caller-defined duration and exposed only
 an asynchronous best-effort revoke operation. `ToolProxy::invoke` minted before
@@ -1331,4 +1331,9 @@ through LSH-T6.
 Commit state: implementation and prompt evidence were committed as
 `14b88d0c2ee34e06ca9cd4fb7d456ea5de2ff43c`. The commit is SSH-signed and
 carries the canonical `Authored and reviewed by Basho Parks, copyright 2026`
-footer. The exact-SHA DEVLOG closeout and remote checkpoint remain pending.
+footer. The exact-SHA DEVLOG closeout was committed as
+`16e0c7eb7a29cc881b9e03ce3376fa16b7f44e2a`; it is also SSH-signed and carries
+the canonical footer. Both outgoing commits passed exact-footer and signature
+verification; the pre-push full-tree no-slop and 79-route policy gates passed;
+and `origin/main` advanced from `f7ee236` through `16e0c7e` on 2026-07-16. This
+final ledger update records the confirmed T4 remote checkpoint.
