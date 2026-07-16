@@ -478,3 +478,69 @@ Closure statement: the original excluded-model, excluded-route, and explicit-rou
 Residual scope: atomic reservations (`LSH-G3`), mandatory current revocation (`LSH-G4`), preflight amplification, endpoint policy, response bounds, authoritative metering, and the adversarial live compatibility gate remain open. No M3 milestone claim is made.
 
 Commit state: G1/G2 implementation, explicit-authority fixtures, and prompt evidence were committed as `1e921befb3e6f47cee89a6ed8d3abd2af5fad6bf`; the exact-SHA DEVLOG closeout was committed as `32a4a557781fbb8159f4b379d5e0a8d64215ad59`. Both commits are SSH-signed and carry the canonical `Authored and reviewed by Basho Parks, copyright 2026` footer. The manually executed Git Bash pre-push gate passed the full-tree no-slop scan and the 79-route policy inventory. `origin/main` advanced from `ffc6262` through `32a4a55` on 2026-07-16. This final ledger update records the confirmed remote checkpoint.
+
+### LSH-G3 — Atomic gateway spend
+
+Status: **PASS** (implementation commit pending in this change set).
+
+The former gateway budget path performed a non-reserving preflight and charged
+only after provider completion. Concurrent stream and non-stream calls could all
+observe remaining authority, execute, and then push the lineage beyond its token,
+USD, or call ceiling. Streaming cancellation was metered on drop, but it did not
+hold authority while the stream was in flight.
+
+All five OpenAI/Anthropic execution surfaces now share the LSH-A4
+`ReservationLedger` through `AppState`. After the immutable G1/G2 decision and
+before provider execution, the gateway atomically reserves a conservative input +
+maximum-output estimate, its priced USD ceiling, and one provider call against
+the tenant/root-lineage/gateway namespace. A denied reservation returns 402 before
+the provider is touched.
+
+Settlement behavior:
+
+- non-stream success atomically replaces the estimate with final usage and
+  releases unused authority;
+- provider failure or any pre-execution abort drops and releases the pending
+  reservation;
+- stream creation moves the reservation into `StreamMeter`, whose drop settles
+  exactly once on clean completion, provider error, or client cancellation;
+- the legacy runtime spend ledger remains updated for compatibility with existing
+  preflight/telemetry paths, and provider executions now count against the call
+  axis rather than recording zero calls; and
+- if final usage exceeds its reservation and cannot fit, reconciliation commits
+  the bounded pre-authorized amount and returns a fail-closed overrun instead of
+  releasing the side effect as free usage. G7/G8 still own response bounds and
+  locally authoritative usage; G3 does not treat provider usage as trusted beyond
+  the existing metering contract.
+
+Changed files:
+
+- `crates/fabric-token/src/spend.rs`;
+- `crates/aog-gateway/src/app.rs`;
+- `crates/aog-gateway/src/meter.rs`;
+- `crates/aog-gateway/src/surface_openai.rs`; and
+- `crates/aog-gateway/src/surface_anthropic.rs`.
+
+Gates:
+
+- `cargo test -p fabric-token` — PASS: 49 unit/integration tests plus doc tests;
+- `cargo test -p aog-gateway` — PASS: 70 library tests plus every gateway
+  integration and doc-test target;
+- the G3 100-way mixed stream/non-stream barrier admits exactly five calls and
+  commits exactly 10,000 tokens, 375 cents, and five calls without crossing any
+  axis;
+- provider-failure drop releases capacity, while simulated stream cancellation
+  commits one call exactly once; estimate-to-actual release and bounded-overrun
+  regressions pass in `fabric-token`;
+- `cargo clippy -p fabric-token -p aog-gateway --all-targets -- -D warnings -A
+  clippy::pedantic` — PASS;
+- `cargo fmt --check` — PASS; and
+- `git diff --check` — PASS.
+
+Closure statement: `LSF-017` is closed for the five gateway execution surfaces at
+the shared authorization-to-provider boundary. Atomic spend no longer depends on
+a post-execution check/charge race, and cancellation/failure cannot leave a live
+reservation or charge it twice. LSH-G4 (mandatory current revocation) is the next
+sequential prompt; no broader M3 milestone claim is made.
+
+Commit state: implementation and prompt evidence are pending in this change set.

@@ -23,6 +23,7 @@ use serde::Serialize;
 use sha2::{Digest, Sha256};
 
 use crate::ResolvedContext;
+use crate::app::DispatchReservation;
 use crate::provider::{StreamChunk, Usage};
 use crate::route::{GatewayRoute, route_header};
 
@@ -374,6 +375,9 @@ pub struct StreamMeter {
     /// Accumulated delta text length — the output-side fallback (~4 chars/token)
     /// for a provider that streams text but never a usage frame.
     pub delta_chars: usize,
+    /// Authority reserved before provider stream creation. Drop reconciles the
+    /// observed/fallback usage and releases the unused portion exactly once.
+    pub(crate) reservation: Option<DispatchReservation>,
 }
 
 impl StreamMeter {
@@ -406,6 +410,19 @@ impl Drop for StreamMeter {
                 u32::try_from(self.delta_chars / 4).unwrap_or(u32::MAX)
             },
         };
+        if let Some(reservation) = self.reservation.take() {
+            let _ = reservation.commit_usage(fabric_token::spend::Spent {
+                tokens: u64::from(usage.input_tokens)
+                    .saturating_add(u64::from(usage.output_tokens)),
+                usd_cents: self.prices.cost(
+                    &self.provider,
+                    &self.model,
+                    usage.input_tokens,
+                    usage.output_tokens,
+                ),
+                tool_calls: 1,
+            });
+        }
         record(
             &self.receipts,
             &self.prices,
@@ -431,7 +448,7 @@ impl Drop for StreamMeter {
                 usage.input_tokens,
                 usage.output_tokens,
             ),
-            0,
+            1,
         );
     }
 }
@@ -535,6 +552,7 @@ pub(crate) mod testkit {
             input_estimate: 25,
             reported: Usage::default(),
             delta_chars: 0,
+            reservation: None,
         }
     }
 

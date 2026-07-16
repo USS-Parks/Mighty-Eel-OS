@@ -66,6 +66,8 @@ impl ReservationKey {
 pub enum ReservationError {
     #[error("reservation would exceed an authority ceiling")]
     Exhausted,
+    #[error("final usage exceeded the reserved authority ceiling")]
+    ReconciliationExceeded,
     #[error("reservation is no longer pending")]
     NotPending,
 }
@@ -165,6 +167,21 @@ impl Reservation {
         self.settle(true)
     }
 
+    /// Replace the conservative pre-execution estimate with authoritative final
+    /// usage. Unused authority is released atomically. If final usage grew past
+    /// the estimate and cannot fit beside other committed/in-flight work, the
+    /// original reservation is committed as the bounded uncertainty charge and
+    /// the caller receives [`ReservationError::ReconciliationExceeded`].
+    pub fn commit_usage(mut self, cap: &Budget, usage: Spent) -> Result<(), ReservationError> {
+        let Some(inner) = self.inner.upgrade() else {
+            self.settled = true;
+            return Err(ReservationError::NotPending);
+        };
+        let result = reconcile(&inner, &self.key, self.id, cap, usage);
+        self.settled = true;
+        result
+    }
+
     pub fn release(mut self) -> Result<(), ReservationError> {
         self.settle(false)
     }
@@ -208,6 +225,37 @@ fn settle(
     if commit {
         state.committed = state.committed.saturating_add(usage);
     }
+    Ok(())
+}
+
+fn reconcile(
+    inner: &ReservationInner,
+    key: &ReservationKey,
+    id: u64,
+    cap: &Budget,
+    usage: Spent,
+) -> Result<(), ReservationError> {
+    let mut all = inner.state.lock().expect("reservation ledger lock");
+    let state = all.get_mut(key).ok_or(ReservationError::NotPending)?;
+    let reserved = state
+        .pending
+        .remove(&id)
+        .ok_or(ReservationError::NotPending)?;
+    state.reserved = state.reserved.saturating_sub(reserved);
+
+    let proposed = state
+        .committed
+        .saturating_add(state.reserved)
+        .saturating_add(usage);
+    if exceeds(cap, proposed) {
+        // The side effect has already happened, so releasing everything would
+        // make an overrun free. Commit the bounded amount authorized before
+        // dispatch and force the caller to fail closed on the reconciliation.
+        state.committed = state.committed.saturating_add(reserved);
+        return Err(ReservationError::ReconciliationExceeded);
+    }
+
+    state.committed = state.committed.saturating_add(usage);
     Ok(())
 }
 
@@ -738,5 +786,118 @@ mod tests {
             .commit()
             .unwrap();
         assert_eq!(ledger.committed(&key).usd_cents, 50);
+    }
+
+    #[test]
+    fn reconciliation_commits_actual_and_releases_unused_authority() {
+        let ledger = ReservationLedger::new();
+        let cap = Budget {
+            token_cap: 100,
+            tool_call_cap: 2,
+            ..Budget::default()
+        };
+        let key = ReservationKey {
+            tenant_id: "tenant-a".into(),
+            root_lineage: "root-a".into(),
+            mission_id: None,
+            system: Some("gateway".into()),
+        };
+        ledger
+            .reserve(
+                key.clone(),
+                &cap,
+                Spent {
+                    tokens: 80,
+                    tool_calls: 1,
+                    ..Spent::default()
+                },
+            )
+            .unwrap()
+            .commit_usage(
+                &cap,
+                Spent {
+                    tokens: 30,
+                    tool_calls: 1,
+                    ..Spent::default()
+                },
+            )
+            .unwrap();
+        assert_eq!(
+            ledger.committed(&key),
+            Spent {
+                tokens: 30,
+                tool_calls: 1,
+                ..Spent::default()
+            }
+        );
+        ledger
+            .reserve(
+                key.clone(),
+                &cap,
+                Spent {
+                    tokens: 70,
+                    tool_calls: 1,
+                    ..Spent::default()
+                },
+            )
+            .unwrap()
+            .commit()
+            .unwrap();
+        assert_eq!(ledger.committed(&key).tokens, 100);
+    }
+
+    #[test]
+    fn reconciliation_overrun_is_bounded_and_reported() {
+        let ledger = ReservationLedger::new();
+        let cap = Budget {
+            token_cap: 100,
+            ..Budget::default()
+        };
+        let key = ReservationKey {
+            tenant_id: "tenant-a".into(),
+            root_lineage: "root-a".into(),
+            mission_id: None,
+            system: Some("gateway".into()),
+        };
+        let reservation = ledger
+            .reserve(
+                key.clone(),
+                &cap,
+                Spent {
+                    tokens: 80,
+                    ..Spent::default()
+                },
+            )
+            .unwrap();
+        assert_eq!(
+            reservation
+                .commit_usage(
+                    &cap,
+                    Spent {
+                        tokens: 120,
+                        ..Spent::default()
+                    },
+                )
+                .unwrap_err(),
+            ReservationError::ReconciliationExceeded
+        );
+        assert_eq!(
+            ledger.committed(&key).tokens,
+            80,
+            "the overrun commits only the authority granted before dispatch"
+        );
+        assert_eq!(
+            ledger
+                .reserve(
+                    key,
+                    &cap,
+                    Spent {
+                        tokens: 21,
+                        ..Spent::default()
+                    },
+                )
+                .unwrap_err(),
+            ReservationError::Exhausted
+        );
     }
 }

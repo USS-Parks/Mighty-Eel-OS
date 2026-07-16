@@ -101,12 +101,12 @@ async fn messages(
     let workflow_id = crate::meter::workflow_from(&headers);
     let mut neutral = anthropic_neutral(&body, inbound_model.clone());
     let query = crate::route::query_text(&neutral.messages);
-    let dispatch = match authorize_dispatch(
+    let mut dispatch = match authorize_dispatch(
         &state,
         &headers,
         &inbound_model,
         &query,
-        crate::route::estimate_tokens(neutral.max_tokens, &query),
+        neutral.max_tokens,
     )
     .await
     {
@@ -164,6 +164,7 @@ async fn messages(
                         input_estimate: crate::route::estimate_tokens(None, &query),
                         reported: crate::provider::Usage::default(),
                         delta_chars: 0,
+                        reservation: dispatch.take_reservation(),
                     },
                 ),
                 Err(e) => provider_http(&e).into_response(),
@@ -181,6 +182,7 @@ async fn messages(
         };
         match dispatch.complete(&dispatched).await {
             Ok(mut r) => {
+                let reconciliation = dispatch.commit_usage(state.prices.as_ref(), r.usage);
                 r.content = crate::tokenize::restore(&r.content, &egress.map);
                 // Metering + receipt (G7): every non-stream completion is receipted.
                 crate::meter::record(
@@ -208,9 +210,12 @@ async fn messages(
                         r.usage.input_tokens,
                         r.usage.output_tokens,
                     ),
-                    0,
+                    1,
                 );
-                Json(message_json(&inbound_model, &r)).into_response()
+                match reconciliation {
+                    Ok(()) => Json(message_json(&inbound_model, &r)).into_response(),
+                    Err(error) => crate::app::reservation_http(&error),
+                }
             }
             Err(e) => provider_http(&e).into_response(),
         }

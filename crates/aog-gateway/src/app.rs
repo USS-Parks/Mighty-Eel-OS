@@ -15,7 +15,10 @@ use axum::Json;
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use chrono::Utc;
-use fabric_contracts::{Classification, Route};
+use fabric_contracts::{Budget, Classification, Route};
+use fabric_token::spend::{
+    Reservation, ReservationError, ReservationKey, ReservationLedger, Spent,
+};
 use mai_compliance::PhiDetector;
 use mai_router::{DefaultRouter, Router};
 use serde_json::json;
@@ -23,7 +26,7 @@ use serde_json::json;
 use crate::meter::{PriceBook, ReceiptLedger};
 use crate::policy::{ModeOutcome, PolicyDecision, PolicyEngine, PolicyMode, Profile};
 use crate::provider::{
-    ChunkStream, CompletionRequest, CompletionResponse, Provider, ProviderError, Registry,
+    ChunkStream, CompletionRequest, CompletionResponse, Provider, ProviderError, Registry, Usage,
 };
 use crate::route::GatewayRoute;
 use crate::{Gateway, ResolvedContext};
@@ -111,6 +114,8 @@ pub struct AppState {
     pub prices: Arc<PriceBook>,
     /// The G8 PHI/PII detector — finds the sensitive spans tokenized on cloud egress.
     pub detector: Arc<PhiDetector>,
+    /// Atomic reserve/commit/release barrier shared by every inference surface.
+    pub reservations: Arc<ReservationLedger>,
 }
 
 impl AppState {
@@ -131,6 +136,7 @@ impl AppState {
             receipts: Arc::new(Mutex::new(ReceiptLedger::new())),
             prices: Arc::new(PriceBook::baseline()),
             detector: Arc::new(PhiDetector::baseline()),
+            reservations: Arc::new(ReservationLedger::new()),
         }
     }
 
@@ -152,6 +158,13 @@ impl AppState {
     #[must_use]
     pub fn with_profile(mut self, profile: Profile) -> Self {
         self.profile = profile;
+        self
+    }
+
+    /// Inject a shared reservation ledger for tests or a process-wide owner.
+    #[must_use]
+    pub fn with_reservations(mut self, reservations: Arc<ReservationLedger>) -> Self {
+        self.reservations = reservations;
         self
     }
 }
@@ -198,7 +211,23 @@ pub(crate) struct AuthorizedDispatch {
     route: GatewayRoute,
     policy: PolicyDecision,
     outcome: ModeOutcome,
+    reservation: Option<DispatchReservation>,
 }
+
+/// Authority reserved before a provider side effect. Streaming requests move
+/// this value into their SSE meter so cancellation settles exactly once.
+pub(crate) struct DispatchReservation {
+    reservation: Reservation,
+    cap: Budget,
+}
+
+impl DispatchReservation {
+    pub(crate) fn commit_usage(self, usage: Spent) -> Result<(), ReservationError> {
+        self.reservation.commit_usage(&self.cap, usage)
+    }
+}
+
+const DEFAULT_OUTPUT_RESERVATION: u32 = 4096;
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 enum DecisionError {
@@ -238,6 +267,17 @@ impl DecisionError {
         });
         (StatusCode::FORBIDDEN, Json(body)).into_response()
     }
+}
+
+pub(crate) fn reservation_http(error: &ReservationError) -> Response {
+    let body = json!({
+        "error": {
+            "message": error.to_string(),
+            "type": "budget_exhausted",
+            "code": "aog_budget_reconciliation_denied",
+        }
+    });
+    (StatusCode::PAYMENT_REQUIRED, Json(body)).into_response()
 }
 
 fn classification_level(name: &str) -> Option<Classification> {
@@ -328,7 +368,60 @@ impl AuthorizedDispatch {
             route,
             policy,
             outcome,
+            reservation: None,
         })
+    }
+
+    fn reserve_budget(
+        &mut self,
+        ledger: &ReservationLedger,
+        prices: &PriceBook,
+        query: &str,
+        max_output_tokens: Option<u32>,
+    ) -> Result<(), ReservationError> {
+        let Some(cap) = self.ctx.token.budget.clone() else {
+            return Ok(());
+        };
+        let input = crate::route::estimate_tokens(None, query);
+        let output = max_output_tokens.unwrap_or(DEFAULT_OUTPUT_RESERVATION);
+        let usage = Spent {
+            tokens: u64::from(input).saturating_add(u64::from(output)),
+            usd_cents: prices.cost(&self.target.provider, &self.inbound_model, input, output),
+            tool_calls: 1,
+        };
+        let key = ReservationKey::for_token(&self.ctx.token, None, Some("aog-gateway".to_string()));
+        self.reservation = Some(DispatchReservation {
+            reservation: ledger.reserve(key, &cap, usage)?,
+            cap,
+        });
+        Ok(())
+    }
+
+    /// Reconcile a completed non-stream request to its final usage.
+    pub(crate) fn commit_usage(
+        &mut self,
+        prices: &PriceBook,
+        usage: Usage,
+    ) -> Result<(), ReservationError> {
+        let Some(reservation) = self.reservation.take() else {
+            return Ok(());
+        };
+        reservation.commit_usage(Spent {
+            tokens: u64::from(usage.input_tokens).saturating_add(u64::from(usage.output_tokens)),
+            usd_cents: prices.cost(
+                &self.target.provider,
+                &self.inbound_model,
+                usage.input_tokens,
+                usage.output_tokens,
+            ),
+            tool_calls: 1,
+        })
+    }
+
+    /// Move pending authority into the SSE meter. Provider setup failure before
+    /// this call releases automatically when the dispatch is dropped.
+    pub(crate) fn take_reservation(&mut self) -> Option<DispatchReservation> {
+        self.reservation.take()
     }
 
     pub(crate) fn context(&self) -> &ResolvedContext {
@@ -391,7 +484,7 @@ pub(crate) async fn authorize_dispatch(
     headers: &HeaderMap,
     inbound_model: &str,
     query: &str,
-    estimated_tokens: u32,
+    max_output_tokens: Option<u32>,
 ) -> Result<AuthorizedDispatch, Response> {
     let ctx = authorize(state, headers)
         .await
@@ -417,7 +510,7 @@ pub(crate) async fn authorize_dispatch(
     let route = crate::route::classify_and_route(
         state.router.as_ref(),
         query,
-        estimated_tokens,
+        crate::route::estimate_tokens(max_output_tokens, query),
         &ctx.tenant_id,
         ctx.token.roles.first().map_or("user", String::as_str),
     );
@@ -425,7 +518,7 @@ pub(crate) async fn authorize_dispatch(
     let policy = state.policy.evaluate(query, &route);
     let outcome = crate::policy::apply_mode(&policy, state.mode, target_cloud);
 
-    let decision = AuthorizedDispatch::new(
+    let mut decision = AuthorizedDispatch::new(
         ctx,
         inbound_model.to_string(),
         target,
@@ -438,6 +531,23 @@ pub(crate) async fn authorize_dispatch(
     if decision.outcome.block {
         return Err(crate::policy::blocked(&decision.policy, state.mode));
     }
+    decision
+        .reserve_budget(
+            state.reservations.as_ref(),
+            state.prices.as_ref(),
+            query,
+            max_output_tokens,
+        )
+        .map_err(|error| {
+            let body = json!({
+                "error": {
+                    "message": error.to_string(),
+                    "type": "budget_exhausted",
+                    "code": "aog_budget_reservation_denied",
+                }
+            });
+            (StatusCode::PAYMENT_REQUIRED, Json(body)).into_response()
+        })?;
     Ok(decision)
 }
 
@@ -700,6 +810,186 @@ mod tests {
         async fn stream(&self, _req: &CompletionRequest) -> Result<ChunkStream, ProviderError> {
             Ok(Box::pin(futures::stream::empty()))
         }
+    }
+
+    struct NamedProvider(&'static str);
+
+    #[async_trait]
+    impl Provider for NamedProvider {
+        fn name(&self) -> &str {
+            self.0
+        }
+
+        async fn complete(
+            &self,
+            req: &CompletionRequest,
+        ) -> Result<CompletionResponse, ProviderError> {
+            Ok(CompletionResponse {
+                model: req.model.clone(),
+                content: "ok".into(),
+                usage: Usage {
+                    input_tokens: 1000,
+                    output_tokens: 1000,
+                },
+                finish_reason: "stop".into(),
+            })
+        }
+
+        async fn stream(&self, _req: &CompletionRequest) -> Result<ChunkStream, ProviderError> {
+            Ok(Box::pin(futures::stream::empty()))
+        }
+    }
+
+    fn budgeted_dispatch(
+        budget: Budget,
+        reservations: &ReservationLedger,
+        prices: &PriceBook,
+    ) -> Result<AuthorizedDispatch, ReservationError> {
+        let mut ctx = context(
+            vec!["gpt-4o-mini"],
+            vec![Route::CloudAllowed],
+            Classification::Restricted,
+        );
+        ctx.token.budget = Some(budget);
+        let mut dispatch = AuthorizedDispatch::new(
+            ctx,
+            "gpt-4o-mini".into(),
+            Target::new("openai", "gpt-4o-mini"),
+            Arc::new(NamedProvider("openai")),
+            gateway_route(Route::CloudAllowed, "public", false),
+            PolicyDecision {
+                allowed_cloud: true,
+                phi_detected: false,
+                effective_route: Route::CloudAllowed,
+                reasons: vec![],
+            },
+            ModeOutcome {
+                block: false,
+                report: false,
+            },
+        )
+        .unwrap();
+        dispatch.reserve_budget(reservations, prices, &"x".repeat(4000), Some(1000))?;
+        Ok(dispatch)
+    }
+
+    #[test]
+    fn atomic_gateway_spend_caps_mixed_stream_and_non_stream_concurrency() {
+        let reservations = Arc::new(ReservationLedger::new());
+        let prices = Arc::new(PriceBook::baseline());
+        let cap = Budget {
+            token_cap: 10_000,
+            usd_cap_cents: 375,
+            tool_call_cap: 5,
+            ..Budget::default()
+        };
+        let barrier = Arc::new(std::sync::Barrier::new(100));
+        let mut workers = Vec::new();
+        for worker_id in 0..100 {
+            let reservations = reservations.clone();
+            let prices = prices.clone();
+            let cap = cap.clone();
+            let barrier = barrier.clone();
+            workers.push(std::thread::spawn(move || {
+                barrier.wait();
+                let Ok(mut dispatch) =
+                    budgeted_dispatch(cap, reservations.as_ref(), prices.as_ref())
+                else {
+                    return false;
+                };
+                if worker_id % 2 == 0 {
+                    // Non-stream settlement path.
+                    dispatch
+                        .commit_usage(
+                            prices.as_ref(),
+                            Usage {
+                                input_tokens: 1000,
+                                output_tokens: 1000,
+                            },
+                        )
+                        .is_ok()
+                } else {
+                    // Stream path moves the reservation into the SSE guard.
+                    dispatch
+                        .take_reservation()
+                        .unwrap()
+                        .commit_usage(Spent {
+                            tokens: 2000,
+                            usd_cents: 75,
+                            tool_calls: 1,
+                        })
+                        .is_ok()
+                }
+            }));
+        }
+        let admitted = workers
+            .into_iter()
+            .map(|worker| worker.join().unwrap())
+            .filter(|admitted| *admitted)
+            .count();
+        assert_eq!(admitted, 5, "all three ceilings admit exactly five calls");
+
+        let key = ReservationKey::for_token(
+            &context(
+                vec!["gpt-4o-mini"],
+                vec![Route::CloudAllowed],
+                Classification::Restricted,
+            )
+            .token,
+            None,
+            Some("aog-gateway".to_string()),
+        );
+        assert_eq!(
+            reservations.committed(&key),
+            Spent {
+                tokens: 10_000,
+                usd_cents: 375,
+                tool_calls: 5,
+            }
+        );
+    }
+
+    #[test]
+    fn failure_releases_and_stream_cancellation_settles_once() {
+        let reservations = ReservationLedger::new();
+        let prices = PriceBook::baseline();
+        let cap = Budget {
+            token_cap: 4000,
+            usd_cap_cents: 150,
+            tool_call_cap: 1,
+            ..Budget::default()
+        };
+
+        // Provider setup failure: dropping the dispatch releases all capacity.
+        drop(budgeted_dispatch(cap.clone(), &reservations, &prices).unwrap());
+        let mut stream = budgeted_dispatch(cap, &reservations, &prices).unwrap();
+        let reservation = stream.take_reservation().unwrap();
+        drop(stream);
+        // Client cancellation after stream start commits observed/fallback use.
+        reservation
+            .commit_usage(Spent {
+                tokens: 500,
+                usd_cents: 1,
+                tool_calls: 1,
+            })
+            .unwrap();
+
+        assert!(
+            matches!(
+                budgeted_dispatch(
+                    Budget {
+                        token_cap: 4000,
+                        usd_cap_cents: 150,
+                        tool_call_cap: 1,
+                        ..Budget::default()
+                    },
+                    &reservations,
+                    &prices,
+                ),
+                Err(ReservationError::Exhausted)
+            ),
+            "the cancelled stream charged one call exactly once"
+        );
     }
 
     #[tokio::test]
