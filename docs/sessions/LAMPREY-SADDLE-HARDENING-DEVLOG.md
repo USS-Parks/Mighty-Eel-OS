@@ -281,7 +281,7 @@ Gate: targeted `receipt`, `crud`, `mission`, `toolgrants`, `replay`, `live_ring`
 
 ### M1 — Trust and tenant boundary milestone gate
 
-Status: **PASS — implementation committed as `3f54495`; documentation closeout pending**.
+Status: **PASS — implementation commit `3f54495`; M1 checkpoint pushed to `main`**.
 
 Final verification on 2026-07-15:
 
