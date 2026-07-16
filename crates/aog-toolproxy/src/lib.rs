@@ -20,7 +20,7 @@ pub mod session;
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::{Arc, Mutex, RwLock};
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 use async_trait::async_trait;
 use fabric_contracts::{Budget, VerifiedRequestContext};
@@ -45,17 +45,22 @@ pub enum ProxyError {
     Mint(String),
 }
 
+/// Maximum lifetime the proxy will request for any per-call credential. The
+/// actual requested lifetime is the smaller of this bound and the tool timeout.
+pub const MAX_CREDENTIAL_TTL: Duration = Duration::from_secs(60);
+
 /// A per-call ephemeral credential (T2), minted just before execution and revoked
 /// at call end — never persisted, never handed to the agent process.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct MintedCredential {
     /// Opaque lease id — safe to log and receipt (identifies, does not authorize).
     pub lease_id: String,
     /// The ephemeral secret the executor uses transiently for this one call. Must
     /// not be persisted or returned to the agent; dropped when the call returns.
     pub secret: String,
-    /// Time-to-live — the call's lifetime.
-    pub ttl: Duration,
+    /// Absolute expiry enforced by the minting authority. The proxy rejects an
+    /// already-expired lease or one later than the TTL it requested.
+    pub expires_at: SystemTime,
 }
 
 /// The seam to WSF's credential broker (wsf-bridge): mint an ephemeral credential
@@ -64,6 +69,9 @@ pub struct MintedCredential {
 #[async_trait]
 pub trait CredentialMinter: Send + Sync {
     /// Mint a call-scoped credential for `tool`, authorized by `ctx`.
+    /// `authority_ttl` is a hard upper bound that must be applied by the external
+    /// minting authority, not merely copied into this response. `expires_at` must
+    /// report that authority-side expiry.
     ///
     /// # Errors
     /// Any minter error aborts the call before it executes.
@@ -71,10 +79,75 @@ pub trait CredentialMinter: Send + Sync {
         &self,
         tool: &ToolDefinition,
         ctx: &InvokeContext,
+        authority_ttl: Duration,
     ) -> Result<MintedCredential, String>;
 
-    /// Best-effort revoke a lease at call end (the TTL also bounds it).
-    async fn revoke(&self, lease_id: &str);
+    /// Durably initiate revocation without awaiting network I/O. This synchronous
+    /// seam is called from a scope guard, including while an invocation future is
+    /// being dropped after cancellation or panic. Implementations should enqueue
+    /// remote work locally; authority-enforced expiry remains the hard bound if a
+    /// revocation worker or network path is unavailable.
+    fn revoke(&self, lease_id: &str);
+}
+
+/// Owns one minted lease across execution. Rust drops local variables when an
+/// invocation future is cancelled or unwinds, so this guard cannot skip the
+/// synchronous revocation handoff merely because normal control flow stopped.
+struct CredentialLease<'a> {
+    minter: &'a dyn CredentialMinter,
+    credential: MintedCredential,
+    issued_ttl: Duration,
+    revoke_started: bool,
+}
+
+impl<'a> CredentialLease<'a> {
+    fn new(
+        minter: &'a dyn CredentialMinter,
+        credential: MintedCredential,
+        requested_ttl: Duration,
+    ) -> Result<Self, String> {
+        let issued_ttl = credential
+            .expires_at
+            .duration_since(SystemTime::now())
+            .map_err(|_| "minting authority returned an expired credential".to_string())?;
+        if issued_ttl.is_zero() || issued_ttl > requested_ttl {
+            minter.revoke(&credential.lease_id);
+            return Err(format!(
+                "minting authority returned TTL {} ms outside requested bound {} ms",
+                issued_ttl.as_millis(),
+                requested_ttl.as_millis()
+            ));
+        }
+        Ok(Self {
+            minter,
+            credential,
+            issued_ttl,
+            revoke_started: false,
+        })
+    }
+
+    fn credential(&self) -> &MintedCredential {
+        &self.credential
+    }
+
+    fn issued_ttl(&self) -> Duration {
+        self.issued_ttl
+    }
+
+    fn revoke(&mut self) {
+        if !self.revoke_started {
+            // Mark first so a panicking implementation cannot be called a second
+            // time by `Drop` during unwinding.
+            self.revoke_started = true;
+            self.minter.revoke(&self.credential.lease_id);
+        }
+    }
+}
+
+impl Drop for CredentialLease<'_> {
+    fn drop(&mut self) {
+        self.revoke();
+    }
 }
 
 /// The seam to the approval inbox (aog-approvals): a side-effecting (`has_side_effects`)
@@ -588,27 +661,49 @@ impl ToolProxy {
             return Ok(blocked);
         }
 
-        // Mint the per-call credential (T2), if a minter is configured. It lives only
-        // for this call — dropped when `invoke` returns; the agent never holds it.
-        let cred = match &self.minter {
-            Some(m) => Some(m.mint(&tool, ctx).await.map_err(ProxyError::Mint)?),
+        // LSH-T4: request a TTL that the minting authority itself must enforce.
+        // The proxy never asks for longer than the tool timeout or the global
+        // one-minute ceiling, and rejects stale/overlong authority responses.
+        let requested_credential_ttl = tool.timeout.min(MAX_CREDENTIAL_TTL);
+        if self.minter.is_some() && requested_credential_ttl.is_zero() {
+            return Err(ProxyError::Mint(
+                "credential TTL bound must be non-zero".to_string(),
+            ));
+        }
+        let mut cred = match &self.minter {
+            Some(m) => {
+                let minted = m
+                    .mint(&tool, ctx, requested_credential_ttl)
+                    .await
+                    .map_err(ProxyError::Mint)?;
+                Some(
+                    CredentialLease::new(m.as_ref(), minted, requested_credential_ttl)
+                        .map_err(ProxyError::Mint)?,
+                )
+            }
             None => None,
         };
+        let execution_timeout = cred
+            .as_ref()
+            .map_or(tool.timeout, CredentialLease::issued_ttl);
 
         // Bound a hung tool: honour `tool.timeout` so a stuck executor cannot hang
         // the agent loop; on elapse return a failed ToolResult rather than blocking
         // forever (audit D6). The lease revoke + receipt below still run.
-        let mut result =
-            match tokio::time::timeout(tool.timeout, executor.execute(&tool, call, cred.as_ref()))
-                .await
-            {
-                Ok(r) => r,
-                Err(_) => timed_out_result(call, tool.timeout),
-            };
+        let mut result = match tokio::time::timeout(
+            execution_timeout,
+            executor.execute(&tool, call, cred.as_ref().map(CredentialLease::credential)),
+        )
+        .await
+        {
+            Ok(r) => r,
+            Err(_) => timed_out_result(call, execution_timeout),
+        };
 
-        // End the lease at call end (its TTL also bounds it).
-        if let (Some(m), Some(c)) = (&self.minter, &cred) {
-            m.revoke(&c.lease_id).await;
+        // Normal completion initiates revocation here. Cancellation, panic, or
+        // task loss instead drops the guard and executes the same handoff.
+        if let Some(lease) = cred.as_mut() {
+            lease.revoke();
         }
 
         // Egress scanning (T5): redact any secret / PHI / ITAR span in the result
@@ -643,7 +738,8 @@ impl ToolProxy {
             ctx,
             &tool,
             &result,
-            cred.as_ref(),
+            cred.as_ref()
+                .map(|lease| (lease.credential(), lease.issued_ttl())),
             Governance {
                 approval_required,
                 approved_by,
@@ -761,7 +857,7 @@ impl ToolProxy {
         ctx: &InvokeContext,
         tool: &ToolDefinition,
         result: &ToolResult,
-        cred: Option<&MintedCredential>,
+        cred: Option<(&MintedCredential, Duration)>,
         gov: Governance,
     ) {
         let at = chrono::Utc::now().to_rfc3339();
@@ -832,8 +928,8 @@ impl ToolProxy {
                 at.clone(),
             );
         }
-        let (cred_lease, cred_ttl_ms) = cred.map_or((None, None), |c| {
-            (Some(self.safe_receipt_text(&c.lease_id)), Some(ms(c.ttl)))
+        let (cred_lease, cred_ttl_ms) = cred.map_or((None, None), |(c, ttl)| {
+            (Some(self.safe_receipt_text(&c.lease_id)), Some(ms(ttl)))
         });
         let result_mission_id = gov.mission_id.clone();
         let receipt_hash = self
@@ -967,7 +1063,7 @@ const MAX_TRACKED_SESSIONS: usize = 4096;
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
-    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use std::time::Duration;
 
     use fabric_contracts::{
@@ -1239,6 +1335,7 @@ mod tests {
             &self,
             tool: &ToolDefinition,
             _ctx: &InvokeContext,
+            authority_ttl: Duration,
         ) -> Result<MintedCredential, String> {
             let mut n = self.counter.lock().unwrap();
             *n += 1;
@@ -1247,11 +1344,11 @@ mod tests {
             Ok(MintedCredential {
                 lease_id,
                 secret: "ephemeral-secret".to_string(),
-                ttl: Duration::from_secs(30),
+                expires_at: SystemTime::now() + authority_ttl,
             })
         }
 
-        async fn revoke(&self, lease_id: &str) {
+        fn revoke(&self, lease_id: &str) {
             self.live.lock().unwrap().retain(|l| l != lease_id);
         }
     }
@@ -1326,7 +1423,7 @@ mod tests {
         // The receipt records the lease id + TTL only — never the secret.
         let rec = &proxy.receipts()[0];
         assert!(rec.cred_lease.is_some());
-        assert_eq!(rec.cred_ttl_ms, Some(30_000));
+        assert!(rec.cred_ttl_ms.is_some_and(|ttl| ttl > 0 && ttl <= 5_000));
         assert!(
             !serde_json::to_string(rec)
                 .unwrap()
@@ -1350,6 +1447,252 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(proxy.receipts()[0].cred_lease, None);
+    }
+
+    #[derive(Clone)]
+    struct LifecycleAuthority {
+        leases: Arc<Mutex<HashMap<String, tokio::time::Instant>>>,
+        counter: Arc<AtomicUsize>,
+        revoke_attempts: Arc<AtomicUsize>,
+        partitioned: Arc<AtomicBool>,
+        overlong: Arc<AtomicBool>,
+        hang_after_mint: Arc<AtomicBool>,
+        minted: Arc<Notify>,
+    }
+
+    impl LifecycleAuthority {
+        fn new() -> Self {
+            Self {
+                leases: Arc::new(Mutex::new(HashMap::new())),
+                counter: Arc::new(AtomicUsize::new(0)),
+                revoke_attempts: Arc::new(AtomicUsize::new(0)),
+                partitioned: Arc::new(AtomicBool::new(false)),
+                overlong: Arc::new(AtomicBool::new(false)),
+                hang_after_mint: Arc::new(AtomicBool::new(false)),
+                minted: Arc::new(Notify::new()),
+            }
+        }
+
+        fn valid_leases(&self) -> usize {
+            let now = tokio::time::Instant::now();
+            self.leases
+                .lock()
+                .unwrap()
+                .values()
+                .filter(|deadline| **deadline > now)
+                .count()
+        }
+    }
+
+    #[async_trait]
+    impl CredentialMinter for LifecycleAuthority {
+        async fn mint(
+            &self,
+            _tool: &ToolDefinition,
+            _ctx: &InvokeContext,
+            authority_ttl: Duration,
+        ) -> Result<MintedCredential, String> {
+            let n = self.counter.fetch_add(1, Ordering::SeqCst) + 1;
+            let lease_id = format!("lifecycle-{n}");
+            let issued_ttl = if self.overlong.load(Ordering::SeqCst) {
+                authority_ttl + Duration::from_secs(1)
+            } else {
+                authority_ttl
+            };
+            self.leases
+                .lock()
+                .unwrap()
+                .insert(lease_id.clone(), tokio::time::Instant::now() + issued_ttl);
+            self.minted.notify_one();
+            if self.hang_after_mint.load(Ordering::SeqCst) {
+                std::future::pending::<()>().await;
+            }
+            Ok(MintedCredential {
+                lease_id,
+                secret: "authority-bounded-secret".to_string(),
+                expires_at: SystemTime::now() + issued_ttl,
+            })
+        }
+
+        fn revoke(&self, lease_id: &str) {
+            self.revoke_attempts.fetch_add(1, Ordering::SeqCst);
+            if !self.partitioned.load(Ordering::SeqCst) {
+                self.leases.lock().unwrap().remove(lease_id);
+            }
+        }
+    }
+
+    struct EnteredThenHang {
+        entered: Arc<Notify>,
+    }
+
+    #[async_trait]
+    impl ToolExecutor for EnteredThenHang {
+        async fn execute(
+            &self,
+            _tool: &ToolDefinition,
+            _call: &ToolCall,
+            cred: Option<&MintedCredential>,
+        ) -> ToolResult {
+            assert!(cred.is_some());
+            self.entered.notify_one();
+            std::future::pending().await
+        }
+    }
+
+    struct PanickingExecutor;
+
+    #[async_trait]
+    impl ToolExecutor for PanickingExecutor {
+        async fn execute(
+            &self,
+            _tool: &ToolDefinition,
+            _call: &ToolCall,
+            cred: Option<&MintedCredential>,
+        ) -> ToolResult {
+            assert!(cred.is_some());
+            panic!("simulated executor panic");
+        }
+    }
+
+    #[tokio::test]
+    async fn reg_lsd_010_cancellation_safe_authority_bounded_credentials() {
+        // Cancellation/executor loss: abort after the executor observes the lease.
+        // Dropping `invoke` must synchronously initiate revocation.
+        let authority = LifecycleAuthority::new();
+        let proxy = Arc::new(ToolProxy::new().with_minter(Box::new(authority.clone())));
+        proxy
+            .register(tool_with_timeout("read.cancel", Duration::from_millis(25)))
+            .unwrap();
+        let entered = Arc::new(Notify::new());
+        let task = tokio::spawn({
+            let proxy = Arc::clone(&proxy);
+            let entered = Arc::clone(&entered);
+            async move {
+                let executor = EnteredThenHang { entered };
+                proxy
+                    .invoke(
+                        &call("cancel", "read.cancel"),
+                        &ctx(ToolAccessRole::Guest),
+                        &executor,
+                    )
+                    .await
+            }
+        });
+        entered.notified().await;
+        assert_eq!(authority.valid_leases(), 1);
+        task.abort();
+        assert!(task.await.unwrap_err().is_cancelled());
+        assert_eq!(authority.valid_leases(), 0);
+        assert_eq!(authority.revoke_attempts.load(Ordering::SeqCst), 1);
+
+        // Panic unwinding drops the same guard rather than skipping cleanup.
+        let panic_task = tokio::spawn({
+            let proxy = Arc::clone(&proxy);
+            async move {
+                proxy
+                    .invoke(
+                        &call("panic", "read.cancel"),
+                        &ctx(ToolAccessRole::Guest),
+                        &PanickingExecutor,
+                    )
+                    .await
+            }
+        });
+        assert!(panic_task.await.unwrap_err().is_panic());
+        assert_eq!(authority.valid_leases(), 0);
+        assert_eq!(authority.revoke_attempts.load(Ordering::SeqCst), 2);
+
+        // Timeout follows normal control flow but uses the authority-reported
+        // remaining lifetime as the executor deadline and revokes exactly once.
+        let timed = proxy
+            .invoke(
+                &call("timeout", "read.cancel"),
+                &ctx(ToolAccessRole::Guest),
+                &HangingExecutor,
+            )
+            .await
+            .unwrap();
+        assert!(!timed.success);
+        assert_eq!(authority.valid_leases(), 0);
+        assert_eq!(authority.revoke_attempts.load(Ordering::SeqCst), 3);
+
+        // A revocation network partition can prevent immediate invalidation, but
+        // the TTL applied at mint authority still makes the lease unusable at the
+        // declared bound without any cleanup continuation.
+        authority.partitioned.store(true, Ordering::SeqCst);
+        let partitioned_proxy = ToolProxy::new().with_minter(Box::new(authority.clone()));
+        partitioned_proxy
+            .register(tool_with_timeout(
+                "read.partitioned",
+                Duration::from_millis(25),
+            ))
+            .unwrap();
+        partitioned_proxy
+            .invoke(
+                &call("partitioned", "read.partitioned"),
+                &ctx(ToolAccessRole::Guest),
+                &EchoExecutor,
+            )
+            .await
+            .unwrap();
+        assert_eq!(authority.valid_leases(), 1);
+        tokio::time::sleep(Duration::from_millis(30)).await;
+        assert_eq!(authority.valid_leases(), 0);
+        assert_eq!(authority.revoke_attempts.load(Ordering::SeqCst), 4);
+
+        // If the executor process disappears after the authority creates a lease
+        // but before the mint response carries its id back, no local guard can
+        // revoke it. The authority TTL is therefore the non-optional hard stop.
+        let lost_authority = LifecycleAuthority::new();
+        lost_authority.hang_after_mint.store(true, Ordering::SeqCst);
+        let lost_proxy = Arc::new(ToolProxy::new().with_minter(Box::new(lost_authority.clone())));
+        lost_proxy
+            .register(tool_with_timeout("read.lost", Duration::from_millis(25)))
+            .unwrap();
+        let lost_task = tokio::spawn({
+            let proxy = Arc::clone(&lost_proxy);
+            async move {
+                proxy
+                    .invoke(
+                        &call("lost", "read.lost"),
+                        &ctx(ToolAccessRole::Guest),
+                        &EchoExecutor,
+                    )
+                    .await
+            }
+        });
+        lost_authority.minted.notified().await;
+        lost_task.abort();
+        assert!(lost_task.await.unwrap_err().is_cancelled());
+        assert_eq!(lost_authority.revoke_attempts.load(Ordering::SeqCst), 0);
+        assert_eq!(lost_authority.valid_leases(), 1);
+        tokio::time::sleep(Duration::from_millis(30)).await;
+        assert_eq!(lost_authority.valid_leases(), 0);
+    }
+
+    #[tokio::test]
+    async fn authority_expiry_outside_the_requested_bound_is_rejected() {
+        let authority = LifecycleAuthority::new();
+        authority.overlong.store(true, Ordering::SeqCst);
+        let proxy = ToolProxy::new().with_minter(Box::new(authority.clone()));
+        proxy
+            .register(tool_with_timeout(
+                "read.overlong",
+                Duration::from_millis(50),
+            ))
+            .unwrap();
+        let error = proxy
+            .invoke(
+                &call("overlong", "read.overlong"),
+                &ctx(ToolAccessRole::Guest),
+                &EchoExecutor,
+            )
+            .await
+            .unwrap_err();
+        assert!(error.to_string().contains("outside requested bound"));
+        assert_eq!(authority.revoke_attempts.load(Ordering::SeqCst), 1);
+        assert_eq!(authority.valid_leases(), 0);
     }
 
     // ── T3: approval gate for side-effecting calls ───────────────────────

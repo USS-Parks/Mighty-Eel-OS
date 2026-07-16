@@ -1267,3 +1267,67 @@ the canonical footer. Both outgoing commits passed exact-footer and signature
 verification; the pre-push full-tree no-slop and 79-route policy gates passed;
 and `origin/main` advanced from `ade0178` through `e251a90` on 2026-07-16. This
 final ledger update records the confirmed T3 remote checkpoint.
+
+### LSH-T4 — Cancellation-safe credentials
+
+Status: **PASS** (implementation commit pending).
+
+The prior `CredentialMinter` returned a caller-defined duration and exposed only
+an asynchronous best-effort revoke operation. `ToolProxy::invoke` minted before
+the executor await and revoked only on the normal continuation, so cancellation,
+panic, task loss, or shutdown could skip cleanup. No production
+`CredentialMinter` implementation or caller exists in the repository; the only
+implementation was the toolproxy unit-test fixture. That confirms the deferred
+`ATPROXY-CRED-CANCEL-REVOKE` path while keeping live production reachability for
+LSH-T6/D4 rather than inventing a deployment claim.
+
+The minter contract now receives an authority TTL that must be enforced by the
+external minting authority and must return that authority's absolute expiry.
+The proxy requests the smaller of the tool timeout and a public 60-second hard
+ceiling, rejects expired or overlong authority responses before execution, and
+uses the accepted remaining lifetime as the executor timeout and receipt TTL.
+
+Every accepted credential is owned by a `CredentialLease` scope guard. Its
+synchronous revocation seam is suitable for a local durable queue and runs both
+on normal completion and when Rust drops the invocation future during
+cancellation or panic. The guard initiates revocation exactly once. If the
+process disappears before receiving the lease id, or a revocation worker/network
+is partitioned, the authority-side expiry remains the non-optional hard bound.
+
+Changed files:
+
+- `crates/aog-toolproxy/src/lib.rs`; and
+- this DEVLOG.
+
+Gates:
+
+- `cargo test -p aog-toolproxy
+  tests::reg_lsd_010_cancellation_safe_authority_bounded_credentials -- --exact`
+  — PASS, 1/1 deterministic lifecycle regression covering cancellation,
+  executor-task loss, panic, timeout, revocation partition, and loss after
+  authority mint but before the response returns;
+- `cargo test -p aog-toolproxy
+  tests::authority_expiry_outside_the_requested_bound_is_rejected -- --exact`
+  — PASS, 1/1 fail-closed authority-bound regression;
+- `cargo test -p aog-toolproxy -p aog-approvals` — PASS: 61 toolproxy tests,
+  five approval tests, and doc tests;
+- `cargo test -p aog-conformance --test robustness_conformance` — PASS, 11/11;
+- `cargo test -p aog-controller --test managed_toolproxy` — PASS in the current
+  prerequisite-free lane;
+- `cargo clippy -p aog-toolproxy -p aog-approvals -p aog-conformance -p
+  aog-controller --all-targets -- -D warnings -A clippy::pedantic` — PASS;
+- source search confirms no production `CredentialMinter` implementation or
+  `with_minter` caller exists outside toolproxy tests;
+- `cargo fmt --check` — PASS; and
+- `git diff --check` — PASS.
+
+Closure statement: the reachable local cancellation-cleanup branch of `LSD-010`
+is closed by the authority-bound mint contract and drop-safe revocation handoff.
+LSH-T6/D4 still own wiring and live-system validation of the eventual production
+minter; this prompt does not claim that absent integration already exists.
+LSH-T5 is the next sequential prompt. The broader M3 milestone remains open
+through LSH-T6.
+
+Commit state: implementation and prompt evidence are ready for the authorized
+commit/push sequence; exact SHAs and the remote checkpoint will be recorded in
+the closeout commit.
