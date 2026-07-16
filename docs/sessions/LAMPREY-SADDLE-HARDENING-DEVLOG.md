@@ -407,7 +407,7 @@ Commit state: C4/C5 implementation and milestone evidence were committed as `170
 
 ### LSH-G1 — One final gateway authorization decision
 
-Status: **PASS — locally verified; not committed**.
+Status: **PASS** (G1/G2 implementation commit `1e921be`).
 
 The vulnerable path remained reachable at the M2 checkpoint: `authorize` returned a valid signed token without consulting its model, route, or classification caveats; each protocol surface independently resolved a mutable target and called a provider; and `RoutingDecision::Denied` became `LocalOnly` plus an audit marker, allowing a local provider to execute. An authenticated holder of a restricted virtual key could therefore invoke an excluded configured model, and content at the router's terminal deny floor could still reach local inference.
 
@@ -442,7 +442,7 @@ Residual scope: LSH-G2 remains sequentially required for the generated five-surf
 
 ### LSH-G2 — Protocol parity for model/route caveats
 
-Status: **PASS — locally verified; not committed**.
+Status: **PASS** (G1/G2 implementation commit `1e921be`).
 
 G2 completes the compatibility/security contract left open by G1. Because `TrustToken.allowed_models` and `allowed_routes` deserialize omitted fields to empty vectors, both omitted and explicit-empty values now mean no gateway inference authority and fail closed. A signed non-empty model caveat authorizes the public inbound alias; a signed non-empty route caveat must authorize the final provider locality. Operator model mapping remains free to translate an authorized public alias to its configured upstream name, but it cannot make an excluded alias authorized and the private dispatch object freezes that upstream name at the sink.
 
@@ -476,3 +476,5 @@ Gates:
 Closure statement: the original excluded-model, excluded-route, and explicit-router-deny paths no longer reproduce at the shared authorization-to-provider boundary. Repository search confirms the five concrete sinks can invoke providers only through `AuthorizedDispatch`; the caveat matrix fails if empty authority is treated as allow or if either signed subset check is removed. Existing valid OpenAI, legacy, and Anthropic compatibility tests remain green with explicit signed authority. `LSF-015`, `LSF-016`, and `LSF-018` are closed for their 15 recorded protocol instances by the combined G1/G2 evidence.
 
 Residual scope: atomic reservations (`LSH-G3`), mandatory current revocation (`LSH-G4`), preflight amplification, endpoint policy, response bounds, authoritative metering, and the adversarial live compatibility gate remain open. No M3 milestone claim is made.
+
+Commit state: G1/G2 implementation, explicit-authority fixtures, and prompt evidence were committed as `1e921befb3e6f47cee89a6ed8d3abd2af5fad6bf`. The commit carries the canonical `Authored and reviewed by Basho Parks, copyright 2026` footer. This metadata closeout records the exact implementation SHA before the authorized push to `main`.
