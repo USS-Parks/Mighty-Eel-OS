@@ -276,6 +276,8 @@ fn messages_sse(
         }));
 
         let mut out_tokens = 0u32;
+        let mut terminal_reason = None;
+        let mut provider_failed = false;
         let mut revocation_denied = false;
         while let Some(frame) = chunks.next().await {
             if let Err(error) = meter.authorize_continuation().await {
@@ -304,18 +306,48 @@ fn messages_sse(
                         }));
                     }
                     if c.done {
+                        terminal_reason = c.finish_reason;
+                        if terminal_reason.is_none() {
+                            yield ev("error", &json!({
+                                "type": "error",
+                                "error": {
+                                    "type": "api_error",
+                                    "message": "provider terminal frame omitted stop_reason"
+                                }
+                            }));
+                            provider_failed = true;
+                        }
                         break;
                     }
                 }
-                Err(_) => break,
+                Err(error) => {
+                    yield ev("error", &json!({
+                        "type": "error",
+                        "error": {
+                            "type": "api_error",
+                            "message": error.to_string()
+                        }
+                    }));
+                    provider_failed = true;
+                    break;
+                }
             }
         }
 
-        if !revocation_denied {
+        if terminal_reason.is_none() && !revocation_denied && !provider_failed {
+            yield ev("error", &json!({
+                "type": "error",
+                "error": {
+                    "type": "api_error",
+                    "message": "provider stream ended without a terminal event"
+                }
+            }));
+        }
+        if let Some(reason) = terminal_reason {
             yield ev("content_block_stop", &json!({ "type": "content_block_stop", "index": 0 }));
             yield ev("message_delta", &json!({
                 "type": "message_delta",
-                "delta": { "stop_reason": "end_turn", "stop_sequence": Value::Null },
+                "delta": { "stop_reason": stop_reason(&reason), "stop_sequence": Value::Null },
                 "usage": { "output_tokens": out_tokens }
             }));
             yield ev("message_stop", &json!({ "type": "message_stop" }));
@@ -335,7 +367,7 @@ mod tests {
     use crate::budget_exhausted;
     use crate::meter::ReceiptLedger;
     use crate::meter::testkit::{delta, stream_meter, usage_frame};
-    use crate::provider::StreamChunk;
+    use crate::provider::{ProviderError, StreamChunk};
 
     #[tokio::test]
     async fn streamed_messages_are_metered_across_split_usage_frames() {
@@ -351,6 +383,7 @@ mod tests {
             Ok(StreamChunk {
                 delta: String::new(),
                 done: true,
+                finish_reason: Some("end_turn".to_string()),
                 usage: None,
             }),
         ]));
@@ -383,6 +416,28 @@ mod tests {
         };
         spend.fold("tok-stream", &mut b);
         assert!(budget_exhausted(&b), "streamed spend crossed the cap");
+    }
+
+    #[tokio::test]
+    async fn provider_failure_never_becomes_end_turn_or_message_stop() {
+        let receipts = Arc::new(Mutex::new(ReceiptLedger::new()));
+        let spend = Arc::new(LocalSpendLedger::default());
+        let chunks: ChunkStream = Box::pin(futures::stream::iter(vec![
+            Ok(delta("partial")),
+            Err(ProviderError::Truncated("premature EOF".to_string())),
+        ]));
+        let resp = messages_sse(
+            "claude-3-5-sonnet".to_string(),
+            chunks,
+            stream_meter(&receipts, &spend),
+        );
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let text = String::from_utf8(body.to_vec()).unwrap();
+        assert!(text.contains("api_error"));
+        assert!(!text.contains("message_stop"));
+        assert!(!text.contains("\"stop_reason\":\"end_turn\""));
     }
 
     #[test]

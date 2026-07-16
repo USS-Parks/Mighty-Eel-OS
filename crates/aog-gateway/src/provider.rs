@@ -38,15 +38,51 @@ const PROVIDER_CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_
 /// local model.
 const PROVIDER_READ_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(120);
 
+/// Resource and time ceilings applied to every provider response.
+#[derive(Debug, Clone, Copy)]
+pub struct ProviderLimits {
+    pub connect_timeout: std::time::Duration,
+    pub idle_timeout: std::time::Duration,
+    pub total_timeout: std::time::Duration,
+    pub max_headers: usize,
+    pub max_header_bytes: usize,
+    pub max_body_bytes: usize,
+    pub max_error_body_bytes: usize,
+    pub max_sse_bytes: usize,
+    pub max_sse_line_bytes: usize,
+    pub max_sse_frame_bytes: usize,
+}
+
+impl Default for ProviderLimits {
+    fn default() -> Self {
+        Self {
+            connect_timeout: PROVIDER_CONNECT_TIMEOUT,
+            idle_timeout: PROVIDER_READ_TIMEOUT,
+            total_timeout: std::time::Duration::from_secs(15 * 60),
+            max_headers: 128,
+            max_header_bytes: 64 * 1024,
+            max_body_bytes: 8 * 1024 * 1024,
+            max_error_body_bytes: 64 * 1024,
+            max_sse_bytes: 16 * 1024 * 1024,
+            max_sse_line_bytes: 1024 * 1024,
+            max_sse_frame_bytes: 2 * 1024 * 1024,
+        }
+    }
+}
+
 /// The shared provider HTTP client, with hang guards (D3): a `connect_timeout`
 /// and an idle `read_timeout` bound a dead or stalled backend, while omitting a
 /// total `timeout` keeps long SSE completions intact. The config is static, so
 /// `build` only fails on a TLS-backend init fault (an unrecoverable deployment
 /// error) — the same invariant `reqwest::Client::new` asserts internally.
-pub(crate) fn build_http_client(endpoint: &ApprovedProviderEndpoint) -> reqwest::Client {
+pub(crate) fn build_http_client(
+    endpoint: &ApprovedProviderEndpoint,
+    limits: ProviderLimits,
+) -> reqwest::Client {
     let mut builder = reqwest::Client::builder()
-        .connect_timeout(PROVIDER_CONNECT_TIMEOUT)
-        .read_timeout(PROVIDER_READ_TIMEOUT)
+        .connect_timeout(limits.connect_timeout)
+        .read_timeout(limits.idle_timeout)
+        .timeout(limits.total_timeout)
         // Never carry provider credentials across an upstream redirect. A
         // configured base URL is the only authorized credential destination.
         .redirect(reqwest::redirect::Policy::none());
@@ -124,6 +160,9 @@ pub struct StreamChunk {
     pub delta: String,
     /// True on the final frame of the stream.
     pub done: bool,
+    /// Provider-authenticated terminal reason, present only when `done` is true.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub finish_reason: Option<String>,
     /// Usage, when the provider reports it (usually on the terminal frame).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub usage: Option<Usage>,
@@ -144,6 +183,15 @@ pub enum ProviderError {
     /// The provider's body could not be decoded to the expected shape.
     #[error("decode: {0}")]
     Decode(String),
+    /// A configured response resource ceiling was exceeded.
+    #[error("provider {resource} exceeded limit {limit}")]
+    Limit {
+        resource: &'static str,
+        limit: usize,
+    },
+    /// The provider stream ended without its protocol terminal event.
+    #[error("truncated provider stream: {0}")]
+    Truncated(String),
 }
 
 /// The internal model-backend trait. Object-safe via `async_trait`.
@@ -201,13 +249,103 @@ impl Registry {
 /// `None` to skip a frame (opening/keep-alive), `Some(Ok(chunk))` to emit, or
 /// `Some(Err(..))` to surface a decode error. `event:`/`id:`/blank lines are
 /// ignored — the JSON `data:` payload carries its own type discriminator.
-pub(crate) fn sse_stream<F>(resp: reqwest::Response, parse: F) -> ChunkStream
+pub(crate) fn validate_response(
+    resp: &reqwest::Response,
+    max_body: usize,
+    limits: ProviderLimits,
+) -> Result<(), ProviderError> {
+    if resp.headers().len() > limits.max_headers {
+        return Err(ProviderError::Limit {
+            resource: "header count",
+            limit: limits.max_headers,
+        });
+    }
+    let header_bytes = resp
+        .headers()
+        .iter()
+        .try_fold(0usize, |total, (name, value)| {
+            total
+                .checked_add(name.as_str().len() + value.as_bytes().len() + 4)
+                .ok_or(ProviderError::Limit {
+                    resource: "header bytes",
+                    limit: limits.max_header_bytes,
+                })
+        })?;
+    if header_bytes > limits.max_header_bytes {
+        return Err(ProviderError::Limit {
+            resource: "header bytes",
+            limit: limits.max_header_bytes,
+        });
+    }
+    if resp
+        .content_length()
+        .is_some_and(|length| length > max_body as u64)
+    {
+        return Err(ProviderError::Limit {
+            resource: "declared body bytes",
+            limit: max_body,
+        });
+    }
+    Ok(())
+}
+
+async fn collect_body(
+    resp: reqwest::Response,
+    max: usize,
+) -> Result<(Vec<u8>, bool), ProviderError> {
+    let mut stream = resp.bytes_stream();
+    let mut body = Vec::new();
+    while let Some(next) = stream.next().await {
+        let bytes = next.map_err(|error| ProviderError::Transport(error.to_string()))?;
+        let remaining = max.saturating_sub(body.len());
+        if bytes.len() > remaining {
+            body.extend_from_slice(&bytes[..remaining]);
+            return Ok((body, true));
+        }
+        body.extend_from_slice(&bytes);
+    }
+    Ok((body, false))
+}
+
+pub(crate) async fn response_json(
+    resp: reqwest::Response,
+    limits: ProviderLimits,
+) -> Result<serde_json::Value, ProviderError> {
+    let (body, truncated) = collect_body(resp, limits.max_body_bytes).await?;
+    if truncated {
+        return Err(ProviderError::Limit {
+            resource: "body bytes",
+            limit: limits.max_body_bytes,
+        });
+    }
+    serde_json::from_slice(&body).map_err(|error| ProviderError::Decode(error.to_string()))
+}
+
+pub(crate) async fn error_body(
+    resp: reqwest::Response,
+    limits: ProviderLimits,
+) -> Result<String, ProviderError> {
+    let (body, truncated) = collect_body(resp, limits.max_error_body_bytes).await?;
+    let mut text = String::from_utf8_lossy(&body).into_owned();
+    if truncated {
+        text.push_str(" [truncated by gateway]");
+    }
+    Ok(text)
+}
+
+pub(crate) fn sse_stream<F>(
+    resp: reqwest::Response,
+    mut parse: F,
+    limits: ProviderLimits,
+) -> ChunkStream
 where
-    F: Fn(&str) -> Option<Result<StreamChunk, ProviderError>> + Send + 'static,
+    F: FnMut(&str) -> Option<Result<StreamChunk, ProviderError>> + Send + 'static,
 {
     let s = async_stream::stream! {
         let mut bytes = resp.bytes_stream();
-        let mut buf = String::new();
+        let mut buf = Vec::new();
+        let mut total_bytes = 0usize;
+        let mut frame_bytes = 0usize;
         while let Some(next) = bytes.next().await {
             let chunk = match next {
                 Ok(b) => b,
@@ -216,10 +354,38 @@ where
                     return;
                 }
             };
-            buf.push_str(&String::from_utf8_lossy(&chunk));
-            while let Some(nl) = buf.find('\n') {
-                let line: String = buf.drain(..=nl).collect();
-                let line = line.trim();
+            total_bytes = match total_bytes.checked_add(chunk.len()) {
+                Some(total) if total <= limits.max_sse_bytes => total,
+                _ => {
+                    yield Err(ProviderError::Limit { resource: "SSE total bytes", limit: limits.max_sse_bytes });
+                    return;
+                }
+            };
+            buf.extend_from_slice(&chunk);
+            while let Some(nl) = buf.iter().position(|byte| *byte == b'\n') {
+                let line: Vec<u8> = buf.drain(..=nl).collect();
+                if line.len() > limits.max_sse_line_bytes {
+                    yield Err(ProviderError::Limit { resource: "SSE line bytes", limit: limits.max_sse_line_bytes });
+                    return;
+                }
+                frame_bytes = match frame_bytes.checked_add(line.len()) {
+                    Some(total) if total <= limits.max_sse_frame_bytes => total,
+                    _ => {
+                        yield Err(ProviderError::Limit { resource: "SSE frame bytes", limit: limits.max_sse_frame_bytes });
+                        return;
+                    }
+                };
+                let line = match std::str::from_utf8(&line) {
+                    Ok(line) => line.trim(),
+                    Err(error) => {
+                        yield Err(ProviderError::Decode(format!("SSE is not UTF-8: {error}")));
+                        return;
+                    }
+                };
+                if line.is_empty() {
+                    frame_bytes = 0;
+                    continue;
+                }
                 let Some(data) = line.strip_prefix("data:") else { continue };
                 let data = data.trim();
                 if data.is_empty() {
@@ -233,7 +399,14 @@ where
                     }
                 }
             }
+            if buf.len() > limits.max_sse_line_bytes {
+                yield Err(ProviderError::Limit { resource: "SSE line bytes", limit: limits.max_sse_line_bytes });
+                return;
+            }
         }
+        yield Err(ProviderError::Truncated(
+            "connection closed before a protocol terminal event".to_string(),
+        ));
     };
     Box::pin(s)
 }

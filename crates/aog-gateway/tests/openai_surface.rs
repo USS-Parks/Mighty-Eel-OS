@@ -42,6 +42,7 @@ data: {\"choices\":[{\"delta\":{\"content\":\"Hello \"}}]}\n\n\
 data: {\"choices\":[{\"delta\":{\"content\":\"from \"}}]}\n\n\
 data: {\"choices\":[{\"delta\":{\"content\":\"the \"}}]}\n\n\
 data: {\"choices\":[{\"delta\":{\"content\":\"gateway\"}}]}\n\n\
+data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n\
 data: {\"choices\":[],\"usage\":{\"prompt_tokens\":5,\"completion_tokens\":4}}\n\n\
 data: [DONE]\n\n";
 

@@ -95,9 +95,10 @@ pub(crate) fn provider_http(e: &ProviderError) -> (StatusCode, String) {
             StatusCode::from_u16(*status).unwrap_or(StatusCode::BAD_GATEWAY),
             body.clone(),
         ),
-        ProviderError::Transport(m) | ProviderError::Decode(m) => {
+        ProviderError::Transport(m) | ProviderError::Decode(m) | ProviderError::Truncated(m) => {
             (StatusCode::BAD_GATEWAY, m.clone())
         }
+        ProviderError::Limit { .. } => (StatusCode::BAD_GATEWAY, e.to_string()),
     }
 }
 
@@ -399,7 +400,8 @@ fn chat_sse(model: String, mut chunks: ChunkStream, meter: crate::meter::StreamM
         yield Ok::<Event, std::convert::Infallible>(
             Event::default().data(chunk_json(&id, ts, &model, &json!({ "role": "assistant" }), None)),
         );
-        let mut closed = false;
+        let mut terminal = false;
+        let mut provider_failed = false;
         let mut revocation_denied = false;
         while let Some(frame) = chunks.next().await {
             if let Err(error) = meter.authorize_continuation().await {
@@ -421,20 +423,46 @@ fn chat_sse(model: String, mut chunks: ChunkStream, meter: crate::meter::StreamM
                             .data(chunk_json(&id, ts, &model, &json!({ "content": c.delta }), None)));
                     }
                     if c.done {
-                        yield Ok(Event::default()
-                            .data(chunk_json(&id, ts, &model, &json!({}), Some("stop"))));
-                        closed = true;
+                        if let Some(reason) = c.finish_reason.as_deref() {
+                            yield Ok(Event::default()
+                                .data(chunk_json(&id, ts, &model, &json!({}), Some(reason))));
+                            terminal = true;
+                        } else {
+                            yield Ok(Event::default().data(json!({
+                                "error": {
+                                    "message": "provider terminal frame omitted finish_reason",
+                                    "type": "provider_stream_error",
+                                    "code": "aog_provider_truncated"
+                                }
+                            }).to_string()));
+                            provider_failed = true;
+                        }
+                        break;
                     }
                 }
-                // A mid-stream provider error ends the stream; the client sees a
-                // truncated-but-well-formed SSE close.
-                Err(_) => break,
+                Err(error) => {
+                    yield Ok(Event::default().data(json!({
+                        "error": {
+                            "message": error.to_string(),
+                            "type": "provider_stream_error",
+                            "code": "aog_provider_stream_error"
+                        }
+                    }).to_string()));
+                    provider_failed = true;
+                    break;
+                }
             }
         }
-        if !closed && !revocation_denied {
-            yield Ok(Event::default().data(chunk_json(&id, ts, &model, &json!({}), Some("stop"))));
+        if !terminal && !revocation_denied && !provider_failed {
+            yield Ok(Event::default().data(json!({
+                "error": {
+                    "message": "provider stream ended without a terminal event",
+                    "type": "provider_stream_error",
+                    "code": "aog_provider_truncated"
+                }
+            }).to_string()));
         }
-        if !revocation_denied {
+        if terminal {
             yield Ok(Event::default().data("[DONE]"));
         }
     };
@@ -596,7 +624,7 @@ mod tests {
     use crate::budget_exhausted;
     use crate::meter::ReceiptLedger;
     use crate::meter::testkit::{delta, stream_meter, usage_frame};
-    use crate::provider::{ChunkStream, StreamChunk};
+    use crate::provider::{ChunkStream, ProviderError, StreamChunk};
 
     #[tokio::test]
     async fn streamed_chat_is_metered_and_accrues_spend() {
@@ -613,6 +641,7 @@ mod tests {
             Ok(StreamChunk {
                 delta: String::new(),
                 done: true,
+                finish_reason: Some("stop".to_string()),
                 usage: None,
             }),
         ]));
@@ -642,6 +671,28 @@ mod tests {
         };
         spend.fold("tok-stream", &mut b);
         assert!(budget_exhausted(&b), "streamed spend crossed the cap");
+    }
+
+    #[tokio::test]
+    async fn provider_failure_never_becomes_stop_or_done() {
+        let receipts = Arc::new(Mutex::new(ReceiptLedger::new()));
+        let spend = Arc::new(LocalSpendLedger::default());
+        let chunks: ChunkStream = Box::pin(futures::stream::iter(vec![
+            Ok(delta("partial")),
+            Err(ProviderError::Truncated("premature EOF".to_string())),
+        ]));
+        let resp = chat_sse(
+            "gpt-4o-mini".to_string(),
+            chunks,
+            stream_meter(&receipts, &spend),
+        );
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let text = String::from_utf8(body.to_vec()).unwrap();
+        assert!(text.contains("provider_stream_error"));
+        assert!(!text.contains("data: [DONE]"));
+        assert!(!text.contains("\"finish_reason\":\"stop\""));
     }
 
     #[test]

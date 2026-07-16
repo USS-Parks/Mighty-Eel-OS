@@ -568,6 +568,7 @@ pub(crate) mod testkit {
         StreamChunk {
             delta: text.to_string(),
             done: false,
+            finish_reason: None,
             usage: None,
         }
     }
@@ -576,6 +577,7 @@ pub(crate) mod testkit {
         StreamChunk {
             delta: String::new(),
             done: false,
+            finish_reason: None,
             usage: Some(Usage {
                 input_tokens: input,
                 output_tokens: output,

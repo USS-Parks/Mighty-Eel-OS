@@ -12,7 +12,10 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use aog_gateway::provider::anthropic::AnthropicProvider;
 use aog_gateway::provider::openai::OpenAiProvider;
-use aog_gateway::provider::{ChatMessage, CompletionRequest, Provider, ProviderError, Registry};
+use aog_gateway::provider::{
+    ChatMessage, CompletionRequest, Provider, ProviderError, ProviderLimits, Registry,
+};
+use axum::body::{Body, Bytes};
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::http::header::{CONTENT_TYPE, LOCATION};
@@ -28,6 +31,7 @@ data: {\"choices\":[{\"delta\":{\"role\":\"assistant\"}}]}\n\n\
 data: {\"choices\":[{\"delta\":{\"content\":\"Hello \"}}]}\n\n\
 data: {\"choices\":[{\"delta\":{\"content\":\"from \"}}]}\n\n\
 data: {\"choices\":[{\"delta\":{\"content\":\"OpenAI\"}}]}\n\n\
+data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n\
 data: {\"choices\":[],\"usage\":{\"prompt_tokens\":5,\"completion_tokens\":4}}\n\n\
 data: [DONE]\n\n";
 
@@ -81,6 +85,56 @@ async fn spawn(app: Router) -> String {
     let base = format!("http://{}", listener.local_addr().unwrap());
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
     base
+}
+
+async fn spawn_static(path: &'static str, body: String, content_type: &'static str) -> String {
+    let app = Router::new().route(
+        path,
+        post(move || {
+            let body = body.clone();
+            async move { ([(CONTENT_TYPE, content_type)], body) }
+        }),
+    );
+    spawn(app).await
+}
+
+async fn slow_sse() -> Response {
+    let stream = async_stream::stream! {
+        loop {
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+            yield Ok::<Bytes, std::convert::Infallible>(Bytes::from_static(b": keepalive\n\n"));
+        }
+    };
+    (
+        [(CONTENT_TYPE, "text/event-stream")],
+        Body::from_stream(stream),
+    )
+        .into_response()
+}
+
+async fn header_heavy() -> Response {
+    let mut response = Json(json!({
+        "model": "fixture",
+        "choices": [{"message": {"content": "ok"}, "finish_reason": "stop"}],
+        "usage": {"prompt_tokens": 1, "completion_tokens": 1}
+    }))
+    .into_response();
+    response.headers_mut().insert("x-one", "1".parse().unwrap());
+    response.headers_mut().insert("x-two", "2".parse().unwrap());
+    response
+        .headers_mut()
+        .insert("x-three", "3".parse().unwrap());
+    response
+}
+
+async fn stream_error(provider: &dyn Provider, request: &CompletionRequest) -> ProviderError {
+    let mut stream = provider.stream(request).await.expect("response headers");
+    while let Some(frame) = stream.next().await {
+        if let Err(error) = frame {
+            return error;
+        }
+    }
+    panic!("faulted provider stream ended without an error")
 }
 
 async fn redirect_to(State(location): State<String>) -> Response {
@@ -201,4 +255,150 @@ async fn cross_origin_redirects_never_receive_provider_credentials() {
         0,
         "redirect target received a request that could carry provider credentials"
     );
+}
+
+#[tokio::test]
+async fn provider_bodies_sse_and_deadlines_are_bounded_and_truthful() {
+    let request = CompletionRequest {
+        model: "fixture".to_string(),
+        messages: vec![ChatMessage::user("bounded response probe")],
+        max_tokens: Some(1),
+        temperature: None,
+    };
+    let endpoint = |base: &str| {
+        aog_gateway::posture::ApprovedProviderEndpoint::loopback_fixture(base).unwrap()
+    };
+
+    let body_limits = ProviderLimits {
+        max_body_bytes: 256,
+        ..ProviderLimits::default()
+    };
+    let openai_base =
+        spawn_static("/v1/chat/completions", "x".repeat(1024), "application/json").await;
+    let anthropic_base = spawn_static("/v1/messages", "x".repeat(1024), "application/json").await;
+    for result in [
+        OpenAiProvider::new_with_limits("openai", endpoint(&openai_base), "key", body_limits)
+            .complete(&request)
+            .await,
+        AnthropicProvider::new_with_limits(endpoint(&anthropic_base), "key", body_limits)
+            .complete(&request)
+            .await,
+    ] {
+        assert!(matches!(result, Err(ProviderError::Limit { .. })));
+    }
+
+    let header_base = spawn(Router::new().route("/v1/chat/completions", post(header_heavy))).await;
+    let header_limits = ProviderLimits {
+        max_headers: 2,
+        ..ProviderLimits::default()
+    };
+    let result =
+        OpenAiProvider::new_with_limits("openai", endpoint(&header_base), "key", header_limits)
+            .complete(&request)
+            .await;
+    assert!(matches!(
+        result,
+        Err(ProviderError::Limit {
+            resource: "header count",
+            ..
+        })
+    ));
+
+    let sse_limits = ProviderLimits {
+        max_sse_line_bytes: 128,
+        max_sse_frame_bytes: 192,
+        ..ProviderLimits::default()
+    };
+    let long_line = spawn_static(
+        "/v1/chat/completions",
+        format!("data: {}", "x".repeat(512)),
+        "text/event-stream",
+    )
+    .await;
+    let error = stream_error(
+        &OpenAiProvider::new_with_limits("openai", endpoint(&long_line), "key", sse_limits),
+        &request,
+    )
+    .await;
+    assert!(matches!(
+        error,
+        ProviderError::Limit {
+            resource: "SSE line bytes",
+            ..
+        }
+    ));
+
+    let oversized_frame = spawn_static(
+        "/v1/chat/completions",
+        "event: a\nevent: b\nevent: c\nevent: d\n".to_string(),
+        "text/event-stream",
+    )
+    .await;
+    let frame_limits = ProviderLimits {
+        max_sse_line_bytes: 64,
+        max_sse_frame_bytes: 24,
+        ..ProviderLimits::default()
+    };
+    let error = stream_error(
+        &OpenAiProvider::new_with_limits("openai", endpoint(&oversized_frame), "key", frame_limits),
+        &request,
+    )
+    .await;
+    assert!(matches!(
+        error,
+        ProviderError::Limit {
+            resource: "SSE frame bytes",
+            ..
+        }
+    ));
+
+    for body in [
+        "data: not-json\n\n",
+        "data: [DONE]\n\n",
+        "data: {\"choices\":[{\"delta\":{\"content\":\"partial\"}}]}\n\n",
+    ] {
+        let base = spawn_static(
+            "/v1/chat/completions",
+            body.to_string(),
+            "text/event-stream",
+        )
+        .await;
+        let error = stream_error(
+            &OpenAiProvider::new("openai", endpoint(&base), "key"),
+            &request,
+        )
+        .await;
+        assert!(matches!(
+            error,
+            ProviderError::Decode(_) | ProviderError::Truncated(_)
+        ));
+    }
+
+    let anthropic_stop = spawn_static(
+        "/v1/messages",
+        "data: {\"type\":\"message_stop\"}\n\n".to_string(),
+        "text/event-stream",
+    )
+    .await;
+    let error = stream_error(
+        &AnthropicProvider::new(endpoint(&anthropic_stop), "key"),
+        &request,
+    )
+    .await;
+    assert!(matches!(error, ProviderError::Truncated(_)));
+
+    let slow_base = spawn(Router::new().route("/v1/chat/completions", post(slow_sse))).await;
+    let deadline_limits = ProviderLimits {
+        idle_timeout: std::time::Duration::from_millis(40),
+        total_timeout: std::time::Duration::from_millis(75),
+        ..ProviderLimits::default()
+    };
+    let started = std::time::Instant::now();
+    let error = stream_error(
+        &OpenAiProvider::new_with_limits("openai", endpoint(&slow_base), "key", deadline_limits),
+        &request,
+    )
+    .await;
+    assert!(matches!(error, ProviderError::Transport(_)));
+    assert!(started.elapsed() < std::time::Duration::from_secs(1));
 }

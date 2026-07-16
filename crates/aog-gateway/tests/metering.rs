@@ -314,6 +314,7 @@ async fn upstream_sse(Json(_body): Json<Value>) -> Response {
     let body = concat!(
         "data: {\"choices\":[{\"delta\":{\"content\":\"str\"}}]}\n\n",
         "data: {\"choices\":[{\"delta\":{\"content\":\"eam\"}}]}\n\n",
+        "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n",
         "data: {\"usage\":{\"prompt_tokens\":1000,\"completion_tokens\":500},\"choices\":[]}\n\n",
         "data: [DONE]\n\n",
     );

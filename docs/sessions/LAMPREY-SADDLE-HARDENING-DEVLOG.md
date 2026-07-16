@@ -788,3 +788,83 @@ the canonical footer. Both outgoing commits passed exact-footer verification;
 the pre-push full-tree no-slop and 79-route policy gates passed; and
 `origin/main` advanced from `a35dffd` through `4f6d6e9` on 2026-07-16. This
 final ledger update records the confirmed G6 remote checkpoint.
+
+### LSH-G7 — Bounded provider responses and truthful stream termination
+
+Status: **PASS** (implementation pending commit).
+
+The shared provider boundary previously used unbounded `Response::json` and
+`Response::text`, buffered SSE into a newline-delimited `String` without a line,
+frame, or total-byte cap, and configured only connect plus per-read idle
+timeouts. A provider that continuously trickled bytes could therefore retain a
+task and grow memory indefinitely. On the client side, both gateway surfaces
+discarded provider errors and premature EOF: OpenAI synthesized
+`finish_reason:"stop"` plus `[DONE]`, while Anthropic synthesized `end_turn`
+plus `message_stop` over partial output.
+
+`ProviderLimits` now defines one shared production contract: 10-second connect,
+120-second idle, and 15-minute total deadlines; 128 headers / 64 KiB aggregate
+header bytes; 8 MiB non-stream body; 64 KiB bounded error body; and 16 MiB SSE
+total, 1 MiB line, and 2 MiB frame ceilings. The reqwest client enforces both
+idle and total deadlines. Every response validates header count/bytes and any
+declared content length before body consumption. Success JSON is collected
+incrementally to the body cap; error text is retained only to its smaller cap
+and marked truncated rather than consuming an attacker-sized error.
+
+The shared SSE parser now buffers raw bytes across transport chunks, validates
+UTF-8 only at complete line boundaries, counts total/line/frame bytes with
+checked arithmetic, and emits explicit `Limit`, `Decode`, `Transport`, or
+`Truncated` errors. EOF without a protocol terminal event is always truncation.
+Provider adapters preserve the authenticated terminal reason: OpenAI requires a
+real `finish_reason` before accepting `[DONE]`; Anthropic requires a
+`stop_reason` before accepting `message_stop`. Usage frames after the semantic
+finish remain observable before the final sentinel.
+
+Both outward surfaces now emit a protocol-native error event on upstream error,
+limit, timeout, malformed data, or premature EOF. Only a verified provider
+terminal frame can produce OpenAI `[DONE]` or Anthropic `message_stop`; the real
+finish/stop reason is preserved (`length` maps to `max_tokens` for the Anthropic
+surface). Revocation continues to use its distinct authorization error and also
+never emits a success sentinel. Stream-meter settlement remains drop-based, so
+faulted and cancelled streams are still receipted/charged exactly once.
+
+Changed files:
+
+- `crates/aog-gateway/src/provider.rs`;
+- `crates/aog-gateway/src/provider/{openai.rs,anthropic.rs}`;
+- `crates/aog-gateway/src/surface_{openai,anthropic}.rs`;
+- `crates/aog-gateway/src/meter.rs`; and
+- `crates/aog-gateway/tests/{providers.rs,openai_surface.rs,metering.rs}`.
+
+No dependency, lockfile, public route, or deployment-manifest change was needed.
+Existing compatible provider fixtures were corrected to emit the required real
+OpenAI finish frame before their usage frame and `[DONE]`; accepting their old
+sentinel-only shape would have preserved the vulnerability.
+
+Gates:
+
+- `cargo test -p aog-gateway --test providers -- --nocapture` — PASS, 3/3.
+  The adversarial provider fixture proves oversized OpenAI and Anthropic JSON,
+  excess headers, newline-free SSE, oversized multi-line frames, malformed JSON,
+  `[DONE]` without `finish_reason`, premature EOF, Anthropic `message_stop`
+  without `stop_reason`, and a 20 ms trickle stream under a 75 ms total deadline
+  all fail boundedly;
+- `cargo test -p aog-gateway provider_failure_never --lib` — PASS, 2/2.
+  Partial output followed by provider truncation yields an explicit error and
+  contains no OpenAI `stop`/`[DONE]` or Anthropic `end_turn`/`message_stop`;
+- `cargo test -p aog-gateway` — PASS: 75 library tests plus every gateway
+  integration and doc-test target; valid OpenAI/Anthropic streaming, metering,
+  policy, tokenization, revocation, and tenant behavior remain green;
+- `cargo clippy -p aog-gateway --all-targets -- -D warnings -A
+  clippy::pedantic` — PASS;
+- `cargo fmt --check` — PASS; and
+- `git diff --check` — PASS.
+
+Closure statement: `LSF-024` and reachable `LSD-005/006` response-fault and
+false-success instances are closed at the shared response parser plus both
+client-protocol surfaces. G8 still owns authoritative local usage and safe
+reconciliation; G9 owns the complete two-tenant adversarial live compatibility
+matrix. No broader M3 milestone claim is made.
+
+Commit state: implementation and prompt evidence are pending the authorized
+commit, exact-SHA closeout, footer verification, and push sequence.
