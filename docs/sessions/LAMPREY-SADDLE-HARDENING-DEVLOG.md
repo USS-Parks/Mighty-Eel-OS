@@ -113,7 +113,7 @@ M0 acceptance: **PASS**. Containment is active, all frozen evidence and plans ar
 
 ### LSH-A1 — Mandatory verified request context
 
-Status: **PASS** (uncommitted M1 bundle).
+Status: **PASS** (M1 implementation commit `3f54495`).
 
 The shared `fabric-contracts` boundary now carries server-established roles, immutable token lineage, the authenticated audience and correlation identity, an exact privileged operation, and a final canonical resource. `WsfPrincipal`, `CanonicalResource`, and `VerifiedRequestContext` remain non-deserializable/private-field types, so ordinary JSON cannot manufacture them. An operation-specific sink check rejects replay of a valid context at the wrong operation.
 
@@ -135,7 +135,7 @@ Residual risk: A1 supplies the authenticated context contract; mandatory current
 
 ### LSH-A2 — Mandatory current revocation provider
 
-Status: **PASS** (uncommitted M1 bundle).
+Status: **PASS** (M1 implementation commit `3f54495`).
 
 `MonotonicRevocationStore::authorize` is now the single trusted-time consumer contract. Only anchor-verified, strictly advancing snapshots enter the store; absence, sequence zero, malformed/future issue time, malformed/expired freshness, rollback, and every complete-predicate revocation dimension fail closed. WSF seal and broker consumers reuse this contract instead of duplicating partial freshness logic.
 
@@ -143,7 +143,7 @@ Gate: `cargo test -p fabric-revocation -p wsf-seal -p wsf-broker` PASS. The tabl
 
 ### LSH-A3 — Tenant and estate capability types
 
-Status: **PASS** (uncommitted M1 bundle).
+Status: **PASS** (M1 implementation commit `3f54495`).
 
 `TenantScope` and `EstateScope` are private-field, non-deserializable proof types derived only from `VerifiedRequestContext`. Exact roles are defined for tenant revocation, estate revocation, global mutation, ring/key destruction, and policy publication. A tenant-bound principal cannot construct estate authority even if its verified token contains an estate-looking role; the server-owned estate principal remains explicit.
 
@@ -151,7 +151,7 @@ Gate: `cargo test -p fabric-contracts` PASS, including the complete dangerous-ca
 
 ### LSH-A4 — Atomic reservation and immutable lineage
 
-Status: **PASS** (uncommitted M1 bundle).
+Status: **PASS** (M1 implementation commit `3f54495`).
 
 Attenuation now stamps an immutable `root_id` on the first child and copies it through nested descendants. `ReservationLedger` provides atomic reserve/commit/release across tenant, root lineage, mission, and system keys; unsettled reservations release on drop/cancellation. One hundred barrier-synchronized contenders against a ten-call cap admit exactly ten, and dropped reservations restore capacity.
 
@@ -159,7 +159,7 @@ Gate: `cargo test -p fabric-token` PASS, including nested-root lineage and deter
 
 ### LSH-A5 — Durable mutation/audit contract
 
-Status: **PASS** (uncommitted M1 bundle).
+Status: **PASS** (M1 implementation commit `3f54495`).
 
 AOG admission now Raft-commits a serialized `aog.audit-intent/v1` outbox record before each desired-state mutation. The intent binds correlation, tenant/subject, exact operation/resource, before/after digests, and planned store operation; the resulting receipt references the durable intent. A failure before the intent produces no mutation, while every later ordering retains a Raft-durable recovery record.
 
@@ -169,7 +169,7 @@ Residual migration: W1–W5, O1–O7, G3/G4, and T2 consume these mandatory cont
 
 ### LSH-W1 — Revocation on every WSF privileged endpoint
 
-Status: **PASS** (uncommitted M1 bundle).
+Status: **PASS** (M1 implementation commit `3f54495`).
 
 `AppState` now carries non-optional `RevocationEnforcement`; production startup loads and verifies the current OpenBao snapshot and refuses startup without it. Issue, verify, attenuate, seal, unseal, exchange, and audit/export paths consult current principal/token revocation before privileged work, and denials are tenant-safe and receipted.
 
@@ -177,7 +177,7 @@ Gate: live OpenBao + Moto test PASS. One valid token succeeded, a sequence-2 ten
 
 ### LSH-W2 — Owner-bound envelope authorization
 
-Status: **PASS** (uncommitted M1 bundle).
+Status: **PASS** (M1 implementation commit `3f54495`).
 
 Unseal now requires the presenting token's subject hash to match the signed envelope owner. Cross-subject service access requires both a verified service identity and the exact `envelope:delegate-unseal` capability; generic admin/delegation roles do not qualify.
 
@@ -185,7 +185,7 @@ Gate: offline named-capability matrix and live OpenBao HTTP seal/unseal PASS; tw
 
 ### LSH-W3 — Complete tenant issuance policy
 
-Status: **PASS** (uncommitted M1 bundle).
+Status: **PASS** (M1 implementation commit `3f54495`).
 
 Omitted/empty requested models now resolve to the restrictive tenant allowlist. Signed token models, routes, compliance scopes, classification ceiling, and service identity are selected from server policy plus authenticated context; untrusted issue bodies remain bounded intent only.
 
@@ -193,7 +193,7 @@ Gate: omission/empty/subset/over-broad model matrix, service-identity matrix, po
 
 ### LSH-W4 — Attenuation depth, revocation, and budget lineage
 
-Status: **PASS** (uncommitted M1 bundle).
+Status: **PASS** (M1 implementation commit `3f54495`).
 
 Attenuation verifies the original signed/current parent, enforces the tenant's absolute maximum depth, carries signed immutable root/depth/ancestor lineage, rejects duplicate/cyclic child IDs, and folds authoritative root-lineage reservations into remaining budget before signing a descendant.
 
@@ -201,7 +201,7 @@ Gate: revoked parent, maximum depth, 100-way sibling reservation concurrency, sp
 
 ### LSH-W5 — Credential TTL intersection
 
-Status: **PASS** (uncommitted M1 bundle).
+Status: **PASS** (M1 implementation commit `3f54495`).
 
 AWS/GCP requested duration is the strict intersection of provider/grant maximum, token remaining lifetime, and revocation-snapshot freshness. When remaining authority is below the provider floor the broker denies before custody/cloud calls; it never rounds authority upward.
 
@@ -209,7 +209,7 @@ Gate: every AWS remaining-token case from 1 through 899 seconds denies; revocati
 
 ### LSH-W6 — WSF live two-tenant gate
 
-Status: **PASS** (uncommitted M1 bundle).
+Status: **PASS** (M1 implementation commit `3f54495`).
 
 The live gate now drives issue → verify → attenuate → seal → unseal → exchange through real HTTP against OpenBao and Moto for two authenticated tenants and two same-tenant subjects. It proves subject/tenant isolation, clean tenant-B continuity while tenant A is revoked, snapshot sequence rollover, rollback refusal, and revocation-state rehydration after server restart.
 
@@ -217,7 +217,7 @@ Gate: `cargo test -p wsf-api --test live_revocation -- --nocapture`, `cargo test
 
 ### LSH-O1 — Tenant-safe GET and LIST
 
-Status: **PASS** (uncommitted M1 bundle).
+Status: **PASS** (M1 implementation commit `3f54495`).
 
 Authenticated GET/LIST now require principal context and apply tenant scope before lookup/pagination. Foreign-tenant GET is indistinguishable from absence; estate reads require the explicit `estate:read` role and use bounded continuation pagination (`limit` clamped to 1–1000).
 
@@ -225,7 +225,7 @@ Gate: the cross-tenant GET/LIST/existence/pagination matrix in `aog-apiserver/te
 
 ### LSH-O2 — Global object mutation rules
 
-Status: **PASS** (uncommitted M1 bundle).
+Status: **PASS** (M1 implementation commit `3f54495`).
 
 Update/delete of `tenant=None` objects now requires the exact global-object estate capability. Tenant principals cannot mutate another tenant's object, and tenant deletion of revocation/kill records is always refused.
 
@@ -233,7 +233,7 @@ Gate: tenant-owned, other-tenant, global-object, and protected-revocation create
 
 ### LSH-O3 — Revocation intent authorization
 
-Status: **PASS** (uncommitted M1 bundle).
+Status: **PASS** (M1 implementation commit `3f54495`).
 
 Tenant revocation requires `tenant:revocation` and an exact tenant target. Estate targets require `estate:revocation`; ring destruction additionally requires `estate:ring-key-destruction`. Empty-tenant authenticated principals no longer acquire tenant scope accidentally.
 
@@ -241,7 +241,7 @@ Gate: the exact tenant/estate/ring authorization matrix PASS; normal tenant toke
 
 ### LSH-O4 — Audit-before-success mutation path
 
-Status: **PASS** (uncommitted M1 bundle).
+Status: **PASS** (M1 implementation commit `3f54495`).
 
 Every privileged mutation persists a Raft-replicated audit intent before desired-state commit, finalizes a durable outbox record after commit, and idempotently delivers the receipt into the separately signed ledger. Startup recovery replays finalized receipts. A crash in the post-commit/pre-finalization window now converts the retained intent into signed, explicitly `indeterminate` evidence, preserving the audit barrier without falsely claiming commit success.
 
@@ -249,7 +249,7 @@ Gate: `cargo test -p aog-apiserver --test receipt -- --nocapture` PASS (3/3), in
 
 ### LSH-O5 — Ring/key destruction confinement
 
-Status: **PASS** (uncommitted M1 bundle).
+Status: **PASS** (M1 implementation commit `3f54495`).
 
 Ring actions require both estate revocation and the dedicated ring-key-destruction authority; tenant-created intents are rejected before controller execution and cannot target shared estate Transit keys.
 
@@ -257,7 +257,7 @@ Gate: the authorization matrix plus live OpenBao `live_ring` test PASS and obser
 
 ### LSH-O6 — Policy-bundle publication trust boundary
 
-Status: **PASS** (uncommitted M1 bundle).
+Status: **PASS** (M1 implementation commit `3f54495`).
 
 Global PolicyBundle admission requires estate publication authority. The controller refuses tenant-scoped bundles as estate truth, retracts any previously derived publication, and records degraded status rather than re-signing arbitrary tenant desired state.
 
@@ -265,7 +265,7 @@ Gate: tenant/global admission cases, bundle signature/anti-rollback unit coverag
 
 ### LSH-O7 — Derived controller state ownership and persistence
 
-Status: **PASS** (uncommitted M1 bundle).
+Status: **PASS** (M1 implementation commit `3f54495`).
 
 Mission-derived grants are keyed by tenant, immutable mission UID, mission name, and tool; namesake tenants cannot collide. Scope shrink updates allowed systems, removed tools are pruned, edge grant caches are tenant-partitioned, and client updates cannot lower controller-owned versions, counters, or typed status persisted in desired state.
 
@@ -273,7 +273,7 @@ Gate: mission rename/namesake, tenant collision, scope reduction, tool removal, 
 
 ### LSH-O8 — AOG API/controller integration gate
 
-Status: **PASS** (uncommitted M1 bundle).
+Status: **PASS** (M1 implementation commit `3f54495`).
 
 Combined black-box evidence exercises tenant-isolated API admission and Raft state, controller reconciliation, OpenBao-backed ring revocation and policy publication, durable audit recovery, replay, and restart behavior. `LSF-009`–`LSF-014` and the reachable M1 instances of `LSD-007/008` are closed.
 
@@ -281,7 +281,7 @@ Gate: targeted `receipt`, `crud`, `mission`, `toolgrants`, `replay`, `live_ring`
 
 ### M1 — Trust and tenant boundary milestone gate
 
-Status: **PASS — awaiting mandatory commit approval**.
+Status: **PASS — implementation committed as `3f54495`; documentation closeout pending**.
 
 Final verification on 2026-07-15:
 
