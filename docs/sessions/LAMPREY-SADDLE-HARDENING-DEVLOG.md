@@ -611,3 +611,8 @@ continuation crosses the same current-state check. LSH-G5 remains sequentially
 responsible for bounding public preflight amplification and adding safe negative
 caching; G4 intentionally prioritizes immediate revocation visibility and makes
 no broader M3 milestone claim.
+
+Commit state: implementation and prompt evidence were committed as
+`bcd332f2c5f3f3c33eb0daf70adabe77518260fb`. The commit is SSH-signed and
+carries the canonical `Authored and reviewed by Basho Parks, copyright 2026`
+footer. Push and remote-checkpoint confirmation remain pending.
