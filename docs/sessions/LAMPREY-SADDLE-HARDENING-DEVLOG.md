@@ -697,7 +697,7 @@ on 2026-07-16. This final ledger update records the confirmed remote checkpoint.
 
 ### LSH-G6 — Provider endpoint and credential policy
 
-Status: **PASS** (implementation pending commit).
+Status: **PASS** (implementation commit `3b48b52`).
 
 The production seam previously parsed provider URLs and rejected credentialed
 HTTP plus non-loopback plaintext local backends, while provider adapters still
@@ -779,5 +779,7 @@ and revalidation. G7 remains responsible for response/body/SSE bounds and truthf
 termination; G8 for authoritative usage; G9 for the complete adversarial live
 compatibility matrix. No broader M3 milestone claim is made.
 
-Commit state: implementation and prompt evidence are pending the authorized
-commit, exact-SHA closeout, footer verification, and push sequence.
+Commit state: implementation and prompt evidence were committed as
+`3b48b521c8b43e15cb4792d329a70bd1de8a7c26`. The commit is SSH-signed and
+carries the canonical `Authored and reviewed by Basho Parks, copyright 2026`
+footer. The exact-SHA DEVLOG closeout and remote checkpoint are pending.
