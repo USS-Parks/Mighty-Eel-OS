@@ -782,4 +782,9 @@ compatibility matrix. No broader M3 milestone claim is made.
 Commit state: implementation and prompt evidence were committed as
 `3b48b521c8b43e15cb4792d329a70bd1de8a7c26`. The commit is SSH-signed and
 carries the canonical `Authored and reviewed by Basho Parks, copyright 2026`
-footer. The exact-SHA DEVLOG closeout and remote checkpoint are pending.
+footer. The exact-SHA DEVLOG closeout was committed as
+`4f6d6e9be2f9021ebc7da98a9d7f70eb01a92643`; it is also SSH-signed and carries
+the canonical footer. Both outgoing commits passed exact-footer verification;
+the pre-push full-tree no-slop and 79-route policy gates passed; and
+`origin/main` advanced from `a35dffd` through `4f6d6e9` on 2026-07-16. This
+final ledger update records the confirmed G6 remote checkpoint.
