@@ -343,7 +343,7 @@ Commit state: implementation and evidence committed in `9b31ad9`; DEVLOG SHA clo
 
 ### LSH-C4 — Membership and forwarding destination policy
 
-Status: **PASS — uncommitted; M2 commit approval pending**.
+Status: **PASS** (M2 implementation commit `1700f87`).
 
 The membership-selected outbound seams now consume one strict canonical origin contract. Secure membership accepts only bounded credential-free HTTPS origins with a host and valid port; paths, queries, fragments, port zero, surrounding whitespace, and userinfo are rejected. Initialization rejects duplicate IDs/origins, and learner admission rejects node-ID rebinding or reuse of another member's origin. The wire transport independently revalidates and canonicalizes every `BasicNode` address before dispatch, so a bypass around the admin API still fails closed.
 
@@ -368,7 +368,7 @@ Residual risk: membership changes remain privileged admin operations and certifi
 
 ### LSH-C5 — Control-plane adversarial gate
 
-Status: **PASS — uncommitted; M2 commit approval pending**.
+Status: **PASS** (M2 implementation commit `1700f87`).
 
 The Raft router now enforces a 1 MiB request-body ceiling before JSON decoding. The live three-node mTLS fixture was extended beyond convergence to cover:
 
@@ -384,7 +384,7 @@ The Raft router now enforces a 1 MiB request-body ceiling before JSON decoding. 
 
 ### M2 — Authenticated AOG control plane milestone gate
 
-Status: **PASS — code and DEVLOG are not committed**.
+Status: **PASS — implementation commit `1700f87`; SHA closeout pending commit**.
 
 Final verification on 2026-07-16:
 
@@ -399,4 +399,4 @@ Final verification on 2026-07-16:
 
 Recovery note: an initial workspace run overlapped earlier still-running Cargo invocations and two autoscale fixtures reported `Database already open. Cannot acquire lock.` The exact `aog-controller --test autoscale` target passed immediately in isolation, and one clean tracked workspace run then passed completely. `cargo audit` and `cargo deny` initially could not create advisory-database lock files under the sandbox's read-only Cargo home; the permitted escalation path ran both required gates successfully without changing repository dependencies.
 
-Commit state: C4/C5 implementation plus this DEVLOG closeout are intentionally unstaged and uncommitted. The workspace Git rule requires the staged-file disclosure and the owner's explicit answer to **“Shall I commit?”** before any commit. Push remains a separate approval after a commit exists.
+Commit state: C4/C5 implementation and the milestone evidence were committed as `1700f87` after the pre-commit integrity and no-slop hooks passed. This exact-SHA closeout is the follow-up metadata change; it remains unstaged and uncommitted until separately approved. No push has occurred.
