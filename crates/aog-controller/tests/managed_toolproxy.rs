@@ -316,7 +316,6 @@ fn invoke_ctx() -> InvokeContext {
         session_id: "x3-session".to_string(),
         profile_id: "tok_x3".to_string(),
         role: ToolAccessRole::Guest,
-        untrusted: false,
         system: None,
         estimated_cost_cents: 0,
     }

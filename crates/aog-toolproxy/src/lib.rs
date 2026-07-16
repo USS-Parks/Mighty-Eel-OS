@@ -28,7 +28,7 @@ use mai_agent::types::{AgentError, ToolAccessRole, ToolCall, ToolDefinition, Too
 
 use crate::guard::{Guardrails, TaskUsage};
 use crate::mission::{Mission, MissionContract};
-use crate::receipt::{ToolReceipt, ToolReceiptChain};
+use crate::receipt::{ResultProvenanceBinding, ToolReceipt, ToolReceiptChain};
 use crate::scan::EgressScanner;
 use crate::session::{SessionEventKind, SessionRecord};
 
@@ -120,9 +120,9 @@ pub enum Provenance {
 }
 
 /// The provenance of any tool result re-entering the model's context — always
-/// [`Provenance::Untrusted`]. The agent tags the next call this result influences
-/// with `InvokeContext { untrusted: true, .. }`, which forces a side-effecting call
-/// through approval instead of auto-executing.
+/// [`Provenance::Untrusted`]. LSH-T1 makes this a server decision: callers no
+/// longer submit a trusted/untrusted flag. The proxy links its own prior result
+/// receipt to the next call, while missing or unknown lineage is also untrusted.
 #[must_use]
 pub fn tool_output_provenance() -> Provenance {
     Provenance::Untrusted
@@ -132,14 +132,11 @@ pub fn tool_output_provenance() -> Provenance {
 #[derive(Debug, Clone)]
 pub struct InvokeContext {
     pub session_id: String,
-    /// The authorizing subject / trust-token id.
+    /// The authorizing signed-grant / trust-token id. LSH-T1 binds this identity
+    /// into result provenance but never treats caller metadata as a trust signal.
     pub profile_id: String,
     /// The caller's role (checked against the tool's `required_role`).
     pub role: ToolAccessRole,
-    /// T4 provenance: this call arose from **untrusted** context (e.g. the model
-    /// acting on content that re-entered from a prior tool result). A side-effecting
-    /// call so tainted cannot auto-execute — it is forced through approval.
-    pub untrusted: bool,
     /// T6: the target system this call touches, matched against the mission
     /// contract's `allowed_systems`. `None` = the call declares no system.
     pub system: Option<String>,
@@ -166,6 +163,9 @@ pub struct ToolProxy {
     guardrails: Guardrails,
     /// Per-task (session) usage the T8 blast-radius caps are measured against.
     task_usage: Mutex<BTreeMap<String, TaskUsage>>,
+    /// LSH-T1 server-owned result lineage, keyed by session. Only completed proxy
+    /// receipts populate this map; caller metadata can neither mint nor clear it.
+    result_provenance: Mutex<BTreeMap<String, ResultProvenanceBinding>>,
 }
 
 /// The governance outcome of a brokered call, recorded on its receipt. Bundled so
@@ -179,6 +179,7 @@ struct Governance {
     mission_id: Option<String>,
     out_of_contract: bool,
     guardrail_tripped: bool,
+    provenance_source: Option<ResultProvenanceBinding>,
 }
 
 impl Default for ToolProxy {
@@ -200,6 +201,7 @@ impl ToolProxy {
             session: None,
             guardrails: Guardrails::new(),
             task_usage: Mutex::new(BTreeMap::new()),
+            result_provenance: Mutex::new(BTreeMap::new()),
         }
     }
 
@@ -335,10 +337,25 @@ impl ToolProxy {
         };
         let out_of_contract = mission_deviation.is_some();
 
+        // LSH-T1: provenance is derived only from the proxy's own completed
+        // receipt ledger. A matching prior result supplies auditable lineage;
+        // missing, unknown, or mismatched lineage remains untrusted. Tool output
+        // never upgrades trust, so callers have no boolean/default to exploit.
+        let provenance_source = self
+            .result_provenance
+            .lock()
+            .expect("provenance lock")
+            .get(&ctx.session_id)
+            .filter(|binding| {
+                binding.grant_id == ctx.profile_id && binding.mission_id == mission_id
+            })
+            .cloned();
+        let provenance = Provenance::Untrusted;
+
         // A call is routed to a human when it is side-effecting (T3) OR it deviates
-        // from the mission contract (T6). Without an inbox, a tainted mutation (T4)
-        // or any mission deviation (T6) is blocked (fail-closed); a plain trusted
-        // side-effect still executes.
+        // from the mission contract (T6). Without an inbox, every mutation is
+        // blocked because tool-result, missing, and unknown provenance are all
+        // untrusted. Only an approval decision can admit a mutating call.
         let needs_review = tool.has_side_effects || mission_deviation.is_some();
         let mut approval_required = false;
         let mut approved_by = None;
@@ -361,6 +378,7 @@ impl ToolProxy {
                                     approval_required: true,
                                     mission_id,
                                     out_of_contract,
+                                    provenance_source: provenance_source.clone(),
                                     ..Governance::default()
                                 },
                             );
@@ -369,7 +387,7 @@ impl ToolProxy {
                     }
                 }
                 None => {
-                    if ctx.untrusted || mission_deviation.is_some() {
+                    if provenance == Provenance::Untrusted || mission_deviation.is_some() {
                         let reason = mission_deviation.clone().unwrap_or_else(|| {
                             "untrusted-triggered mutation requires approval (no inbox configured)"
                                 .to_string()
@@ -385,6 +403,7 @@ impl ToolProxy {
                                 approval_required: true,
                                 mission_id,
                                 out_of_contract,
+                                provenance_source: provenance_source.clone(),
                                 ..Governance::default()
                             },
                         );
@@ -451,6 +470,7 @@ impl ToolProxy {
                 mission_id,
                 out_of_contract,
                 guardrail_tripped: false,
+                provenance_source,
             },
         );
         Ok(result)
@@ -509,7 +529,9 @@ impl ToolProxy {
         let (cred_lease, cred_ttl_ms) = cred.map_or((None, None), |c| {
             (Some(c.lease_id.clone()), Some(ms(c.ttl)))
         });
-        self.receipts
+        let result_mission_id = gov.mission_id.clone();
+        let receipt_hash = self
+            .receipts
             .lock()
             .expect("receipt lock")
             .append(ToolReceipt {
@@ -527,13 +549,35 @@ impl ToolProxy {
                 cred_ttl_ms,
                 approval_required: gov.approval_required,
                 approved_by: gov.approved_by,
-                untrusted_context: ctx.untrusted,
+                untrusted_context: true,
+                provenance_source: gov.provenance_source,
                 redacted_spans: gov.redacted_spans,
                 redaction_kinds: gov.redaction_kinds,
                 mission_id: gov.mission_id,
                 out_of_contract: gov.out_of_contract,
                 guardrail_tripped: gov.guardrail_tripped,
             });
+
+        // Bind the result just produced to the exact receipt-chain head. The
+        // grant/profile and mission were resolved on the server path for this
+        // invocation; the caller cannot inject this binding into a later context.
+        let mut provenance = self.result_provenance.lock().expect("provenance lock");
+        if !provenance.contains_key(&ctx.session_id)
+            && provenance.len() >= MAX_TRACKED_SESSIONS
+            && let Some(oldest) = provenance.keys().next().cloned()
+        {
+            provenance.remove(&oldest);
+        }
+        provenance.insert(
+            ctx.session_id.clone(),
+            ResultProvenanceBinding {
+                tool_id: call.tool_id.clone(),
+                grant_id: ctx.profile_id.clone(),
+                mission_id: result_mission_id,
+                call_id: call.call_id.clone(),
+                receipt_hash,
+            },
+        );
     }
 
     /// The receipt-chain head (hex).
@@ -691,17 +735,8 @@ mod tests {
             session_id: "s1".to_string(),
             profile_id: "tok_1".to_string(),
             role,
-            untrusted: false,
             system: None,
             estimated_cost_cents: 0,
-        }
-    }
-
-    /// A context tainted by untrusted provenance (T4).
-    fn untrusted_ctx(role: ToolAccessRole) -> InvokeContext {
-        InvokeContext {
-            untrusted: true,
-            ..ctx(role)
         }
     }
 
@@ -943,7 +978,12 @@ mod tests {
             live: Arc::clone(&live),
             counter: Arc::new(Mutex::new(0)),
         });
-        let proxy = ToolProxy::new().with_minter(minter);
+        let proxy = ToolProxy::new()
+            .with_minter(minter)
+            .with_approvals(Box::new(AlwaysGate {
+                approve: true,
+                actor: "operator".to_string(),
+            }));
         proxy
             .register(tool("write.record", true, ToolAccessRole::Parent))
             .unwrap();
@@ -1096,7 +1136,7 @@ mod tests {
     // ── T4: provenance tagging (the agentjacking defense) ────────────────
 
     #[tokio::test]
-    async fn injected_instruction_in_a_tool_result_cannot_auto_trigger_a_mutation() {
+    async fn reg_lsf_026_server_provenance_blocks_injected_mutation() {
         // A read tool returns attacker-controlled text with an injected instruction.
         struct InjectingReader;
         #[async_trait]
@@ -1118,7 +1158,11 @@ mod tests {
             }
         }
 
-        let proxy = ToolProxy::new();
+        let proxy = ToolProxy::new().with_mission(
+            MissionContract::new("mission-provenance")
+                .allow_tool("web.read")
+                .allow_tool("delete_all"),
+        );
         proxy
             .register(tool("web.read", false, ToolAccessRole::Guest))
             .unwrap();
@@ -1137,14 +1181,15 @@ mod tests {
             .unwrap();
         assert!(read.success);
         assert_eq!(tool_output_provenance(), Provenance::Untrusted);
+        let read_receipt = proxy.receipt_head();
 
-        // The model, acting on that untrusted output, tries the mutating call — so the
-        // call is tainted. With no inbox configured it is blocked (fail-closed), never
-        // auto-executed.
+        // The model, acting on that untrusted output, tries the mutating call. No
+        // caller taint flag exists: the proxy carries forward its own result
+        // receipt. With no inbox configured the mutation is blocked fail-closed.
         let del = proxy
             .invoke(
                 &call("c2", "delete_all"),
-                &untrusted_ctx(ToolAccessRole::Guest),
+                &ctx(ToolAccessRole::Guest),
                 &EchoExecutor,
             )
             .await
@@ -1162,10 +1207,18 @@ mod tests {
         assert!(rec.untrusted_context);
         assert!(rec.approval_required);
         assert_eq!(rec.approved_by, None);
+        let source = rec
+            .provenance_source
+            .expect("server-derived result lineage");
+        assert_eq!(source.tool_id, "web.read");
+        assert_eq!(source.grant_id, "tok_1");
+        assert_eq!(source.mission_id.as_deref(), Some("mission-provenance"));
+        assert_eq!(source.call_id, "c1");
+        assert_eq!(source.receipt_hash, read_receipt);
     }
 
     #[tokio::test]
-    async fn untrusted_mutation_routes_to_the_inbox_when_configured() {
+    async fn missing_provenance_mutation_routes_to_the_inbox_when_configured() {
         struct RecordingGate {
             called: Arc<Mutex<bool>>,
         }
@@ -1193,7 +1246,7 @@ mod tests {
         proxy
             .invoke(
                 &call("c1", "delete_all"),
-                &untrusted_ctx(ToolAccessRole::Guest),
+                &ctx(ToolAccessRole::Guest),
                 &EchoExecutor,
             )
             .await
@@ -1209,7 +1262,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn untrusted_read_only_call_executes_normally() {
+    async fn missing_provenance_read_only_call_executes_normally() {
         let proxy = ToolProxy::new();
         proxy
             .register(tool("web.read", false, ToolAccessRole::Guest))
@@ -1217,7 +1270,7 @@ mod tests {
         let r = proxy
             .invoke(
                 &call("c1", "web.read"),
-                &untrusted_ctx(ToolAccessRole::Guest),
+                &ctx(ToolAccessRole::Guest),
                 &EchoExecutor,
             )
             .await
@@ -1227,7 +1280,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn trusted_mutation_without_inbox_still_executes() {
+    async fn missing_provenance_mutation_without_inbox_is_denied() {
         let proxy = ToolProxy::new();
         proxy
             .register(tool("write.record", true, ToolAccessRole::Parent))
@@ -1240,11 +1293,10 @@ mod tests {
             )
             .await
             .unwrap();
-        assert!(
-            r.success,
-            "a trusted mutation with no inbox executes (T3 behaviour)"
-        );
-        assert!(!proxy.receipts()[0].untrusted_context);
+        assert!(!r.success, "missing provenance cannot authorize mutation");
+        assert!(r.error.unwrap().contains("requires approval"));
+        assert!(proxy.receipts()[0].untrusted_context);
+        assert!(proxy.receipts()[0].provenance_source.is_none());
     }
 
     // ── T5: egress scanning of tool results ──────────────────────────────

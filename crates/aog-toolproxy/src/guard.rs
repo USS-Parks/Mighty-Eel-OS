@@ -168,7 +168,6 @@ mod tests {
             session_id: "s1".to_string(),
             profile_id: profile.to_string(),
             role: ToolAccessRole::Guest,
-            untrusted: false,
             system: system.map(str::to_string),
             estimated_cost_cents: 0,
         }

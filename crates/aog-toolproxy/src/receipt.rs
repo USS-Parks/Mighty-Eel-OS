@@ -41,6 +41,11 @@ pub struct ToolReceipt {
     /// side-effecting such call is forced through approval, never auto-executed.
     #[serde(default, skip_serializing_if = "is_false")]
     pub untrusted_context: bool,
+    /// LSH-T1: server-derived lineage for the tool result that preceded this
+    /// invocation in the same session. `None` means the lineage was missing or
+    /// unknown; that condition is still treated as untrusted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provenance_source: Option<ResultProvenanceBinding>,
     /// T5: number of secret/PHI/ITAR spans redacted from this call's result before
     /// it re-entered the model context. Zero (omitted) when the result was clean.
     #[serde(default, skip_serializing_if = "is_zero")]
@@ -60,6 +65,20 @@ pub struct ToolReceipt {
     /// blast-radius cap). Omitted when no guardrail tripped.
     #[serde(default, skip_serializing_if = "is_false")]
     pub guardrail_tripped: bool,
+}
+
+/// Server-recorded identity of one tool result. The receipt-chain head binds the
+/// result to the exact receipt that recorded its executing tool, authorizing
+/// grant/profile, mission, and call id. Callers cannot supply this structure to
+/// [`crate::InvokeContext`]; the proxy carries it forward from its own ledger.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct ResultProvenanceBinding {
+    pub tool_id: String,
+    pub grant_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mission_id: Option<String>,
+    pub call_id: String,
+    pub receipt_hash: String,
 }
 
 /// `skip_serializing_if` predicate — omit a `false` flag so an un-gated receipt is

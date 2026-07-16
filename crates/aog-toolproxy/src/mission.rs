@@ -172,7 +172,6 @@ mod tests {
             session_id: "s1".to_string(),
             profile_id: "tok_1".to_string(),
             role: ToolAccessRole::Guest,
-            untrusted: false,
             system: None,
             estimated_cost_cents: 0,
         }

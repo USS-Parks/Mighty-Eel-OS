@@ -1033,3 +1033,76 @@ the canonical footer. Both outgoing commits passed exact-footer verification;
 the pre-push full-tree no-slop and 79-route policy gates passed; and
 `origin/main` advanced from `0c2ddc4` through `a373cf1` on 2026-07-16. This
 final ledger update records the confirmed G9 remote checkpoint.
+
+### LSH-T1 — Server-derived provenance
+
+Status: **PASS** (implementation commit pending).
+
+`InvokeContext.untrusted` let an integrating caller assert that model context
+was trusted. With no approval inbox, `false` admitted a side-effecting tool call
+directly to `ToolExecutor::execute`. That was the confirmed `LSF-026` confused-
+deputy path.
+
+The caller-controlled flag is removed from the public invocation context and
+all consumers. The proxy now treats tool-result, missing, unknown, and
+mismatched lineage as untrusted. Read-only calls remain available, while every
+mutation requires an approval decision; without an inbox it is denied before
+credential minting or executor entry.
+
+Each completed result now creates a server-owned provenance binding keyed by
+session and tied to the executing tool, authorizing signed-grant/trust-token id,
+mission, call id, and exact receipt-chain head. A matching binding is copied
+into the next receipt as `provenance_source`; callers cannot construct or clear
+that lineage through `InvokeContext`. The adversarial regression performs a
+read whose result contains an injected `delete_all` instruction, then submits a
+plain caller context. The proxy derives the prior result receipt itself and
+denies the mutation. Separate regressions prove missing lineage routes to a
+configured inbox or denies when no inbox exists, while read-only execution is
+unchanged.
+
+The affected-crate all-target lint also found the G4 live revocation fixture
+still calling the removed optional `.with_revocation_path` builder. The fixture
+now uses `Gateway::new_production(..., REV_PATH)` and loads the already-seeded
+mandatory baseline snapshot. This is a compile-only compatibility repair to the
+existing live gate, not a new runtime path.
+
+Changed files:
+
+- `crates/aog-toolproxy/src/lib.rs`;
+- `crates/aog-toolproxy/src/receipt.rs`;
+- `crates/aog-toolproxy/src/guard.rs`;
+- `crates/aog-toolproxy/src/mission.rs`;
+- `crates/aog-approvals/src/lib.rs`;
+- `crates/aog-conformance/tests/robustness_conformance.rs`;
+- `crates/aog-controller/tests/managed_toolproxy.rs`;
+- `crates/aog-controller/tests/live_revocation.rs`; and
+- this DEVLOG.
+
+Gates:
+
+- `cargo test -p aog-toolproxy
+  tests::reg_lsf_026_server_provenance_blocks_injected_mutation -- --exact` —
+  PASS, 1/1 named adversarial regression;
+- `cargo test -p aog-toolproxy -p aog-approvals` — PASS: 53 toolproxy tests,
+  five approval tests, and doc tests. The server-derived injection, missing-
+  lineage approval/deny, receipt binding, mutation, credential, mission,
+  guardrail, session, and egress regressions are green;
+- `cargo test -p aog-conformance --test robustness_conformance` — PASS, 11/11;
+- `cargo test -p aog-controller --test managed_toolproxy --test
+  live_revocation` — PASS, 2/2 in the current prerequisite-free lane;
+- `cargo clippy -p aog-toolproxy -p aog-approvals -p aog-conformance -p
+  aog-controller --all-targets -- -D warnings -A clippy::pedantic` — PASS;
+- source search for `InvokeContext` `untrusted` fields/defaults and the removed
+  revocation builder — clean;
+- `cargo fmt --check` — PASS; and
+- `git diff --check` — PASS.
+
+Closure statement: `LSF-026` is closed at the toolproxy request-context and
+executor boundary. Caller-supplied provenance flags/defaults no longer exist,
+and injected tool-result instructions cannot reach mutation without approval.
+LSH-T2 is the next sequential prompt. The broader M3 milestone remains open
+through LSH-T6.
+
+Commit state: implementation and prompt evidence are ready for the authorized
+commit/push sequence; exact SHAs and the remote checkpoint will be recorded in
+the closeout commit.

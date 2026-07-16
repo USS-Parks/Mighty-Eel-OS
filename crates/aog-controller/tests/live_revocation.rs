@@ -239,14 +239,16 @@ async fn an_intent_denies_a_token_on_every_replica_and_over_media() {
     );
 
     // The real gateway: resolves virtual keys, and its kill switch reads REV_PATH.
-    let gateway = Gateway::new(
+    let gateway = Gateway::new_production(
         OpenBaoAuth::new(OpenBaoConfig::new(&addr, role_id, secret_id)).unwrap(),
         GatewayConfig {
             token_public_key: anchor.public_key().to_vec(),
             virtual_key_kv_prefix: VK_PREFIX.to_owned(),
         },
+        REV_PATH,
     )
-    .with_revocation_path(REV_PATH);
+    .await
+    .expect("mandatory baseline revocation snapshot is current");
 
     // Provision a resolvable key: a capability + a virtual key → a token.
     client
