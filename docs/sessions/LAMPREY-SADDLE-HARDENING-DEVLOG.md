@@ -1107,5 +1107,9 @@ through LSH-T6.
 Commit state: implementation and prompt evidence were committed as
 `5f92865ec807846934f89c14defaa5daadb5fbbe`. The commit is SSH-signed and
 carries the canonical `Authored and reviewed by Basho Parks, copyright 2026`
-footer. The exact-SHA DEVLOG closeout and remote checkpoint remain in the
-authorized closeout sequence.
+footer. The exact-SHA DEVLOG closeout was committed as
+`be08d5dab72147dee188cce9a2f3467562008e59`; it is also SSH-signed and carries
+the canonical footer. Both outgoing commits passed exact-footer and signature
+verification; the pre-push full-tree no-slop and 79-route policy gates passed;
+and `origin/main` advanced from `d97a8a7` through `be08d5d` on 2026-07-16. This
+final ledger update records the confirmed T1 remote checkpoint.
