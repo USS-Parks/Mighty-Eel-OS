@@ -945,5 +945,9 @@ broader M3 milestone claim is made.
 Commit state: implementation and prompt evidence were committed as
 `be2e900217b3b3aa77a2b8d6c1713a82a6ea612e`. The commit is SSH-signed and
 carries the canonical `Authored and reviewed by Basho Parks, copyright 2026`
-footer. The exact-SHA DEVLOG closeout, pre-push integrity gates, and remote
-checkpoint will be recorded after Git confirms them.
+footer. The exact-SHA DEVLOG closeout was committed as
+`e6bc6c26ab4d1f331289d3b48d24db05e50fb92d`; it is also SSH-signed and carries
+the canonical footer. Both outgoing commits passed exact-footer verification;
+the pre-push full-tree no-slop and 79-route policy gates passed; and
+`origin/main` advanced from `6a19392` through `e6bc6c2` on 2026-07-16. This
+final ledger update records the confirmed G8 remote checkpoint.
