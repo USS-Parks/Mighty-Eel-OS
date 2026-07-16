@@ -384,7 +384,7 @@ The Raft router now enforces a 1 MiB request-body ceiling before JSON decoding. 
 
 ### M2 — Authenticated AOG control plane milestone gate
 
-Status: **PASS — implementation commit `1700f87`; SHA closeout pending commit**.
+Status: **PASS — implementation commit `1700f87`; DEVLOG closeout `17fc3ec`; pushed to `main`**.
 
 Final verification on 2026-07-16:
 
@@ -399,4 +399,4 @@ Final verification on 2026-07-16:
 
 Recovery note: an initial workspace run overlapped earlier still-running Cargo invocations and two autoscale fixtures reported `Database already open. Cannot acquire lock.` The exact `aog-controller --test autoscale` target passed immediately in isolation, and one clean tracked workspace run then passed completely. `cargo audit` and `cargo deny` initially could not create advisory-database lock files under the sandbox's read-only Cargo home; the permitted escalation path ran both required gates successfully without changing repository dependencies.
 
-Commit state: C4/C5 implementation and the milestone evidence were committed as `1700f87` after the pre-commit integrity and no-slop hooks passed. This exact-SHA closeout is the follow-up metadata change; it remains unstaged and uncommitted until separately approved. No push has occurred.
+Commit state: C4/C5 implementation and milestone evidence were committed as `1700f87`; the exact-SHA DEVLOG closeout was committed as `17fc3ec`. Both commits carry the canonical `Authored and reviewed by Basho Parks, copyright 2026` footer. The pre-push full no-slop and 79-route policy gates passed, and `origin/main` advanced from `20edccb` through `17fc3ec` on 2026-07-16. This final ledger update records the confirmed remote checkpoint.
