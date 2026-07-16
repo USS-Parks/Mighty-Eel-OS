@@ -481,7 +481,7 @@ Commit state: G1/G2 implementation, explicit-authority fixtures, and prompt evid
 
 ### LSH-G3 — Atomic gateway spend
 
-Status: **PASS** (implementation commit pending in this change set).
+Status: **PASS** (implementation commit `7e8c05c`).
 
 The former gateway budget path performed a non-reserving preflight and charged
 only after provider completion. Concurrent stream and non-stream calls could all
@@ -543,4 +543,6 @@ a post-execution check/charge race, and cancellation/failure cannot leave a live
 reservation or charge it twice. LSH-G4 (mandatory current revocation) is the next
 sequential prompt; no broader M3 milestone claim is made.
 
-Commit state: implementation and prompt evidence are pending in this change set.
+Commit state: implementation and prompt evidence were committed as
+`7e8c05c1a4c4176fd596fa15de495c0054434fdf`; this exact-SHA DEVLOG update is
+the follow-up metadata change set.
