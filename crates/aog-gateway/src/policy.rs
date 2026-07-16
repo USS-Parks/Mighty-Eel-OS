@@ -22,7 +22,7 @@ use fabric_contracts::Route;
 use mai_compliance::{BaaEnforcer, ComposerConfig, ModuleDecision, PhiDetector, PolicyComposer};
 use serde_json::json;
 
-use crate::app::{AppState, Target};
+use crate::app::Target;
 use crate::route::GatewayRoute;
 
 /// Enforcement posture for a request.
@@ -274,27 +274,6 @@ pub fn target_is_cloud(target: &Target) -> bool {
     target.provider != "local"
 }
 
-/// The policy gate a surface runs before dispatch. Returns the decision + outcome
-/// when the request may proceed, or a ready `403` [`Response`] when enforce blocks.
-///
-/// The `Err` variant is intentionally a prepared HTTP `Response` (control flow,
-/// not an error value) — boxing it would add indirection for no benefit.
-#[allow(clippy::result_large_err)]
-pub(crate) fn gate(
-    state: &AppState,
-    target_cloud: bool,
-    query: &str,
-    route: &GatewayRoute,
-) -> Result<(PolicyDecision, ModeOutcome), Response> {
-    let decision = state.policy.evaluate(query, route);
-    let outcome = apply_mode(&decision, state.mode, target_cloud);
-    if outcome.block {
-        Err(blocked(&decision, state.mode))
-    } else {
-        Ok((decision, outcome))
-    }
-}
-
 fn set_headers(
     resp: &mut Response,
     decision: &PolicyDecision,
@@ -334,7 +313,7 @@ pub(crate) fn tag_policy(
 
 /// A `403` for an enforce-blocked request (generic error shape both OpenAI and
 /// Anthropic clients surface).
-fn blocked(decision: &PolicyDecision, mode: PolicyMode) -> Response {
+pub(crate) fn blocked(decision: &PolicyDecision, mode: PolicyMode) -> Response {
     let reason = decision
         .reasons
         .first()

@@ -21,7 +21,7 @@ use axum::routing::post;
 use axum::{Json, Router};
 use chrono::{Duration, Utc};
 use fabric_contracts::{
-    Attenuation, Budget, Classification, RevocationStatus, Signature, TrustToken,
+    Attenuation, Budget, Classification, RevocationStatus, Route, Signature, TrustToken,
 };
 use fabric_crypto::Signer;
 use fabric_crypto::providers::RustCryptoMlDsa87;
@@ -167,8 +167,8 @@ fn in_budget_token(signer: &RustCryptoMlDsa87) -> TrustToken {
         identity_id: None,
         roles: vec![],
         compliance_scopes: vec![],
-        allowed_routes: vec![],
-        allowed_models: vec![],
+        allowed_routes: vec![Route::CloudAllowed],
+        allowed_models: vec!["claude-3-5-sonnet".into()],
         max_data_classification: Classification::Restricted,
         country: None,
         person_type: None,

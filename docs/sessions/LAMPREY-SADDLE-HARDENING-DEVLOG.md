@@ -400,3 +400,79 @@ Final verification on 2026-07-16:
 Recovery note: an initial workspace run overlapped earlier still-running Cargo invocations and two autoscale fixtures reported `Database already open. Cannot acquire lock.` The exact `aog-controller --test autoscale` target passed immediately in isolation, and one clean tracked workspace run then passed completely. `cargo audit` and `cargo deny` initially could not create advisory-database lock files under the sandbox's read-only Cargo home; the permitted escalation path ran both required gates successfully without changing repository dependencies.
 
 Commit state: C4/C5 implementation and milestone evidence were committed as `1700f87`; the exact-SHA DEVLOG closeout was committed as `17fc3ec`. Both commits carry the canonical `Authored and reviewed by Basho Parks, copyright 2026` footer. The pre-push full no-slop and 79-route policy gates passed, and `origin/main` advanced from `20edccb` through `17fc3ec` on 2026-07-16. This final ledger update records the confirmed remote checkpoint.
+
+---
+
+## M3 — Gateway and tool boundary (in progress)
+
+### LSH-G1 — One final gateway authorization decision
+
+Status: **PASS — locally verified; not committed**.
+
+The vulnerable path remained reachable at the M2 checkpoint: `authorize` returned a valid signed token without consulting its model, route, or classification caveats; each protocol surface independently resolved a mutable target and called a provider; and `RoutingDecision::Denied` became `LocalOnly` plus an audit marker, allowing a local provider to execute. An authenticated holder of a restricted virtual key could therefore invoke an excluded configured model, and content at the router's terminal deny floor could still reach local inference.
+
+`AuthorizedDispatch` is now the sole provider-execution capability used by OpenAI chat, OpenAI streaming, legacy completion, Anthropic messages, and Anthropic streaming. It is created only after virtual-key/token verification, revocation/budget preflight, final alias-to-provider resolution, locality, classification, router decision, signed caveats, and deny-wins policy evaluation are known. Its fields are private; its `complete` and `stream` methods overwrite any later request-model mutation with the frozen authorized upstream target before invoking the private provider handle.
+
+Terminal controls:
+
+- an explicit router deny returns 403 for local and cloud targets in every policy mode;
+- a non-empty signed `allowed_models` caveat must contain the inbound public model alias;
+- a non-empty signed `allowed_routes` caveat must authorize the resolved provider locality;
+- unknown classification fails closed, and a recognized classification above the signed maximum is denied; and
+- registry/provider identity mismatch is denied before dispatch.
+
+Changed files:
+
+- `crates/aog-gateway/src/app.rs`;
+- `crates/aog-gateway/src/policy.rs`;
+- `crates/aog-gateway/src/surface_openai.rs`; and
+- `crates/aog-gateway/src/surface_anthropic.rs`.
+
+Focused and compatibility gates:
+
+- `cargo test -p aog-gateway app::tests --lib` — PASS, 6/6; the exhaustive locality/route table proves an explicit deny cannot become allow, excluded aliases stay denied across target transforms, route/classification caveats are terminal, and the provider sink receives the frozen upstream model rather than a post-authorization mutation.
+- `cargo test -p aog-gateway` — PASS: 66 library tests plus all gateway integration and doc-test targets; existing valid OpenAI, legacy, Anthropic, provider, policy-mode, metering, tenant-isolation, tokenization, revocation, and budget behavior remains green.
+- `cargo clippy -p aog-gateway --all-targets -- -D warnings -A clippy::pedantic` — PASS.
+- `cargo fmt --check` — PASS.
+- `git diff --check` — PASS.
+
+Change-aware bypass review: repository search finds no direct `provider.complete` or `provider.stream` call in either protocol surface; all five provider sinks consume `AuthorizedDispatch`. Removing the terminal `route.denied` check, the alias caveat check, or the frozen-target overwrite makes its corresponding focused regression fail.
+
+Residual scope: LSH-G2 remains sequentially required for the generated five-surface model/route matrix and the explicit omitted/empty/subset compatibility contract. G1 deliberately preserves current empty-caveat token behavior until that prompt resolves and tests it consistently; no claim is made that `LSF-015`, `LSF-016`, or all protocol instances are closed before G2. G3/G4 and later gateway prompts still own atomic spend and mandatory current revocation.
+
+### LSH-G2 — Protocol parity for model/route caveats
+
+Status: **PASS — locally verified; not committed**.
+
+G2 completes the compatibility/security contract left open by G1. Because `TrustToken.allowed_models` and `allowed_routes` deserialize omitted fields to empty vectors, both omitted and explicit-empty values now mean no gateway inference authority and fail closed. A signed non-empty model caveat authorizes the public inbound alias; a signed non-empty route caveat must authorize the final provider locality. Operator model mapping remains free to translate an authorized public alias to its configured upstream name, but it cannot make an excluded alias authorized and the private dispatch object freezes that upstream name at the sink.
+
+The generated matrix names and exercises all five reachable instances:
+
+- OpenAI chat non-stream;
+- OpenAI chat stream;
+- OpenAI legacy completion;
+- Anthropic message non-stream; and
+- Anthropic message stream.
+
+For every surface, the matrix covers model omission/empty, excluded model subset, route omission/empty, excluded route subset, and a valid subset control. This yields the 10 instance regressions required by `REG-LSF-015-gateway-model-matrix` and `REG-LSF-016-gateway-route-matrix`; the shared G1 terminal-deny table simultaneously covers all `LSF-018` locality/route transformations. Existing live-gateway fixtures now issue explicit model and route authority instead of relying on an empty-as-unbounded legacy interpretation.
+
+Additional changed test files:
+
+- `crates/aog-gateway/tests/openai_surface.rs`;
+- `crates/aog-gateway/tests/anthropic_surface.rs`;
+- `crates/aog-gateway/tests/completions_legacy.rs`;
+- `crates/aog-gateway/tests/metering.rs`;
+- `crates/aog-gateway/tests/policy_modes.rs`; and
+- `crates/aog-gateway/tests/tenant_isolation.rs`.
+
+Gates:
+
+- `cargo test -p aog-gateway app::tests --lib` — PASS, 8/8, including the generated five-surface matrix and omitted-field deserialization regression.
+- `cargo test -p aog-gateway` — PASS: 68 library tests plus all gateway integration and doc-test targets.
+- `cargo clippy -p aog-gateway --all-targets -- -D warnings -A clippy::pedantic` — PASS.
+- `cargo fmt --check` — PASS.
+- `git diff --check` — PASS.
+
+Closure statement: the original excluded-model, excluded-route, and explicit-router-deny paths no longer reproduce at the shared authorization-to-provider boundary. Repository search confirms the five concrete sinks can invoke providers only through `AuthorizedDispatch`; the caveat matrix fails if empty authority is treated as allow or if either signed subset check is removed. Existing valid OpenAI, legacy, and Anthropic compatibility tests remain green with explicit signed authority. `LSF-015`, `LSF-016`, and `LSF-018` are closed for their 15 recorded protocol instances by the combined G1/G2 evidence.
+
+Residual scope: atomic reservations (`LSH-G3`), mandatory current revocation (`LSH-G4`), preflight amplification, endpoint policy, response bounds, authoritative metering, and the adversarial live compatibility gate remain open. No M3 milestone claim is made.

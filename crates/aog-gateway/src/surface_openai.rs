@@ -8,8 +8,6 @@
 //! back to OpenAI's exact wire shape — so an off-the-shelf OpenAI client repoints
 //! at the gateway with only a base-URL change.
 
-use std::sync::Arc;
-
 use axum::response::sse::{Event, Sse};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
@@ -18,9 +16,9 @@ use chrono::Utc;
 use futures::StreamExt;
 use serde_json::{Value, json};
 
-use crate::app::{AppState, Target, authorize};
+use crate::app::{AppState, authorize, authorize_dispatch};
 use crate::provider::{
-    ChatMessage, ChunkStream, CompletionRequest, CompletionResponse, Provider, ProviderError, Role,
+    ChatMessage, ChunkStream, CompletionRequest, CompletionResponse, ProviderError, Role,
 };
 
 /// Mount the OpenAI-compatible routes over shared [`AppState`].
@@ -103,23 +101,6 @@ pub(crate) fn provider_http(e: &ProviderError) -> (StatusCode, String) {
     }
 }
 
-/// Resolve an inbound model id to (target, provider), or an HTTP error.
-pub(crate) fn resolve_provider(
-    state: &AppState,
-    model: &str,
-) -> Result<(Target, Arc<dyn Provider>), (StatusCode, String)> {
-    let target = state
-        .models
-        .resolve(model)
-        .cloned()
-        .ok_or((StatusCode::NOT_FOUND, format!("unknown model: {model}")))?;
-    let provider = state.registry.get(&target.provider).ok_or((
-        StatusCode::BAD_GATEWAY,
-        format!("provider not registered: {}", target.provider),
-    ))?;
-    Ok((target, provider))
-}
-
 fn neutral_from(body: &Value, upstream_model: String) -> CompletionRequest {
     CompletionRequest {
         model: upstream_model,
@@ -136,40 +117,34 @@ async fn chat_completions(
     headers: HeaderMap,
     Json(body): Json<Value>,
 ) -> Response {
-    // Auth + pre-flight budget (G1).
-    let ctx = match authorize(&state, &headers).await {
-        Ok(c) => c,
-        Err(e) => return e.into_response(),
-    };
     let inbound_model = body
         .get("model")
         .and_then(Value::as_str)
         .unwrap_or_default()
         .to_string();
-    let (target, provider) = match resolve_provider(&state, &inbound_model) {
-        Ok(pair) => pair,
-        Err(e) => return e.into_response(),
-    };
-    let target_cloud = crate::policy::target_is_cloud(&target);
-    let provider_name = target.provider.clone();
     let workflow_id = crate::meter::workflow_from(&headers);
-    let neutral = neutral_from(&body, target.model);
+    let mut neutral = neutral_from(&body, inbound_model.clone());
     let query = crate::route::query_text(&neutral.messages);
-
-    // Classify + route (G5).
-    let decision = crate::route::classify_and_route(
-        state.router.as_ref(),
+    let dispatch = match authorize_dispatch(
+        &state,
+        &headers,
+        &inbound_model,
         &query,
         crate::route::estimate_tokens(neutral.max_tokens, &query),
-        &ctx.tenant_id,
-        ctx.token.roles.first().map_or("user", String::as_str),
-    );
-    // Policy + modes (G6): shadow logs, report-only flags, enforce blocks.
-    let (policy_decision, outcome) =
-        match crate::policy::gate(&state, target_cloud, &query, &decision) {
-            Ok(pair) => pair,
-            Err(blocked) => return blocked,
-        };
+    )
+    .await
+    {
+        Ok(decision) => decision,
+        Err(blocked) => return blocked,
+    };
+    neutral.model = dispatch.target_model().to_string();
+    let inbound_model = dispatch.inbound_model().to_string();
+    let ctx = dispatch.context().clone();
+    let target_cloud = dispatch.target_is_cloud();
+    let provider_name = dispatch.provider_name().to_string();
+    let decision = dispatch.route().clone();
+    let policy_decision = dispatch.policy().clone();
+    let outcome = dispatch.outcome();
 
     let mut tokenized_spans = 0u32;
     let resp = if body.get("stream").and_then(Value::as_bool).unwrap_or(false) {
@@ -192,7 +167,7 @@ async fn chat_completions(
             });
             (StatusCode::BAD_REQUEST, Json(err)).into_response()
         } else {
-            match provider.stream(&neutral).await {
+            match dispatch.stream(&neutral).await {
                 // Metering + receipt + budget decrement for the STREAMED path:
                 // the guard rides the SSE generator and settles on drop —
                 // clean [DONE], provider error, or client disconnect alike — so
@@ -228,7 +203,7 @@ async fn chat_completions(
             messages: egress.messages,
             ..neutral.clone()
         };
-        match provider.complete(&dispatched).await {
+        match dispatch.complete(&dispatched).await {
             Ok(mut r) => {
                 r.content = crate::tokenize::restore(&r.content, &egress.map);
                 // Metering + receipt (G7): every non-stream completion is receipted.
@@ -462,21 +437,11 @@ async fn completions(
     // The legacy completion endpoint runs the SAME governance pipeline as
     // chat — auth, classify/route, policy, tokenize egress, meter/receipt, budget
     // — never a bare provider call.
-    let ctx = match authorize(&state, &headers).await {
-        Ok(c) => c,
-        Err(e) => return e.into_response(),
-    };
     let inbound_model = body
         .get("model")
         .and_then(Value::as_str)
         .unwrap_or_default()
         .to_string();
-    let (target, provider) = match resolve_provider(&state, &inbound_model) {
-        Ok(pair) => pair,
-        Err(e) => return e.into_response(),
-    };
-    let target_cloud = crate::policy::target_is_cloud(&target);
-    let provider_name = target.provider.clone();
     let workflow_id = crate::meter::workflow_from(&headers);
     let prompt = match body.get("prompt") {
         Some(Value::String(s)) => s.clone(),
@@ -487,28 +452,34 @@ async fn completions(
             .join("\n"),
         _ => String::new(),
     };
-    let neutral = CompletionRequest {
-        model: target.model,
+    let mut neutral = CompletionRequest {
+        model: inbound_model.clone(),
         messages: vec![ChatMessage::user(prompt)],
         max_tokens: opt_u32(&body, "max_tokens"),
         temperature: opt_f32(&body, "temperature"),
     };
     let query = crate::route::query_text(&neutral.messages);
 
-    // Classify + route (G5).
-    let decision = crate::route::classify_and_route(
-        state.router.as_ref(),
+    let dispatch = match authorize_dispatch(
+        &state,
+        &headers,
+        &inbound_model,
         &query,
         crate::route::estimate_tokens(neutral.max_tokens, &query),
-        &ctx.tenant_id,
-        ctx.token.roles.first().map_or("user", String::as_str),
-    );
-    // Policy + modes (G6): enforce blocks a classified-data cloud egress.
-    let (policy_decision, outcome) =
-        match crate::policy::gate(&state, target_cloud, &query, &decision) {
-            Ok(pair) => pair,
-            Err(blocked) => return blocked,
-        };
+    )
+    .await
+    {
+        Ok(decision) => decision,
+        Err(blocked) => return blocked,
+    };
+    neutral.model = dispatch.target_model().to_string();
+    let inbound_model = dispatch.inbound_model().to_string();
+    let ctx = dispatch.context().clone();
+    let target_cloud = dispatch.target_is_cloud();
+    let provider_name = dispatch.provider_name().to_string();
+    let decision = dispatch.route().clone();
+    let policy_decision = dispatch.policy().clone();
+    let outcome = dispatch.outcome();
     // Tokenize sensitive spans before cloud egress (G8).
     let egress = crate::tokenize::egress(state.detector.as_ref(), target_cloud, &neutral.messages);
     let tokenized_spans = egress.span_count();
@@ -516,7 +487,7 @@ async fn completions(
         messages: egress.messages,
         ..neutral.clone()
     };
-    let resp = match provider.complete(&dispatched).await {
+    let resp = match dispatch.complete(&dispatched).await {
         Ok(mut r) => {
             r.content = crate::tokenize::restore(&r.content, &egress.map);
             // Metering + receipt (G7).

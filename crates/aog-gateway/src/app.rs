@@ -11,14 +11,21 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
+use axum::Json;
 use axum::http::{HeaderMap, StatusCode};
+use axum::response::{IntoResponse, Response};
 use chrono::Utc;
+use fabric_contracts::{Classification, Route};
 use mai_compliance::PhiDetector;
 use mai_router::{DefaultRouter, Router};
+use serde_json::json;
 
 use crate::meter::{PriceBook, ReceiptLedger};
-use crate::policy::{PolicyEngine, PolicyMode, Profile};
-use crate::provider::Registry;
+use crate::policy::{ModeOutcome, PolicyDecision, PolicyEngine, PolicyMode, Profile};
+use crate::provider::{
+    ChunkStream, CompletionRequest, CompletionResponse, Provider, ProviderError, Registry,
+};
+use crate::route::GatewayRoute;
 use crate::{Gateway, ResolvedContext};
 
 /// Where a requested model is dispatched: which registered provider, under what
@@ -177,9 +184,570 @@ pub(crate) async fn authorize(
         .map_err(|e| crate::http::to_http(&e))
 }
 
+/// A final, immutable authorization decision carried to the provider sink.
+///
+/// All fields are private so a protocol surface cannot swap the verified token,
+/// provider, upstream model, route, or policy result after authorization. The
+/// only provider-call methods overwrite the request model with the frozen target.
+pub(crate) struct AuthorizedDispatch {
+    ctx: ResolvedContext,
+    inbound_model: String,
+    target: Target,
+    provider: Arc<dyn Provider>,
+    target_cloud: bool,
+    route: GatewayRoute,
+    policy: PolicyDecision,
+    outcome: ModeOutcome,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+enum DecisionError {
+    #[error("the router denied this request")]
+    RouterDenied,
+    #[error("model '{0}' is not authorized by the trust token")]
+    ModelDenied(String),
+    #[error("the resolved provider locality is not authorized by the trust token")]
+    RouteDenied,
+    #[error("request classification '{actual}' exceeds token ceiling '{ceiling}'")]
+    ClassificationDenied { actual: String, ceiling: String },
+    #[error("request classification '{0}' is not recognized")]
+    UnknownClassification(String),
+    #[error("resolved provider identity does not match its registered target")]
+    ProviderMismatch,
+}
+
+impl DecisionError {
+    fn code(&self) -> &'static str {
+        match self {
+            Self::RouterDenied => "aog_router_denied",
+            Self::ModelDenied(_) => "aog_model_denied",
+            Self::RouteDenied => "aog_route_denied",
+            Self::ClassificationDenied { .. } => "aog_classification_denied",
+            Self::UnknownClassification(_) => "aog_classification_unknown",
+            Self::ProviderMismatch => "aog_provider_mismatch",
+        }
+    }
+
+    fn into_response(self) -> Response {
+        let body = json!({
+            "error": {
+                "message": self.to_string(),
+                "type": "authorization_denied",
+                "code": self.code(),
+            }
+        });
+        (StatusCode::FORBIDDEN, Json(body)).into_response()
+    }
+}
+
+fn classification_level(name: &str) -> Option<Classification> {
+    match name {
+        "public" => Some(Classification::Public),
+        "internal" => Some(Classification::Internal),
+        // The router's sensitive and regulated tiers both fall within the WSF
+        // Restricted capability used by current tenant issuance policy. ITAR /
+        // national-security material is elevated to Controlled/Secret by its
+        // dedicated policy controls or the router's terminal Critical decision.
+        "sensitive" | "regulated" | "restricted" => Some(Classification::Restricted),
+        "controlled" => Some(Classification::Controlled),
+        "critical" | "secret" => Some(Classification::Secret),
+        _ => None,
+    }
+}
+
+fn route_authorizes_target(allowed: &[Route], target_cloud: bool) -> bool {
+    if allowed.is_empty() {
+        // Omitted deserializes to empty. Neither form is authority: production
+        // issuance resolves caller omission to a tenant allowlist, so seeing an
+        // empty signed result here is malformed/legacy authority and fails closed.
+        return false;
+    }
+    if target_cloud {
+        allowed.contains(&Route::CloudAllowed) || allowed.contains(&Route::LocalPreferred)
+    } else {
+        allowed.contains(&Route::LocalOnly) || allowed.contains(&Route::LocalPreferred)
+    }
+}
+
+fn validate_final_decision(
+    ctx: &ResolvedContext,
+    inbound_model: &str,
+    target: &Target,
+    route: &GatewayRoute,
+) -> Result<(), DecisionError> {
+    if route.denied {
+        return Err(DecisionError::RouterDenied);
+    }
+
+    if !ctx
+        .token
+        .allowed_models
+        .iter()
+        .any(|model| model == inbound_model)
+    {
+        return Err(DecisionError::ModelDenied(inbound_model.to_string()));
+    }
+
+    let target_cloud = crate::policy::target_is_cloud(target);
+    if !route_authorizes_target(&ctx.token.allowed_routes, target_cloud) {
+        return Err(DecisionError::RouteDenied);
+    }
+
+    let actual = classification_level(&route.classification)
+        .ok_or_else(|| DecisionError::UnknownClassification(route.classification.clone()))?;
+    if actual > ctx.token.max_data_classification {
+        return Err(DecisionError::ClassificationDenied {
+            actual: route.classification.clone(),
+            ceiling: format!("{:?}", ctx.token.max_data_classification).to_lowercase(),
+        });
+    }
+    Ok(())
+}
+
+impl AuthorizedDispatch {
+    fn new(
+        ctx: ResolvedContext,
+        inbound_model: String,
+        target: Target,
+        provider: Arc<dyn Provider>,
+        route: GatewayRoute,
+        policy: PolicyDecision,
+        outcome: ModeOutcome,
+    ) -> Result<Self, DecisionError> {
+        validate_final_decision(&ctx, &inbound_model, &target, &route)?;
+        if provider.name() != target.provider {
+            return Err(DecisionError::ProviderMismatch);
+        }
+        let target_cloud = crate::policy::target_is_cloud(&target);
+        Ok(Self {
+            ctx,
+            inbound_model,
+            target,
+            provider,
+            target_cloud,
+            route,
+            policy,
+            outcome,
+        })
+    }
+
+    pub(crate) fn context(&self) -> &ResolvedContext {
+        &self.ctx
+    }
+
+    pub(crate) fn inbound_model(&self) -> &str {
+        &self.inbound_model
+    }
+
+    pub(crate) fn provider_name(&self) -> &str {
+        &self.target.provider
+    }
+
+    pub(crate) fn target_model(&self) -> &str {
+        &self.target.model
+    }
+
+    pub(crate) fn target_is_cloud(&self) -> bool {
+        self.target_cloud
+    }
+
+    pub(crate) fn route(&self) -> &GatewayRoute {
+        &self.route
+    }
+
+    pub(crate) fn policy(&self) -> &PolicyDecision {
+        &self.policy
+    }
+
+    pub(crate) fn outcome(&self) -> ModeOutcome {
+        self.outcome
+    }
+
+    pub(crate) async fn complete(
+        &self,
+        request: &CompletionRequest,
+    ) -> Result<CompletionResponse, ProviderError> {
+        let mut frozen = request.clone();
+        frozen.model.clone_from(&self.target.model);
+        self.provider.complete(&frozen).await
+    }
+
+    pub(crate) async fn stream(
+        &self,
+        request: &CompletionRequest,
+    ) -> Result<ChunkStream, ProviderError> {
+        let mut frozen = request.clone();
+        frozen.model.clone_from(&self.target.model);
+        self.provider.stream(&frozen).await
+    }
+}
+
+/// Resolve every authorization input once and return the immutable decision
+/// consumed by provider execution. Router denies and signed token caveats are
+/// terminal in every mode, including development shadow/report-only modes.
+#[allow(clippy::result_large_err)]
+pub(crate) async fn authorize_dispatch(
+    state: &AppState,
+    headers: &HeaderMap,
+    inbound_model: &str,
+    query: &str,
+    estimated_tokens: u32,
+) -> Result<AuthorizedDispatch, Response> {
+    let ctx = authorize(state, headers)
+        .await
+        .map_err(IntoResponse::into_response)?;
+    let target = state
+        .models
+        .resolve(inbound_model)
+        .cloned()
+        .ok_or_else(|| {
+            (
+                StatusCode::NOT_FOUND,
+                format!("unknown model: {inbound_model}"),
+            )
+                .into_response()
+        })?;
+    let provider = state.registry.get(&target.provider).ok_or_else(|| {
+        (
+            StatusCode::BAD_GATEWAY,
+            format!("provider not registered: {}", target.provider),
+        )
+            .into_response()
+    })?;
+    let route = crate::route::classify_and_route(
+        state.router.as_ref(),
+        query,
+        estimated_tokens,
+        &ctx.tenant_id,
+        ctx.token.roles.first().map_or("user", String::as_str),
+    );
+    let target_cloud = crate::policy::target_is_cloud(&target);
+    let policy = state.policy.evaluate(query, &route);
+    let outcome = crate::policy::apply_mode(&policy, state.mode, target_cloud);
+
+    let decision = AuthorizedDispatch::new(
+        ctx,
+        inbound_model.to_string(),
+        target,
+        provider,
+        route,
+        policy,
+        outcome,
+    )
+    .map_err(DecisionError::into_response)?;
+    if decision.outcome.block {
+        return Err(crate::policy::blocked(&decision.policy, state.mode));
+    }
+    Ok(decision)
+}
+
 #[cfg(test)]
 mod tests {
+    use async_trait::async_trait;
+    use fabric_contracts::{Attenuation, RevocationStatus, Signature, TrustToken};
+
     use super::*;
+    use crate::provider::{ChatMessage, Role, Usage};
+    use crate::route::RouteSource;
+
+    fn context(models: Vec<&str>, routes: Vec<Route>, ceiling: Classification) -> ResolvedContext {
+        ResolvedContext {
+            tenant_id: "tenant-a".into(),
+            token: TrustToken {
+                token_id: "token-a".into(),
+                issued_at: "2026-07-16T00:00:00Z".into(),
+                expires_at: "2099-01-01T00:00:00Z".into(),
+                issuer: "wsf".into(),
+                trust_bundle_version: "v1".into(),
+                tenant_id: "tenant-a".into(),
+                subject_id: Some("subject-a".into()),
+                subject_hash: "hash-a".into(),
+                service_identity: None,
+                identity_id: None,
+                roles: vec!["user".into()],
+                compliance_scopes: vec![],
+                allowed_routes: routes,
+                allowed_models: models.into_iter().map(str::to_string).collect(),
+                max_data_classification: ceiling,
+                country: None,
+                person_type: None,
+                offline_mode: false,
+                revocation_status: RevocationStatus::Unknown,
+                budget: None,
+                attenuation: Attenuation::default(),
+                signature: Signature {
+                    alg: "ML-DSA-87".into(),
+                    key_id: "anchor".into(),
+                    value: "sig".into(),
+                },
+            },
+        }
+    }
+
+    fn gateway_route(route: Route, classification: &str, denied: bool) -> GatewayRoute {
+        GatewayRoute {
+            route,
+            classification: classification.into(),
+            reason: "test decision".into(),
+            source: RouteSource::Classified,
+            denied,
+        }
+    }
+
+    #[test]
+    fn terminal_router_deny_is_invariant_across_locality_and_route() {
+        let ctx = context(
+            vec!["alias"],
+            vec![Route::LocalOnly, Route::CloudAllowed],
+            Classification::Secret,
+        );
+        for provider in ["local", "openai"] {
+            for route in [Route::LocalOnly, Route::LocalPreferred, Route::CloudAllowed] {
+                let result = validate_final_decision(
+                    &ctx,
+                    "alias",
+                    &Target::new(provider, "upstream"),
+                    &gateway_route(route, "public", true),
+                );
+                assert_eq!(
+                    result,
+                    Err(DecisionError::RouterDenied),
+                    "a target transform to {provider}/{route:?} must not revive a deny"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn excluded_model_cannot_be_revived_by_alias_target_or_locality() {
+        let ctx = context(
+            vec!["authorized-alias"],
+            vec![Route::LocalOnly, Route::CloudAllowed],
+            Classification::Restricted,
+        );
+        for target in [
+            Target::new("local", "authorized-alias"),
+            Target::new("openai", "authorized-alias"),
+            Target::new("local", "blocked-alias"),
+        ] {
+            assert_eq!(
+                validate_final_decision(
+                    &ctx,
+                    "blocked-alias",
+                    &target,
+                    &gateway_route(Route::CloudAllowed, "public", false),
+                ),
+                Err(DecisionError::ModelDenied("blocked-alias".into()))
+            );
+        }
+    }
+
+    #[test]
+    fn signed_route_and_classification_caveats_are_terminal() {
+        let cloud_only = context(
+            vec!["alias"],
+            vec![Route::CloudAllowed],
+            Classification::Internal,
+        );
+        assert_eq!(
+            validate_final_decision(
+                &cloud_only,
+                "alias",
+                &Target::new("local", "upstream"),
+                &gateway_route(Route::LocalOnly, "public", false),
+            ),
+            Err(DecisionError::RouteDenied)
+        );
+        assert_eq!(
+            validate_final_decision(
+                &cloud_only,
+                "alias",
+                &Target::new("openai", "upstream"),
+                &gateway_route(Route::CloudAllowed, "regulated", false),
+            ),
+            Err(DecisionError::ClassificationDenied {
+                actual: "regulated".into(),
+                ceiling: "internal".into(),
+            })
+        );
+    }
+
+    #[test]
+    fn generated_five_surface_model_route_caveat_matrix() {
+        let surfaces = [
+            "openai_chat",
+            "openai_stream",
+            "openai_legacy",
+            "anthropic_message",
+            "anthropic_stream",
+        ];
+        let cloud_target = Target::new("openai", "upstream-model");
+        let public_cloud = gateway_route(Route::CloudAllowed, "public", false);
+        let mut instance_regressions = 0usize;
+
+        for surface in surfaces {
+            for models in [vec![], vec!["different-model"]] {
+                assert_eq!(
+                    validate_final_decision(
+                        &context(
+                            models,
+                            vec![Route::CloudAllowed],
+                            Classification::Restricted,
+                        ),
+                        "authorized-alias",
+                        &cloud_target,
+                        &public_cloud,
+                    ),
+                    Err(DecisionError::ModelDenied("authorized-alias".into())),
+                    "{surface}: omitted/empty or excluding model caveat must deny"
+                );
+            }
+            instance_regressions += 1;
+
+            for routes in [vec![], vec![Route::LocalOnly]] {
+                assert_eq!(
+                    validate_final_decision(
+                        &context(
+                            vec!["authorized-alias", "other-allowed-alias"],
+                            routes,
+                            Classification::Restricted,
+                        ),
+                        "authorized-alias",
+                        &cloud_target,
+                        &public_cloud,
+                    ),
+                    Err(DecisionError::RouteDenied),
+                    "{surface}: omitted/empty or excluding route caveat must deny"
+                );
+            }
+            instance_regressions += 1;
+
+            assert!(
+                validate_final_decision(
+                    &context(
+                        vec!["authorized-alias", "other-allowed-alias"],
+                        vec![Route::LocalOnly, Route::CloudAllowed],
+                        Classification::Restricted,
+                    ),
+                    "authorized-alias",
+                    &cloud_target,
+                    &public_cloud,
+                )
+                .is_ok(),
+                "{surface}: a valid subset request must retain compatibility"
+            );
+        }
+        assert_eq!(instance_regressions, 10, "five surfaces x two caveat axes");
+    }
+
+    #[test]
+    fn omitted_caveats_deserialize_to_fail_closed_empty_authority() {
+        let mut value = serde_json::to_value(
+            context(
+                vec!["authorized-alias"],
+                vec![Route::CloudAllowed],
+                Classification::Restricted,
+            )
+            .token,
+        )
+        .unwrap();
+        let object = value.as_object_mut().unwrap();
+        object.remove("allowed_models");
+        object.remove("allowed_routes");
+        let omitted: TrustToken = serde_json::from_value(value).unwrap();
+        assert!(omitted.allowed_models.is_empty());
+        assert!(omitted.allowed_routes.is_empty());
+        assert_eq!(
+            validate_final_decision(
+                &ResolvedContext {
+                    tenant_id: omitted.tenant_id.clone(),
+                    token: omitted,
+                },
+                "authorized-alias",
+                &Target::new("openai", "upstream-model"),
+                &gateway_route(Route::CloudAllowed, "public", false),
+            ),
+            Err(DecisionError::ModelDenied("authorized-alias".into()))
+        );
+    }
+
+    struct RecordingProvider {
+        seen_models: Arc<Mutex<Vec<String>>>,
+    }
+
+    #[async_trait]
+    impl Provider for RecordingProvider {
+        fn name(&self) -> &str {
+            "local"
+        }
+
+        async fn complete(
+            &self,
+            req: &CompletionRequest,
+        ) -> Result<CompletionResponse, ProviderError> {
+            self.seen_models
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .push(req.model.clone());
+            Ok(CompletionResponse {
+                model: req.model.clone(),
+                content: "ok".into(),
+                usage: Usage::default(),
+                finish_reason: "stop".into(),
+            })
+        }
+
+        async fn stream(&self, _req: &CompletionRequest) -> Result<ChunkStream, ProviderError> {
+            Ok(Box::pin(futures::stream::empty()))
+        }
+    }
+
+    #[tokio::test]
+    async fn authorized_dispatch_freezes_provider_model_at_the_sink() {
+        let seen_models = Arc::new(Mutex::new(Vec::new()));
+        let provider: Arc<dyn Provider> = Arc::new(RecordingProvider {
+            seen_models: seen_models.clone(),
+        });
+        let route = gateway_route(Route::LocalOnly, "public", false);
+        let policy = PolicyDecision {
+            allowed_cloud: true,
+            phi_detected: false,
+            effective_route: Route::LocalOnly,
+            reasons: vec![],
+        };
+        let decision = AuthorizedDispatch::new(
+            context(
+                vec!["public-alias"],
+                vec![Route::LocalOnly],
+                Classification::Restricted,
+            ),
+            "public-alias".into(),
+            Target::new("local", "frozen-upstream"),
+            provider,
+            route,
+            policy,
+            ModeOutcome {
+                block: false,
+                report: false,
+            },
+        )
+        .expect("authorized final decision");
+
+        let caller_mutated = CompletionRequest {
+            model: "attacker-change-after-authorization".into(),
+            messages: vec![ChatMessage {
+                role: Role::User,
+                content: "hello".into(),
+            }],
+            max_tokens: Some(8),
+            temperature: None,
+        };
+        decision.complete(&caller_mutated).await.unwrap();
+        assert_eq!(
+            *seen_models.lock().unwrap_or_else(|e| e.into_inner()),
+            vec!["frozen-upstream".to_string()]
+        );
+    }
 
     #[test]
     fn model_map_routes_and_defaults() {
