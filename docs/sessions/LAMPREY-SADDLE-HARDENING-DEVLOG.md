@@ -954,7 +954,7 @@ final ledger update records the confirmed G8 remote checkpoint.
 
 ### LSH-G9 — Gateway live compatibility matrix
 
-Status: **PASS** (implementation commit pending).
+Status: **PASS** (implementation commit `1c4d290`).
 
 The existing OpenAI and Anthropic surface tests used raw `reqwest` requests that
 matched SDK wire shapes but explicitly deferred real SDK execution. They also
@@ -1024,7 +1024,8 @@ confirms the composed closures for `LSF-015`–`LSF-025` and reachable
 `LSD-005/006` without breaking valid official-client behavior. LSH-T1 is the
 next sequential prompt; the broader M3 milestone remains open through LSH-T6.
 
-Commit state: implementation and prompt evidence are ready for the authorized
-signed commit and push. The exact implementation SHA, footer verification,
-pre-push integrity gates, and remote checkpoint will be recorded after Git
-confirms them.
+Commit state: implementation and prompt evidence were committed as
+`1c4d29078a0f79396670efec7ac0c3f6f95f6b1d`. The commit is SSH-signed and
+carries the canonical `Authored and reviewed by Basho Parks, copyright 2026`
+footer. The exact-SHA DEVLOG closeout, pre-push integrity gates, and remote
+checkpoint will be recorded after Git confirms them.
