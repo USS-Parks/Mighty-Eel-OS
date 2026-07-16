@@ -198,7 +198,7 @@ async fn await_health(client: &Client) -> bool {
 async fn three_node_raft_requires_mutual_tls_and_exact_sender_identity() {
     let dir = scratch();
     let ca = gen_ca(&dir, "estate-ca");
-    let nodes: Vec<NodeMaterial> = (1..=3).map(|id| gen_node(&dir, id, &ca)).collect();
+    let mut nodes: Vec<NodeMaterial> = (1..=3).map(|id| gen_node(&dir, id, &ca)).collect();
 
     let mut listeners = Vec::new();
     let mut urls = Vec::new();
@@ -208,6 +208,8 @@ async fn three_node_raft_requires_mutual_tls_and_exact_sender_identity() {
         listeners.push(listener);
     }
 
+    let mut raft_nodes = Vec::new();
+    let mut servers = Vec::new();
     for (index, listener) in listeners.into_iter().enumerate() {
         let node_id = (index + 1) as u64;
         let daemon = Daemon::start(Config {
@@ -227,16 +229,17 @@ async fn three_node_raft_requires_mutual_tls_and_exact_sender_identity() {
         })
         .await
         .unwrap();
+        raft_nodes.push(Some(daemon.node()));
         let server = daemon.node_tls().unwrap().server_config().unwrap();
         let app = daemon.app();
-        tokio::spawn(async move {
+        servers.push(tokio::spawn(async move {
             axum::serve(
                 TlsListener::new(listener, server),
                 app.into_make_service_with_connect_info::<TlsPeer>(),
             )
             .await
             .unwrap();
-        });
+        }));
     }
 
     let http = mtls_http(&ca, &nodes[0], 1, &urls[0]);
@@ -331,6 +334,42 @@ async fn three_node_raft_requires_mutual_tls_and_exact_sender_identity() {
         .unwrap_err();
     assert!(http_membership.to_string().contains("requires https://"));
 
+    for address in [
+        "https://127.0.0.1:9/admin",
+        "https://127.0.0.1:9/?redirect=https://evil.test",
+        "https://user:secret@127.0.0.1:9",
+    ] {
+        let error = clients[0]
+            .add_learner(Member {
+                id: 4,
+                addr: address.to_owned(),
+            })
+            .await
+            .unwrap_err();
+        assert!(
+            error.to_string().contains("membership address"),
+            "unsafe membership address was not rejected clearly: {address}: {error}"
+        );
+    }
+
+    let duplicate_origin = clients[0]
+        .add_learner(Member {
+            id: 4,
+            addr: urls[1].clone(),
+        })
+        .await
+        .unwrap_err();
+    assert!(duplicate_origin.to_string().contains("pinned to node 2"));
+
+    let node_rebind = clients[0]
+        .add_learner(Member {
+            id: 2,
+            addr: urls[2].clone(),
+        })
+        .await
+        .unwrap_err();
+    assert!(node_rebind.to_string().contains("node 2 is already pinned"));
+
     let forged_vote = VoteRequest::new(Vote::new(999, 3), None);
     let response = http
         .post(format!("{}/raft/vote", urls[1]))
@@ -339,6 +378,13 @@ async fn three_node_raft_requires_mutual_tls_and_exact_sender_identity() {
         .await
         .unwrap();
     assert_eq!(response.status(), reqwest::StatusCode::FORBIDDEN);
+    let replayed_vote = http
+        .post(format!("{}/raft/vote", urls[1]))
+        .body(serde_json::to_vec(&forged_vote).unwrap())
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(replayed_vote.status(), reqwest::StatusCode::FORBIDDEN);
 
     let forged_append = AppendEntriesRequest::<TypeConfig> {
         vote: Vote::new(999, 3),
@@ -368,4 +414,118 @@ async fn three_node_raft_requires_mutual_tls_and_exact_sender_identity() {
         .await
         .unwrap();
     assert_eq!(response.status(), reqwest::StatusCode::FORBIDDEN);
+
+    let malformed = http
+        .post(format!("{}/raft/vote", urls[1]))
+        .body("not-json")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(malformed.status(), reqwest::StatusCode::BAD_REQUEST);
+
+    let oversized = http
+        .post(format!("{}/raft/vote", urls[1]))
+        .body(vec![b'x'; 1024 * 1024 + 1])
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(oversized.status(), reqwest::StatusCode::PAYLOAD_TOO_LARGE);
+
+    // Rotate one follower to a fresh same-CA certificate with the same immutable
+    // node SPIFFE identity and advertised origin, then prove it rejoins and reads
+    // committed state after a cold Raft restart.
+    let leader = clients[0].leader().await.unwrap().leader.unwrap();
+    let rotate_id = if leader == 3 { 2 } else { 3 };
+    let rotate_index = usize::try_from(rotate_id - 1).unwrap();
+    let rotate_node = raft_nodes[rotate_index].take().unwrap();
+    rotate_node.raft().shutdown().await.unwrap();
+    drop(rotate_node);
+    servers[rotate_index].abort();
+    let _ = (&mut servers[rotate_index]).await;
+    nodes[rotate_index] = gen_node(&dir, rotate_id, &ca);
+    let rotate_addr: std::net::SocketAddr = urls[rotate_index]
+        .strip_prefix("https://")
+        .unwrap()
+        .parse()
+        .unwrap();
+    let listener = TcpListener::bind(rotate_addr).await.unwrap();
+    let daemon = Daemon::start(Config {
+        node_id: rotate_id,
+        data_dir: dir.join(format!("data-{rotate_id}")),
+        listen: rotate_addr,
+        advertise: urls[rotate_index].clone(),
+        anchor_pubkey: None,
+        openbao: None,
+        node_tls: Some(NodeTlsProvisioning::Files {
+            ca_der_path: ca.cert_der.clone(),
+            cert_der_path: nodes[rotate_index].cert_der.clone(),
+            key_der_path: nodes[rotate_index].key_der.clone(),
+            minimum_remaining: Duration::from_secs(3600),
+        }),
+        allow_insecure_admin: true,
+    })
+    .await
+    .unwrap();
+    raft_nodes[rotate_index] = Some(daemon.node());
+    let server = daemon.node_tls().unwrap().server_config().unwrap();
+    let app = daemon.app();
+    servers[rotate_index] = tokio::spawn(async move {
+        axum::serve(
+            TlsListener::new(listener, server),
+            app.into_make_service_with_connect_info::<TlsPeer>(),
+        )
+        .await
+        .unwrap();
+    });
+    assert!(
+        await_health(&clients[rotate_index]).await,
+        "rotated node rejoins with a fresh same-identity certificate"
+    );
+    let rotated_value = clients[rotate_index]
+        .get("Workload/mtls")
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(rotated_value.value, b"v1");
+
+    // Loss of the current leader is the live partition/failover fixture. The
+    // remaining quorum must elect a different leader and accept a new write
+    // within the declared ten-second availability bound.
+    let old_leader = clients[0].leader().await.unwrap().leader.unwrap();
+    let old_index = usize::try_from(old_leader - 1).unwrap();
+    let old_node = raft_nodes[old_index].take().unwrap();
+    old_node.raft().shutdown().await.unwrap();
+    drop(old_node);
+    servers[old_index].abort();
+    let _ = (&mut servers[old_index]).await;
+    let failover_started = Instant::now();
+    let mut new_leader = None;
+    while failover_started.elapsed() < Duration::from_secs(10) {
+        for (index, client) in clients.iter().enumerate() {
+            if index == old_index {
+                continue;
+            }
+            if let Ok(status) = client.leader().await
+                && let Some(candidate) = status.leader
+                && candidate != old_leader
+            {
+                new_leader = Some(candidate);
+                break;
+            }
+        }
+        if new_leader.is_some() {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    let new_leader = new_leader.expect("remaining mTLS quorum elects a new leader");
+    let response = clients[usize::try_from(new_leader - 1).unwrap()]
+        .write(Op::Put {
+            key: "Workload/after-failover".to_owned(),
+            value: b"v2".to_vec(),
+            expected: Precondition::Any,
+        })
+        .await
+        .unwrap();
+    assert!(matches!(response, aogd::RaftResponse::Applied { .. }));
 }

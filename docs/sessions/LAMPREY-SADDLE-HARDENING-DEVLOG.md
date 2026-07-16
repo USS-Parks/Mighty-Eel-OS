@@ -340,3 +340,63 @@ Final focused verification on 2026-07-15:
 During final verification, one production-posture test fixture still enabled the newly forbidden insecure-admin flag. Correcting that boolean fixture restored the intended production-with-mTLS case; the complete focused gate set was rerun and passed afterward.
 
 Commit state: implementation and evidence committed in `9b31ad9`; DEVLOG SHA closeout committed in `6eb5293`; `origin/main` advanced from `5ea75a9` through `6eb5293` on 2026-07-15. This final ledger update records the confirmed remote checkpoint.
+
+### LSH-C4 — Membership and forwarding destination policy
+
+Status: **PASS — uncommitted; M2 commit approval pending**.
+
+The membership-selected outbound seams now consume one strict canonical origin contract. Secure membership accepts only bounded credential-free HTTPS origins with a host and valid port; paths, queries, fragments, port zero, surrounding whitespace, and userinfo are rejected. Initialization rejects duplicate IDs/origins, and learner admission rejects node-ID rebinding or reuse of another member's origin. The wire transport independently revalidates and canonicalizes every `BasicNode` address before dispatch, so a bypass around the admin API still fails closed.
+
+Both Raft and admin HTTP clients disable redirects. Follower writes validate the current leader's pinned ID/origin immediately before dispatch. The follower authenticates the caller at the ingress node, then the leader authenticates the forwarding node's current membership and mTLS SPIFFE identity; the caller's WSF trust token and `Authorization` header are never attached to the membership-selected request. Forward markers on a non-write path, without secure transport, without a node identity, from a non-member, or alongside a bearer token are denied.
+
+Changed files:
+
+- `crates/aog-wire/src/lib.rs`;
+- `crates/aogd/src/admin.rs`;
+- `crates/aogd/src/lib.rs`; and
+- `crates/aogd/tests/daemon_mtls.rs`.
+
+Focused gate:
+
+- strict canonical-origin matrix — PASS;
+- redirect fixture — PASS; the sink received zero requests;
+- forwarded-request credential regression — PASS; no WSF token or Authorization header;
+- malicious membership path/query/userinfo, duplicate-origin, and node-ID-rebind cases — PASS; and
+- real three-node mTLS cluster after the destination-policy migration — PASS.
+
+Residual risk: membership changes remain privileged admin operations and certificate issuance remains anchored in the estate CA. C4 prevents URL reinterpretation, redirect following, identity/address collision, and bearer forwarding; it does not treat compromise of the estate CA or an authorized quorum as an address-policy bypass.
+
+### LSH-C5 — Control-plane adversarial gate
+
+Status: **PASS — uncommitted; M2 commit approval pending**.
+
+The Raft router now enforces a 1 MiB request-body ceiling before JSON decoding. The live three-node mTLS fixture was extended beyond convergence to cover:
+
+- no certificate and rogue CA rejection during TLS handshake;
+- valid-certificate/wrong-node forged vote, append, and snapshot rejection before Raft;
+- replay of the forged vote with the same fail-closed result;
+- malformed JSON rejection and 1 MiB + 1 byte body rejection;
+- fresh same-CA certificate rotation for an unchanged node SPIFFE ID and advertised origin, followed by cold Raft restart and committed-state recovery;
+- current-leader loss, election of a different leader by the remaining quorum, and a successful post-failover write within the ten-second bound; and
+- the separate C3 bootstrap fixture's one-shot and post-restart replay denial.
+
+`LSF-007` and `LSF-008` are closed at their production seams by the combined C1-C5 evidence: omission cannot expose a steady-state admin surface, and unauthenticated/plaintext/misdirected Raft traffic cannot reach consensus decoding or privileged forwarding.
+
+### M2 — Authenticated AOG control plane milestone gate
+
+Status: **PASS — code and DEVLOG are not committed**.
+
+Final verification on 2026-07-16:
+
+- `cargo fmt --check` — PASS.
+- `cargo check --workspace` — PASS.
+- `cargo clippy --workspace -- -D warnings -A clippy::pedantic` — PASS.
+- `cargo test --workspace --quiet` with the existing Git OpenSSL directory added only to that command's `PATH` — PASS, exit 0. The long repository fuzz/convergence lanes and standard ignored-test declarations behaved as expected.
+- `cargo audit` — PASS; 494 locked dependencies scanned against 1,160 RustSec advisories, no vulnerability reported.
+- `cargo deny check` — PASS (`advisories ok, bans ok, licenses ok, sources ok`); existing informational unmatched-license and duplicate-version warnings remain.
+- Focused `aog-wire`, `aogd`, and `aog-noded` test suites — PASS, including the live multi-node C4/C5 fixture.
+- `git diff --check` and integrity verification are run after this ledger write and before staging.
+
+Recovery note: an initial workspace run overlapped earlier still-running Cargo invocations and two autoscale fixtures reported `Database already open. Cannot acquire lock.` The exact `aog-controller --test autoscale` target passed immediately in isolation, and one clean tracked workspace run then passed completely. `cargo audit` and `cargo deny` initially could not create advisory-database lock files under the sandbox's read-only Cargo home; the permitted escalation path ran both required gates successfully without changing repository dependencies.
+
+Commit state: C4/C5 implementation plus this DEVLOG closeout are intentionally unstaged and uncommitted. The workspace Git rule requires the staged-file disclosure and the owner's explicit answer to **“Shall I commit?”** before any commit. Push remains a separate approval after a commit exists.

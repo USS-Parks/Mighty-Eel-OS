@@ -292,7 +292,11 @@ impl Daemon {
                     .map_err(|e| DaemonError::Config(format!("admin mTLS client: {e}")))?;
             (wire, http)
         } else {
-            (WireNetwork::new(), reqwest::Client::new())
+            let http = reqwest::Client::builder()
+                .redirect(reqwest::redirect::Policy::none())
+                .build()
+                .map_err(|e| DaemonError::Config(format!("admin HTTP client: {e}")))?;
+            (WireNetwork::new(), http)
         };
         let node =
             Arc::new(RaftNode::start_with_network(config.node_id, &config.data_dir, wire).await?);

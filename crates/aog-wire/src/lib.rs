@@ -22,7 +22,7 @@ use aog_store::raft::types::{NodeId, TypeConfig};
 use axum::Router;
 use axum::body::Bytes;
 use axum::extract::connect_info::MockConnectInfo;
-use axum::extract::{ConnectInfo, State};
+use axum::extract::{ConnectInfo, DefaultBodyLimit, State};
 use axum::http::StatusCode;
 use axum::routing::post;
 use openraft::BasicNode;
@@ -41,9 +41,23 @@ use crate::tls::TlsPeer;
 
 /// A [`RaftNetworkFactory`] that reaches each peer over HTTP at the URL carried
 /// in its `BasicNode` address. Cheap to clone (shares one connection pool).
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct WireNetwork {
     http: reqwest::Client,
+    require_https: bool,
+}
+
+impl Default for WireNetwork {
+    fn default() -> Self {
+        let http = reqwest::Client::builder()
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .expect("redirect-disabled Raft client construction");
+        Self {
+            http,
+            require_https: false,
+        }
+    }
 }
 
 impl WireNetwork {
@@ -62,15 +76,61 @@ impl WireNetwork {
     pub fn with_tls(client_config: rustls::ClientConfig) -> Result<Self, reqwest::Error> {
         let http = reqwest::Client::builder()
             .use_preconfigured_tls(client_config)
+            .redirect(reqwest::redirect::Policy::none())
             .build()?;
-        Ok(Self { http })
+        Ok(Self {
+            http,
+            require_https: true,
+        })
     }
+}
+
+/// Parse an untrusted membership address into the only origin form the wire
+/// transport will use. Membership entries are origins, never general URLs: no
+/// credentials, paths, query strings, fragments, unknown schemes, or port zero.
+/// The returned value is normalized for stable node-id/address pinning.
+///
+/// # Errors
+/// Returns a public, credential-free reason when the address is not a valid
+/// control-plane origin.
+pub fn canonical_peer_origin(address: &str, require_https: bool) -> Result<String, String> {
+    if address.trim() != address || address.len() > 2_048 {
+        return Err("membership address must be a bounded origin without whitespace".to_owned());
+    }
+    let url = reqwest::Url::parse(address).map_err(|e| format!("invalid member URI: {e}"))?;
+    let allowed_scheme = if require_https {
+        url.scheme() == "https"
+    } else {
+        matches!(url.scheme(), "http" | "https")
+    };
+    if !allowed_scheme {
+        return Err(if require_https {
+            "secure Raft membership requires https:// addresses".to_owned()
+        } else {
+            "Raft membership requires an http:// or https:// address".to_owned()
+        });
+    }
+    if !url.username().is_empty() || url.password().is_some() {
+        return Err("membership address must not contain credentials".to_owned());
+    }
+    if url.path() != "/" || url.query().is_some() || url.fragment().is_some() {
+        return Err(
+            "membership address must be an origin without path, query, or fragment".to_owned(),
+        );
+    }
+    if url.host_str().is_none() {
+        return Err("membership address must contain a host".to_owned());
+    }
+    if url.port_or_known_default().is_none() || url.port() == Some(0) {
+        return Err("membership address must contain a valid TCP port".to_owned());
+    }
+    Ok(url.origin().ascii_serialization())
 }
 
 /// A connection to one peer at `url`.
 pub struct WireConnection {
     http: reqwest::Client,
-    url: String,
+    url: Result<String, String>,
     target: NodeId,
 }
 
@@ -80,7 +140,7 @@ impl RaftNetworkFactory<TypeConfig> for WireNetwork {
     async fn new_client(&mut self, target: NodeId, node: &BasicNode) -> Self::Network {
         WireConnection {
             http: self.http.clone(),
-            url: node.addr.clone(),
+            url: canonical_peer_origin(&node.addr, self.require_https),
             target,
         }
     }
@@ -105,10 +165,11 @@ impl WireConnection {
         Resp: DeserializeOwned,
         E: DeserializeOwned,
     {
+        let url = self.url.as_ref().map_err(unreachable)?;
         let body = serde_json::to_vec(rpc).map_err(unreachable)?;
         let resp = self
             .http
-            .post(format!("{}{path}", self.url))
+            .post(format!("{url}{path}"))
             .body(body)
             .send()
             .await
@@ -199,6 +260,7 @@ fn router_with_peer_identity(node: Arc<RaftNode>, require_peer_identity: bool) -
             node,
             require_peer_identity,
         })
+        .layer(DefaultBodyLimit::max(1024 * 1024))
         .layer(MockConnectInfo(TlsPeer {
             socket_addr: SocketAddr::from(([127, 0, 0, 1], 0)),
             node_id: None,
@@ -261,5 +323,97 @@ fn authorize_peer(
     match peer.node_id {
         Some(authenticated_node_id) if authenticated_node_id == claimed_node_id => Ok(()),
         _ => Err(StatusCode::FORBIDDEN),
+    }
+}
+
+#[cfg(test)]
+mod destination_policy_tests {
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    use axum::Router;
+    use axum::response::Redirect;
+    use axum::routing::post;
+    use serde_json::json;
+
+    use super::{WireConnection, WireNetwork, canonical_peer_origin};
+
+    #[test]
+    fn membership_origins_are_canonical_and_bounded() {
+        assert_eq!(
+            canonical_peer_origin("https://EXAMPLE.com:443", true).unwrap(),
+            "https://example.com"
+        );
+        assert_eq!(
+            canonical_peer_origin("https://[::1]:4600/", true).unwrap(),
+            "https://[::1]:4600"
+        );
+
+        for address in [
+            "http://cp1:4600",
+            "https://user:secret@cp1:4600",
+            "https://cp1:4600/admin",
+            "https://cp1:4600/?next=https://evil.test",
+            "https://cp1:4600/#fragment",
+            "https://cp1:0",
+            " https://cp1:4600",
+        ] {
+            assert!(
+                canonical_peer_origin(address, true).is_err(),
+                "accepted unsafe membership address {address}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn raft_client_never_follows_membership_redirects() {
+        let redirected_requests = Arc::new(AtomicUsize::new(0));
+        let sink_count = Arc::clone(&redirected_requests);
+        let sink = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let sink_url = format!("http://{}", sink.local_addr().unwrap());
+        tokio::spawn(async move {
+            axum::serve(
+                sink,
+                Router::new().route(
+                    "/raft/vote",
+                    post(move || async move {
+                        sink_count.fetch_add(1, Ordering::SeqCst);
+                        "followed"
+                    }),
+                ),
+            )
+            .await
+            .unwrap();
+        });
+
+        let redirect = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let redirect_url = format!("http://{}", redirect.local_addr().unwrap());
+        tokio::spawn(async move {
+            axum::serve(
+                redirect,
+                Router::new().route(
+                    "/raft/vote",
+                    post(move || {
+                        let location = format!("{sink_url}/raft/vote");
+                        async move { Redirect::temporary(&location) }
+                    }),
+                ),
+            )
+            .await
+            .unwrap();
+        });
+
+        let network = WireNetwork::new();
+        let connection = WireConnection {
+            http: network.http,
+            url: Ok(redirect_url),
+            target: 2,
+        };
+        let result = connection
+            .call::<_, serde_json::Value, serde_json::Value>("/raft/vote", &json!({}))
+            .await;
+        assert!(result.is_err(), "redirect response must fail closed");
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        assert_eq!(redirected_requests.load(Ordering::SeqCst), 0);
     }
 }

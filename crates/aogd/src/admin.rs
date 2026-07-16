@@ -19,6 +19,7 @@ use aog_apiserver::auth::{Authenticator, TOKEN_HEADER};
 use aog_store::raft::RaftNode;
 use aog_store::raft::types::{NodeId, RaftResponse};
 use aog_store::{Op, Versioned};
+use aog_wire::canonical_peer_origin;
 use aog_wire::tls::TlsPeer;
 use axum::extract::connect_info::MockConnectInfo;
 use axum::extract::{ConnectInfo, Request, State};
@@ -112,6 +113,39 @@ async fn require_admin(
     req: Request,
     next: Next,
 ) -> AdminResult<Response> {
+    if req.headers().contains_key(FORWARDED_HEADER) {
+        if !state.secure_transport {
+            return Err((
+                StatusCode::FORBIDDEN,
+                "forwarded admin writes require authenticated node transport".to_owned(),
+            ));
+        }
+        if req.uri().path() != "/admin/write" || req.headers().contains_key(TOKEN_HEADER) {
+            return Err((
+                StatusCode::FORBIDDEN,
+                "forwarded admin request has an invalid path or carries a bearer token".to_owned(),
+            ));
+        }
+        let peer = request_tls_peer(req.extensions()).ok_or_else(|| {
+            (
+                StatusCode::FORBIDDEN,
+                "forwarded admin write requires a node certificate".to_owned(),
+            )
+        })?;
+        let peer_id = peer.node_id.ok_or_else(|| {
+            (
+                StatusCode::FORBIDDEN,
+                "forwarded admin write requires a node SPIFFE identity".to_owned(),
+            )
+        })?;
+        if !is_current_member(&state, peer_id) {
+            return Err((
+                StatusCode::FORBIDDEN,
+                "forwarded admin write came from a non-member node".to_owned(),
+            ));
+        }
+        return Ok(next.run(req).await);
+    }
     if let Some(auth) = &state.authenticator {
         let principal = auth.authenticate(req.headers()).map_err(|_| {
             (
@@ -146,15 +180,20 @@ async fn require_admin(
 }
 
 fn request_peer(extensions: &axum::http::Extensions) -> SocketAddr {
-    extensions
-        .get::<ConnectInfo<TlsPeer>>()
-        .map(|ConnectInfo(peer)| peer.socket_addr)
+    request_tls_peer(extensions)
+        .map(|peer| peer.socket_addr)
         .or_else(|| {
             extensions
                 .get::<ConnectInfo<SocketAddr>>()
                 .map(|ConnectInfo(peer)| *peer)
         })
         .unwrap_or_else(|| SocketAddr::from(([0, 0, 0, 0], 0)))
+}
+
+fn request_tls_peer(extensions: &axum::http::Extensions) -> Option<TlsPeer> {
+    extensions
+        .get::<ConnectInfo<TlsPeer>>()
+        .map(|ConnectInfo(peer)| *peer)
 }
 
 fn bounded_bootstrap_allows(path: &str, peer: SocketAddr, bootstrap_open: bool) -> bool {
@@ -172,8 +211,8 @@ fn failed(e: impl std::fmt::Display) -> (StatusCode, String) {
     (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
 }
 
-/// The URL of the current leader (from the Raft membership), if one is established.
-fn leader_url(node: &RaftNode) -> Option<String> {
+/// The pinned node id and URL of the current leader, if one is established.
+fn leader_binding(node: &RaftNode) -> Option<(NodeId, String)> {
     let raft = node.raft();
     let metrics = raft.metrics();
     let m = metrics.borrow();
@@ -181,7 +220,24 @@ fn leader_url(node: &RaftNode) -> Option<String> {
     m.membership_config
         .membership()
         .get_node(&leader)
-        .map(|n| n.addr.clone())
+        .map(|n| (leader, n.addr.clone()))
+}
+
+fn current_member_bindings(state: &AdminState) -> Vec<(NodeId, String)> {
+    let metrics = state.node.raft().metrics();
+    let metrics = metrics.borrow();
+    let membership = metrics.membership_config.membership();
+    membership
+        .voter_ids()
+        .chain(membership.learner_ids())
+        .filter_map(|id| membership.get_node(&id).map(|node| (id, node.addr.clone())))
+        .collect()
+}
+
+fn is_current_member(state: &AdminState, node_id: NodeId) -> bool {
+    current_member_bindings(state)
+        .iter()
+        .any(|(id, _)| *id == node_id)
 }
 
 async fn healthz() -> &'static str {
@@ -206,9 +262,22 @@ async fn initialize(
         ));
     }
     let mut members = BTreeMap::new();
+    let mut origins = BTreeMap::new();
     for member in req.members {
-        validate_membership_address(&state, &member.addr)?;
-        members.insert(member.id, BasicNode::new(member.addr));
+        let origin = validate_member_binding(&state, member.id, &member.addr)?;
+        if members.contains_key(&member.id) {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                format!("duplicate membership node id {}", member.id),
+            ));
+        }
+        if let Some(bound_id) = origins.insert(origin.clone(), member.id) {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                format!("membership origin is already pinned to node {bound_id}"),
+            ));
+        }
+        members.insert(member.id, BasicNode::new(origin));
     }
     let result = state.node.raft().initialize(members).await;
     if let Err(error) = result {
@@ -225,29 +294,45 @@ async fn add_learner(
     State(state): State<AdminState>,
     Json(m): Json<Member>,
 ) -> AdminResult<StatusCode> {
-    validate_membership_address(&state, &m.addr)?;
+    let origin = validate_member_binding(&state, m.id, &m.addr)?;
     state
         .node
         .raft()
-        .add_learner(m.id, BasicNode::new(m.addr), true)
+        .add_learner(m.id, BasicNode::new(origin), true)
         .await
         .map_err(failed)?;
     Ok(StatusCode::OK)
 }
 
-fn validate_membership_address(state: &AdminState, address: &str) -> AdminResult<()> {
-    if !state.secure_transport {
-        return Ok(());
+fn validate_member_binding(
+    state: &AdminState,
+    node_id: NodeId,
+    address: &str,
+) -> AdminResult<String> {
+    let origin = canonical_peer_origin(address, state.secure_transport)
+        .map_err(|reason| (StatusCode::BAD_REQUEST, reason))?;
+    for (bound_id, bound_address) in current_member_bindings(state) {
+        let bound_origin =
+            canonical_peer_origin(&bound_address, state.secure_transport).map_err(|reason| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("stored membership binding is invalid: {reason}"),
+                )
+            })?;
+        if bound_id == node_id && bound_origin != origin {
+            return Err((
+                StatusCode::CONFLICT,
+                format!("node {node_id} is already pinned to a different origin"),
+            ));
+        }
+        if bound_id != node_id && bound_origin == origin {
+            return Err((
+                StatusCode::CONFLICT,
+                format!("membership origin is already pinned to node {bound_id}"),
+            ));
+        }
     }
-    let uri = reqwest::Url::parse(address)
-        .map_err(|e| (StatusCode::BAD_REQUEST, format!("invalid member URI: {e}")))?;
-    if uri.scheme() != "https" {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            "secure Raft membership requires https:// addresses".to_owned(),
-        ));
-    }
-    Ok(())
+    Ok(origin)
 }
 
 /// Set the cluster's voter set (promotes caught-up learners, or removes a member).
@@ -284,22 +369,18 @@ async fn write(
             "forwarded but this node is not the leader; retry".to_owned(),
         ));
     }
-    let Some(url) = leader_url(node) else {
+    let Some((leader_id, url)) = leader_binding(node) else {
         return Err((
             StatusCode::SERVICE_UNAVAILABLE,
             "no leader currently known; retry".to_owned(),
         ));
     };
-    // Propagate the caller's trust token so the leader re-authenticates the original
-    // caller end-to-end — the forward hop is not itself trusted (mTLS is phase A2).
-    let mut fwd = state
-        .http
-        .post(format!("{url}/admin/write"))
-        .header(FORWARDED_HEADER, "1");
-    if let Some(tok) = headers.get(TOKEN_HEADER) {
-        fwd = fwd.header(TOKEN_HEADER, tok.clone());
-    }
-    let resp = fwd.json(&op).send().await.map_err(|e| {
+    let url = validate_member_binding(&state, leader_id, &url)?;
+    // The follower already authenticated the caller. The leader authenticates the
+    // forwarding node through mTLS membership instead of sending the caller's
+    // bearer token to a membership-selected network destination.
+    let fwd = forwarded_write_request(&state.http, &url, &op);
+    let resp = fwd.send().await.map_err(|e| {
         (
             StatusCode::BAD_GATEWAY,
             format!("forwarding to leader failed: {e}"),
@@ -313,6 +394,12 @@ async fn write(
         .await
         .map(Json)
         .map_err(|e| (StatusCode::BAD_GATEWAY, e.to_string()))
+}
+
+fn forwarded_write_request(http: &reqwest::Client, url: &str, op: &Op) -> reqwest::RequestBuilder {
+    http.post(format!("{url}/admin/write"))
+        .header(FORWARDED_HEADER, "1")
+        .json(op)
 }
 
 /// Read one applied key from this node's committed state.
@@ -337,7 +424,13 @@ async fn leader(State(state): State<AdminState>) -> Json<LeaderStatus> {
 mod admin_auth_tests {
     use std::net::SocketAddr;
 
-    use super::{AOG_ADMIN_ROLE, bounded_bootstrap_allows, roles_include_admin};
+    use aog_apiserver::auth::TOKEN_HEADER;
+    use aog_store::{Op, Precondition};
+
+    use super::{
+        AOG_ADMIN_ROLE, FORWARDED_HEADER, bounded_bootstrap_allows, forwarded_write_request,
+        roles_include_admin,
+    };
 
     #[test]
     fn admin_role_gate() {
@@ -357,5 +450,26 @@ mod admin_auth_tests {
         assert!(!bounded_bootstrap_allows("/admin/write", local, true));
         assert!(!bounded_bootstrap_allows("/admin/initialize", remote, true));
         assert!(!bounded_bootstrap_allows("/admin/initialize", local, false));
+    }
+
+    #[test]
+    fn internal_forwarding_request_never_carries_caller_credentials() {
+        let http = reqwest::Client::builder()
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .unwrap();
+        let request = forwarded_write_request(
+            &http,
+            "https://leader.example:4600",
+            &Op::Delete {
+                key: "Workload/test".to_owned(),
+                expected: Precondition::Any,
+            },
+        )
+        .build()
+        .unwrap();
+        assert_eq!(request.headers()[FORWARDED_HEADER], "1");
+        assert!(!request.headers().contains_key(TOKEN_HEADER));
+        assert!(!request.headers().contains_key("authorization"));
     }
 }
