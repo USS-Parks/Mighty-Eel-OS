@@ -1116,7 +1116,8 @@ final ledger update records the confirmed T1 remote checkpoint.
 
 ### LSH-T2 — Atomic mission and guard enforcement
 
-Status: **PASS** (implementation commit pending).
+Status: **PASS** (implementation commit
+`e168ca6d3bb6a56178c6c3d3d7e852fcef0f7fae`).
 
 The mission and operator blast-radius controls previously checked counters,
 released their locks, awaited approval, and only then recorded usage. Parallel
@@ -1184,6 +1185,8 @@ the two reachable `LSD-009` omission paths are closed at the toolproxy boundary.
 LSH-T3 is the next sequential prompt. The broader M3 milestone remains open
 through LSH-T6.
 
-Commit state: implementation and prompt evidence are ready for the authorized
-commit/push sequence; exact SHAs and the remote checkpoint will be recorded in
-the closeout commit.
+Commit state: implementation and prompt evidence were committed as
+`e168ca6d3bb6a56178c6c3d3d7e852fcef0f7fae`. The commit is SSH-signed and
+carries the canonical `Authored and reviewed by Basho Parks, copyright 2026`
+footer. The exact-SHA DEVLOG closeout and remote checkpoint remain in the
+authorized closeout sequence.
