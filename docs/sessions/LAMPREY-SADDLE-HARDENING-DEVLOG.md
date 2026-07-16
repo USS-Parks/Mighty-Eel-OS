@@ -683,4 +683,11 @@ milestone claim is made.
 Commit state: implementation and prompt evidence were committed as
 `27bc5819af01df14f71ededecaa0eae81de00183`. The commit is SSH-signed and
 carries the canonical `Authored and reviewed by Basho Parks, copyright 2026`
-footer. Push and remote-checkpoint confirmation remain pending.
+footer. The initial exact-SHA DEVLOG closeout is
+`fa78113280aa4744efed7adcfc4c33dc09830d08`. The first pre-push route-policy
+gate then identified the instrumented test server's two literal mock paths as
+unregistered production routes; the bounded fixture-only repair was committed
+as `aadcf36b2afccbfe3195bd583aa7333797b2e7eb`. The focused adversarial test,
+strict clippy, file integrity, full no-slop scan, and 79-route policy inventory
+all pass after that repair. Push and remote-checkpoint confirmation remain
+pending.
