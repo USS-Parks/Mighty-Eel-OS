@@ -1194,3 +1194,70 @@ the canonical footer. Both outgoing commits passed exact-footer and signature
 verification; the pre-push full-tree no-slop and 79-route policy gates passed;
 and `origin/main` advanced from `1dbcab4` through `1fc190a` on 2026-07-16. This
 final ledger update records the confirmed T2 remote checkpoint.
+
+### LSH-T3 — Complete bounded egress scanning
+
+Status: **PASS** (implementation commit pending).
+
+The prior scanner traversed only JSON string values. Tool error text flowed
+unchanged to the caller and receipt, object keys were cloned verbatim, and
+post-execution recursion had no byte, node, depth, string, or decode-work bound.
+Those were the confirmed `LSF-028`/`LSF-029` paths and the reachable
+`LSD-010` unbounded-scan case.
+
+The unified egress path now scans successful output, tool error text, and every
+free-text receipt/session field before exposure or persistence. Provenance
+bindings are sanitized recursively before entering the receipt chain. Sensitive
+JSON object keys quarantine the complete result rather than risk key collision
+or structural ambiguity. Tool errors are redacted with the same PHI, ITAR, and
+secret detectors as successful values, and their redaction kinds contribute to
+the receipt evidence.
+
+Scanning now enforces deterministic limits: 1 MiB aggregate key/string bytes,
+100,000 JSON nodes, depth 64, and 256 KiB per string. A limit violation returns
+JSON null plus a stable non-sensitive quarantine error and receipt label.
+Whole-string standard-base64 and hex representations up to 128 KiB are decoded
+within the same bounded path; decoded PHI, ITAR, or secret findings redact the
+encoded source as one span. Non-UTF-8 decoded data remains opaque and cannot
+expand traversal work.
+
+Changed files:
+
+- `Cargo.lock`;
+- `crates/aog-toolproxy/Cargo.toml`;
+- `crates/aog-toolproxy/src/lib.rs`;
+- `crates/aog-toolproxy/src/scan.rs`; and
+- this DEVLOG.
+
+Gates:
+
+- `cargo test -p aog-toolproxy
+  tests::reg_lsf_028_tool_error_and_receipt_metadata_are_scanned -- --exact` —
+  PASS, 1/1;
+- `cargo test -p aog-toolproxy
+  scan::tests::reg_lsf_029_sensitive_object_key_quarantines_the_result --
+  --exact` — PASS, 1/1;
+- `cargo test -p aog-toolproxy
+  scan::tests::reg_lsd_010_depth_node_and_byte_limits_quarantine_deterministically
+  -- --exact` — PASS, 1/1;
+- base64/hex, nested value, PHI, ITAR, AWS, GitHub, OpenAI, Slack, PEM, benign,
+  scalar, and multi-finding scanner fixtures — PASS;
+- `cargo test -p aog-toolproxy -p aog-approvals` — PASS: 59 toolproxy tests,
+  five approval tests, and doc tests;
+- `cargo test -p aog-conformance --test robustness_conformance` — PASS, 11/11;
+- `cargo test -p aog-controller --test managed_toolproxy` — PASS in the current
+  prerequisite-free lane;
+- `cargo clippy -p aog-toolproxy -p aog-approvals -p aog-conformance -p
+  aog-controller --all-targets -- -D warnings -A clippy::pedantic` — PASS;
+- `cargo fmt --check` — PASS; and
+- `git diff --check` — PASS.
+
+Closure statement: `LSF-028` and `LSF-029` are closed across model-facing and
+receipt surfaces. The post-execution scanner branch of `LSD-010` is closed with
+deterministic quarantine limits; credential-cancellation behavior remains owned
+by LSH-T4/D4. LSH-T4 is the next sequential prompt. The broader M3 milestone
+remains open through LSH-T6.
+
+Commit state: implementation and prompt evidence are ready for the authorized
+commit/push sequence; exact SHAs and the remote checkpoint will be recorded in
+the closeout commit.

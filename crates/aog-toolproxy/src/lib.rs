@@ -615,9 +615,28 @@ impl ToolProxy {
         // BEFORE it re-enters the model context, and receipt the redaction count +
         // kinds (metadata only — never the redacted values).
         let scan = self.scanner.scan_result(&result.output);
-        let redacted_spans = scan.count();
-        let redaction_kinds = scan.redactions;
+        let output_violation = scan.violation;
+        let mut redaction_kinds = scan.redactions;
         result.output = scan.output;
+        if let Some(error) = result.error.take() {
+            match self.scanner.scan_text(&error) {
+                Ok((safe_error, error_kinds)) => {
+                    result.error = Some(safe_error);
+                    redaction_kinds.extend(error_kinds);
+                }
+                Err(violation) => {
+                    result.error = Some(format!("tool egress quarantined ({})", violation.label()));
+                    redaction_kinds.push(violation.label().to_string());
+                    result.output = serde_json::Value::Null;
+                    result.success = false;
+                }
+            }
+        }
+        if let Some(violation) = output_violation {
+            result.error = Some(format!("tool egress quarantined ({})", violation.label()));
+            result.success = false;
+        }
+        let redacted_spans = u32::try_from(redaction_kinds.len()).unwrap_or(u32::MAX);
 
         self.append_receipt(
             call,
@@ -637,6 +656,13 @@ impl ToolProxy {
             },
         );
         Ok(result)
+    }
+
+    fn safe_receipt_text(&self, text: &str) -> String {
+        self.scanner.scan_text(text).map_or_else(
+            |violation| format!("[QUARANTINED:{}]", violation.label()),
+            |(safe, _)| safe,
+        )
     }
 
     fn reserve_guard(
@@ -739,6 +765,33 @@ impl ToolProxy {
         gov: Governance,
     ) {
         let at = chrono::Utc::now().to_rfc3339();
+        let safe_call_id = self.safe_receipt_text(&call.call_id);
+        let safe_tool_id = self.safe_receipt_text(&call.tool_id);
+        let safe_session_id = self.safe_receipt_text(&ctx.session_id);
+        let safe_profile_id = self.safe_receipt_text(&ctx.profile_id);
+        let safe_error = result
+            .error
+            .as_deref()
+            .map(|error| self.safe_receipt_text(error));
+        let safe_approved_by = gov
+            .approved_by
+            .as_deref()
+            .map(|actor| self.safe_receipt_text(actor));
+        let safe_mission_id = gov
+            .mission_id
+            .as_deref()
+            .map(|mission| self.safe_receipt_text(mission));
+        let safe_provenance_source = gov.provenance_source.clone().map(|mut source| {
+            source.tool_id = self.safe_receipt_text(&source.tool_id);
+            source.grant_id = self.safe_receipt_text(&source.grant_id);
+            source.mission_id = source
+                .mission_id
+                .as_deref()
+                .map(|mission| self.safe_receipt_text(mission));
+            source.call_id = self.safe_receipt_text(&source.call_id);
+            source.receipt_hash = self.safe_receipt_text(&source.receipt_hash);
+            source
+        });
         // T7: mirror the brokered call into the session transcript, if one is
         // attached — the tool call, the approval (if any), and the result — so the
         // full agent loop replays from one ledger. Metadata only.
@@ -746,16 +799,16 @@ impl ToolProxy {
             let mut s = session.lock().expect("session lock");
             s.record(
                 SessionEventKind::ToolCall,
-                Some(call.tool_id.clone()),
-                format!("{} call {}", call.tool_id, call.call_id),
+                Some(safe_tool_id.clone()),
+                format!("{safe_tool_id} call {safe_call_id}"),
                 serde_json::json!({
-                    "call_id": call.call_id,
+                    "call_id": safe_call_id.clone(),
                     "has_side_effects": tool.has_side_effects,
                     "out_of_contract": gov.out_of_contract,
                 }),
                 at.clone(),
             );
-            if let Some(actor) = &gov.approved_by {
+            if let Some(actor) = &safe_approved_by {
                 s.record(
                     SessionEventKind::Approval,
                     Some(actor.clone()),
@@ -766,10 +819,10 @@ impl ToolProxy {
             }
             s.record(
                 SessionEventKind::ToolResult,
-                Some(call.tool_id.clone()),
+                Some(safe_tool_id.clone()),
                 format!(
                     "{} {}",
-                    call.tool_id,
+                    safe_tool_id,
                     if result.success { "ok" } else { "blocked" }
                 ),
                 serde_json::json!({
@@ -780,7 +833,7 @@ impl ToolProxy {
             );
         }
         let (cred_lease, cred_ttl_ms) = cred.map_or((None, None), |c| {
-            (Some(c.lease_id.clone()), Some(ms(c.ttl)))
+            (Some(self.safe_receipt_text(&c.lease_id)), Some(ms(c.ttl)))
         });
         let result_mission_id = gov.mission_id.clone();
         let receipt_hash = self
@@ -788,25 +841,25 @@ impl ToolProxy {
             .lock()
             .expect("receipt lock")
             .append(ToolReceipt {
-                call_id: call.call_id.clone(),
-                tool_id: call.tool_id.clone(),
-                session_id: ctx.session_id.clone(),
-                profile_id: ctx.profile_id.clone(),
+                call_id: safe_call_id,
+                tool_id: safe_tool_id,
+                session_id: safe_session_id,
+                profile_id: safe_profile_id,
                 has_side_effects: tool.has_side_effects,
                 success: result.success,
                 duration_ms: result.duration_ms,
                 chain_step: call.chain_step,
                 at,
-                error: result.error.clone(),
+                error: safe_error,
                 cred_lease,
                 cred_ttl_ms,
                 approval_required: gov.approval_required,
-                approved_by: gov.approved_by,
+                approved_by: safe_approved_by,
                 untrusted_context: true,
-                provenance_source: gov.provenance_source,
+                provenance_source: safe_provenance_source,
                 redacted_spans: gov.redacted_spans,
                 redaction_kinds: gov.redaction_kinds,
-                mission_id: gov.mission_id,
+                mission_id: safe_mission_id,
                 out_of_contract: gov.out_of_contract,
                 guardrail_tripped: gov.guardrail_tripped,
             });
@@ -1625,6 +1678,47 @@ mod tests {
                 .contains("AKIAIOSFODNN7EXAMPLE"),
             "the raw secret is never receipted"
         );
+        assert!(proxy.verify_receipts());
+    }
+
+    #[tokio::test]
+    async fn reg_lsf_028_tool_error_and_receipt_metadata_are_scanned() {
+        struct ErrorExecutor;
+        #[async_trait]
+        impl ToolExecutor for ErrorExecutor {
+            async fn execute(
+                &self,
+                _tool: &ToolDefinition,
+                call: &ToolCall,
+                _cred: Option<&MintedCredential>,
+            ) -> ToolResult {
+                ToolResult {
+                    call_id: call.call_id.clone(),
+                    tool_id: call.tool_id.clone(),
+                    success: false,
+                    output: serde_json::Value::Null,
+                    error: Some("backend exposed AKIAIOSFODNN7EXAMPLE".to_string()),
+                    duration_ms: 1,
+                }
+            }
+        }
+
+        let proxy = ToolProxy::new();
+        proxy
+            .register(tool("db.query", false, ToolAccessRole::Guest))
+            .unwrap();
+        let call = call("AKIAIOSFODNN7EXAMPLE", "db.query");
+        let result = proxy
+            .invoke(&call, &ctx(ToolAccessRole::Guest), &ErrorExecutor)
+            .await
+            .unwrap();
+        let error = result.error.unwrap();
+        assert!(!error.contains("AKIAIOSFODNN7EXAMPLE"));
+        assert!(error.contains("[REDACTED:secret_aws_key]"));
+
+        let receipt = serde_json::to_string(&proxy.receipts()[0]).unwrap();
+        assert!(!receipt.contains("AKIAIOSFODNN7EXAMPLE"));
+        assert!(receipt.contains("[REDACTED:secret_aws_key]"));
         assert!(proxy.verify_receipts());
     }
 

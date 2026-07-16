@@ -20,10 +20,17 @@
 //! OpenAI / Slack tokens, PEM private-key blocks). Only span **counts + kind
 //! labels** are surfaced for the receipt — never the redacted value.
 
+use base64::Engine as _;
 use mai_compliance::{
     ItarConfidence, ItarDetector, ItarDetectorConfig, PhiConfidence, PhiDetector, PhiDetectorConfig,
 };
 use serde_json::Value;
+
+const MAX_SCAN_BYTES: usize = 1_048_576;
+const MAX_SCAN_NODES: usize = 100_000;
+const MAX_SCAN_DEPTH: usize = 64;
+const MAX_STRING_BYTES: usize = 262_144;
+const MAX_ENCODED_CHARS: usize = 131_072;
 
 /// The result of scanning a tool output: the redacted value plus the kind label
 /// of every redacted span (metadata only — the raw values never appear here).
@@ -34,6 +41,37 @@ pub struct ScanOutcome {
     /// One kind label per redacted span, in document order (e.g.
     /// `["secret_aws_key", "phi_ssn"]`). Safe to receipt.
     pub redactions: Vec<String>,
+    /// A deterministic work-limit or structural violation. Violating output is
+    /// quarantined as JSON null and never returned to the model.
+    pub violation: Option<ScanViolation>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScanViolation {
+    Bytes,
+    Nodes,
+    Depth,
+    StringBytes,
+    SensitiveObjectKey,
+}
+
+impl ScanViolation {
+    #[must_use]
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Bytes => "egress_limit_bytes",
+            Self::Nodes => "egress_limit_nodes",
+            Self::Depth => "egress_limit_depth",
+            Self::StringBytes => "egress_limit_string",
+            Self::SensitiveObjectKey => "egress_sensitive_object_key",
+        }
+    }
+}
+
+#[derive(Default)]
+struct ScanBudget {
+    bytes: usize,
+    nodes: usize,
 }
 
 impl ScanOutcome {
@@ -58,7 +96,9 @@ struct Finding {
 }
 
 /// The egress scanner: PHI + ITAR (mai-compliance) + a focused secret scanner,
-/// run over every string in a tool result. Build once (`baseline`) and share.
+/// run over every string in a tool result. Object keys are scanned and sensitive
+/// keys quarantine the result. Total bytes, nodes, depth, string length, and
+/// standard-base64/hex decoding work are bounded by the constants above.
 ///
 /// The PHI/ITAR confidence floor is **Probable** — the weakest "Possible"
 /// keyword-only tier is skipped so ordinary tool output is not mangled by
@@ -95,41 +135,84 @@ impl EgressScanner {
     /// Scan a tool result, returning the redacted value + the redacted-span kinds.
     #[must_use]
     pub fn scan_result(&self, output: &Value) -> ScanOutcome {
-        let (output, redactions) = self.redact_value(output);
-        ScanOutcome { output, redactions }
+        let mut budget = ScanBudget::default();
+        match self.redact_value(output, 0, &mut budget) {
+            Ok((output, redactions)) => ScanOutcome {
+                output,
+                redactions,
+                violation: None,
+            },
+            Err(violation) => ScanOutcome {
+                output: Value::Null,
+                redactions: vec![violation.label().to_string()],
+                violation: Some(violation),
+            },
+        }
     }
 
-    /// Recurse into a JSON value, redacting every string **value** (object keys are
-    /// left intact — redacting a key would change the result's shape).
-    fn redact_value(&self, value: &Value) -> (Value, Vec<String>) {
+    /// Scan one free-text channel (including tool errors and receipt metadata).
+    pub fn scan_text(&self, text: &str) -> Result<(String, Vec<String>), ScanViolation> {
+        if text.len() > MAX_STRING_BYTES {
+            return Err(ScanViolation::StringBytes);
+        }
+        Ok(self.redact_str(text))
+    }
+
+    /// Recurse through keys and values within deterministic work limits.
+    fn redact_value(
+        &self,
+        value: &Value,
+        depth: usize,
+        budget: &mut ScanBudget,
+    ) -> Result<(Value, Vec<String>), ScanViolation> {
+        if depth > MAX_SCAN_DEPTH {
+            return Err(ScanViolation::Depth);
+        }
+        budget.nodes = budget.nodes.saturating_add(1);
+        if budget.nodes > MAX_SCAN_NODES {
+            return Err(ScanViolation::Nodes);
+        }
         match value {
             Value::String(s) => {
+                if s.len() > MAX_STRING_BYTES {
+                    return Err(ScanViolation::StringBytes);
+                }
+                budget.bytes = budget.bytes.saturating_add(s.len());
+                if budget.bytes > MAX_SCAN_BYTES {
+                    return Err(ScanViolation::Bytes);
+                }
                 let (redacted, kinds) = self.redact_str(s);
-                (Value::String(redacted), kinds)
+                Ok((Value::String(redacted), kinds))
             }
             Value::Array(items) => {
                 let mut kinds = Vec::new();
-                let out = items
-                    .iter()
-                    .map(|item| {
-                        let (r, k) = self.redact_value(item);
-                        kinds.extend(k);
-                        r
-                    })
-                    .collect();
-                (Value::Array(out), kinds)
+                let mut out = Vec::with_capacity(items.len());
+                for item in items {
+                    let (redacted, item_kinds) = self.redact_value(item, depth + 1, budget)?;
+                    kinds.extend(item_kinds);
+                    out.push(redacted);
+                }
+                Ok((Value::Array(out), kinds))
             }
             Value::Object(map) => {
                 let mut kinds = Vec::new();
                 let mut out = serde_json::Map::with_capacity(map.len());
                 for (key, val) in map {
-                    let (r, k) = self.redact_value(val);
-                    kinds.extend(k);
-                    out.insert(key.clone(), r);
+                    budget.bytes = budget.bytes.saturating_add(key.len());
+                    if budget.bytes > MAX_SCAN_BYTES {
+                        return Err(ScanViolation::Bytes);
+                    }
+                    let (_, key_kinds) = self.redact_str(key);
+                    if !key_kinds.is_empty() {
+                        return Err(ScanViolation::SensitiveObjectKey);
+                    }
+                    let (redacted, value_kinds) = self.redact_value(val, depth + 1, budget)?;
+                    kinds.extend(value_kinds);
+                    out.insert(key.clone(), redacted);
                 }
-                (Value::Object(out), kinds)
+                Ok((Value::Object(out), kinds))
             }
-            other => (other.clone(), Vec::new()),
+            other => Ok((other.clone(), Vec::new())),
         }
     }
 
@@ -151,7 +234,48 @@ impl EgressScanner {
             });
         }
         scan_secrets(text, &mut findings);
+        self.scan_encoded(text, &mut findings);
         redact_with(text, findings)
+    }
+
+    fn scan_encoded(&self, text: &str, findings: &mut Vec<Finding>) {
+        let trimmed = text.trim();
+        if trimmed.len() < 16 || trimmed.len() > MAX_ENCODED_CHARS {
+            return;
+        }
+        let start = text.find(trimmed).unwrap_or(0);
+        let decoded = if trimmed.len().is_multiple_of(2)
+            && trimmed.bytes().all(|byte| byte.is_ascii_hexdigit())
+        {
+            hex::decode(trimmed).ok()
+        } else {
+            base64::engine::general_purpose::STANDARD
+                .decode(trimmed)
+                .ok()
+        };
+        let Some(decoded) = decoded else {
+            return;
+        };
+        let Ok(decoded) = std::str::from_utf8(&decoded) else {
+            return;
+        };
+        let mut decoded_findings = Vec::new();
+        for hit in self.phi.scan(decoded).hits {
+            decoded_findings.push(format!("phi_{}", hit.identifier.as_str()));
+        }
+        if !self.itar.scan(decoded).hits.is_empty() {
+            decoded_findings.push("itar".to_string());
+        }
+        let mut secrets = Vec::new();
+        scan_secrets(decoded, &mut secrets);
+        decoded_findings.extend(secrets.into_iter().map(|finding| finding.kind));
+        if let Some(kind) = decoded_findings.first() {
+            findings.push(Finding {
+                start,
+                end: start + trimmed.len(),
+                kind: format!("encoded_{kind}"),
+            });
+        }
     }
 }
 
@@ -438,5 +562,56 @@ mod tests {
         let out = scanner().scan_result(&v);
         assert!(out.is_clean());
         assert_eq!(out.output, v);
+    }
+
+    #[test]
+    fn reg_lsf_029_sensitive_object_key_quarantines_the_result() {
+        let v = serde_json::json!({ "AKIAIOSFODNN7EXAMPLE": "value" });
+        let out = scanner().scan_result(&v);
+        assert_eq!(out.output, Value::Null);
+        assert_eq!(out.violation, Some(ScanViolation::SensitiveObjectKey));
+    }
+
+    #[test]
+    fn base64_and_hex_encoded_secrets_are_redacted() {
+        let secret = "AKIAIOSFODNN7EXAMPLE";
+        let encoded = base64::engine::general_purpose::STANDARD.encode(secret);
+        let out = scanner().scan_result(&s(&encoded));
+        assert!(!out.output.as_str().unwrap().contains(&encoded));
+        assert!(out.redactions[0].starts_with("encoded_secret_"));
+
+        let encoded = hex::encode(secret);
+        let out = scanner().scan_result(&s(&encoded));
+        assert!(!out.output.as_str().unwrap().contains(&encoded));
+        assert!(out.redactions[0].starts_with("encoded_secret_"));
+    }
+
+    #[test]
+    fn reg_lsd_010_depth_node_and_byte_limits_quarantine_deterministically() {
+        let mut deep = Value::Null;
+        for _ in 0..=MAX_SCAN_DEPTH {
+            deep = Value::Array(vec![deep]);
+        }
+        assert_eq!(
+            scanner().scan_result(&deep).violation,
+            Some(ScanViolation::Depth)
+        );
+
+        let many = Value::Array(vec![Value::Null; MAX_SCAN_NODES]);
+        assert_eq!(
+            scanner().scan_result(&many).violation,
+            Some(ScanViolation::Nodes)
+        );
+
+        let large = Value::Array(vec![s(&"x".repeat(220_000)); 5]);
+        assert_eq!(
+            scanner().scan_result(&large).violation,
+            Some(ScanViolation::Bytes)
+        );
+
+        assert!(matches!(
+            scanner().scan_text(&"x".repeat(MAX_STRING_BYTES + 1)),
+            Err(ScanViolation::StringBytes)
+        ));
     }
 }
