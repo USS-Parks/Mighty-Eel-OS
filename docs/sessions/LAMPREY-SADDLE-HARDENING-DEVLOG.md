@@ -615,4 +615,8 @@ no broader M3 milestone claim.
 Commit state: implementation and prompt evidence were committed as
 `bcd332f2c5f3f3c33eb0daf70adabe77518260fb`. The commit is SSH-signed and
 carries the canonical `Authored and reviewed by Basho Parks, copyright 2026`
-footer. Push and remote-checkpoint confirmation remain pending.
+footer. The exact-SHA DEVLOG closeout was committed as
+`eccc6a425239a23e8a832acddd624a23a007cfca`. Both commits passed the full
+pre-push no-slop and 79-route policy gates, and `origin/main` advanced from
+`2590b50` through `eccc6a4` on 2026-07-16. This final ledger update records the
+confirmed remote checkpoint.
