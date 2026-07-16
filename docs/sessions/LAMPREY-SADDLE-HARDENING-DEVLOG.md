@@ -544,5 +544,9 @@ reservation or charge it twice. LSH-G4 (mandatory current revocation) is the nex
 sequential prompt; no broader M3 milestone claim is made.
 
 Commit state: implementation and prompt evidence were committed as
-`7e8c05c1a4c4176fd596fa15de495c0054434fdf`; this exact-SHA DEVLOG update is
-the follow-up metadata change set.
+`7e8c05c1a4c4176fd596fa15de495c0054434fdf`; the exact-SHA DEVLOG closeout was
+committed as `fffa6ea1945e2162698a6639c30ad82da415b905`. Both commits are
+SSH-signed and carry the canonical `Authored and reviewed by Basho Parks,
+copyright 2026` footer. The pre-push full no-slop and 79-route policy gates
+passed, and `origin/main` advanced from `01dfba2` through `fffa6ea` on
+2026-07-16. This final ledger update records the confirmed remote checkpoint.
