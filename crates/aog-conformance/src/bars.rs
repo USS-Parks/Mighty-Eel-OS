@@ -6,7 +6,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::future::Future;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 use aog_controller::{Action, AlwaysLeader, Controller, ReconcileError, Reconciler};
@@ -27,6 +27,25 @@ fn scratch(name: &str) -> std::path::PathBuf {
     let dir = std::env::temp_dir().join(format!("{name}-{}-{seq}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     dir
+}
+
+/// Real in-process Raft estates are intentionally serialized inside this test
+/// binary. Cargo runs the conformance tests concurrently, and overlapping
+/// election/fault workloads make a shared CI runner measure scheduler starvation
+/// instead of the property under test.
+static RAFT_ESTATE_GATE: OnceLock<tokio::sync::Mutex<()>> = OnceLock::new();
+
+async fn raft_estate_guard() -> tokio::sync::MutexGuard<'static, ()> {
+    RAFT_ESTATE_GATE
+        .get_or_init(|| tokio::sync::Mutex::new(()))
+        .lock()
+        .await
+}
+
+async fn shutdown_nodes(nodes: &[Arc<RaftNode>]) {
+    for node in nodes {
+        let _ = node.shutdown().await;
+    }
 }
 
 /// A small deterministic PRNG (SplitMix64) — the fuzz is reproducible, so a
@@ -104,7 +123,7 @@ async fn leader_write(nodes: &[Arc<RaftNode>], op: Op) -> Result<(), String> {
 /// Add a learner through a quorum-confirmed leader, tolerating a bounded
 /// election gap between single-voter bootstrap and membership expansion.
 async fn leader_add_learner(nodes: &[Arc<RaftNode>], id: u64) -> Result<(), String> {
-    let deadline = Instant::now() + Duration::from_secs(10);
+    let deadline = Instant::now() + Duration::from_secs(30);
     let mut last = String::from("no confirmed leader");
     loop {
         if let Some(li) = confirmed_leader(nodes).await {
@@ -129,7 +148,7 @@ async fn leader_change_membership(
     nodes: &[Arc<RaftNode>],
     voters: BTreeSet<u64>,
 ) -> Result<(), String> {
-    let deadline = Instant::now() + Duration::from_secs(10);
+    let deadline = Instant::now() + Duration::from_secs(30);
     let mut last = String::from("no confirmed leader");
     loop {
         if let Some(li) = confirmed_leader(nodes).await {
@@ -465,27 +484,9 @@ pub async fn linearizable_under_faults(
 ) -> Result<String, String> {
     const KEY: &str = "Counter/linearizability";
 
-    let dir = scratch("loom-conformance-linearizability");
-    let cluster = Arc::new(Cluster::new());
-    let mut nodes: Vec<Arc<RaftNode>> = Vec::with_capacity(3);
-    for id in 1..=3u64 {
-        nodes.push(Arc::new(
-            RaftNode::join(id, dir.join(format!("n{id}")), &cluster)
-                .await
-                .map_err(|e| format!("node {id} join failed: {e:?}"))?,
-        ));
-    }
-    nodes[0]
-        .initialize(BTreeSet::from([1]))
-        .await
-        .map_err(|e| format!("initialize failed: {e:?}"))?;
-    nodes[0]
-        .wait_for_leader(Duration::from_secs(10))
-        .await
-        .map_err(|e| format!("no leader: {e:?}"))?;
-    leader_add_learner(&nodes, 2).await?;
-    leader_add_learner(&nodes, 3).await?;
-    leader_change_membership(&nodes, BTreeSet::from([1, 2, 3])).await?;
+    let _estate_guard = raft_estate_guard().await;
+    let (cluster, nodes) = spawn_cluster(3, "loom-conformance-linearizability").await?;
+    let result: Result<String, String> = async {
 
     // Seed the counter at 0, leader-transparently: on a contended runner the
     // first election may still be settling when the bar starts.
@@ -585,9 +586,13 @@ pub async fn linearizable_under_faults(
         ));
     }
     let ambiguous = final_n - total_acks;
-    Ok(format!(
+        Ok(format!(
         "{clients} concurrent CAS-increment clients under injected partitions and real leader failovers: {total_acks} acknowledged increments ≤ final counter {final_n} — no lost update, no stale allow ({ambiguous} benign ambiguous in-flight commits)"
-    ))
+        ))
+    }
+    .await;
+    shutdown_nodes(&nodes).await;
+    result
 }
 
 // ---------------------------------------------------------------------------
@@ -612,18 +617,26 @@ async fn spawn_cluster(n: u64, label: &str) -> Result<(Arc<Cluster>, Vec<Arc<Raf
                 .map_err(|e| format!("node {id} join failed: {e:?}"))?,
         ));
     }
-    nodes[0]
-        .initialize(BTreeSet::from([1]))
-        .await
-        .map_err(|e| format!("initialize failed: {e:?}"))?;
-    nodes[0]
-        .wait_for_leader(Duration::from_secs(10))
-        .await
-        .map_err(|e| format!("no leader: {e:?}"))?;
-    for id in 2..=n {
-        leader_add_learner(&nodes, id).await?;
+    let setup: Result<(), String> = async {
+        nodes[0]
+            .initialize(BTreeSet::from([1]))
+            .await
+            .map_err(|e| format!("initialize failed: {e:?}"))?;
+        nodes[0]
+            .wait_for_leader(Duration::from_secs(10))
+            .await
+            .map_err(|e| format!("no leader: {e:?}"))?;
+        for id in 2..=n {
+            leader_add_learner(&nodes, id).await?;
+        }
+        leader_change_membership(&nodes, (1..=n).collect()).await?;
+        Ok(())
     }
-    leader_change_membership(&nodes, (1..=n).collect()).await?;
+    .await;
+    if let Err(error) = setup {
+        shutdown_nodes(&nodes).await;
+        return Err(error);
+    }
     Ok((cluster, nodes))
 }
 
@@ -741,7 +754,9 @@ pub async fn kill_switch_under_scale(replicas: u64, workloads: usize) -> Result<
     const REVOKED: &str = "tok-compromised";
     const LIVE: &str = "tok-healthy";
 
+    let _estate_guard = raft_estate_guard().await;
     let (_cluster, nodes) = spawn_cluster(replicas, "loom-conformance-killswitch").await?;
+    let result: Result<String, String> = async {
     let anchor = RustCryptoMlDsa87::generate("loom-estate-anchor")
         .map_err(|e| format!("anchor keygen failed: {e}"))?;
     let anchor_pk = anchor.public_key().to_vec();
@@ -804,9 +819,13 @@ pub async fn kill_switch_under_scale(replicas: u64, workloads: usize) -> Result<
         }
     }
 
-    Ok(format!(
+        Ok(format!(
         "under {workloads} estate objects, a signed revocation replicated to all {replicas} replicas; every replica denied the revoked token and admitted a live one, and a rogue-signed snapshot failed closed on all — no replica missed the kill"
-    ))
+        ))
+    }
+    .await;
+    shutdown_nodes(&nodes).await;
+    result
 }
 
 /// Bar 6 (V8) — scale target: `replicas` control-plane nodes reconcile `workloads`
@@ -820,7 +839,9 @@ pub async fn scale_target(replicas: u64, workloads: usize) -> Result<String, Str
     // object, so this SLO is never the bottleneck — it exists to catch a stall.
     let slo = Duration::from_secs(120);
 
+    let _estate_guard = raft_estate_guard().await;
     let (_cluster, nodes) = spawn_cluster(replicas, "loom-conformance-scale").await?;
+    let result: Result<String, String> = async {
     let li = confirmed_leader_within(&nodes, Duration::from_secs(10))
         .await
         .map_err(|e| format!("{e} (loading the estate)"))?;
@@ -880,9 +901,13 @@ pub async fn scale_target(replicas: u64, workloads: usize) -> Result<String, Str
         ));
     }
 
-    Ok(format!(
+        Ok(format!(
         "{workloads} workloads across {replicas} replicas: ingested in {ingest:?}, reconciled to convergence in {reconcile:?} (< {slo:?} SLO), and every object is readable on every replica — scale target met"
-    ))
+        ))
+    }
+    .await;
+    shutdown_nodes(&nodes).await;
+    result
 }
 
 /// Nearest-rank percentile `p` (1..=100) over an ascending-sorted slice. Integer
@@ -909,7 +934,9 @@ fn percentile(sorted: &[Duration], p: usize) -> Duration {
 pub async fn revocation_to_denial_slo(replicas: u64, iterations: usize) -> Result<String, String> {
     let slo = Duration::from_secs(3);
 
+    let _estate_guard = raft_estate_guard().await;
     let (_cluster, nodes) = spawn_cluster(replicas, "loom-conformance-revslo").await?;
+    let result: Result<String, String> = async {
     let anchor = RustCryptoMlDsa87::generate("loom-estate-anchor")
         .map_err(|e| format!("anchor keygen failed: {e}"))?;
     let anchor_pk = anchor.public_key().to_vec();
@@ -981,9 +1008,13 @@ pub async fn revocation_to_denial_slo(replicas: u64, iterations: usize) -> Resul
         ));
     }
 
-    Ok(format!(
+        Ok(format!(
         "revocation-to-denial across {replicas} replicas over {iterations} revocations: p50 {p50:?}, p99 {p99:?}, worst {worst:?} — all ≤ {slo:?} SLO; a stale snapshot fails closed (I-9)"
-    ))
+        ))
+    }
+    .await;
+    shutdown_nodes(&nodes).await;
+    result
 }
 
 /// V7 — chaos + soak (control-plane self-healing + rollout determinism under
@@ -1005,7 +1036,9 @@ pub async fn revocation_to_denial_slo(replicas: u64, iterations: usize) -> Resul
 /// proof, the aggressive proof its `v7_*` companion.
 pub async fn chaos_soak(replicas: u64, rounds: usize, seed: u64) -> Result<String, String> {
     let heal_slo = Duration::from_secs(10);
+    let _estate_guard = raft_estate_guard().await;
     let (cluster, nodes) = spawn_cluster(replicas, "loom-conformance-chaossoak").await?;
+    let result: Result<String, String> = async {
     let mut prng = SplitMix64::new(seed);
     // The deterministic rollout: step r sets its key to v{r}. The end state is a
     // pure function of `rounds`, independent of which node was killed when.
@@ -1099,9 +1132,13 @@ pub async fn chaos_soak(replicas: u64, rounds: usize, seed: u64) -> Result<Strin
         }
     }
 
-    Ok(format!(
+        Ok(format!(
         "{rounds} kill/heal cycles on {replicas} replicas: a leader re-emerged within {heal_slo:?} each round, every killed node rejoined and caught up, and all replicas converged to the identical {rounds}-step rollout end state — self-healing + deterministic under chaos, no committed loss"
-    ))
+        ))
+    }
+    .await;
+    shutdown_nodes(&nodes).await;
+    result
 }
 
 /// Bar 3 — split-brain safety (doctrine I-4 / addendum H2): a minority partition
@@ -1122,7 +1159,9 @@ pub async fn split_brain_safety(replicas: u64) -> Result<String, String> {
         ));
     }
     let slo = Duration::from_secs(10);
+    let _estate_guard = raft_estate_guard().await;
     let (cluster, nodes) = spawn_cluster(replicas, "loom-conformance-splitbrain").await?;
+    let result: Result<String, String> = async {
 
     // Isolate a minority: the largest set that still leaves a quorum majority.
     // For 5 voters that is 2 nodes {4,5}; the majority {1,2,3} keeps quorum.
@@ -1222,7 +1261,11 @@ pub async fn split_brain_safety(replicas: u64) -> Result<String, String> {
         }
     }
 
-    Ok(format!(
+        Ok(format!(
         "on {replicas} voters, an isolated {minority_size}-node minority committed nothing and confirmed no leader while the quorum majority committed; the estate reconverged to one leader with the write intact on every replica — no split-brain allow"
-    ))
+        ))
+    }
+    .await;
+    shutdown_nodes(&nodes).await;
+    result
 }

@@ -357,7 +357,7 @@ impl RaftNode {
     ///
     /// # Errors
     /// [`NodeError::Raft`] if shutdown fails.
-    pub async fn shutdown(self) -> Result<(), NodeError> {
+    pub async fn shutdown(&self) -> Result<(), NodeError> {
         self.raft
             .shutdown()
             .await
