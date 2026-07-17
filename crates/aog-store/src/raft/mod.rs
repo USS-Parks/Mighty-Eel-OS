@@ -353,14 +353,26 @@ impl RaftNode {
         self.sm.revision().await
     }
 
-    /// Gracefully stop the Raft core.
+    /// Gracefully stop the Raft core without consuming the node owner.
+    ///
+    /// This is for shared owners that will release their state-machine handles
+    /// immediately after stopping. Call [`Self::shutdown`] when the caller owns
+    /// the node and must also release its durable-store locks before reopening.
     ///
     /// # Errors
     /// [`NodeError::Raft`] if shutdown fails.
-    pub async fn shutdown(&self) -> Result<(), NodeError> {
+    pub async fn stop(&self) -> Result<(), NodeError> {
         self.raft
             .shutdown()
             .await
             .map_err(|e| NodeError::Raft(e.to_string()))
+    }
+
+    /// Gracefully stop the Raft core and consume the node, releasing its stores.
+    ///
+    /// # Errors
+    /// [`NodeError::Raft`] if shutdown fails.
+    pub async fn shutdown(self) -> Result<(), NodeError> {
+        self.stop().await
     }
 }

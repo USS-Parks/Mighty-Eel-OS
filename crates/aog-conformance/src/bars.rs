@@ -44,7 +44,7 @@ async fn raft_estate_guard() -> tokio::sync::MutexGuard<'static, ()> {
 
 async fn shutdown_nodes(nodes: &[Arc<RaftNode>]) {
     for node in nodes {
-        let _ = node.shutdown().await;
+        let _ = node.stop().await;
     }
 }
 
