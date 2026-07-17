@@ -1527,7 +1527,7 @@ advanced `origin/main` from `df119fb6321e60e8cfffc1b36281ba95f9f5004a` to
 
 ### LSH-T6 — Tool governance live gate
 
-Status: **PASS** (implementation checkpoint pending publication).
+Status: **PASS** (published source checkpoint; M3 complete).
 
 The repository previously exposed `ToolProxy`, `CredentialMinter`,
 `ApprovalInbox`, and the focused WSF OpenBao client only as independent library
@@ -1611,7 +1611,12 @@ Gates:
 Closure statement: the production caller, approval, credential authority,
 executor, egress, revocation, and receipt chain now close `LSF-026` through
 `LSF-029` and the currently reachable `LSD-009/010` paths end to end. M3's
-gateway/tool acceptance and full workspace gates are green. Implementation
-commit, remote checkpoint, and exact-SHA ledger closeout are the remaining T6
-bookkeeping before the deferred-evidence lane or the independent Saddle import
-may consume this source snapshot.
+gateway/tool acceptance and full workspace gates are green. The implementation
+was SSH-signed and committed as
+`5e541e5324269a051d3304e94ae868080d876a25`, carries the canonical footer, and
+advanced `origin/main` from `4b5335e8d989b2b792f9d1dcb7e2ea53000844d9` to
+`5e541e5324269a051d3304e94ae868080d876a25` on 2026-07-17 after the full-tree
+no-slop and 79-route policy gates passed. This DEVLOG closeout records the
+exact source snapshot eligible for the independent Saddle `SAD-01` import. The
+source hardening roster's next deferred prompt remains `LSH-D1`; no additional
+source-lane closure is claimed here.
