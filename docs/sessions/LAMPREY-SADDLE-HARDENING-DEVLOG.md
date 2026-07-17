@@ -1337,3 +1337,87 @@ the canonical footer. Both outgoing commits passed exact-footer and signature
 verification; the pre-push full-tree no-slop and 79-route policy gates passed;
 and `origin/main` advanced from `f7ee236` through `16e0c7e` on 2026-07-16. This
 final ledger update records the confirmed T4 remote checkpoint.
+
+### CI recovery checkpoint — GitHub Actions failure window
+
+Status: **PASS** (remote checkpoint confirmed).
+
+This bounded recovery interrupted, but did not advance, the sequential roster
+after the GitHub workflows remained red across the preceding commit window. The
+failure set crossed four integration boundaries rather than one prompt:
+
+- the WSF live bridge minted an exactly 900-second token, then reached AWS STS
+  after enough elapsed time to fall below STS's 900-second minimum;
+- the development Loom estate attempted authenticated Raft forwarding that only
+  exists in the production mTLS topology, and V5 discarded rejected scale-write
+  responses;
+- in-process conformance setup assumed the bootstrap handle remained leader,
+  then accumulated concurrent Raft estates without stopping their cores on the
+  Windows aggregate runner; and
+- the live revocation test held a write guard across an await, which the exact CI
+  clippy command rejected.
+
+The recovery gives WSF exchanges explicit authority headroom, directs
+development-estate writes to the reported leader while preserving strict
+production forwarding, makes membership setup leader-transparent, checks every
+V5 scale write, releases the revocation lock before I/O, serializes real-Raft
+conformance gates within their test binary, and stops each estate after its bar.
+The first shared-owner stop seam briefly changed the consuming `shutdown`
+contract and kept a redb store lock alive; both Linux MAI CI and Windows Lamprey
+exposed that regression. The final correction restores consuming shutdown for
+store release and keeps a separate borrowed stop seam for Arc-owned test estates.
+
+Changed files across the recovery commits:
+
+- `crates/wsf-api/tests/live_api.rs`;
+- `crates/wsf-api/tests/live_revocation.rs`;
+- `crates/aog-conformance/src/bars.rs`;
+- `crates/aog-store/src/raft/mod.rs`;
+- `deployment/loom-harness/gates/v5-kill-switch-under-scale.sh`;
+- `deployment/loom-harness/gates/v7-chaos-soak.sh`;
+- `deployment/loom-harness/gates/v8-scale.sh`; and
+- `deployment/loom-harness/gates/v10-revocation-slo.sh`.
+
+Local gates:
+
+- `cargo test -p aog-conformance --lib` — PASS in normal parallel mode: three
+  passed and five aggressive/SLO/nightly gates intentionally ignored; the final
+  run completed in 51.45 seconds;
+- `cargo test -p aog-apiserver --test receipt
+  pending_intent_survives_crash_and_recovers_as_verifiable_evidence -- --exact`
+  — PASS, 1/1;
+- `cargo test -p aog-store` — PASS, eight integration tests plus crate/doc tests;
+- affected-crate clippy with `-D warnings -A clippy::pedantic`, `cargo fmt
+  --check`, shell syntax checks, and `git diff --check` — PASS;
+- live OpenBao + Moto integration suite — PASS, all 15 trust-adjacent tests,
+  including the WSF AWS STS exchange; and
+- containerized 5-control-plane + 5-edge Loom estate — PASS: V5, V8, V10, V4,
+  and V7.
+
+The local full-workspace check remained environment-blocked because this Windows
+host has no `protoc` on `PATH`; the GitHub Rust gate installed the protobuf
+compiler and passed compilation, clippy, formatting, and `cargo test --workspace`
+on the final SHA.
+
+Commit and remote evidence:
+
+- integration-boundary repair:
+  `4bfe8c9adcd3024749d547b198fb10ce5466c082`;
+- conformance lifecycle repair:
+  `a4e7337df1816cd2cd6bc03889e20c6d289c204c`;
+- consuming-shutdown correction and final code checkpoint:
+  `3a0684b3f50f1c2f77f0a85ca0951af34b94beb4`;
+- MAI CI run
+  `29552235789` — PASS:
+  <https://github.com/USS-Parks/im-mighty-eel-mai/actions/runs/29552235789>;
+- Lamprey MAI Validation run
+  `29552235838` — PASS:
+  <https://github.com/USS-Parks/im-mighty-eel-mai/actions/runs/29552235838>;
+- SHIP Validation `29552235791`, commit-message validation `29552235790`, and
+  Pages `29552235462` — PASS.
+
+All three recovery commits are SSH-signed and carry the canonical `Authored and
+reviewed by Basho Parks, copyright 2026` footer. The pre-commit no-slop checks and
+pre-push full-tree no-slop plus 79-route policy gates passed for every published
+range. This recovery checkpoint closes the observed GitHub failure window;
+LSH-T5 remains the next sequential PSPR prompt.
