@@ -110,7 +110,7 @@ pub struct DecisionReceipt {
 
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum ApprovalError {
-    #[error("approval decision requires an authenticated AOG update context")]
+    #[error("approval decision requires an authenticated AOG tool-approval context")]
     WrongOperation,
     #[error("approval actor lacks the required role")]
     MissingRole,
@@ -291,7 +291,7 @@ impl ApprovalInbox {
         actor: &VerifiedRequestContext,
     ) -> Result<Option<(String, String, String)>, ApprovalError> {
         if actor
-            .require_operation(RequestOperation::AogUpdate)
+            .require_operation(RequestOperation::AogToolApprove)
             .is_err()
         {
             return Err(ApprovalError::WrongOperation);
@@ -602,7 +602,7 @@ mod tests {
         );
         VerifiedRequestContext::establish(
             principal,
-            RequestOperation::AogUpdate,
+            RequestOperation::AogToolApprove,
             CanonicalResource::resolved("approval", id, Some(tenant.to_string())).unwrap(),
         )
         .unwrap()
@@ -626,7 +626,7 @@ mod tests {
         );
         VerifiedRequestContext::establish(
             principal,
-            RequestOperation::AogUpdate,
+            RequestOperation::AogToolApprove,
             CanonicalResource::resolved("system", "write.record", Some("tenant-a".to_string()))
                 .unwrap(),
         )

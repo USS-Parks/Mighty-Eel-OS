@@ -1469,7 +1469,7 @@ Tickets time out against the absolute expiry, atomically remove the exact
 nonce-bound pending item, and append a fail-closed expiry decision.
 
 Approve and deny operations now require a `VerifiedRequestContext` established
-for `AogUpdate` on the exact `approval/<id>` resource. The authenticated
+for the dedicated `AogToolApprove` operation on the exact `approval/<id>` resource. The authenticated
 principal must carry `aog:approve` and match the pending tenant. A successful
 decision yields one `ApprovalGrant` binding approval id, authenticated actor,
 role, tenant, call id, canonical arguments digest, nonce, and expiry. Consuming
@@ -1524,3 +1524,94 @@ fingerprint `SHA256:PE4Wpbp27IeZC6y4dd97YDNLiFrDvky2KOWSqvdkTEc`, carries the
 canonical footer, passed the full-tree no-slop and 79-route pre-push gates, and
 advanced `origin/main` from `df119fb6321e60e8cfffc1b36281ba95f9f5004a` to
 `acd755a88c95960c53374f271e2c7616b03f2376` on 2026-07-17. LSH-T6 is active.
+
+### LSH-T6 — Tool governance live gate
+
+Status: **PASS** (implementation checkpoint pending publication).
+
+The repository previously exposed `ToolProxy`, `CredentialMinter`,
+`ApprovalInbox`, and the focused WSF OpenBao client only as independent library
+seams. No production caller composed them, no real executor consumed the
+call-scoped credential, and the only credential-minter implementations lived in
+tests. Consequently T1–T5's local proofs did not establish that the complete
+runtime path preserved their invariants.
+
+The new `aog-tool-runtime` crate is the production composition boundary. It
+accepts only a `VerifiedRequestContext` established for the dedicated
+`AogToolInvoke` operation and exact canonical `tool/<id>` resource, derives tool
+role from authenticated principal claims, requires a verified tenant plus root
+token lineage, and rejects caller-selected routes or credential roles.
+Side-effecting calls traverse the real `ApprovalInbox`; decisions now use the
+separate `AogToolApprove` operation instead of overloading generic AOG update.
+
+Credential authority is configured by exact tenant and tool. Each binding names
+an OpenBao token role and explicit child policy set. The WSF OpenBao client
+creates a non-renewable token with no default policy, a requested TTL and equal
+explicit maximum TTL no longer than 60 seconds, metadata binding tenant/tool/
+session, and a redacted debug representation. The runtime passes the token only
+as an HTTP Authorization header to an operator-allowlisted executor endpoint;
+HTTPS is mandatory except loopback tests, redirects are disabled, and response
+bodies are streamed under a byte ceiling.
+
+Revocation is cancellation safe. `CredentialLease::Drop` synchronously writes
+an accessor-only record through a temporary file plus `sync_all` and atomic
+rename. A serialized worker drains records by logging into OpenBao and revoking
+the accessor. Pending records survive process loss and are retried at startup;
+authority-enforced expiry remains the upper bound if OpenBao is unavailable.
+Both `MintedCredential` and `OpenBaoTokenLease` now redact secrets from `Debug`
+and zeroize their token strings on drop. Session ids are restricted to a
+bounded metadata-safe alphabet before authority or receipt use.
+
+Live evidence used disposable OpenBao image
+`openbao/openbao@sha256:436eaf9778cad75507ff70ea26ace30dcbe15606e619ac3823495663d7f7c115`
+on loopback. The test provisioned separate parent and child policies, an
+AppRole, and a token role, then exercised benign, injected, approved mutation,
+four concurrent, oversized, secret-bearing, and cancelled calls through the
+real runtime and a live HTTP tool. Ten distinct tokens reached the tool while
+active; all ten accessors were subsequently rejected by OpenBao. Nine completed
+calls produced an intact receipt chain; the cancelled call produced no
+fabricated completion receipt, while its drop guard durably revoked the lease.
+The secret fixture appeared neither in returned model context nor serialized
+receipts.
+
+Changed files:
+
+- `Cargo.toml` and `Cargo.lock`;
+- `crates/aog-tool-runtime/Cargo.toml`;
+- `crates/aog-tool-runtime/src/lib.rs`;
+- `crates/aog-tool-runtime/tests/live_tool_governance.rs`;
+- `crates/aog-approvals/src/lib.rs`;
+- `crates/aog-toolproxy/src/lib.rs`;
+- `crates/fabric-contracts/src/principal.rs`;
+- `crates/wsf-bridge/src/lib.rs`;
+- `crates/wsf-bridge/src/openbao.rs`;
+- `docs/verification/LSH-T6-LIVE-TOOL-GATE.md`; and
+- this DEVLOG.
+
+Gates:
+
+- `cargo test -p aog-tool-runtime --test live_tool_governance -- --nocapture`
+  with live OpenBao — PASS, full benign/injected/mutating/concurrent/cancelled/
+  oversized/secret-bearing matrix;
+- `cargo test -p aog-tool-runtime -p aog-toolproxy -p aog-approvals -p
+  wsf-bridge` with live OpenBao — PASS;
+- `cargo test -p aog-conformance --test robustness_conformance` — PASS, 11/11;
+- `cargo test -p aog-controller --test managed_toolproxy` — PASS, 1/1;
+- focused strict clippy for the runtime, proxy, approvals, bridge, conformance,
+  and controller — PASS;
+- `cargo check --workspace` using the installed host `protoc` — PASS;
+- `cargo clippy --workspace --all-targets -- -D warnings -A
+  clippy::pedantic` — PASS;
+- `cargo test --workspace` with the live T6 environment — PASS;
+- `cargo fmt --all -- --check` and `git diff --check` — PASS;
+- `cargo audit` — PASS, zero vulnerabilities across 495 dependencies; and
+- `cargo deny check` — PASS (`advisories ok, bans ok, licenses ok, sources ok`;
+  configured duplicate/unmatched-license warnings remain non-fatal).
+
+Closure statement: the production caller, approval, credential authority,
+executor, egress, revocation, and receipt chain now close `LSF-026` through
+`LSF-029` and the currently reachable `LSD-009/010` paths end to end. M3's
+gateway/tool acceptance and full workspace gates are green. Implementation
+commit, remote checkpoint, and exact-SHA ledger closeout are the remaining T6
+bookkeeping before the deferred-evidence lane or the independent Saddle import
+may consume this source snapshot.

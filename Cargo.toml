@@ -23,6 +23,7 @@ members = [
     "crates/aog-scheduler",
     "crates/aog-store",
     "crates/aog-toolproxy",
+    "crates/aog-tool-runtime",
     "crates/aog-wire",
     "crates/aogd",
     "crates/aogctl",

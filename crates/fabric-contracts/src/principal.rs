@@ -186,6 +186,10 @@ pub enum RequestOperation {
     AogList,
     AogUpdate,
     AogDelete,
+    /// Invoke a registered tool through the governed AOG execution boundary.
+    AogToolInvoke,
+    /// Decide one pending governed tool invocation.
+    AogToolApprove,
 }
 
 impl RequestOperation {
@@ -200,9 +204,13 @@ impl RequestOperation {
             | Self::WsfBroker
             | Self::WsfAuditRead
             | Self::WsfAuditExport => Audience::Wsf,
-            Self::AogCreate | Self::AogRead | Self::AogList | Self::AogUpdate | Self::AogDelete => {
-                Audience::Aog
-            }
+            Self::AogCreate
+            | Self::AogRead
+            | Self::AogList
+            | Self::AogUpdate
+            | Self::AogDelete
+            | Self::AogToolInvoke
+            | Self::AogToolApprove => Audience::Aog,
         }
     }
 }

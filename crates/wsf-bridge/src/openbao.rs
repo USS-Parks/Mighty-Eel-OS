@@ -12,11 +12,13 @@
 //! `Handler` conflict (KNOWN-ISSUES #7, deferred by 0.2d); this ~150-line client
 //! keeps `wsf-bridge` tonic/axum-free.
 
+use std::collections::BTreeMap;
 use std::time::Duration;
 
 use reqwest::{Client, StatusCode};
 use serde::{Deserialize, Serialize};
 use tracing::debug;
+use zeroize::Zeroize;
 
 /// Configuration for the focused OpenBao client.
 #[derive(Debug, Clone)]
@@ -128,6 +130,9 @@ pub enum OpenBaoError {
     /// A requested KV path does not exist.
     #[error("kv path not found: {0}")]
     NotFound(String),
+    /// A caller supplied an unsafe or unsupported token-lease request.
+    #[error("invalid token lease request: {0}")]
+    InvalidLease(String),
 }
 
 // ── OpenBao wire types ─────────────────────────────────────────────────
@@ -148,6 +153,71 @@ struct AppRoleAuth {
     client_token: String,
     #[serde(default)]
     lease_duration: u64,
+}
+
+#[derive(Debug, Serialize)]
+struct TokenCreateRequest<'a> {
+    display_name: &'a str,
+    ttl: String,
+    explicit_max_ttl: String,
+    renewable: bool,
+    no_default_policy: bool,
+    policies: &'a [String],
+    #[serde(rename = "meta")]
+    metadata: &'a BTreeMap<String, String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct TokenCreateResponse {
+    auth: TokenAuth,
+}
+
+#[derive(Debug, Deserialize)]
+struct TokenAuth {
+    client_token: String,
+    accessor: String,
+    lease_duration: u64,
+}
+
+#[derive(Debug, Serialize)]
+struct AccessorRequest<'a> {
+    accessor: &'a str,
+}
+
+/// An authority-enforced OpenBao token lease. The token is deliberately
+/// redacted from `Debug`; only its accessor is suitable for logs and receipts.
+#[derive(Clone)]
+pub struct OpenBaoTokenLease {
+    client_token: String,
+    accessor: String,
+    lease_duration: Duration,
+}
+
+impl OpenBaoTokenLease {
+    /// Consume the lease for handoff to the executor boundary. Any token bytes
+    /// left in this value are zeroized by `Drop`.
+    #[must_use]
+    pub fn into_parts(mut self) -> (String, String, Duration) {
+        let client_token = std::mem::take(&mut self.client_token);
+        let accessor = std::mem::take(&mut self.accessor);
+        (client_token, accessor, self.lease_duration)
+    }
+}
+
+impl Drop for OpenBaoTokenLease {
+    fn drop(&mut self) {
+        self.client_token.zeroize();
+    }
+}
+
+impl std::fmt::Debug for OpenBaoTokenLease {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("OpenBaoTokenLease")
+            .field("client_token", &"<redacted>")
+            .field("accessor", &self.accessor)
+            .field("lease_duration", &self.lease_duration)
+            .finish()
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -213,6 +283,110 @@ impl OpenBaoAuth {
             "authenticated to OpenBao via AppRole"
         );
         Ok(body.auth.client_token)
+    }
+
+    /// Create one non-renewable token from a pre-provisioned token role. Both
+    /// `ttl` and `explicit_max_ttl` are set to the requested bound, so OpenBao
+    /// itself—not the caller—enforces expiration.
+    pub async fn create_token_for_role(
+        &self,
+        parent_token: &str,
+        role: &str,
+        display_name: &str,
+        ttl: Duration,
+        policies: &[String],
+        metadata: &BTreeMap<String, String>,
+    ) -> Result<OpenBaoTokenLease, OpenBaoError> {
+        validate_path_segment(role, "token role")?;
+        if display_name.trim().is_empty() || display_name.len() > 128 {
+            return Err(OpenBaoError::InvalidLease(
+                "display name must contain 1..=128 characters".to_string(),
+            ));
+        }
+        if ttl.is_zero() || ttl > Duration::from_secs(60) {
+            return Err(OpenBaoError::InvalidLease(
+                "TTL must be within 1..=60 seconds".to_string(),
+            ));
+        }
+        if policies.is_empty() {
+            return Err(OpenBaoError::InvalidLease(
+                "at least one child token policy is required".to_string(),
+            ));
+        }
+        for policy in policies {
+            validate_path_segment(policy, "token policy")?;
+        }
+        let ttl_wire = format!("{}s", ttl.as_secs());
+        let request = TokenCreateRequest {
+            display_name,
+            ttl: ttl_wire.clone(),
+            explicit_max_ttl: ttl_wire,
+            renewable: false,
+            no_default_policy: true,
+            policies,
+            metadata,
+        };
+        let url = format!("{}/v1/auth/token/create/{role}", self.config.address);
+        let response = self
+            .client
+            .post(url)
+            .header("X-Vault-Token", parent_token)
+            .json(&request)
+            .send()
+            .await?;
+        let status = response.status();
+        if !status.is_success() {
+            let body = response.text().await.unwrap_or_default();
+            return Err(OpenBaoError::Protocol(format!(
+                "token create {status}: {}",
+                body.trim()
+            )));
+        }
+        let response: TokenCreateResponse = response
+            .json()
+            .await
+            .map_err(|error| OpenBaoError::Protocol(format!("token create parse: {error}")))?;
+        if response.auth.client_token.is_empty()
+            || response.auth.accessor.is_empty()
+            || response.auth.lease_duration == 0
+            || response.auth.lease_duration > ttl.as_secs()
+        {
+            return Err(OpenBaoError::Protocol(
+                "token create returned an invalid or overlong lease".to_string(),
+            ));
+        }
+        Ok(OpenBaoTokenLease {
+            client_token: response.auth.client_token,
+            accessor: response.auth.accessor,
+            lease_duration: Duration::from_secs(response.auth.lease_duration),
+        })
+    }
+
+    /// Revoke a token by its non-authorizing accessor. A missing accessor is
+    /// treated as already revoked, making durable retry idempotent.
+    pub async fn revoke_token_accessor(
+        &self,
+        parent_token: &str,
+        accessor: &str,
+    ) -> Result<(), OpenBaoError> {
+        validate_path_segment(accessor, "token accessor")?;
+        let url = format!("{}/v1/auth/token/revoke-accessor", self.config.address);
+        let response = self
+            .client
+            .post(url)
+            .header("X-Vault-Token", parent_token)
+            .json(&AccessorRequest { accessor })
+            .send()
+            .await?;
+        let status = response.status();
+        if !status.is_success() && status != StatusCode::BAD_REQUEST {
+            let body = response.text().await.unwrap_or_default();
+            return Err(OpenBaoError::Protocol(format!(
+                "token revoke {status}: {}",
+                body.trim()
+            )));
+        }
+        Ok(())
     }
 
     /// Read tenant attributes from KV v2 at `<tenant_data_path>/<tenant_id>`.
@@ -456,6 +630,46 @@ impl OpenBaoAuth {
                 .is_some_and(|sealed| !sealed),
             Err(_) => false,
         }
+    }
+}
+
+fn validate_path_segment(value: &str, label: &str) -> Result<(), OpenBaoError> {
+    if value.is_empty()
+        || value.len() > 128
+        || !value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+    {
+        return Err(OpenBaoError::InvalidLease(format!(
+            "{label} must match [A-Za-z0-9_-]{{1,128}}"
+        )));
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod token_lease_tests {
+    use super::*;
+
+    #[test]
+    fn token_lease_debug_redacts_secret() {
+        let lease = OpenBaoTokenLease {
+            client_token: "never-print-me".to_string(),
+            accessor: "accessor-1".to_string(),
+            lease_duration: Duration::from_secs(30),
+        };
+        let rendered = format!("{lease:?}");
+        assert!(!rendered.contains("never-print-me"));
+        assert!(rendered.contains("<redacted>"));
+        assert!(rendered.contains("accessor-1"));
+    }
+
+    #[test]
+    fn path_segment_validation_rejects_injection() {
+        assert!(validate_path_segment("role-a_1", "role").is_ok());
+        assert!(validate_path_segment("../root", "role").is_err());
+        assert!(validate_path_segment("role?x=1", "role").is_err());
+        assert!(validate_path_segment("", "role").is_err());
     }
 }
 

@@ -29,6 +29,7 @@ use fabric_token::spend::{Reservation, ReservationKey, ReservationLedger, Spent}
 use mai_agent::ToolRegistry;
 use mai_agent::types::{AgentError, ToolAccessRole, ToolCall, ToolDefinition, ToolResult};
 use serde::Serialize;
+use zeroize::Zeroize;
 
 use crate::guard::Guardrails;
 use crate::mission::{Mission, MissionContract};
@@ -53,7 +54,6 @@ pub const MAX_CREDENTIAL_TTL: Duration = Duration::from_secs(60);
 
 /// A per-call ephemeral credential (T2), minted just before execution and revoked
 /// at call end — never persisted, never handed to the agent process.
-#[derive(Debug)]
 pub struct MintedCredential {
     /// Opaque lease id — safe to log and receipt (identifies, does not authorize).
     pub lease_id: String,
@@ -63,6 +63,22 @@ pub struct MintedCredential {
     /// Absolute expiry enforced by the minting authority. The proxy rejects an
     /// already-expired lease or one later than the TTL it requested.
     pub expires_at: SystemTime,
+}
+
+impl std::fmt::Debug for MintedCredential {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MintedCredential")
+            .field("lease_id", &self.lease_id)
+            .field("secret", &"<redacted>")
+            .field("expires_at", &self.expires_at)
+            .finish()
+    }
+}
+
+impl Drop for MintedCredential {
+    fn drop(&mut self) {
+        self.secret.zeroize();
+    }
 }
 
 /// The seam to WSF's credential broker (wsf-bridge): mint an ephemeral credential

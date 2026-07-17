@@ -340,6 +340,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "aog-tool-runtime"
+version = "0.1.0"
+dependencies = [
+ "aog-approvals",
+ "aog-toolproxy",
+ "async-trait",
+ "axum 0.8.9",
+ "blake3",
+ "chrono",
+ "fabric-contracts",
+ "futures-util",
+ "mai-agent",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "uuid",
+ "wsf-bridge",
+]
+
+[[package]]
 name = "aog-toolproxy"
 version = "0.1.0"
 dependencies = [
@@ -356,6 +379,7 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.18",
  "tokio",
+ "zeroize",
 ]
 
 [[package]]
@@ -5023,6 +5047,7 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid",
+ "zeroize",
 ]
 
 [[package]]

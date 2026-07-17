@@ -40,7 +40,7 @@ mod error;
 pub mod openbao;
 
 pub use error::BridgeError;
-pub use openbao::{OpenBaoAuth, OpenBaoConfig, OpenBaoError, TenantAttributes};
+pub use openbao::{OpenBaoAuth, OpenBaoConfig, OpenBaoError, OpenBaoTokenLease, TenantAttributes};
 
 use std::sync::Arc;
 use std::time::Duration;
