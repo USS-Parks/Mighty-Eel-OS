@@ -1451,7 +1451,7 @@ Verification:
 
 ### LSH-T5 — Authenticated approval decisions
 
-Status: **PASS** (reconciled implementation commit pending).
+Status: **PASS** (reconciled implementation and remote checkpoint `acd755a88c95960c53374f271e2c7616b03f2376`).
 
 The prior inbox accepted a free-form actor string, keyed pending work directly
 by caller-supplied call id, silently replaced an existing pending request on id
@@ -1518,6 +1518,9 @@ published CI-recovery and repository-identity checkpoint. LSH-T6 remains
 responsible for the real production caller/executor/credential/approval live
 gate. LSH-T6 is the next sequential prompt and the final prompt in M3.
 
-Commit state: implementation and prompt evidence are ready for the authorized
-commit/push sequence; exact SHAs and the remote checkpoint will be recorded in
-the closeout commit.
+Commit state: the reconciled implementation and prompt evidence were committed
+as `acd755a88c95960c53374f271e2c7616b03f2376`. The commit is SSH-signed with
+fingerprint `SHA256:PE4Wpbp27IeZC6y4dd97YDNLiFrDvky2KOWSqvdkTEc`, carries the
+canonical footer, passed the full-tree no-slop and 79-route pre-push gates, and
+advanced `origin/main` from `df119fb6321e60e8cfffc1b36281ba95f9f5004a` to
+`acd755a88c95960c53374f271e2c7616b03f2376` on 2026-07-17. LSH-T6 is active.
