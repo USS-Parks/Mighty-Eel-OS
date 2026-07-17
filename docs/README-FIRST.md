@@ -312,7 +312,7 @@ For each issue, send:
    `cd source; git log -1 --format=%H`) to confirm.
 
 Open an issue at
-[github.com/USS-Parks/im-mighty-eel-mai/issues](https://github.com/USS-Parks/im-mighty-eel-mai/issues)
+[github.com/USS-Parks/Mighty-Eel-OS/issues](https://github.com/USS-Parks/Mighty-Eel-OS/issues)
 with the above. If you do not have access to that repo, email the
 release engineer who sent you this bundle and attach the same
 information.

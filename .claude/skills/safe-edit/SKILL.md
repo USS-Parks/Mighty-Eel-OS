@@ -1,6 +1,6 @@
 ---
 name: safe-edit
-description: "MANDATORY skill for ALL file edits in the MAI monorepo (im-mighty-eel-mai). This skill MUST be used any time Claude needs to modify a file that lives in the workspace-mounted folder (the user's Windows filesystem). It prevents the sandbox truncation bug that corrupts files when sed/Write/bash-redirect is used through the Linux mount. Use this skill EVERY TIME you are about to edit .rs, .py, .toml, .yml, or any other file in the MAI repo. If you catch yourself reaching for sed -i, Write tool on a >40 line file, or any bash redirect targeting the workspace mount: STOP and use this skill instead. No exceptions."
+description: "MANDATORY skill for ALL file edits in the Mighty-Eel-OS monorepo. This skill MUST be used any time Claude needs to modify a file that lives in the workspace-mounted folder (the user's Windows filesystem). It prevents the sandbox truncation bug that corrupts files when sed/Write/bash-redirect is used through the Linux mount. Use this skill EVERY TIME you are about to edit .rs, .py, .toml, .yml, or any other file in the MAI repo. If you catch yourself reaching for sed -i, Write tool on a >40 line file, or any bash redirect targeting the workspace mount: STOP and use this skill instead. No exceptions."
 ---
 
 # Safe Edit Protocol for MAI Monorepo

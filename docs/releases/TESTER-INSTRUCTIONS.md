@@ -219,7 +219,7 @@ demos.** If your time is short, anchor your read there.
 ## 5. Issue Report Template
 
 Copy this block into the body of a GitHub issue at
-[github.com/USS-Parks/im-mighty-eel-mai/issues](https://github.com/USS-Parks/im-mighty-eel-mai/issues),
+[github.com/USS-Parks/Mighty-Eel-OS/issues](https://github.com/USS-Parks/Mighty-Eel-OS/issues),
 or into an email to the release engineer who sent you the bundle.
 One issue per problem; do not batch unrelated problems.
 

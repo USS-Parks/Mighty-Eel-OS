@@ -1,7 +1,7 @@
 [Unit]
 Description=Island Mountain MAI API server (REST + gRPC)
 Documentation=file:///usr/share/doc/mai/README.md
-Documentation=https://github.com/USS-Parks/im-mighty-eel-mai
+Documentation=https://github.com/USS-Parks/Mighty-Eel-OS
 After=network-online.target
 Wants=network-online.target
 RequiresMountsFor=/var/lib/mai /etc/mai

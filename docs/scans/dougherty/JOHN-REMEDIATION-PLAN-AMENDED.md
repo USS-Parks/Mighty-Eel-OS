@@ -1,5 +1,9 @@
 ﻿# John Dougherty Remediation Plan (DOUGHERTY Lane)
 
+> **Repository identity update (2026-07-16):** the canonical repository is now
+> `USS-Parks/Mighty-Eel-OS`. Historical scan and tester-artifact references below
+> retain the former repository name because they identify the original artifact.
+
 > **STATUS — CLOSED (2026-05-25)**
 > All 26 J-sessions (J-01..J-26 plus J-10b) complete. J-23..J-26 (OpenAI-compat, ONNX Runtime, MLX, Triton adapters) landed under `a072634` in a parallel session. Closure document: [`dougherty/J-15-DOUGHERTY-CLOSURE.md`](dougherty/J-15-DOUGHERTY-CLOSURE.md). RC1.2 re-bundle + re-ship (RC-10 + RC-11) shipped at freeze `e55c1ff` with local GitDoctor score 93/100. Kept as the canonical record of what the DOUGHERTY response covered. Current build work has moved to the GITDOCTOR-75 lane — see [`GITDOCTOR-75-REMEDIATION-PLAN.md`](../gd75/GITDOCTOR-75-REMEDIATION-PLAN.md).
 

@@ -2,7 +2,7 @@
 
 **Initiative:** Repository-wide security remediation and production-truth restoration  
 **Products:** MAI appliance, Woven Sovereignty Fabric (WSF), Agentic Orchestration Governance (AOG)  
-**Repository:** `im-mighty-eel-mai` at `C:\Users\17076\Documents\Claude\Mighty Eel OS\mai`  
+**Repository:** `USS-Parks/Mighty-Eel-OS` at `C:\Users\17076\Documents\Claude\Mighty Eel OS\mai`
 **Source audit:** 2026-07-05 parent-agent repository audit at commit `6ffaaeeea0a83c7fa071e114183cfa60c5898703`  
 **Author:** Basho Parks + Codex · **Created:** 2026-07-05  
 **Status:** **HISTORICAL EXECUTION RECORD — SUPERSEDED FOR CURRENT CLOSURE.** The roster was executed in `session/SEC-1`; the authoritative execution evidence is `docs/sessions/SECURITY-REMEDIATION-DEVLOG.md`. Its original unchecked prompt boxes are preserved rather than retroactively rewritten. Current WSF/AOG closure is governed by `PLANNING/LAMPREY-SADDLE-WSF-AOG-SECURITY-HARDENING-PSPR.md` because the 2026-07-15 source assessment found surviving/regressed controls.

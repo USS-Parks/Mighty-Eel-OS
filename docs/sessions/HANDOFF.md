@@ -11,7 +11,7 @@
 - Building **two products** for Island Mountain's sales/CS division: **WSF** (Woven Sovereignty
   Fabric — trust plane, on OpenBao) + **AOG** (Agentic Orchestration Governance — control plane),
   with the live islandmountain.io/aeneas.html cloud-security console (build codename **Lamprey**) as
-  WSF's first consumer. Built by **extending the existing Lamprey MAI Rust workspace** (`im-mighty-eel-mai`).
+  WSF's first consumer. Built by **extending the existing Lamprey MAI Rust workspace** (`Mighty-Eel-OS`).
 - **Mode:** STS (stem to stern). The user wants **relentless, continuous execution** — commit each
   prompt, verify each, **do NOT stop to ask permission**, **push only at the very end** after the full
   test suite/CI validate. The user is explicitly impatient with checkpoint-and-ask behavior.

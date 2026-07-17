@@ -1,5 +1,9 @@
 ﻿# GitDoctor 75 Remediation Plan
 
+> **Repository identity update (2026-07-16):** the canonical repository is now
+> `USS-Parks/Mighty-Eel-OS`. The historical source-artifact filename below retains
+> the former repository name so the referenced evidence remains identifiable.
+
 > **STATUS as of 2026-05-26 — IN-FLIGHT**
 > Sessions landed on `origin/main`: GD75-07 (`24a6700` adapter health-check timeouts + pooling), GD75-08 (`a121d4a` pooled HTTP client lifecycle), GD75-09/10 (`28f0386` local load-balancing + batching matrix), GD75-14/15 (`23b876c` caching policy + evidence pack). Remaining: GD75-01..06, GD75-11..13, GD75-16. DOUGHERTY (predecessor) closed 2026-05-25. Next milestone is GD75-16 (external rescan + RC2 handoff). Latest local scan: [`LOCAL-GITDOCTOR-EVIDENCE-2026-05-26.md`](../LOCAL-GITDOCTOR-EVIDENCE-2026-05-26.md).
 
@@ -273,4 +277,3 @@ This lane is complete when:
 3. The local scanner and standard test gates show no new unexplained regressions.
 4. The external reviewer has a short response memo and evidence pack.
 5. The next external scan is 95+/100, or any remaining lost points are traced to intentional MAI architecture constraints rather than accidental gaps.
-

@@ -9,7 +9,7 @@ Build-Depends:
  python3-venv,
  python3-pip
 Standards-Version: 4.6.2
-Homepage: https://github.com/USS-Parks/im-mighty-eel-mai
+Homepage: https://github.com/USS-Parks/Mighty-Eel-OS
 Rules-Requires-Root: no
 
 Package: mai

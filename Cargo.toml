@@ -58,7 +58,7 @@ edition = "2024"
 # prior "1.85" claim did not match the code. See J-04 fix-up commit.
 rust-version = "1.88"
 license = "LicenseRef-Proprietary"
-repository = "https://github.com/USS-Parks/im-mighty-eel-mai"
+repository = "https://github.com/USS-Parks/Mighty-Eel-OS"
 
 [workspace.dependencies]
 # Async runtime

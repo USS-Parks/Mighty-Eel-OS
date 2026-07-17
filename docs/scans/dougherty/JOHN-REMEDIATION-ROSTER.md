@@ -1,5 +1,9 @@
 # John Dougherty Remediation Prompt Roster
 
+> **Repository identity update (2026-07-16):** the canonical repository is now
+> `USS-Parks/Mighty-Eel-OS`. Historical scan and tester-artifact references below
+> retain the former repository name because they identify the original artifact.
+
 > **STATUS — CLOSED (2026-05-25). SUPERSEDED.**
 > Original draft. Canonical re-emit lives at [`../JOHN-REMEDIATION-ROSTER.md`](../JOHN-REMEDIATION-ROSTER.md). Lane closed 2026-05-25 with all 27 sessions complete (top-level roster adds J-10b). See [`J-15-DOUGHERTY-CLOSURE.md`](J-15-DOUGHERTY-CLOSURE.md).
 

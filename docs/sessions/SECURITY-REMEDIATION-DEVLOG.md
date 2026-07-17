@@ -1,7 +1,7 @@
 # Security Remediation DEVLOG
 
 Initiative: MAI / WSF / AOG security remediation (Critical/High trust-boundary closure).
-Repository: im-mighty-eel-mai. Worktree: `mai-worktrees/mai-SEC-1`, branch `session/SEC-1`.
+Repository: `USS-Parks/Mighty-Eel-OS`. Worktree: `mai-worktrees/mai-SEC-1`, branch `session/SEC-1`.
 Baseline: `6ffaaee` (`cleanup/artifact-audit`) — the 2026-07-05 audit commit.
 Plan of record: [../scans/SECURITY-REMEDIATION-PSPR.md](../scans/SECURITY-REMEDIATION-PSPR.md).
 Finding register: [../scans/SECURITY-REMEDIATION-FINDINGS.md](../scans/SECURITY-REMEDIATION-FINDINGS.md).

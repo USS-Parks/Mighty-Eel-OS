@@ -20,11 +20,11 @@ fi
 # Keyless verification binds the certificate to OUR signing workflow —
 # never "any identity from any issuer". Inside GitHub Actions the exact
 # identity is derived from the run itself (GITHUB_WORKFLOW_REF, e.g.
-# `USS-Parks/im-mighty-eel-mai/.github/workflows/supply-chain.yml@refs/tags/v1.2.3`);
+# `USS-Parks/Mighty-Eel-OS/.github/workflows/supply-chain.yml@refs/tags/v1.2.3`);
 # outside it, a pinned regexp for the canonical release workflow applies.
 # A signature minted by any other workflow, repo, or issuer fails verify.
 OIDC_ISSUER="${COSIGN_CERT_OIDC_ISSUER:-https://token.actions.githubusercontent.com}"
-IDENTITY_REGEXP="${COSIGN_CERT_IDENTITY_REGEXP:-^https://github\.com/USS-Parks/im-mighty-eel-mai/\.github/workflows/supply-chain\.yml@refs/(tags/v[0-9][A-Za-z0-9.+-]*|heads/main)$}"
+IDENTITY_REGEXP="${COSIGN_CERT_IDENTITY_REGEXP:-^https://github\.com/USS-Parks/Mighty-Eel-OS/\.github/workflows/supply-chain\.yml@refs/(tags/v[0-9][A-Za-z0-9.+-]*|heads/main)$}"
 
 verify_keyless() {
   img="$1"

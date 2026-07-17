@@ -3,6 +3,10 @@
 > **STATUS as of 2026-05-26 — IN-FLIGHT**
 > Landed: GD75-07 (`24a6700`), GD75-08 (`a121d4a`), GD75-09 + GD75-10 (`28f0386`), GD75-14 + GD75-15 (`23b876c`). Remaining: GD75-01..06, GD75-11..13, GD75-16. See [`GITDOCTOR-75-REMEDIATION-PLAN.md`](GITDOCTOR-75-REMEDIATION-PLAN.md) for the per-session plan and dependency graph.
 
+> **Repository identity update (2026-07-16):** the canonical repository is now
+> `USS-Parks/Mighty-Eel-OS`. The historical source-artifact filename below retains
+> the former repository name so the referenced evidence remains identifiable.
+
 **Lane:** GITDOCTOR-75 (`GD75-01` through `GD75-16`)
 **Companion plan:** `docs/GITDOCTOR-75-REMEDIATION-PLAN.md`
 **Source artifact:** `docs/USS-Parks-im-mighty-eel-mai-analysis 5.24.2026 - 6_57_PM_PST.pdf`
@@ -521,4 +525,3 @@ VERIFY:
 ACCEPTANCE:
 - The lane has a final score or ready-to-run rescan packet.
 - RC2 handoff knows exactly what remains.
-

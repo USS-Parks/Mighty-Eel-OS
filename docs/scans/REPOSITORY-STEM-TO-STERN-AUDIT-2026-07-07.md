@@ -1,7 +1,7 @@
 # Mighty Eel MAI Repository Audit — Stem to Stern
 
 **Audit date:** 2026-07-07  
-**Repository:** `USS-Parks/im-mighty-eel-mai`  
+**Repository:** `USS-Parks/Mighty-Eel-OS` (renamed from `USS-Parks/im-mighty-eel-mai` on 2026-07-16)
 **Worktree:** `C:\Users\17076\Documents\Claude\Mighty Eel OS\mai`  
 **Revision:** `6ffaaeeea0a83c7fa071e114183cfa60c5898703`  
 **Branch:** `cleanup/artifact-audit`  

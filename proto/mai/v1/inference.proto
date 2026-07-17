@@ -10,7 +10,7 @@ syntax = "proto3";
 package mai.v1;
 
 option java_package = "io.islandmountain.mai.v1";
-option go_package = "github.com/USS-Parks/im-mighty-eel-mai/proto/mai/v1";
+option go_package = "github.com/USS-Parks/Mighty-Eel-OS/proto/mai/v1";
 
 // ---------------------------------------------------------------------------
 // Inference Service

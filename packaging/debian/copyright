@@ -1,7 +1,7 @@
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: mai
 Upstream-Contact: Island Mountain <ops@islandmountain.io>
-Source: https://github.com/USS-Parks/im-mighty-eel-mai
+Source: https://github.com/USS-Parks/Mighty-Eel-OS
 
 Files: *
 Copyright: 2025-2026 Island Mountain (USS-Parks)

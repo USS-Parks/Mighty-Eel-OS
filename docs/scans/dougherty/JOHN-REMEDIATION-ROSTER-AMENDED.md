@@ -1,5 +1,9 @@
 ﻿# John Dougherty Remediation Prompt Roster
 
+> **Repository identity update (2026-07-16):** the canonical repository is now
+> `USS-Parks/Mighty-Eel-OS`. Historical scan and tester-artifact references below
+> retain the former repository name because they identify the original artifact.
+
 > **STATUS — CLOSED (2026-05-25)**
 > All 27 sessions (J-01..J-26 plus J-10b) executed. J-23..J-26 landed under `a072634`. Closure: [`dougherty/J-15-DOUGHERTY-CLOSURE.md`](dougherty/J-15-DOUGHERTY-CLOSURE.md). Roster kept as historical reference for what each session covered; for the prompts of the next lane see [`GITDOCTOR-75-PROMPT-ROSTER.md`](../gd75/GITDOCTOR-75-PROMPT-ROSTER.md).
 

@@ -1,5 +1,9 @@
 # John Dougherty Remediation Plan (DOUGHERTY Lane)
 
+> **Repository identity update (2026-07-16):** the canonical repository is now
+> `USS-Parks/Mighty-Eel-OS`. Historical scan and tester-artifact references below
+> retain the former repository name because they identify the original artifact.
+
 > **STATUS — CLOSED (2026-05-25). SUPERSEDED.**
 > This is the original draft of the DOUGHERTY plan. The canonical re-emitted version lives at [`../JOHN-REMEDIATION-PLAN.md`](../JOHN-REMEDIATION-PLAN.md) (top-level `docs/`) and was amended to add J-10b. Lane closed 2026-05-25 with all 27 sessions (J-01..J-26 + J-10b) complete; J-23..J-26 landed under `a072634`. Closure document: [`J-15-DOUGHERTY-CLOSURE.md`](J-15-DOUGHERTY-CLOSURE.md). Current build work is in the GITDOCTOR-75 lane.
 

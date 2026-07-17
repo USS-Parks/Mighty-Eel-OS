@@ -69,7 +69,7 @@ against the real artifacts and fails the build on a violation (invariant A10).
 - Keyless verify no longer accepts any identity/issuer. Inside GitHub
   Actions the certificate identity is pinned to the exact signing workflow
   ref (`https://github.com/${GITHUB_WORKFLOW_REF}`); outside, a pinned
-  regexp for the canonical `USS-Parks/im-mighty-eel-mai` supply-chain
+  regexp for the canonical `USS-Parks/Mighty-Eel-OS` supply-chain
   workflow on `refs/tags/v*` / `refs/heads/main`. Issuer pinned to
   `https://token.actions.githubusercontent.com` (env-overridable for a
   fork). `bash -n` clean; SUPPLY-CHAIN.md status updated.

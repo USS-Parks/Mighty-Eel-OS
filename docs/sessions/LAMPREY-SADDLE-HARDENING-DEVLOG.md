@@ -1,7 +1,7 @@
 # Lamprey Saddle WSF + AOG Hardening DEVLOG
 
 Initiative: close the 2026-07-15 WSF/AOG workflow findings and complete the interrupted high-risk review.  
-Repository: `im-mighty-eel-mai`.  
+Repository: `USS-Parks/Mighty-Eel-OS` (renamed from `USS-Parks/im-mighty-eel-mai` on 2026-07-16).
 Worktree: `mai-worktrees/mai-LSH-1`; branch `session/LSH-1`.  
 Plan of record: [`../../../PLANNING/LAMPREY-SADDLE-WSF-AOG-SECURITY-HARDENING-PSPR.md`](../../../PLANNING/LAMPREY-SADDLE-WSF-AOG-SECURITY-HARDENING-PSPR.md).  
 Finding register: [`../scans/LAMPREY-SADDLE-HARDENING-FINDINGS.json`](../scans/LAMPREY-SADDLE-HARDENING-FINDINGS.json).  
@@ -1409,10 +1409,10 @@ Commit and remote evidence:
   `3a0684b3f50f1c2f77f0a85ca0951af34b94beb4`;
 - MAI CI run
   `29552235789` — PASS:
-  <https://github.com/USS-Parks/im-mighty-eel-mai/actions/runs/29552235789>;
+  <https://github.com/USS-Parks/Mighty-Eel-OS/actions/runs/29552235789>;
 - Lamprey MAI Validation run
   `29552235838` — PASS:
-  <https://github.com/USS-Parks/im-mighty-eel-mai/actions/runs/29552235838>;
+  <https://github.com/USS-Parks/Mighty-Eel-OS/actions/runs/29552235838>;
 - SHIP Validation `29552235791`, commit-message validation `29552235790`, and
   Pages `29552235462` — PASS.
 
@@ -1421,3 +1421,30 @@ reviewed by Basho Parks, copyright 2026` footer. The pre-commit no-slop checks a
 pre-push full-tree no-slop plus 79-route policy gates passed for every published
 range. This recovery checkpoint closes the observed GitHub failure window;
 LSH-T5 remains the next sequential PSPR prompt.
+
+### Repository identity migration — `USS-Parks/Mighty-Eel-OS`
+
+Status: **PASS** (canonical GitHub identity verified; publication carried by
+this bounded governance checkpoint).
+
+On 2026-07-16, the GitHub repository was renamed from
+`USS-Parks/im-mighty-eel-mai` to `USS-Parks/Mighty-Eel-OS`. The active repository
+identity was updated across the PSPR and DEVLOG front doors, operator and tester
+instructions, package metadata, protobuf Go package metadata, supply-chain
+signing policy, workflow links, and the local Git `origin` URL.
+
+Historical scan filenames, release reports, tester evidence, baseline metadata,
+and retired local clone paths retain the former name because changing them would
+rewrite immutable evidence or break references to archived artifacts. Closed
+governance plans and rosters that still cite those artifacts now carry an
+explicit repository-identity annotation.
+
+Verification:
+
+- authenticated GitHub metadata resolved `USS-Parks/Mighty-Eel-OS`, with `main`
+  as the default branch;
+- `origin` fetch and push URLs resolve to
+  `https://github.com/USS-Parks/Mighty-Eel-OS.git`;
+- live identity surfaces contain the new repository name; and
+- the retained former-name references are confined to annotated history and
+  immutable evidence.
