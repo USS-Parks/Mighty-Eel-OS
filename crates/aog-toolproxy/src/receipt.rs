@@ -8,6 +8,8 @@
 use fabric_proof::{ChainLink, GENESIS_HASH, canonical_hash, chain_link, verify_chain};
 use serde::Serialize;
 
+use crate::ApprovalGrant;
+
 /// A metadata-only receipt for one brokered tool call.
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct ToolReceipt {
@@ -37,6 +39,10 @@ pub struct ToolReceipt {
     /// Who approved a gated call (the actor); `None` for un-gated or blocked calls.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub approved_by: Option<String>,
+    /// LSH-T5: authenticated, single-use approval binding for the exact call and
+    /// immutable arguments. Present only when approval admitted execution.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub approval: Option<ApprovalGrant>,
     /// T4: the call arose from untrusted context (tool-result provenance) — a
     /// side-effecting such call is forced through approval, never auto-executed.
     #[serde(default, skip_serializing_if = "is_false")]

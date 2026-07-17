@@ -247,7 +247,7 @@ async fn rc6_side_effecting_call_without_approval_never_executes() {
             _c: &ToolCall,
             _ctx: &InvokeContext,
             _preview: &str,
-        ) -> Result<String, String> {
+        ) -> Result<aog_toolproxy::ApprovalGrant, String> {
             Err("no human approved this write".to_owned())
         }
     }

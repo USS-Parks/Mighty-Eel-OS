@@ -169,6 +169,7 @@ dependencies = [
  "aog-toolproxy",
  "async-trait",
  "chrono",
+ "fabric-contracts",
  "fabric-proof",
  "hex",
  "mai-agent",
