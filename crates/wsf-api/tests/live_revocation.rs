@@ -625,14 +625,11 @@ async fn revocation_propagates_to_seal_and_broker_end_to_end() {
     // Process restart: rebuild revocation state solely from the signed
     // OpenBao-distributed sequence-2 snapshot, then prove the denial survives.
     let restart_store = Arc::new(RwLock::new(MonotonicRevocationStore::new()));
+    let restart_snapshot = fetch_snapshot(&c, &addr, &root).await;
     restart_store
         .write()
         .unwrap()
-        .advance(
-            fetch_snapshot(&c, &addr, &root).await,
-            &MlDsa87Verifier,
-            rev_anchor.public_key(),
-        )
+        .advance(restart_snapshot, &MlDsa87Verifier, rev_anchor.public_key())
         .expect("restart adopts current snapshot");
     let restart_state = AppState {
         bridge: bridge.clone(),

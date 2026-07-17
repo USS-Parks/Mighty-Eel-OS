@@ -101,6 +101,52 @@ async fn leader_write(nodes: &[Arc<RaftNode>], op: Op) -> Result<(), String> {
     }
 }
 
+/// Add a learner through a quorum-confirmed leader, tolerating a bounded
+/// election gap between single-voter bootstrap and membership expansion.
+async fn leader_add_learner(nodes: &[Arc<RaftNode>], id: u64) -> Result<(), String> {
+    let deadline = Instant::now() + Duration::from_secs(10);
+    let mut last = String::from("no confirmed leader");
+    loop {
+        if let Some(li) = confirmed_leader(nodes).await {
+            match nodes[li].add_learner(id).await {
+                Ok(()) => return Ok(()),
+                Err(e) => last = format!("{e:?}"),
+            }
+        }
+        if Instant::now() >= deadline {
+            return Err(format!(
+                "add learner {id} kept failing across leadership churn: {last}"
+            ));
+        }
+        tokio::time::sleep(Duration::from_millis(25)).await;
+    }
+}
+
+/// Change voters through a quorum-confirmed leader. Membership changes are
+/// idempotent for the requested voter set, so retrying after a transient
+/// ForwardToLeader/election gap is safe and mirrors the live admin client.
+async fn leader_change_membership(
+    nodes: &[Arc<RaftNode>],
+    voters: BTreeSet<u64>,
+) -> Result<(), String> {
+    let deadline = Instant::now() + Duration::from_secs(10);
+    let mut last = String::from("no confirmed leader");
+    loop {
+        if let Some(li) = confirmed_leader(nodes).await {
+            match nodes[li].change_membership(voters.clone()).await {
+                Ok(()) => return Ok(()),
+                Err(e) => last = format!("{e:?}"),
+            }
+        }
+        if Instant::now() >= deadline {
+            return Err(format!(
+                "change membership kept failing across leadership churn: {last}"
+            ));
+        }
+        tokio::time::sleep(Duration::from_millis(25)).await;
+    }
+}
+
 /// A confirmed leader's index, awaited across election gaps (bounded): a
 /// mid-election `None` on a contended runner must not abort a bar one-shot.
 async fn confirmed_leader_within(
@@ -437,18 +483,9 @@ pub async fn linearizable_under_faults(
         .wait_for_leader(Duration::from_secs(10))
         .await
         .map_err(|e| format!("no leader: {e:?}"))?;
-    nodes[0]
-        .add_learner(2)
-        .await
-        .map_err(|e| format!("add learner 2: {e:?}"))?;
-    nodes[0]
-        .add_learner(3)
-        .await
-        .map_err(|e| format!("add learner 3: {e:?}"))?;
-    nodes[0]
-        .change_membership(BTreeSet::from([1, 2, 3]))
-        .await
-        .map_err(|e| format!("change membership: {e:?}"))?;
+    leader_add_learner(&nodes, 2).await?;
+    leader_add_learner(&nodes, 3).await?;
+    leader_change_membership(&nodes, BTreeSet::from([1, 2, 3])).await?;
 
     // Seed the counter at 0, leader-transparently: on a contended runner the
     // first election may still be settling when the bar starts.
@@ -584,15 +621,9 @@ async fn spawn_cluster(n: u64, label: &str) -> Result<(Arc<Cluster>, Vec<Arc<Raf
         .await
         .map_err(|e| format!("no leader: {e:?}"))?;
     for id in 2..=n {
-        nodes[0]
-            .add_learner(id)
-            .await
-            .map_err(|e| format!("add learner {id}: {e:?}"))?;
+        leader_add_learner(&nodes, id).await?;
     }
-    nodes[0]
-        .change_membership((1..=n).collect())
-        .await
-        .map_err(|e| format!("change membership: {e:?}"))?;
+    leader_change_membership(&nodes, (1..=n).collect()).await?;
     Ok((cluster, nodes))
 }
 

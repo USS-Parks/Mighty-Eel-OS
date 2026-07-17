@@ -27,11 +27,16 @@ CPS="cp1 cp2 cp3 cp4 cp5"
 write_to() { # svc key value-json-array — bounded retry: an election window on a
   # contended runner must not fail a must-succeed write one-shot.
   body='{"Put":{"key":"'"$2"'","value":'"$3"',"expected":"Any"}}'
+  wt_svc="$1"
   wt_n=0
   while :; do
-    wt_r="$(docker exec "${PROJECT}-$1-1" curl -s --max-time 6 -X POST \
+    wt_r="$(docker exec "${PROJECT}-${wt_svc}-1" curl -s --max-time 6 -X POST \
       -H 'content-type: application/json' -d "$body" http://127.0.0.1:4600/admin/write)" || wt_r=""
     case "$wt_r" in *Applied*) printf '%s' "$wt_r"; return 0 ;; esac
+    wt_leader="$(docker exec "${PROJECT}-${wt_svc}-1" curl -s --max-time 4 \
+      http://127.0.0.1:4600/admin/leader \
+      | sed -n 's/.*"leader":\([0-9][0-9]*\).*/\1/p')" || wt_leader=""
+    case "$wt_leader" in 1|2|3|4|5) wt_svc="cp${wt_leader}" ;; esac
     wt_n=$((wt_n + 1))
     if [ "$wt_n" -ge 10 ]; then printf '%s' "$wt_r"; return 0; fi
     sleep 1
@@ -47,7 +52,8 @@ i=0
 while [ "$i" -lt "$SCALE" ]; do
   set -- cp1 cp2 cp3 cp4 cp5
   eval "svc=\${$(( (i % 5) + 1 ))}"
-  write_to "$svc" "Workload/v5-scale-$i" '[87,76]' >/dev/null
+  r="$(write_to "$svc" "Workload/v5-scale-$i" '[87,76]')"
+  case "$r" in *Applied*) : ;; *) echo "FAIL: workload $i did not commit: $r" >&2; exit 1 ;; esac
   i=$((i + 1))
 done
 echo "  wrote $SCALE workloads"

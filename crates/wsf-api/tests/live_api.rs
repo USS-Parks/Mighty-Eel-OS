@@ -210,7 +210,11 @@ async fn sdk_round_trips_every_endpoint() {
         bridge: Arc::new(TrustBridge::new(
             ob(),
             bridge_signer.clone(),
-            BridgeConfig::new("2026.07.03.api", vec![5u8; 32]),
+            // AWS STS enforces a 900-second minimum. Give this end-to-end
+            // round-trip explicit headroom so the preceding API calls cannot
+            // consume authority below that floor before the exchange occurs.
+            BridgeConfig::new("2026.07.03.api", vec![5u8; 32])
+                .with_token_ttl(std::time::Duration::from_secs(1_200)),
         )),
         broker: Arc::new(AwsStsBroker::new(
             ob(),
