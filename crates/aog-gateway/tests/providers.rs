@@ -8,11 +8,14 @@
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use aog_gateway::provider::anthropic::AnthropicProvider;
 use aog_gateway::provider::openai::OpenAiProvider;
-use aog_gateway::provider::{ChatMessage, CompletionRequest, Registry};
-use axum::http::header::CONTENT_TYPE;
+use aog_gateway::provider::{ChatMessage, CompletionRequest, Provider, ProviderError, Registry};
+use aog_gateway::provider_endpoint::ApprovedEndpoint;
+use axum::http::StatusCode;
+use axum::http::header::{CONTENT_TYPE, LOCATION};
 use axum::response::{IntoResponse, Response};
 use axum::routing::post;
 use axum::{Json, Router};
@@ -89,10 +92,13 @@ async fn same_request_two_providers_one_interface_with_streaming() {
     let mut reg = Registry::new();
     reg.register(Arc::new(OpenAiProvider::new(
         "openai",
-        openai_base,
+        ApprovedEndpoint::loopback_test(&openai_base).unwrap(),
         "test-key",
     )));
-    reg.register(Arc::new(AnthropicProvider::new(anthropic_base, "test-key")));
+    reg.register(Arc::new(AnthropicProvider::new(
+        ApprovedEndpoint::loopback_test(&anthropic_base).unwrap(),
+        "test-key",
+    )));
     assert_eq!(
         reg.names(),
         vec!["anthropic".to_string(), "openai".to_string()]
@@ -142,5 +148,52 @@ async fn same_request_two_providers_one_interface_with_streaming() {
 
     eprintln!(
         "G2 gate PASSED: one Provider interface, two backends (openai + anthropic), one-shot + streaming"
+    );
+}
+
+#[tokio::test]
+async fn cross_origin_redirect_does_not_replay_anthropic_key_or_prompt() {
+    let leaked_requests = Arc::new(AtomicUsize::new(0));
+    let leaked_requests_at_sink = leaked_requests.clone();
+    let attacker = spawn(Router::new().route(
+        "/v1/messages",
+        post(move || {
+            let leaked_requests = leaked_requests_at_sink.clone();
+            async move {
+                leaked_requests.fetch_add(1, Ordering::SeqCst);
+                StatusCode::NO_CONTENT
+            }
+        }),
+    ))
+    .await;
+    let location = format!("{attacker}/v1/messages");
+    let redirector = spawn(Router::new().route(
+        "/v1/messages",
+        post(move || {
+            let location = location.clone();
+            async move { (StatusCode::TEMPORARY_REDIRECT, [(LOCATION, location)]) }
+        }),
+    ))
+    .await;
+
+    let provider = AnthropicProvider::new(
+        ApprovedEndpoint::loopback_test(&redirector).unwrap(),
+        "must-not-leak",
+    );
+    let request = CompletionRequest {
+        model: "claude-test".to_string(),
+        messages: vec![ChatMessage::user("governed prompt")],
+        max_tokens: Some(8),
+        temperature: None,
+    };
+    let error = provider.complete(&request).await.unwrap_err();
+    assert!(
+        matches!(error, ProviderError::Upstream { status: 307, .. }),
+        "redirect must be surfaced, not followed: {error}"
+    );
+    assert_eq!(
+        leaked_requests.load(Ordering::SeqCst),
+        0,
+        "redirect sink received the API key or prompt"
     );
 }

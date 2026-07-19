@@ -17,6 +17,7 @@ pub mod meter;
 pub mod policy;
 pub mod posture;
 pub mod provider;
+pub mod provider_endpoint;
 pub mod recommend;
 pub mod route;
 pub mod spend;

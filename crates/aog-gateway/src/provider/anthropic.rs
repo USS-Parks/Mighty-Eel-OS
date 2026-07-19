@@ -9,6 +9,8 @@
 use async_trait::async_trait;
 use serde_json::{Value, json};
 
+use crate::provider_endpoint::ApprovedEndpoint;
+
 use super::{
     ChunkStream, CompletionRequest, CompletionResponse, Provider, ProviderError, Role, StreamChunk,
     Usage, sse_stream,
@@ -20,25 +22,23 @@ const ANTHROPIC_VERSION: &str = "2023-06-01";
 
 /// An Anthropic Messages provider.
 pub struct AnthropicProvider {
-    base_url: String,
+    endpoint: ApprovedEndpoint,
     api_key: String,
-    client: reqwest::Client,
 }
 
 impl AnthropicProvider {
     /// Cloud Anthropic (`https://api.anthropic.com`).
     #[must_use]
-    pub fn anthropic(api_key: impl Into<String>) -> Self {
-        Self::new("https://api.anthropic.com", api_key)
+    pub fn anthropic(endpoint: ApprovedEndpoint, api_key: impl Into<String>) -> Self {
+        Self::new(endpoint, api_key)
     }
 
     /// An explicit base URL (e.g. a mock in tests).
     #[must_use]
-    pub fn new(base_url: impl Into<String>, api_key: impl Into<String>) -> Self {
+    pub fn new(endpoint: ApprovedEndpoint, api_key: impl Into<String>) -> Self {
         Self {
-            base_url: base_url.into().trim_end_matches('/').to_string(),
+            endpoint,
             api_key: api_key.into(),
-            client: super::build_http_client(),
         }
     }
 
@@ -75,10 +75,11 @@ impl AnthropicProvider {
     }
 
     async fn post(&self, body: &Value) -> Result<reqwest::Response, ProviderError> {
-        let url = format!("{}/v1/messages", self.base_url);
+        let url = self.endpoint.request_url("v1/messages");
         let mut rb = self
-            .client
-            .post(&url)
+            .endpoint
+            .client()
+            .post(url)
             .header("anthropic-version", ANTHROPIC_VERSION)
             .json(body);
         if !self.api_key.is_empty() {

@@ -77,6 +77,9 @@ services:
       AOG_MODE: shadow
       AOG_OPENAI_KEY: ${OPENAI_API_KEY:?set OPENAI_API_KEY in deployment/shadow/.env}
       AOG_OPENAI_BASE: ${OPENAI_BASE:-https://api.openai.com}
+      # A custom OPENAI_BASE must also be named here; the official origin is
+      # approved by default.
+      AOG_PROVIDER_ALLOWED_ORIGINS: ${OPENAI_ALLOWED_ORIGINS:-}
     volumes: ["seed-data:/seed:ro"]
     ports: ["127.0.0.1:8080:8080"]
     depends_on:

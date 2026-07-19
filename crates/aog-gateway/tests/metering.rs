@@ -15,6 +15,7 @@ use std::time::Duration as StdDuration;
 use aog_gateway::app::{AppState, ModelMap, Target};
 use aog_gateway::provider::Registry;
 use aog_gateway::provider::openai::OpenAiProvider;
+use aog_gateway::provider_endpoint::ApprovedEndpoint;
 use aog_gateway::{Gateway, GatewayConfig};
 use axum::response::{IntoResponse, Response};
 use axum::routing::post;
@@ -241,7 +242,7 @@ async fn cost_per_task_aggregates_and_chain_verifies() {
     let mut registry = Registry::new();
     registry.register(Arc::new(OpenAiProvider::new(
         "openai",
-        upstream_base,
+        ApprovedEndpoint::loopback_test(&upstream_base).unwrap(),
         "unused",
     )));
     let gateway = Arc::new(Gateway::new(
@@ -356,7 +357,7 @@ async fn streamed_call_accrues_spend_and_cap_refuses_next_call() {
     let mut registry = Registry::new();
     registry.register(Arc::new(OpenAiProvider::new(
         "openai",
-        upstream_base,
+        ApprovedEndpoint::loopback_test(&upstream_base).unwrap(),
         "unused",
     )));
     let gateway = Arc::new(Gateway::new(

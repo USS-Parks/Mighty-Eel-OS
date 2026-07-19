@@ -694,3 +694,81 @@ all pass after that repair. Its ledger record is
 range passed signature/footer verification and the full pre-push no-slop and
 79-route policy gates; `origin/main` advanced from `f01aa49` through `f45e8a2`
 on 2026-07-16. This final ledger update records the confirmed remote checkpoint.
+
+### LSH-G6 — Provider endpoint and credential policy
+
+Status: **PASS** (implementation pending commit).
+
+Raw provider base URLs no longer reach either adapter. A new
+`ApprovedEndpoint` is the mandatory construction capability for OpenAI,
+Anthropic, and local providers. Before OpenBao interaction, credential
+attachment, provider construction, or listener bind, the gateway now:
+
+- parses and canonicalizes the configured origin, rejects URL userinfo/query/
+  fragment ambiguity, and requires an exact local or cloud origin allowlist;
+- resolves every hostname, rejects the entire answer set if any address falls
+  outside the declared local/public class, and pins the accepted addresses into
+  a direct no-proxy client so later DNS changes cannot redirect dispatch;
+- rejects metadata/link-local/reserved destinations, public addresses behind
+  the security-significant `local` label, and private/loopback answers behind a
+  cloud label;
+- requires HTTPS for cloud and production private-local providers; plaintext is
+  limited to pinned loopback, plus an exact-origin private fixture exception
+  selected only by the explicit Development profile; and
+- disables redirects in the sole provider client, so neither standard Bearer
+  credentials nor Anthropic's custom `x-api-key` can cross an origin boundary.
+
+The stock appliance demo preserves its isolated `mock-llm` through the explicit
+development-only allowlist. Custom shadow OpenAI endpoints now require both
+`OPENAI_BASE` and the matching `OPENAI_ALLOWED_ORIGINS`; operator docs state the
+public-HTTPS/address policy. Production cannot select the development plaintext
+exception.
+
+Changed files:
+
+- `crates/aog-gateway/src/{lib.rs,main.rs,provider.rs,provider_endpoint.rs}`;
+- `crates/aog-gateway/src/provider/{openai.rs,anthropic.rs}`;
+- `crates/aog-gateway/tests/{providers.rs,openai_surface.rs,anthropic_surface.rs,completions_legacy.rs,metering.rs,policy_modes.rs,tenant_isolation.rs}`;
+- `deployment/appliance/{docker-compose.yml,README.md}`; and
+- `deployment/shadow/{docker-compose.yml,.env.example,README.md}`.
+
+Gates:
+
+- pre-fix `cargo test -p aog-gateway
+  posture::tests::production_rejects_arbitrary_https_local_provider --lib` —
+  **EXPECTED FAIL**, proving an arbitrary HTTPS origin labeled local was
+  accepted (`unwrap_err()` received `Ok(())`);
+- `cargo test -p aog-gateway provider_endpoint::tests --lib` — PASS: six
+  endpoint-policy regressions cover arbitrary local origin, credentialed HTTP,
+  mixed public/private DNS-rebinding answers, metadata/link-local IP, strict
+  production plaintext, and the loopback test constructor;
+- `cargo test -p aog-gateway --test providers -- --nocapture` — PASS: the live
+  two-server 307 fixture surfaces 307 and records zero requests at the attacker
+  origin, while valid OpenAI and Anthropic loopback adapters still complete and
+  stream;
+- `cargo test -p aog-gateway` — PASS: 79 library tests plus every gateway
+  integration and doc-test target;
+- `cargo clippy -p aog-gateway --all-targets -- -D warnings -A
+  clippy::pedantic` — PASS;
+- `cargo fmt --check` and `git diff --check` — PASS;
+- both demo compose profiles pass `validate_profile.py`; and
+- `pytest deployment/appliance/tests/ -q` — PASS: 16 tests (the temporary
+  standalone runner lacked `pytest-asyncio`, producing only the unrelated
+  unknown `asyncio_mode` configuration warning).
+
+Change-aware bypass review: both provider adapters now store only the private
+fields of `ApprovedEndpoint`; repository search finds no raw-URL constructor or
+alternate provider HTTP client. System proxies are disabled, accepted DNS
+answers are pinned under the original TLS hostname, and redirects are terminal.
+Removing the origin check, address-class check, HTTPS rule, or no-redirect
+policy makes its focused regression fail.
+
+Closure statement: `LSF-021`, `LSF-022`, and both `LSF-023` instances are closed
+at the common provider-construction/dispatch boundary. The original arbitrary
+local-origin path no longer constructs a provider, the redirect fixture does
+not dispatch to its second origin, and valid explicit loopback fixtures plus
+the development appliance profile remain green. LSH-G7 remains sequentially
+responsible for response/body/frame/duration bounds and truthful termination;
+no M3 milestone claim is made.
+
+Commit state: implementation and prompt evidence are pending commit.

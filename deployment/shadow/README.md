@@ -47,6 +47,12 @@ curl -s http://localhost:8080/v1/chat/completions \
 Your real OpenAI key stays inside the gateway (from `.env`); your app only ever
 presents `vk_demo`. Demo models mapped to your OpenAI: `gpt-4o-mini`, `gpt-4o`.
 
+If you override `OPENAI_BASE`, also set `OPENAI_ALLOWED_ORIGINS` to that exact
+public HTTPS origin. The gateway resolves and pins every approved address,
+rejects private/link-local/metadata destinations, ignores system HTTP proxies,
+and never follows provider redirects. The stock `https://api.openai.com` origin
+is approved by default.
+
 ## 4. Read the dashboard
 
 Open **http://localhost:8088**:

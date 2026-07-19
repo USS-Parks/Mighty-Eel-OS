@@ -15,6 +15,7 @@ use aog_gateway::posture::{ProviderEndpoint, enforce_startup_posture};
 use aog_gateway::provider::Registry;
 use aog_gateway::provider::anthropic::AnthropicProvider;
 use aog_gateway::provider::openai::OpenAiProvider;
+use aog_gateway::provider_endpoint::{ApprovedEndpoint, EndpointPolicy};
 use aog_gateway::{Gateway, GatewayConfig};
 use base64::Engine;
 use wsf_bridge::{OpenBaoAuth, OpenBaoConfig};
@@ -71,6 +72,8 @@ async fn run() -> Result<(), String> {
         .ok()
         .filter(|key| !key.is_empty());
     let anthropic_base = env_or("AOG_ANTHROPIC_BASE", "https://api.anthropic.com");
+    let local_allowed_origins = env_or("AOG_LOCAL_ALLOWED_ORIGINS", "");
+    let cloud_allowed_origins = env_or("AOG_PROVIDER_ALLOWED_ORIGINS", "");
     let mut provider_endpoints = vec![ProviderEndpoint {
         name: "local",
         base_url: &local_base,
@@ -94,6 +97,38 @@ async fn run() -> Result<(), String> {
         });
     }
     enforce_startup_posture(profile, &revocation_path, &provider_endpoints)?;
+
+    // Resolve and pin every provider before OpenBao interaction or listener
+    // bind. Raw configured URLs never reach a provider adapter.
+    let local_policy = if profile == Profile::Development {
+        EndpointPolicy::development_local(&local_allowed_origins)
+    } else {
+        EndpointPolicy::local(&local_allowed_origins)
+    }
+    .map_err(|error| format!("local provider policy: {error}"))?;
+    let cloud_policy = EndpointPolicy::cloud(&cloud_allowed_origins)
+        .map_err(|error| format!("cloud provider policy: {error}"))?;
+    let local_endpoint = ApprovedEndpoint::resolve(&local_base, &local_policy)
+        .await
+        .map_err(|error| format!("local provider endpoint: {error}"))?;
+    let openai_endpoint = if openai_key.is_some() {
+        Some(
+            ApprovedEndpoint::resolve(&openai_base, &cloud_policy)
+                .await
+                .map_err(|error| format!("OpenAI provider endpoint: {error}"))?,
+        )
+    } else {
+        None
+    };
+    let anthropic_endpoint = if anthropic_key.is_some() {
+        Some(
+            ApprovedEndpoint::resolve(&anthropic_base, &cloud_policy)
+                .await
+                .map_err(|error| format!("Anthropic provider endpoint: {error}"))?,
+        )
+    } else {
+        None
+    };
 
     let addr = env("AOG_OPENBAO_ADDR")?;
     let role_id = env("AOG_OPENBAO_ROLE_ID")?;
@@ -120,19 +155,19 @@ async fn run() -> Result<(), String> {
 
     // Providers: always a local OpenAI-compatible backend; cloud providers when keyed.
     let mut registry = Registry::new();
-    registry.register(Arc::new(OpenAiProvider::local(local_base)));
+    registry.register(Arc::new(OpenAiProvider::local(local_endpoint)));
     let mut models = ModelMap::new()
         .route("demo", Target::new("local", "demo"))
         .default_target(Target::new("local", "demo"));
 
-    if let Some(key) = openai_key {
-        registry.register(Arc::new(OpenAiProvider::new("openai", openai_base, key)));
+    if let (Some(key), Some(endpoint)) = (openai_key, openai_endpoint) {
+        registry.register(Arc::new(OpenAiProvider::new("openai", endpoint, key)));
         models = models
             .route("gpt-4o-mini", Target::new("openai", "gpt-4o-mini"))
             .route("gpt-4o", Target::new("openai", "gpt-4o"));
     }
-    if let Some(key) = anthropic_key {
-        registry.register(Arc::new(AnthropicProvider::new(anthropic_base, key)));
+    if let (Some(key), Some(endpoint)) = (anthropic_key, anthropic_endpoint) {
+        registry.register(Arc::new(AnthropicProvider::new(endpoint, key)));
         models = models.route(
             "claude-3-5-sonnet",
             Target::new("anthropic", "claude-3-5-sonnet"),

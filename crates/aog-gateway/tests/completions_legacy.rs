@@ -20,6 +20,7 @@ use std::time::Duration as StdDuration;
 use aog_gateway::app::{AppState, ModelMap, Target};
 use aog_gateway::provider::Registry;
 use aog_gateway::provider::openai::OpenAiProvider;
+use aog_gateway::provider_endpoint::ApprovedEndpoint;
 use aog_gateway::{Gateway, GatewayConfig};
 use axum::extract::State;
 use axum::response::{IntoResponse, Response};
@@ -257,7 +258,7 @@ async fn legacy_completions_runs_the_full_governed_pipeline() {
     let mut registry = Registry::new();
     registry.register(Arc::new(OpenAiProvider::new(
         "openai",
-        upstream_base,
+        ApprovedEndpoint::loopback_test(&upstream_base).unwrap(),
         "unused",
     )));
     let gateway = Arc::new(Gateway::new(

@@ -26,6 +26,11 @@ provisions OpenBao (AppRole + KV + Transit + policy), mints the persistent
 ML-DSA trust anchor, issues a demo trust token, seeds the `vk_demo` virtual key,
 and writes a shared env file the services source before starting.
 
+The demo's `mock-llm` origin is an exact, development-only local-provider
+allowlist entry. Production permits plaintext only to pinned loopback addresses;
+private local providers require an explicitly allowlisted HTTPS origin. Cloud
+providers require an exact public HTTPS origin and never follow redirects.
+
 ## Endpoints
 
 | Service | URL |

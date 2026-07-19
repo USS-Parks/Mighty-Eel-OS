@@ -14,6 +14,7 @@ use std::time::Duration as StdDuration;
 use aog_gateway::app::{AppState, ModelMap, Target};
 use aog_gateway::provider::Registry;
 use aog_gateway::provider::anthropic::AnthropicProvider;
+use aog_gateway::provider_endpoint::ApprovedEndpoint;
 use aog_gateway::{Gateway, GatewayConfig};
 use axum::http::header::CONTENT_TYPE;
 use axum::response::{IntoResponse, Response};
@@ -244,7 +245,10 @@ async fn anthropic_client_completes_message_and_stream() {
 
     let upstream_base = spawn(Router::new().route("/v1/messages", post(upstream))).await;
     let mut registry = Registry::new();
-    registry.register(Arc::new(AnthropicProvider::new(upstream_base, "unused")));
+    registry.register(Arc::new(AnthropicProvider::new(
+        ApprovedEndpoint::loopback_test(&upstream_base).unwrap(),
+        "unused",
+    )));
     let gateway = Arc::new(Gateway::new(
         openbao,
         GatewayConfig {
