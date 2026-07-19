@@ -569,6 +569,7 @@ pub(crate) mod testkit {
             delta: text.to_string(),
             done: false,
             usage: None,
+            finish_reason: None,
         }
     }
 
@@ -580,6 +581,7 @@ pub(crate) mod testkit {
                 input_tokens: input,
                 output_tokens: output,
             }),
+            finish_reason: None,
         }
     }
 }

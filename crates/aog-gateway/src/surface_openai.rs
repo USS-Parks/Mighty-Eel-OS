@@ -95,9 +95,11 @@ pub(crate) fn provider_http(e: &ProviderError) -> (StatusCode, String) {
             StatusCode::from_u16(*status).unwrap_or(StatusCode::BAD_GATEWAY),
             body.clone(),
         ),
-        ProviderError::Transport(m) | ProviderError::Decode(m) => {
-            (StatusCode::BAD_GATEWAY, m.clone())
-        }
+        ProviderError::Transport(m)
+        | ProviderError::Decode(m)
+        | ProviderError::Limit(m)
+        | ProviderError::Truncated(m) => (StatusCode::BAD_GATEWAY, m.clone()),
+        ProviderError::Timeout(m) => (StatusCode::GATEWAY_TIMEOUT, m.clone()),
     }
 }
 
@@ -387,7 +389,7 @@ fn chunk_json(id: &str, ts: i64, model: &str, delta: &Value, finish: Option<&str
 }
 
 /// Re-emit a neutral [`ChunkStream`] as OpenAI `chat.completion.chunk` SSE frames,
-/// opening with a role delta and closing with a `finish_reason:"stop"` frame then
+/// opening with a role delta and closing with the provider's terminal reason then
 /// the literal `data: [DONE]` an OpenAI client waits for. The `meter` guard
 /// observes every frame and settles (receipt + budget decrement) when the
 /// generator drops, however the stream ends.
@@ -401,6 +403,7 @@ fn chat_sse(model: String, mut chunks: ChunkStream, meter: crate::meter::StreamM
         );
         let mut closed = false;
         let mut revocation_denied = false;
+        let mut finish_reason: Option<String> = None;
         while let Some(frame) = chunks.next().await {
             if let Err(error) = meter.authorize_continuation().await {
                 yield Ok(Event::default().data(json!({
@@ -416,25 +419,32 @@ fn chat_sse(model: String, mut chunks: ChunkStream, meter: crate::meter::StreamM
             match frame {
                 Ok(c) => {
                     meter.observe(&c);
+                    if c.finish_reason.is_some() {
+                        finish_reason = c.finish_reason.clone();
+                    }
                     if !c.delta.is_empty() {
                         yield Ok(Event::default()
                             .data(chunk_json(&id, ts, &model, &json!({ "content": c.delta }), None)));
                     }
                     if c.done {
                         yield Ok(Event::default()
-                            .data(chunk_json(&id, ts, &model, &json!({}), Some("stop"))));
+                            .data(chunk_json(&id, ts, &model, &json!({}), finish_reason.as_deref())));
                         closed = true;
                     }
                 }
-                // A mid-stream provider error ends the stream; the client sees a
-                // truncated-but-well-formed SSE close.
-                Err(_) => break,
+                Err(error) => {
+                    yield Ok(Event::default().data(json!({
+                        "error": {
+                            "message": error.to_string(),
+                            "type": "provider_error",
+                            "code": "aog_provider_stream_failed"
+                        }
+                    }).to_string()));
+                    break;
+                }
             }
         }
-        if !closed && !revocation_denied {
-            yield Ok(Event::default().data(chunk_json(&id, ts, &model, &json!({}), Some("stop"))));
-        }
-        if !revocation_denied {
+        if closed && !revocation_denied {
             yield Ok(Event::default().data("[DONE]"));
         }
     };
@@ -614,6 +624,7 @@ mod tests {
                 delta: String::new(),
                 done: true,
                 usage: None,
+                finish_reason: Some("stop".to_string()),
             }),
         ]));
 

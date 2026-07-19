@@ -24,6 +24,7 @@ use async_trait::async_trait;
 use futures::StreamExt;
 use futures::stream::BoxStream;
 use serde::{Deserialize, Serialize};
+use tokio::time::{Instant, timeout};
 
 use crate::posture::ApprovedProviderEndpoint;
 
@@ -37,6 +38,13 @@ const PROVIDER_CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_
 /// without that. Generous enough for slow first-token / prefill latency on a large
 /// local model.
 const PROVIDER_READ_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(120);
+pub(crate) const MAX_PROVIDER_HEADERS: usize = 64 * 1024;
+pub(crate) const MAX_PROVIDER_BODY: usize = 8 * 1024 * 1024;
+pub(crate) const MAX_PROVIDER_ERROR_BODY: usize = 64 * 1024;
+const MAX_PROVIDER_STREAM: usize = 32 * 1024 * 1024;
+const MAX_SSE_LINE: usize = 1024 * 1024;
+const PROVIDER_TOTAL_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(600);
+const PROVIDER_STREAM_IDLE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
 
 /// The shared provider HTTP client, with hang guards (D3): a `connect_timeout`
 /// and an idle `read_timeout` bound a dead or stalled backend, while omitting a
@@ -127,6 +135,9 @@ pub struct StreamChunk {
     /// Usage, when the provider reports it (usually on the terminal frame).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub usage: Option<Usage>,
+    /// Provider-reported terminal reason (`stop`, `length`, `end_turn`, ...).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub finish_reason: Option<String>,
 }
 
 /// A boxed stream of completion frames.
@@ -144,6 +155,62 @@ pub enum ProviderError {
     /// The provider's body could not be decoded to the expected shape.
     #[error("decode: {0}")]
     Decode(String),
+    /// A provider exceeded a configured header/body/frame/stream bound.
+    #[error("provider limit: {0}")]
+    Limit(String),
+    /// A provider stream ended without its protocol terminal marker.
+    #[error("provider stream truncated: {0}")]
+    Truncated(String),
+    /// A provider exceeded its total or idle duration.
+    #[error("provider timeout: {0}")]
+    Timeout(String),
+}
+
+pub(crate) fn validate_response_headers(resp: &reqwest::Response) -> Result<(), ProviderError> {
+    let bytes = resp
+        .headers()
+        .iter()
+        .try_fold(0usize, |total, (name, value)| {
+            total.checked_add(name.as_str().len() + value.as_bytes().len())
+        });
+    if bytes.is_none_or(|bytes| bytes > MAX_PROVIDER_HEADERS) {
+        return Err(ProviderError::Limit(format!(
+            "response headers exceed {MAX_PROVIDER_HEADERS} bytes"
+        )));
+    }
+    Ok(())
+}
+
+pub(crate) async fn bounded_body(
+    resp: reqwest::Response,
+    limit: usize,
+) -> Result<Vec<u8>, ProviderError> {
+    validate_response_headers(&resp)?;
+    if resp
+        .content_length()
+        .is_some_and(|length| length > limit as u64)
+    {
+        return Err(ProviderError::Limit(format!(
+            "response body exceeds {limit} bytes"
+        )));
+    }
+    let read = async move {
+        let mut out = Vec::new();
+        let mut stream = resp.bytes_stream();
+        while let Some(chunk) = stream.next().await {
+            let chunk = chunk.map_err(|error| ProviderError::Transport(error.to_string()))?;
+            if out.len().saturating_add(chunk.len()) > limit {
+                return Err(ProviderError::Limit(format!(
+                    "response body exceeds {limit} bytes"
+                )));
+            }
+            out.extend_from_slice(&chunk);
+        }
+        Ok(out)
+    };
+    timeout(PROVIDER_TOTAL_TIMEOUT, read)
+        .await
+        .map_err(|_| ProviderError::Timeout("response body total duration exceeded".into()))?
 }
 
 /// The internal model-backend trait. Object-safe via `async_trait`.
@@ -205,10 +272,42 @@ pub(crate) fn sse_stream<F>(resp: reqwest::Response, parse: F) -> ChunkStream
 where
     F: Fn(&str) -> Option<Result<StreamChunk, ProviderError>> + Send + 'static,
 {
+    if let Err(error) = validate_response_headers(&resp) {
+        return Box::pin(futures::stream::once(async move { Err(error) }));
+    }
+    if resp
+        .content_length()
+        .is_some_and(|length| length > MAX_PROVIDER_STREAM as u64)
+    {
+        return Box::pin(futures::stream::once(async {
+            Err(ProviderError::Limit(format!(
+                "stream exceeds {MAX_PROVIDER_STREAM} bytes"
+            )))
+        }));
+    }
     let s = async_stream::stream! {
         let mut bytes = resp.bytes_stream();
-        let mut buf = String::new();
-        while let Some(next) = bytes.next().await {
+        let mut buf = Vec::new();
+        let mut total = 0usize;
+        let deadline = Instant::now() + PROVIDER_TOTAL_TIMEOUT;
+        loop {
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            if remaining.is_zero() {
+                yield Err(ProviderError::Timeout("stream total duration exceeded".into()));
+                return;
+            }
+            let wait = PROVIDER_STREAM_IDLE_TIMEOUT.min(remaining);
+            let next = match timeout(wait, bytes.next()).await {
+                Ok(next) => next,
+                Err(_) => {
+                    yield Err(ProviderError::Timeout("stream idle duration exceeded".into()));
+                    return;
+                }
+            };
+            let Some(next) = next else {
+                yield Err(ProviderError::Truncated("EOF before terminal event".into()));
+                return;
+            };
             let chunk = match next {
                 Ok(b) => b,
                 Err(e) => {
@@ -216,10 +315,25 @@ where
                     return;
                 }
             };
-            buf.push_str(&String::from_utf8_lossy(&chunk));
-            while let Some(nl) = buf.find('\n') {
-                let line: String = buf.drain(..=nl).collect();
-                let line = line.trim();
+            total = total.saturating_add(chunk.len());
+            if total > MAX_PROVIDER_STREAM {
+                yield Err(ProviderError::Limit(format!("stream exceeds {MAX_PROVIDER_STREAM} bytes")));
+                return;
+            }
+            buf.extend_from_slice(&chunk);
+            while let Some(nl) = buf.iter().position(|byte| *byte == b'\n') {
+                if nl > MAX_SSE_LINE {
+                    yield Err(ProviderError::Limit(format!("SSE line exceeds {MAX_SSE_LINE} bytes")));
+                    return;
+                }
+                let line: Vec<u8> = buf.drain(..=nl).collect();
+                let line = match std::str::from_utf8(&line) {
+                    Ok(line) => line.trim(),
+                    Err(error) => {
+                        yield Err(ProviderError::Decode(error.to_string()));
+                        return;
+                    }
+                };
                 let Some(data) = line.strip_prefix("data:") else { continue };
                 let data = data.trim();
                 if data.is_empty() {
@@ -232,6 +346,10 @@ where
                         return;
                     }
                 }
+            }
+            if buf.len() > MAX_SSE_LINE {
+                yield Err(ProviderError::Limit(format!("SSE line exceeds {MAX_SSE_LINE} bytes")));
+                return;
             }
         }
     };

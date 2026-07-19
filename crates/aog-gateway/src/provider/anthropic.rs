@@ -12,8 +12,8 @@ use serde_json::{Value, json};
 use crate::posture::ApprovedProviderEndpoint;
 
 use super::{
-    ChunkStream, CompletionRequest, CompletionResponse, Provider, ProviderError, Role, StreamChunk,
-    Usage, sse_stream,
+    ChunkStream, CompletionRequest, CompletionResponse, MAX_PROVIDER_BODY, MAX_PROVIDER_ERROR_BODY,
+    Provider, ProviderError, Role, StreamChunk, Usage, bounded_body, sse_stream,
 };
 
 /// Anthropic's mandatory default when the caller sets no cap.
@@ -87,7 +87,8 @@ impl AnthropicProvider {
             .map_err(|e| ProviderError::Transport(e.to_string()))?;
         let status = resp.status();
         if !status.is_success() {
-            let body = resp.text().await.unwrap_or_default();
+            let body = String::from_utf8_lossy(&bounded_body(resp, MAX_PROVIDER_ERROR_BODY).await?)
+                .into_owned();
             return Err(ProviderError::Upstream {
                 status: status.as_u16(),
                 body,
@@ -121,6 +122,7 @@ fn parse_sse(data: &str) -> Option<Result<StreamChunk, ProviderError>> {
                 delta,
                 done: false,
                 usage: None,
+                finish_reason: None,
             }))
         }
         "message_start" => Some(Ok(StreamChunk {
@@ -130,6 +132,7 @@ fn parse_sse(data: &str) -> Option<Result<StreamChunk, ProviderError>> {
                 input_tokens: u32_at(&v, "/message/usage/input_tokens"),
                 output_tokens: 0,
             }),
+            finish_reason: None,
         })),
         "message_delta" => Some(Ok(StreamChunk {
             delta: String::new(),
@@ -138,11 +141,16 @@ fn parse_sse(data: &str) -> Option<Result<StreamChunk, ProviderError>> {
                 input_tokens: 0,
                 output_tokens: u32_at(&v, "/usage/output_tokens"),
             }),
+            finish_reason: v
+                .pointer("/delta/stop_reason")
+                .and_then(Value::as_str)
+                .map(str::to_string),
         })),
         "message_stop" => Some(Ok(StreamChunk {
             delta: String::new(),
             done: true,
             usage: None,
+            finish_reason: None,
         })),
         // ping, content_block_start, content_block_stop — nothing to emit.
         _ => None,
@@ -158,10 +166,9 @@ impl Provider for AnthropicProvider {
 
     async fn complete(&self, req: &CompletionRequest) -> Result<CompletionResponse, ProviderError> {
         let resp = self.post(&Self::body(req, false)).await?;
-        let v: Value = resp
-            .json()
-            .await
-            .map_err(|e| ProviderError::Decode(e.to_string()))?;
+        let body = bounded_body(resp, MAX_PROVIDER_BODY).await?;
+        let v: Value =
+            serde_json::from_slice(&body).map_err(|e| ProviderError::Decode(e.to_string()))?;
         let content = v
             .get("content")
             .and_then(Value::as_array)

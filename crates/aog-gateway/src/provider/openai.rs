@@ -14,8 +14,8 @@ use serde_json::{Value, json};
 use crate::posture::ApprovedProviderEndpoint;
 
 use super::{
-    ChunkStream, CompletionRequest, CompletionResponse, Provider, ProviderError, StreamChunk,
-    Usage, sse_stream,
+    ChunkStream, CompletionRequest, CompletionResponse, MAX_PROVIDER_BODY, MAX_PROVIDER_ERROR_BODY,
+    Provider, ProviderError, StreamChunk, Usage, bounded_body, sse_stream,
 };
 
 /// An OpenAI-compatible chat provider.
@@ -80,7 +80,8 @@ impl OpenAiProvider {
             .map_err(|e| ProviderError::Transport(e.to_string()))?;
         let status = resp.status();
         if !status.is_success() {
-            let body = resp.text().await.unwrap_or_default();
+            let body = String::from_utf8_lossy(&bounded_body(resp, MAX_PROVIDER_ERROR_BODY).await?)
+                .into_owned();
             return Err(ProviderError::Upstream {
                 status: status.as_u16(),
                 body,
@@ -115,6 +116,7 @@ fn parse_sse(data: &str) -> Option<Result<StreamChunk, ProviderError>> {
             delta: String::new(),
             done: true,
             usage: None,
+            finish_reason: None,
         }));
     }
     let v: Value = match serde_json::from_str(data) {
@@ -127,17 +129,19 @@ fn parse_sse(data: &str) -> Option<Result<StreamChunk, ProviderError>> {
         .unwrap_or_default()
         .to_string();
     let usage = openai_usage(&v);
-    let finished = v
+    let finish_reason = v
         .pointer("/choices/0/finish_reason")
-        .is_some_and(|r| !r.is_null());
+        .and_then(Value::as_str)
+        .map(str::to_string);
     // Skip the opening role-only frame (no delta, no usage, not finished).
-    if delta.is_empty() && usage.is_none() && !finished {
+    if delta.is_empty() && usage.is_none() && finish_reason.is_none() {
         return None;
     }
     Some(Ok(StreamChunk {
         delta,
         done: false,
         usage,
+        finish_reason,
     }))
 }
 
@@ -149,10 +153,9 @@ impl Provider for OpenAiProvider {
 
     async fn complete(&self, req: &CompletionRequest) -> Result<CompletionResponse, ProviderError> {
         let resp = self.post(&Self::body(req, false)).await?;
-        let v: Value = resp
-            .json()
-            .await
-            .map_err(|e| ProviderError::Decode(e.to_string()))?;
+        let body = bounded_body(resp, MAX_PROVIDER_BODY).await?;
+        let v: Value =
+            serde_json::from_slice(&body).map_err(|e| ProviderError::Decode(e.to_string()))?;
         Ok(CompletionResponse {
             model: v
                 .get("model")

@@ -277,6 +277,8 @@ fn messages_sse(
 
         let mut out_tokens = 0u32;
         let mut revocation_denied = false;
+        let mut closed = false;
+        let mut stop_reason: Option<String> = None;
         while let Some(frame) = chunks.next().await {
             if let Err(error) = meter.authorize_continuation().await {
                 yield ev("error", &json!({
@@ -292,6 +294,9 @@ fn messages_sse(
             match frame {
                 Ok(c) => {
                     meter.observe(&c);
+                    if c.finish_reason.is_some() {
+                        stop_reason = c.finish_reason.clone();
+                    }
                     if let Some(u) = c.usage
                         && u.output_tokens > 0
                     {
@@ -304,18 +309,28 @@ fn messages_sse(
                         }));
                     }
                     if c.done {
+                        closed = true;
                         break;
                     }
                 }
-                Err(_) => break,
+                Err(error) => {
+                    yield ev("error", &json!({
+                        "type": "error",
+                        "error": {
+                            "type": "api_error",
+                            "message": error.to_string()
+                        }
+                    }));
+                    break;
+                }
             }
         }
 
-        if !revocation_denied {
+        if closed && !revocation_denied {
             yield ev("content_block_stop", &json!({ "type": "content_block_stop", "index": 0 }));
             yield ev("message_delta", &json!({
                 "type": "message_delta",
-                "delta": { "stop_reason": "end_turn", "stop_sequence": Value::Null },
+                "delta": { "stop_reason": stop_reason, "stop_sequence": Value::Null },
                 "usage": { "output_tokens": out_tokens }
             }));
             yield ev("message_stop", &json!({ "type": "message_stop" }));
@@ -352,6 +367,7 @@ mod tests {
                 delta: String::new(),
                 done: true,
                 usage: None,
+                finish_reason: Some("end_turn".to_string()),
             }),
         ]));
 
