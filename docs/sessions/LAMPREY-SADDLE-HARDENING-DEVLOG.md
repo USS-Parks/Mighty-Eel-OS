@@ -1620,3 +1620,59 @@ no-slop and 79-route policy gates passed. This DEVLOG closeout records the
 exact source snapshot eligible for the independent Saddle `SAD-01` import. The
 source hardening roster's next deferred prompt remains `LSH-D1`; no additional
 source-lane closure is claimed here.
+
+### 2026-07-19 - Archived worktree reconciliation
+
+Status: **PASS** (no unpublished implementation remains in the three retained
+archive refs).
+
+The storage-recovery audit preserved three dirty or unpublished worktree states
+before removing their heavyweight checkouts. Each archive was compared with the
+published implementation that owns the same PSPR objective:
+
+- `archive/aog-approval-binding-6b81189` at
+  `6b8118975d6e17a1e4e1c7458c8c2594516c224b` is the pre-reconciliation LSH-T5
+  patch. Its lockfile and all six functional source/test blobs are byte-for-byte
+  identical to the corresponding blobs in published commit
+  `acd755a88c95960c53374f271e2c7616b03f2376`, which is an ancestor of `main`.
+- `archive/LSH-G6-uncommitted-20260719` at
+  `d0b2e9f8949bc3d9fb065960e09e3243d6b16226` is a partial sibling draft of
+  LSH-G6. Published commit `3b48b521c8b43e15cb4792d329a70bd1de8a7c26`
+  completes the same endpoint/credential objective through the existing
+  startup-posture boundary, including exact-origin authorization, address-set
+  validation and pinning, redirect refusal, and credential-safe provider
+  construction.
+- `archive/LSH-G7-uncommitted-20260719` at
+  `b87a23fd22325bbc908909242b4f54808c1967b1` is a partial sibling draft of
+  LSH-G7. Published commit `b3bccb89c1a811031393cb4082399c388018b6f1`
+  completes and extends it with header/body/error-body/SSE line/frame/total-byte
+  ceilings, idle and total deadlines, explicit truncation, and protocol-native
+  failure termination.
+
+Fresh reconciliation gates on current `main`:
+
+- G6 startup-posture regressions - PASS, 5/5;
+- provider redirect and bounded-response matrix - PASS, 3/3;
+- truthful OpenAI/Anthropic stream-failure regressions - PASS, 2/2;
+- exact T5 authenticated-decision and invalid-binding regressions - PASS, 2/2;
+- complete `aog-approvals` plus `aog-toolproxy` tests - PASS, 68/68;
+- robustness conformance - PASS, 11/11;
+- managed toolproxy cutover regression - PASS, 1/1;
+- complete `cargo test -p aog-gateway` package suite - PASS;
+- `cargo check --workspace` - PASS using the pinned host `protoc`;
+- strict workspace all-target clippy - PASS;
+- `cargo test --workspace` - PASS; and
+- workspace formatting plus `git diff --check` - PASS.
+
+The first sandboxed workspace-check attempt was denied permission to execute the
+pinned host `protoc.exe`. The identical command passed under the authorized
+desktop identity; this was a host sandbox boundary, not a source or product
+failure.
+
+The archive commits remain forensic preservation refs, not merge candidates.
+Merging either partial sibling draft would replace later reviewed code with an
+older competing implementation; merging the pre-reconciliation T5 commit would
+duplicate code already present byte-for-byte. The complete WSF/AOG work product
+is therefore the signed, footer-compliant mainline sequence already recorded
+above. This reconciliation checkpoint makes that disposition explicit on
+`main` without reintroducing obsolete worktree state.
